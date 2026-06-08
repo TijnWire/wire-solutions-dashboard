@@ -25,6 +25,9 @@ pnpm-debug.log*
 # Stray temp files
 *verify_excel.mjs
 
+# Privé: lokale inloggegevens-overzichten — NOOIT publiceren
+prive/
+
 # Editor / OS
 .vscode/*
 !.vscode/extensions.json
