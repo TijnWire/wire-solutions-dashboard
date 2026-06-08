@@ -4,10 +4,7 @@ import type { User, Project, Taak, ProjectPost, Sanering, TauwOpdracht, Brievenr
 export const SEED_SANERINGEN: Sanering[] = [];
 export const SEED_TAUW: TauwOpdracht[] = [];
 
-export const SEED_KLANTEN: Klant[] = [
-  { id: "kl-1", naam: "Fam. Yilmaz", straat: "Dorpsstraat", huisnummer: "7", postcode: "3081 AB", plaats: "Rotterdam-Noord", telefoon: "06 12345678", notitie: "Meterkast achter de voordeur, links. Bedrijfspand — bij receptie melden.", fotos: [] },
-  { id: "kl-2", naam: "Mw. Visser", straat: "Lindelaan", huisnummer: "22", postcode: "3132 BC", plaats: "Vlaardingen-Oost", telefoon: "06 34567890", notitie: "Belt aan via intercom.", fotos: [] },
-];
+export const SEED_KLANTEN: Klant[] = [];
 
 export const SEED_INSTELLINGEN: Instellingen = {
   supabaseUrl: "",
@@ -41,11 +38,7 @@ export const SEED_KENNIS: KennisArtikel[] = [
   { id: "kb-14", categorie: "Stedin-procedures", titel: "Geen toegang tot de meterkast (op slot)", inhoud: "Noteer 'geen toegang', maak een foto van de situatie en zet de afspraak op 'Niet thuis' of 'Herpland'. Laat de planner een nieuwe afspraak maken." },
 ];
 
-export const SEED_VERLOF: Verlof[] = [
-  { id: "vl-1", medewerkerId: "u-brandon", type: "Vakantie", van: "2026-06-15", tot: "2026-06-19", status: "Goedgekeurd", notitie: "Zomervakantie" },
-  { id: "vl-2", medewerkerId: "u-melany", type: "Verlof", van: "2026-06-09", tot: "2026-06-09", status: "Aangevraagd", notitie: "Tandarts" },
-  { id: "vl-3", medewerkerId: "u-remon", type: "Vakantie", van: "2026-06-22", tot: "2026-06-26", status: "Aangevraagd", notitie: "" },
-];
+export const SEED_VERLOF: Verlof[] = [];
 
 export const SEED_COMM: Communicatie = {
   herinneringAan: true,
@@ -65,14 +58,9 @@ export const SEED_COMM: Communicatie = {
   ],
 };
 
-export const SEED_LOONSTROKEN: Loonstrook[] = [
-  { id: "ls-1", medewerkerId: "u-brandon", periodeType: "Maand", refDatum: "2026-05-01", periode: "Mei 2026", bruto: 3200, bijtelling: 350, netto: 2480, boetes: 0, uren: 168, notitie: "" },
-  { id: "ls-2", medewerkerId: "u-melany", periodeType: "Maand", refDatum: "2026-05-01", periode: "Mei 2026", bruto: 3100, bijtelling: 0, netto: 2410, boetes: 0, uren: 160, notitie: "" },
-];
+export const SEED_LOONSTROKEN: Loonstrook[] = [];
 
-export const SEED_BOETES: Boete[] = [
-  { id: "bo-1", medewerkerId: "u-brandon", datum: "2026-05-14", omschrijving: "Parkeerboete bedrijfsbus", bedrag: 65, status: "Open", notitie: "Centrum Rotterdam" },
-];
+export const SEED_BOETES: Boete[] = [];
 
 export const SEED_BEDRIJF: Bedrijf = {
   naam: "Wire Solutions B.V.",
@@ -85,24 +73,7 @@ export const SEED_BEDRIJF: Bedrijf = {
   iban: "",
 };
 
-export const SEED_FACTUREN: Factuur[] = [
-  {
-    id: "f-1",
-    nummer: "2026-0001",
-    datum: "2026-05-28",
-    klantNaam: "Stedin Netbeheer B.V.",
-    klantAdres: "Blaak 8",
-    klantPostcodePlaats: "3011 TA Rotterdam",
-    regels: [
-      { omschrijving: "Voorschouwen wijk Rotterdam-Noord (per stuk)", aantal: 120, prijs: 12.5 },
-      { omschrijving: "Brieven bezorgd incl. routeplanning", aantal: 340, prijs: 0.85 },
-      { omschrijving: "Afspraken ingepland en bevestigd", aantal: 87, prijs: 4.0 },
-    ],
-    btwPercentage: 21,
-    status: "Verstuurd",
-    notitie: "Betaling binnen 14 dagen o.v.v. het factuurnummer.",
-  },
-];
+export const SEED_FACTUREN: Factuur[] = [];
 
 // Echte teamaccounts. Wachtwoorden staan NOOIT in de code — alleen een PBKDF2-salted hash (zie lib/auth.ts).
 // De platte wachtwoorden zijn eenmalig veilig doorgegeven aan de eigenaar.
@@ -125,97 +96,14 @@ export const SEED_USERS: User[] = [
   { id: "u-willem", naam: "Willem Klijnoot", initialen: "WK", email: "willem@wiresolutions.nl", rol: "beheer", functie: "Leiding", wachtwoordHash: "tlMd5mFgJc/Q8wekatNTZsJGoZX/9U1rH36UwuFHKHE=", wachtwoordSalt: "u78SOQD9MzSD1bt0XsBTgw==", wachtwoordIter: 150000 },
 ];
 
-export const SEED_PROJECTS: Project[] = [
-  { id: "p-rotterdam", naam: "Stedin-batch Rotterdam-Noord", wijk: "Rotterdam-Noord", toegewezenAan: ["u-brandon"] },
-  { id: "p-capelle", naam: "Stedin-batch Capelle a/d IJssel", wijk: "Capelle a/d IJssel", toegewezenAan: ["u-melany"] },
-  { id: "p-schiedam", naam: "Stedin-batch Schiedam-Centrum", wijk: "Schiedam-Centrum", toegewezenAan: ["u-brandon"] },
-  { id: "p-vlaardingen", naam: "Stedin-batch Vlaardingen-Oost", wijk: "Vlaardingen-Oost", toegewezenAan: ["u-melany"] },
-  { id: "p-administratie", naam: "Administratie & facturatie", wijk: "Kantoor", toegewezenAan: ["u-remon", "u-willem"] },
-];
+export const SEED_PROJECTS: Project[] = [];
 
-export const SEED_TAKEN: Taak[] = [
-  { id: "t-1", projectId: "p-rotterdam", titel: "Route lopen en brieven gooien", toegewezenAan: "u-brandon", deadline: "Vandaag 17:00", status: "Mee bezig", notitie: "" },
-  { id: "t-2", projectId: "p-rotterdam", titel: "Blanco's markeren op de kaart", toegewezenAan: "u-brandon", deadline: "Vandaag 17:30", status: "Te doen", notitie: "" },
-  { id: "t-3", projectId: "p-schiedam", titel: "Bedrijfspanden persoonlijk afgeven", toegewezenAan: "u-brandon", deadline: "Morgen 12:00", status: "Te doen", notitie: "Let op: nummer 14 is een kantoorpand." },
-  { id: "t-4", projectId: "p-capelle", titel: "Meterkast-foto's uploaden", toegewezenAan: "u-melany", deadline: "Vandaag 16:00", status: "Mee bezig", notitie: "" },
-  { id: "t-5", projectId: "p-capelle", titel: "Ontbrekende huisnummers noteren", toegewezenAan: "u-melany", deadline: "Vandaag", status: "Klaar", notitie: "Huisnr. 22 en 24 ontbreken." },
-  { id: "t-6", projectId: "p-vlaardingen", titel: "Buren spreken (min. 7 per adres)", toegewezenAan: "u-melany", deadline: "Morgen 17:00", status: "Te doen", notitie: "" },
-  { id: "t-7", projectId: "p-administratie", titel: "Facturen week 22 controleren", toegewezenAan: "u-remon", deadline: "Morgen", status: "Te doen", notitie: "" },
-  { id: "t-8", projectId: "p-administratie", titel: "Planning volgende week rondzetten", toegewezenAan: "u-willem", deadline: "Vrijdag", status: "Mee bezig", notitie: "" },
-];
+export const SEED_TAKEN: Taak[] = [];
 
 // Voorbeeld-projectberichten: updates ("afgerond") en vragen die de leiding kan afhandelen.
-export const SEED_PROJECT_POSTS: ProjectPost[] = [
-  {
-    id: "pp-1",
-    projectId: "p-rotterdam",
-    type: "update",
-    auteurId: "u-brandon",
-    tekst: "Dorpsstraat 1 t/m 5 afgerond — brieven gegooid en buren gesproken. Ga zo verder met de oneven kant.",
-    aangemaakt: "2026-06-02T07:45:00.000Z",
-    afgehandeld: false,
-    reacties: [],
-  },
-  {
-    id: "pp-2",
-    projectId: "p-capelle",
-    type: "vraag",
-    auteurId: "u-melany",
-    tekst: "Op nummer 22 en 24 ontbreekt het huisnummerbordje. Moet ik die alsnog proberen of meteen als 'ontbreekt' melden bij Stedin?",
-    aangemaakt: "2026-06-02T08:10:00.000Z",
-    afgehandeld: false,
-    reacties: [
-      { id: "pr-1", auteurId: "u-remon", tekst: "Probeer ze morgen nog één keer. Lukt het niet, dan melden als ontbreekt.", aangemaakt: "2026-06-02T08:25:00.000Z" },
-    ],
-  },
-  {
-    id: "pp-3",
-    projectId: "p-vlaardingen",
-    type: "update",
-    auteurId: "u-melany",
-    tekst: "Lindelaan volledig bezorgd. Alleen nr. 26 was niet thuis — afspraak ingepland.",
-    aangemaakt: "2026-06-01T15:20:00.000Z",
-    afgehandeld: true,
-    afgehandeldDoor: "u-willem",
-    afgehandeldOp: "2026-06-01T16:00:00.000Z",
-    reacties: [],
-  },
-];
+export const SEED_PROJECT_POSTS: ProjectPost[] = [];
 
 // Voorbeeld-brievenronde (toont looproute, ontbrekend huisnummer en bedrijfspand)
-export const SEED_RONDES: Brievenronde[] = [
-  {
-    id: "r-dorpsstraat",
-    straat: "Dorpsstraat",
-    postcode: "3081 AB",
-    plaats: "Rotterdam-Noord",
-    projectId: "p-rotterdam",
-    toegewezenAan: "u-brandon",
-    aangemaakt: "2026-06-01T08:00:00.000Z",
-    status: "toegewezen",
-    toegewezenOp: "2026-06-01T08:00:00.000Z",
-    adressen: [
-      { id: "a-1", huisnummer: 1, toevoeging: "", type: "woning", status: "Gegooid", ontbreekt: false, notitie: "" },
-      { id: "a-3", huisnummer: 3, toevoeging: "", type: "woning", status: "Gegooid", ontbreekt: false, notitie: "" },
-      { id: "a-7", huisnummer: 7, toevoeging: "", type: "bedrijf", status: "Te doen", ontbreekt: false, notitie: "Kantoorpand — persoonlijk afgeven bij receptie." },
-      { id: "a-9", huisnummer: 9, toevoeging: "", type: "woning", status: "Te doen", ontbreekt: false, notitie: "" },
-      { id: "a-11", huisnummer: 11, toevoeging: "", type: "woning", status: "Niet thuis", ontbreekt: false, notitie: "" },
-      { id: "a-2", huisnummer: 2, toevoeging: "", type: "woning", status: "Gegooid", ontbreekt: false, notitie: "" },
-      { id: "a-4", huisnummer: 4, toevoeging: "", type: "woning", status: "Blanco", ontbreekt: false, notitie: "" },
-      { id: "a-6", huisnummer: 6, toevoeging: "", type: "woning", status: "Te doen", ontbreekt: false, notitie: "" },
-      { id: "a-8", huisnummer: 8, toevoeging: "", type: "woning", status: "Te doen", ontbreekt: false, notitie: "" },
-      { id: "a-10", huisnummer: 10, toevoeging: "", type: "woning", status: "Te doen", ontbreekt: false, notitie: "" },
-    ],
-  },
-];
+export const SEED_RONDES: Brievenronde[] = [];
 
-export const SEED_AFSPRAKEN: Afspraak[] = [
-  // Groep: straat "Lindelaan" (Anna)
-  { id: "af-1", locatie: "Lindelaan", soort: "straat", klantNaam: "Mw. Visser", telefoon: "06 34567890", straat: "Lindelaan", huisnummer: "22", postcode: "3132 BC", plaats: "Vlaardingen-Oost", type: "woning", datum: "2026-06-04", tijd: "13:00", toegewezenAan: "u-melany", status: "Bevestigd", notitie: "" },
-  { id: "af-2", locatie: "Lindelaan", soort: "straat", klantNaam: "Dhr. de Wit", telefoon: "06 23456789", straat: "Lindelaan", huisnummer: "24", postcode: "3132 BC", plaats: "Vlaardingen-Oost", type: "woning", datum: "2026-06-04", tijd: "13:30", toegewezenAan: "u-melany", status: "Open", notitie: "" },
-  { id: "af-3", locatie: "Lindelaan", soort: "straat", klantNaam: "Fam. Bakker", telefoon: "06 99887766", straat: "Lindelaan", huisnummer: "26", postcode: "3132 BC", plaats: "Vlaardingen-Oost", type: "woning", datum: "2026-06-04", tijd: "14:00", toegewezenAan: "u-melany", status: "Open", notitie: "Belt aan via intercom." },
-  // Groep: appartement "Flat De Es" (Sven)
-  { id: "af-4", locatie: "Flat De Es", soort: "appartement", klantNaam: "Dhr. Yilmaz", telefoon: "06 12345678", straat: "Essenlaan", huisnummer: "12-1", postcode: "3081 AB", plaats: "Rotterdam-Noord", type: "woning", datum: "2026-06-03", tijd: "09:00", toegewezenAan: "u-brandon", status: "Bevestigd", notitie: "" },
-  { id: "af-5", locatie: "Flat De Es", soort: "appartement", klantNaam: "Mw. Pietersen", telefoon: "06 56781234", straat: "Essenlaan", huisnummer: "12-2", postcode: "3081 AB", plaats: "Rotterdam-Noord", type: "woning", datum: "2026-06-03", tijd: "09:30", toegewezenAan: "u-brandon", status: "Open", notitie: "" },
-  { id: "af-6", locatie: "Flat De Es", soort: "appartement", klantNaam: "Beheerder VvE", telefoon: "010 1234567", straat: "Essenlaan", huisnummer: "12-BG", postcode: "3081 AB", plaats: "Rotterdam-Noord", type: "bedrijf", datum: "2026-06-03", tijd: "08:30", toegewezenAan: "u-brandon", status: "Bevestigd", notitie: "Sleutel meterruimte ophalen." },
-];
+export const SEED_AFSPRAKEN: Afspraak[] = [];

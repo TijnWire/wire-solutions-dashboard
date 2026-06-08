@@ -247,7 +247,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let actief = true;
     (async () => {
-      const [u, p, t, pp, pl, san, tw, v, r, af, fac, bed, loon, boe, communicatie, verl, kn, inst, kl, s, vm, med] = await Promise.all([
+      let [u, p, t, pp, pl, san, tw, v, r, af, fac, bed, loon, boe, communicatie, verl, kn, inst, kl, s, vm, med] = await Promise.all([
         laadSlice<User[]>("users", LS.users, SEED_USERS),
         laadSlice<Project[]>("projects", LS.projects, SEED_PROJECTS),
         laadSlice<Taak[]>("taken", LS.taken, SEED_TAKEN),
@@ -272,6 +272,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         laadSlice<Mededeling[]>("mededelingen", LS.mededelingen, []),
       ]);
       if (!actief) return;
+      // Eenmalige schoonmaak: verwijder de voorbeeld-/demoprojecten en bijbehorende data, zodat het
+      // team met eigen projecten begint. Draait één keer per tag; alles wat je daarna zelf toevoegt
+      // blijft staan. Team, bedrijfsgegevens, kennisbank en sjablonen worden NIET gewist.
+      const SCHOON_TAG = "2026-06-eigen-start";
+      if (typeof localStorage !== "undefined" && localStorage.getItem("wire.schoon") !== SCHOON_TAG) {
+        p = []; t = []; pp = []; pl = []; san = []; tw = []; v = []; r = []; af = []; fac = []; loon = []; boe = []; verl = []; kl = []; vm = [];
+        localStorage.setItem("wire.schoon", SCHOON_TAG);
+      }
       // Migratie: oude (platte-tekst) accounts zonder versleuteld wachtwoord vervangen door het echte team.
       let basisUsers = u.length === 0 || u.some((x) => !x.wachtwoordHash) ? SEED_USERS : u;
       // Eenmalige wachtwoord-sync: bestaande apparaten nemen de (opnieuw ingestelde) wachtwoorden uit
