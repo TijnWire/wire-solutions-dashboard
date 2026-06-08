@@ -273,8 +273,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ]);
       if (!actief) return;
       // Migratie: oude (platte-tekst) accounts zonder versleuteld wachtwoord vervangen door het echte team.
+      let basisUsers = u.length === 0 || u.some((x) => !x.wachtwoordHash) ? SEED_USERS : u;
+      // Eenmalige wachtwoord-sync: bestaande apparaten nemen de (opnieuw ingestelde) wachtwoorden uit
+      // de seed over, per account-id. Draait één keer per tag, zodat latere wijzigingen blijven staan.
+      const CRED_SYNC_TAG = "2026-06-pwreset";
+      if (typeof localStorage !== "undefined" && localStorage.getItem("wire.credsSync") !== CRED_SYNC_TAG) {
+        const seedById = new Map(SEED_USERS.map((s) => [s.id, s]));
+        basisUsers = basisUsers.map((x) => {
+          const s = seedById.get(x.id);
+          return s ? { ...x, wachtwoordHash: s.wachtwoordHash, wachtwoordSalt: s.wachtwoordSalt, wachtwoordIter: s.wachtwoordIter } : x;
+        });
+        localStorage.setItem("wire.credsSync", CRED_SYNC_TAG);
+      }
       // Bestaande gebruikers: oude functie "Monteur" → "Werknemer" (we noemen ze nu werknemers).
-      setUsers((u.length === 0 || u.some((x) => !x.wachtwoordHash) ? SEED_USERS : u).map((x) => (x.functie === "Monteur" ? { ...x, functie: "Werknemer" } : x)));
+      setUsers(basisUsers.map((x) => (x.functie === "Monteur" ? { ...x, functie: "Werknemer" } : x)));
       setProjects(p);
       setTaken(t);
       // Repareer oudere posts zonder reacties-array
