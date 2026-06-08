@@ -34,23 +34,25 @@ export function Bevestig({
 }) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4">
       <div className="absolute inset-0 bg-black/40" onClick={onAnnuleer} />
-      <div className="relative w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
+      <div className="relative w-full max-w-none rounded-t-2xl bg-white px-6 pt-5 pb-[calc(1.5rem+env(safe-area-inset-bottom))] shadow-2xl sm:max-w-sm sm:rounded-2xl sm:pt-6 sm:pb-6">
+        {/* Greep-balkje — laat op mobiel zien dat dit een onderpaneel is */}
+        <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-ink-200 sm:hidden" />
         <h3 className="text-lg font-bold text-ink-900">{titel}</h3>
         <p className="mt-2 text-sm leading-relaxed text-ink-600">{metWaarschuwing(tekst)}</p>
-        <div className="mt-6 flex justify-end gap-2">
+        <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <button
             type="button"
             onClick={onAnnuleer}
-            className="rounded-xl border border-ink-200 bg-white px-5 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50"
+            className="w-full rounded-xl border border-ink-200 bg-white px-5 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50 sm:w-auto"
           >
             Annuleren
           </button>
           <button
             type="button"
             onClick={onBevestig}
-            className={`rounded-xl px-5 py-2.5 text-sm font-semibold text-white ${bevestigTone === "brand" ? "bg-brand-600 hover:bg-brand-700" : "bg-red-600 hover:bg-red-700"}`}
+            className={`w-full rounded-xl px-5 py-2.5 text-sm font-semibold text-white sm:w-auto ${bevestigTone === "brand" ? "bg-brand-600 hover:bg-brand-700" : "bg-red-600 hover:bg-red-700"}`}
           >
             {bevestigLabel}
           </button>

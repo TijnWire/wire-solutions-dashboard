@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { Sidebar } from "./components/Sidebar";
+import { BottomNav } from "./components/BottomNav";
 import { Topbar } from "./components/Topbar";
 import { DevSwitcher } from "./components/DevSwitcher";
 import { Login } from "./pages/Login";
@@ -33,7 +34,7 @@ import { NavContext, type NavTarget } from "./store/NavContext";
 
 function Splash() {
   return (
-    <div className="flex h-screen flex-col items-center justify-center gap-5 bg-white text-ink-500">
+    <div className="flex h-full flex-col items-center justify-center gap-5 bg-white text-ink-500">
       <img src="/wire-logo.png" alt="Wire Solutions" className="h-28 w-auto animate-pulse" />
       <div className="text-sm">Bezig met laden…</div>
     </div>
@@ -118,7 +119,7 @@ export default function App() {
 
   return (
     <NavContext.Provider value={{ navigeer }}>
-    <div className="flex h-screen overflow-hidden bg-ink-100">
+    <div className="flex h-full overflow-hidden bg-ink-100">
       {/* Vaste zijbalk op desktop */}
       <div className="hidden md:flex">
         <Sidebar active={active} onSelect={ga} />
@@ -151,8 +152,12 @@ export default function App() {
           onZoek={(q) => zoekResultaten(q, { afspraken, rondes, voorschouwen, klanten, facturen, users, kennis, projects }, currentUser)}
           onResultaat={(item) => navigeer(item.navKey, item.target ?? null)}
         />
-        <main className="scrollbar-thin flex-1 overflow-y-auto p-4 md:p-6">{render()}</main>
+        <main className="scrollbar-thin flex-1 overflow-y-auto overflow-x-hidden overscroll-contain p-4 pb-[calc(5rem+env(safe-area-inset-bottom))] md:p-6 md:pb-6">{render()}</main>
       </div>
+
+      {/* App-achtige onderbalk op mobiel */}
+      <BottomNav active={active} onSelect={ga} onMeer={() => setMenuOpen(true)} />
+
       <DevSwitcher />
     </div>
     </NavContext.Provider>

@@ -8,9 +8,30 @@
   html {
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
+    -webkit-tap-highlight-color: transparent; /* geen grijze flits bij tikken op mobiel */
+    /* App 'vastzetten': alleen de binnen-container scrollt, de pagina zelf niet. */
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none; /* geen rubber-band / bounce bij doorswipen */
   }
   body {
     @apply bg-ink-100 text-ink-800 font-sans;
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+    position: relative;
+  }
+  #root {
+    height: 100%;
+    overflow: hidden;
+  }
+  /* Voorkom dat iOS inzoomt bij het focussen van een invoerveld (gebeurt bij lettergrootte < 16px). */
+  @media (max-width: 640px) {
+    input,
+    textarea,
+    select {
+      font-size: 16px;
+    }
   }
 }
 

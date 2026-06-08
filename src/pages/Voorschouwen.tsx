@@ -383,7 +383,7 @@ export function Voorschouwen() {
 
       {/* Mini-overzicht */}
       <div className="grid grid-cols-3 gap-4">
-        <Card className="flex items-center gap-3 p-4">
+        <Card className="flex flex-col items-start gap-1.5 p-3 sm:flex-row sm:items-center sm:gap-3 sm:p-4">
           <div className="rounded-xl bg-brand-50 p-2.5 text-brand-600">
             <ClipboardCheck className="h-5 w-5" />
           </div>
@@ -392,7 +392,7 @@ export function Voorschouwen() {
             <div className="text-xs text-ink-500">Totaal</div>
           </div>
         </Card>
-        <Card className="flex items-center gap-3 p-4">
+        <Card className="flex flex-col items-start gap-1.5 p-3 sm:flex-row sm:items-center sm:gap-3 sm:p-4">
           <div className="rounded-xl bg-green-50 p-2.5 text-green-600">
             <FileText className="h-5 w-5" />
           </div>
@@ -401,7 +401,7 @@ export function Voorschouwen() {
             <div className="text-xs text-ink-500">Ingediend</div>
           </div>
         </Card>
-        <Card className="flex items-center gap-3 p-4">
+        <Card className="flex flex-col items-start gap-1.5 p-3 sm:flex-row sm:items-center sm:gap-3 sm:p-4">
           <div className="rounded-xl bg-orange-50 p-2.5 text-orange-600">
             <Pencil className="h-5 w-5" />
           </div>

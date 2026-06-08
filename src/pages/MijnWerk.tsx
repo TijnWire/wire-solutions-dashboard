@@ -160,7 +160,7 @@ export function MijnWerk({ initieelProject }: { initieelProject?: string }) {
         {stats.map((s) => {
           const Icon = s.icon;
           return (
-            <Card key={s.label} className="flex items-center gap-3 p-4">
+            <Card key={s.label} className="flex flex-col items-start gap-1.5 p-3 sm:flex-row sm:items-center sm:gap-3 sm:p-4">
               <div className={`rounded-xl p-2.5 ${s.tone}`}>
                 <Icon className="h-5 w-5" />
               </div>

@@ -104,7 +104,7 @@ export function Topbar({
 
   return (
     <>
-    <header className="sticky top-0 z-30 flex items-center gap-4 border-b border-ink-200 bg-white/80 px-4 py-3.5 backdrop-blur md:px-6">
+    <header className="sticky top-0 z-30 flex items-center gap-4 border-b border-ink-200 bg-white/80 px-4 pb-3.5 pt-[calc(0.875rem+env(safe-area-inset-top))] backdrop-blur md:px-6 md:py-3.5">
       <button type="button" onClick={onMenu} className="-ml-1 rounded-lg p-2 text-ink-600 hover:bg-ink-100 md:hidden" title="Menu">
         <Menu className="h-5 w-5" />
       </button>

@@ -19,7 +19,7 @@ export function Login() {
   };
 
   return (
-    <div className="grid min-h-screen w-full bg-white md:grid-cols-2">
+    <div className="grid min-h-[100dvh] w-full overflow-y-auto bg-white md:grid-cols-2">
       {/* Linkerkant — merk */}
       <div className="relative hidden flex-col justify-between overflow-hidden bg-gradient-to-br from-orange-500 to-orange-700 p-12 text-white md:flex">
         <div className="inline-flex rounded-2xl bg-white p-4 shadow-lg">
