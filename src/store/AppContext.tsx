@@ -2,6 +2,7 @@ import {
   createContext,
   useContext,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -54,6 +55,7 @@ import {
   SEED_KLANTEN,
 } from "../lib/seed";
 import { idbGet, idbSet } from "./db";
+import { supabaseAan, sb, sbLeesAlles, sbSchrijf, sbLogin, sbLogout, sbSessieEmail } from "../lib/supabase";
 
 // Oude browseropslag-sleutels — alleen nog om eenmalig naar IndexedDB te migreren.
 const LS = {
@@ -242,6 +244,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [instellingen, setInstellingen] = useState<Instellingen>(SEED_INSTELLINGEN);
   const [klanten, setKlanten] = useState<Klant[]>(SEED_KLANTEN);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  // Supabase: actieve sessie + bijhouden wat we al gesynct hebben (tegen terugkaats-lussen).
+  const [sbSessie, setSbSessie] = useState(false);
+  const sync = useRef<{ klaar: boolean; gezien: Record<string, string> }>({ klaar: false, gezien: {} });
 
   // Eenmalig inladen vanuit de lokale database (IndexedDB).
   useEffect(() => {
@@ -463,9 +468,116 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (hydrated) void idbSet("session", currentUserId);
   }, [currentUserId, hydrated]);
 
+  // ── Centrale database (Supabase) — alle onderdelen synchroniseren tussen apparaten ──
+  // Per onderdeel: een setter (om binnenkomende data toe te passen) en de huidige waarde (om te pushen).
+  const setters: Record<string, (v: unknown) => void> = {
+    users: (v) => setUsers(v as User[]),
+    projects: (v) => setProjects(v as Project[]),
+    taken: (v) => setTaken(v as Taak[]),
+    projectPosts: (v) => setProjectPosts(v as ProjectPost[]),
+    planningen: (v) => setPlanningen(v as Weekplanning[]),
+    saneringen: (v) => setSaneringen(v as Sanering[]),
+    tauw: (v) => setTauwOpdrachten(v as TauwOpdracht[]),
+    voorschouwen: (v) => setVoorschouwen(v as Voorschouw[]),
+    voorschouwMappen: (v) => setVoorschouwMappen(v as VoorschouwMap[]),
+    mededelingen: (v) => setMededelingen(v as Mededeling[]),
+    rondes: (v) => setRondes(v as Brievenronde[]),
+    afspraken: (v) => setAfspraken(v as Afspraak[]),
+    facturen: (v) => setFacturen(v as Factuur[]),
+    bedrijf: (v) => setBedrijf(v as Bedrijf),
+    loonstroken: (v) => setLoonstroken(v as Loonstrook[]),
+    boetes: (v) => setBoetes(v as Boete[]),
+    comm: (v) => setComm(v as Communicatie),
+    verlof: (v) => setVerlof(v as Verlof[]),
+    kennis: (v) => setKennis(v as KennisArtikel[]),
+    instellingen: (v) => setInstellingen(v as Instellingen),
+    klanten: (v) => setKlanten(v as Klant[]),
+  };
+  const waarden: Record<string, unknown> = {
+    users, projects, taken, projectPosts, planningen, saneringen, tauw: tauwOpdrachten,
+    voorschouwen, voorschouwMappen, mededelingen, rondes, afspraken, facturen, bedrijf,
+    loonstroken, boetes, comm, verlof, kennis, instellingen, klanten,
+  };
+
+  // 1) Houd bij of er een Supabase-sessie is.
+  useEffect(() => {
+    if (!supabaseAan) return;
+    let actief = true;
+    void sb().auth.getSession().then(({ data }) => { if (actief) setSbSessie(!!data.session); });
+    const { data: sub } = sb().auth.onAuthStateChange((_e, session) => { if (actief) setSbSessie(!!session); });
+    return () => { actief = false; sub.subscription.unsubscribe(); };
+  }, []);
+
+  // 2) Bij een actieve sessie: haal de gedeelde data op, zet ontbrekende onderdelen klaar,
+  //    bepaal wie is ingelogd, en luister naar realtime-wijzigingen van andere apparaten.
+  useEffect(() => {
+    if (!supabaseAan || !sbSessie || !hydrated) return;
+    let actief = true;
+    (async () => {
+      try {
+        const remote = await sbLeesAlles();
+        if (!actief) return;
+        for (const [key, val] of Object.entries(remote)) {
+          sync.current.gezien[key] = JSON.stringify(val);
+          setters[key]?.(val);
+        }
+        for (const key of Object.keys(setters)) {
+          if (!(key in remote)) {
+            sync.current.gezien[key] = JSON.stringify(waarden[key]);
+            void sbSchrijf(key, waarden[key]).catch(() => {});
+          }
+        }
+        const email = await sbSessieEmail();
+        if (actief && email) {
+          const lijst = (remote.users as User[] | undefined) ?? users;
+          const ik = lijst.find((u) => u.email.toLowerCase() === email.toLowerCase());
+          if (ik) setCurrentUserId(ik.id);
+        }
+        sync.current.klaar = true;
+      } catch { /* netwerk/permissie weg — blijf local-first werken */ }
+    })();
+    const kanaal = sb()
+      .channel("wire_state")
+      .on("postgres_changes", { event: "*", schema: "public", table: "wire_state" }, (payload) => {
+        const row = (payload.new ?? payload.old) as { key?: string; data?: unknown } | null;
+        if (!row?.key || !(row.key in setters)) return;
+        const j = JSON.stringify(row.data);
+        if (sync.current.gezien[row.key] === j) return; // eigen wijziging — overslaan
+        sync.current.gezien[row.key] = j;
+        setters[row.key](row.data);
+      })
+      .subscribe();
+    return () => { actief = false; sync.current.klaar = false; void sb().removeChannel(kanaal); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [supabaseAan, sbSessie, hydrated]);
+
+  // 3) Push elke lokale wijziging naar de cloud (alleen ná de eerste synchronisatie).
+  useEffect(() => {
+    if (!supabaseAan || !sbSessie || !hydrated || !sync.current.klaar) return;
+    for (const key of Object.keys(setters)) {
+      const j = JSON.stringify(waarden[key]);
+      if (sync.current.gezien[key] !== j) {
+        sync.current.gezien[key] = j;
+        void sbSchrijf(key, waarden[key]).catch(() => {});
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [supabaseAan, sbSessie, hydrated, users, projects, taken, projectPosts, planningen, saneringen, tauwOpdrachten, voorschouwen, voorschouwMappen, mededelingen, rondes, afspraken, facturen, bedrijf, loonstroken, boetes, comm, verlof, kennis, instellingen, klanten]);
+
   const currentUser = users.find((u) => u.id === currentUserId) ?? null;
 
   const login: AppState["login"] = async (email, wachtwoord) => {
+    // Eerst via Supabase (centrale database). Lukt dat niet, val terug op de lokale controle —
+    // zo raakt niemand buitengesloten als Supabase nog niet is ingericht of even onbereikbaar is.
+    if (supabaseAan) {
+      try {
+        if (await sbLogin(email, wachtwoord)) {
+          const u = users.find((x) => x.email.toLowerCase() === email.trim().toLowerCase());
+          if (u) setCurrentUserId(u.id);
+          return true;
+        }
+      } catch { /* val terug op de lokale controle */ }
+    }
     const u = users.find((x) => x.email.toLowerCase() === email.trim().toLowerCase());
     if (!u) return false;
     const ok = await verifieerWachtwoord(wachtwoord, u);
@@ -476,7 +588,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return false;
   };
 
-  const logout = () => setCurrentUserId(null);
+  const logout = () => { if (supabaseAan) void sbLogout(); setCurrentUserId(null); };
   // Demo-switcher: direct als een ander account verdergaan (alle data is gedeeld in dezelfde store).
   const wisselGebruiker: AppState["wisselGebruiker"] = (id) => { if (users.some((u) => u.id === id)) setCurrentUserId(id); };
 

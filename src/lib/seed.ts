@@ -7,8 +7,8 @@ export const SEED_TAUW: TauwOpdracht[] = [];
 export const SEED_KLANTEN: Klant[] = [];
 
 export const SEED_INSTELLINGEN: Instellingen = {
-  supabaseUrl: "",
-  supabaseKey: "",
+  supabaseUrl: "https://buauptxdaiuvqazhlrhk.supabase.co",
+  supabaseKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ1YXVwdHhkYWl1dnFhemhscmhrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5MTQ0ODAsImV4cCI6MjA5NjQ5MDQ4MH0.OeQlHefazX6XLdAoOQtJEWs9lUqctjP3rC4_L7byn_4",
   googleMapsKey: "",
   whatsappToken: "",
   claudeKey: "",
