@@ -1,11 +1,12 @@
 import { useState } from "react";
 import {
-  Search, Plus, ArrowLeft, MapPin, Phone, Camera, Trash2, X, Upload,
+  Search, Plus, ArrowLeft, MapPin, Phone, Trash2, X,
   CalendarCheck, Mailbox, ClipboardCheck, Database, Image as ImageIcon, Download,
   Building2, ChevronDown, ChevronRight, FlaskConical, Recycle, RotateCcw, FolderArchive,
 } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { Card, Badge, Bevestig } from "../components/ui";
+import { FotoKnoppen } from "../components/FotoKnoppen";
 import { fileNaarDataUrl } from "../lib/image";
 import { downloadVoorschouwPdf } from "../lib/voorschouwPdf";
 import { datumLabel } from "../lib/afspraak";
@@ -57,10 +58,7 @@ function KlantForm({ onKlaar }: { onKlaar: () => void }) {
                 <button type="button" onClick={() => setFotos((p) => p.filter((_, idx) => idx !== i))} className="absolute right-1 top-1 rounded-full bg-black/60 p-1 text-white opacity-0 group-hover:opacity-100"><X className="h-3.5 w-3.5" /></button>
               </div>
             ))}
-            <label className="flex aspect-square cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-ink-300 text-ink-400 hover:border-brand-400 hover:text-brand-600">
-              {bezig ? <Upload className="h-6 w-6 animate-pulse" /> : <><Camera className="h-6 w-6" /><span className="text-[11px]">Foto</span></>}
-              <input type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={(e) => upload(e.target.files)} />
-            </label>
+            <FotoKnoppen onFiles={upload} bezig={bezig} />
           </div>
         </div>
       </Card>
@@ -183,10 +181,7 @@ export function Klanten({ initieelKey }: { initieelKey?: string }) {
                 )}
               </div>
             ))}
-            <label className="flex aspect-square cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-ink-300 text-ink-400 hover:border-brand-400 hover:text-brand-600">
-              {bezig ? <Upload className="h-6 w-6 animate-pulse" /> : <><Camera className="h-6 w-6" /><span className="text-[11px]">Toevoegen</span></>}
-              <input type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={(e) => uploadFotos(e.target.files)} />
-            </label>
+            <FotoKnoppen onFiles={uploadFotos} bezig={bezig} />
           </div>
         </Card>
 

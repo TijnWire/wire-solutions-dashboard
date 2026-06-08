@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Camera, X, Save, Send, Loader2, Folder, FolderPlus, Check, Search, ChevronDown } from "lucide-react";
+import { ArrowLeft, X, Save, Send, Folder, FolderPlus, Check, Search, ChevronDown } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { Card } from "./ui";
+import { FotoKnoppen } from "./FotoKnoppen";
 import { fileNaarDataUrl } from "../lib/image";
 import { legeVoorschouw, type Voorschouw, type JaNee } from "../lib/types";
 
@@ -298,27 +299,10 @@ export function VoorschouwForm({
               </div>
             ))}
 
-            <label className="flex aspect-square cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-ink-300 text-ink-400 hover:border-brand-400 hover:text-brand-600">
-              {bezig ? (
-                <Loader2 className="h-6 w-6 animate-spin" />
-              ) : (
-                <>
-                  <Camera className="h-6 w-6" />
-                  <span className="text-[11px] font-medium">Foto</span>
-                </>
-              )}
-              <input
-                type="file"
-                accept="image/*"
-                capture="environment"
-                multiple
-                className="hidden"
-                onChange={(e) => voegFotosToe(e.target.files)}
-              />
-            </label>
+            <FotoKnoppen onFiles={voegFotosToe} bezig={bezig} />
           </div>
           <p className="mt-1.5 text-xs text-ink-400">
-            Tip: op je telefoon opent dit direct de camera. Je kunt meerdere foto's toevoegen.
+            Tip: maak een foto met de camera óf kies bestaande foto's uit je galerij. Je kunt er meerdere tegelijk toevoegen.
           </p>
         </div>
       </Card>
