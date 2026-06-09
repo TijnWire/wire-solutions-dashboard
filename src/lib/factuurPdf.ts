@@ -36,28 +36,29 @@ function maakPdf(f: Factuur, bedrijf: Bedrijf, logo: string | null): jsPDF {
   const doc = new jsPDF();
   const RM = BREEDTE - LM; // rechtermarge (192)
 
-  // Logo links boven
+  // Logo links boven — groot, zoals op de template
   if (logo) {
     const p = doc.getImageProperties(logo);
-    const hoogte = 26;
-    const breedte = (p.width / p.height) * hoogte;
-    doc.addImage(logo, "PNG", LM, 14, breedte, hoogte);
+    let hoogte = 42;
+    let breedte = (p.width / p.height) * hoogte;
+    if (breedte > 52) { breedte = 52; hoogte = (p.height / p.width) * breedte; }
+    doc.addImage(logo, "PNG", LM, 12, breedte, hoogte);
   } else {
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(18);
+    doc.setFontSize(20);
     doc.setTextColor(...ORANJE);
-    doc.text(bedrijf.naam, LM, 28);
+    doc.text(bedrijf.naam, LM, 30);
   }
 
   // Geadresseerde (klant) links
-  let y = 58;
+  let y = 64;
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   doc.setTextColor(...DONKER);
   doc.text([f.klantNaam, f.tav ? `T.a.v. ${f.tav}` : "", f.klantAdres, f.klantPostcodePlaats].filter(Boolean), LM, y);
 
   // Metadata rechts
-  let my = 70;
+  let my = 74;
   const meta: [string, string][] = [];
   if (f.relatienummer) meta.push(["Relatienummer:", f.relatienummer]);
   meta.push(["Factuurnummer:", f.nummer]);
@@ -128,17 +129,24 @@ function maakPdf(f: Factuur, bedrijf: Bedrijf, logo: string | null): jsPDF {
     doc.text(doc.splitTextToSize(f.notitie, RM - LM) as string[], LM, y);
   }
 
-  // Voettekst onderaan — bedrijfsgegevens
-  const vy = 280;
+  // Voettekst onderaan — bedrijfsgegevens (oranje labels, net als de template)
+  const vy = 278;
   doc.setFontSize(7.5);
   doc.setTextColor(...GRIJS);
   doc.text([bedrijf.adres, bedrijf.postcodePlaats, bedrijf.telefoon ? `T ${bedrijf.telefoon}` : "", bedrijf.email ? `E ${bedrijf.email}` : ""].filter(Boolean), LM, vy);
-  const fin: string[] = [];
-  if (bedrijf.iban) fin.push(`IBAN ${bedrijf.iban}`);
-  if (bedrijf.bic) fin.push(`BIC ${bedrijf.bic}`);
-  if (bedrijf.kvk) fin.push(`KvK ${bedrijf.kvk}`);
-  if (bedrijf.btw) fin.push(`BTW ${bedrijf.btw}`);
-  doc.text(fin, 92, vy);
+  const fin: [string, string][] = [];
+  if (bedrijf.iban) fin.push(["IBAN", bedrijf.iban]);
+  if (bedrijf.bic) fin.push(["BIC", bedrijf.bic]);
+  if (bedrijf.kvk) fin.push(["KvK", bedrijf.kvk]);
+  if (bedrijf.btw) fin.push(["BTW", bedrijf.btw]);
+  let fy = vy;
+  for (const [label, waarde] of fin) {
+    doc.setTextColor(...ORANJE);
+    doc.text(label, 78, fy);
+    doc.setTextColor(...GRIJS);
+    doc.text(waarde, 90, fy);
+    fy += 3.4;
+  }
   doc.setTextColor(...ORANJE);
   doc.text("www.wire-solutions.nl", RM, vy, { align: "right" });
 
