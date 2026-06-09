@@ -226,7 +226,10 @@ export function Projecten({ initieelProject }: { initieelProject?: string }) {
               />
               <div className="ml-auto flex flex-wrap items-center gap-2">
                 {project.boekhouding === "gefactureerd" ? (
-                  <Badge tone="green">Gefactureerd ✓</Badge>
+                  <>
+                    <Badge tone="green">Gefactureerd ✓</Badge>
+                    <button type="button" onClick={() => updateProject(project.id, { boekhouding: "te_factureren", gefactureerdOp: undefined })} className="text-xs font-medium text-ink-400 hover:text-ink-600" title="Per ongeluk gefactureerd? Zet terug naar de boekhouding">corrigeren</button>
+                  </>
                 ) : project.boekhouding === "te_factureren" ? (
                   <>
                     <Badge tone="indigo">Bij boekhouding</Badge>
