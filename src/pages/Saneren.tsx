@@ -326,6 +326,11 @@ function SaneringDetail({ sanering, onTerug }: { sanering: Sanering; onTerug: ()
               <button type="button" onClick={goedkeuren} className={knopPrimair}><Check className="h-4 w-4" /> Goedkeuren</button>
               <button type="button" onClick={terugNaarWerknemer} className={knopKlein}><RotateCcw className="h-3.5 w-3.5" /> Terug naar werknemer</button>
             </div>
+          ) : isToegewezen ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm text-ink-500">Klaar gemeld — wacht op controle.</span>
+              <button type="button" onClick={terugNaarWerknemer} className={knopKlein}><RotateCcw className="h-3.5 w-3.5" /> Terug naar mezelf — nog iets aanpassen</button>
+            </div>
           ) : <p className="text-sm text-ink-500">Klaar gemeld — wacht op controle door de beheerder.</p>)}
 
           {status === "gecontroleerd" && (isLeiding ? (
