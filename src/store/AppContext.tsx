@@ -384,8 +384,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       );
       setFacturen(fac);
       setOpdrachtgevers(og);
-      // Vervang oude placeholder-bedrijfsgegevens door de echte
-      setBedrijf(!bed.kvk || bed.kvk === "12345678" ? SEED_BEDRIJF : bed);
+      // Start met de echte bedrijfsgegevens en zet daar de (niet-lege) opgeslagen waarden overheen.
+      // Zo ontbreken vaste velden als BTW/IBAN/BIC nooit — ook niet bij oudere, onvolledige lokale data.
+      const schoonBed: Bedrijf = { ...SEED_BEDRIJF };
+      (Object.entries(bed) as [keyof Bedrijf, string][]).forEach(([k, v]) => { if (v && v !== "12345678") schoonBed[k] = v; });
+      setBedrijf(schoonBed);
       // Repareer oudere loonstroken zonder de nieuwe velden
       setLoonstroken(
         loon.map((l) => ({
