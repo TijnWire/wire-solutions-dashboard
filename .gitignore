@@ -25,6 +25,9 @@ pnpm-debug.log*
 # Stray temp files
 *verify_excel.mjs
 
+# Losse referentie-templates (voorbeeld-PDF's, niet door de app gebruikt)
+*(template).pdf
+
 # Privé: lokale inloggegevens-overzichten — NOOIT publiceren
 prive/
 
