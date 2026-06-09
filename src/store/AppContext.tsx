@@ -32,6 +32,7 @@ import type {
   KennisArtikel,
   Instellingen,
   Klant,
+  Opdrachtgever,
 } from "../lib/types";
 import { legeDag, legeSlots, PLANNING_TIJDEN } from "../lib/types";
 import { verifieerWachtwoord } from "../lib/auth";
@@ -53,6 +54,7 @@ import {
   SEED_KENNIS,
   SEED_INSTELLINGEN,
   SEED_KLANTEN,
+  SEED_OPDRACHTGEVERS,
 } from "../lib/seed";
 import { idbGet, idbSet } from "./db";
 import { supabaseAan, sb, sbLeesAlles, sbSchrijf, sbLogin, sbLogout, sbSessieEmail } from "../lib/supabase";
@@ -72,6 +74,7 @@ const LS = {
   rondes: "wire.rondes",
   afspraken: "wire.afspraken",
   facturen: "wire.facturen",
+  opdrachtgevers: "wire.opdrachtgevers",
   bedrijf: "wire.bedrijf",
   loonstroken: "wire.loonstroken",
   boetes: "wire.boetes",
@@ -115,6 +118,7 @@ type AppState = {
   rondes: Brievenronde[];
   afspraken: Afspraak[];
   facturen: Factuur[];
+  opdrachtgevers: Opdrachtgever[];
   bedrijf: Bedrijf;
   loonstroken: Loonstrook[];
   boetes: Boete[];
@@ -188,6 +192,9 @@ type AppState = {
   addFactuur: (f: Omit<Factuur, "id">) => string;
   updateFactuur: (id: string, patch: Partial<Factuur>) => void;
   deleteFactuur: (id: string) => void;
+  addOpdrachtgever: (o: Omit<Opdrachtgever, "id">) => string;
+  updateOpdrachtgever: (id: string, patch: Partial<Opdrachtgever>) => void;
+  deleteOpdrachtgever: (id: string) => void;
   updateBedrijf: (patch: Partial<Bedrijf>) => void;
 
   addLoonstrook: (l: Omit<Loonstrook, "id">) => string;
@@ -235,6 +242,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [rondes, setRondes] = useState<Brievenronde[]>(SEED_RONDES);
   const [afspraken, setAfspraken] = useState<Afspraak[]>(SEED_AFSPRAKEN);
   const [facturen, setFacturen] = useState<Factuur[]>(SEED_FACTUREN);
+  const [opdrachtgevers, setOpdrachtgevers] = useState<Opdrachtgever[]>(SEED_OPDRACHTGEVERS);
   const [bedrijf, setBedrijf] = useState<Bedrijf>(SEED_BEDRIJF);
   const [loonstroken, setLoonstroken] = useState<Loonstrook[]>(SEED_LOONSTROKEN);
   const [boetes, setBoetes] = useState<Boete[]>(SEED_BOETES);
@@ -252,7 +260,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let actief = true;
     (async () => {
-      let [u, p, t, pp, pl, san, tw, v, r, af, fac, bed, loon, boe, communicatie, verl, kn, inst, kl, s, vm, med] = await Promise.all([
+      let [u, p, t, pp, pl, san, tw, v, r, af, fac, bed, loon, boe, communicatie, verl, kn, inst, kl, s, vm, med, og] = await Promise.all([
         laadSlice<User[]>("users", LS.users, SEED_USERS),
         laadSlice<Project[]>("projects", LS.projects, SEED_PROJECTS),
         laadSlice<Taak[]>("taken", LS.taken, SEED_TAKEN),
@@ -275,6 +283,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         laadSlice<string | null>("session", LS.session, null),
         laadSlice<VoorschouwMap[]>("voorschouwMappen", LS.voorschouwMappen, []),
         laadSlice<Mededeling[]>("mededelingen", LS.mededelingen, []),
+        laadSlice<Opdrachtgever[]>("opdrachtgevers", LS.opdrachtgevers, SEED_OPDRACHTGEVERS),
       ]);
       if (!actief) return;
       // Eenmalige schoonmaak: verwijder de voorbeeld-/demoprojecten en bijbehorende data, zodat het
@@ -374,6 +383,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }))
       );
       setFacturen(fac);
+      setOpdrachtgevers(og);
       // Vervang oude placeholder-bedrijfsgegevens door de echte
       setBedrijf(!bed.kvk || bed.kvk === "12345678" ? SEED_BEDRIJF : bed);
       // Repareer oudere loonstroken zonder de nieuwe velden
@@ -441,6 +451,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (hydrated) void idbSet("facturen", facturen);
   }, [facturen, hydrated]);
   useEffect(() => {
+    if (hydrated) void idbSet("opdrachtgevers", opdrachtgevers);
+  }, [opdrachtgevers, hydrated]);
+  useEffect(() => {
     if (hydrated) void idbSet("bedrijf", bedrijf);
   }, [bedrijf, hydrated]);
   useEffect(() => {
@@ -484,6 +497,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     rondes: (v) => setRondes(v as Brievenronde[]),
     afspraken: (v) => setAfspraken(v as Afspraak[]),
     facturen: (v) => setFacturen(v as Factuur[]),
+    opdrachtgevers: (v) => setOpdrachtgevers(v as Opdrachtgever[]),
     bedrijf: (v) => setBedrijf(v as Bedrijf),
     loonstroken: (v) => setLoonstroken(v as Loonstrook[]),
     boetes: (v) => setBoetes(v as Boete[]),
@@ -496,7 +510,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const waarden: Record<string, unknown> = {
     users, projects, taken, projectPosts, planningen, saneringen, tauw: tauwOpdrachten,
     voorschouwen, voorschouwMappen, mededelingen, rondes, afspraken, facturen, bedrijf,
-    loonstroken, boetes, comm, verlof, kennis, instellingen, klanten,
+    loonstroken, boetes, comm, verlof, kennis, instellingen, klanten, opdrachtgevers,
   };
 
   // 1) Houd bij of er een Supabase-sessie is.
@@ -562,7 +576,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supabaseAan, sbSessie, hydrated, users, projects, taken, projectPosts, planningen, saneringen, tauwOpdrachten, voorschouwen, voorschouwMappen, mededelingen, rondes, afspraken, facturen, bedrijf, loonstroken, boetes, comm, verlof, kennis, instellingen, klanten]);
+  }, [supabaseAan, sbSessie, hydrated, users, projects, taken, projectPosts, planningen, saneringen, tauwOpdrachten, voorschouwen, voorschouwMappen, mededelingen, rondes, afspraken, facturen, bedrijf, loonstroken, boetes, comm, verlof, kennis, instellingen, klanten, opdrachtgevers]);
 
   const currentUser = users.find((u) => u.id === currentUserId) ?? null;
 
@@ -818,6 +832,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const deleteFactuur: AppState["deleteFactuur"] = (id) =>
     setFacturen((prev) => prev.filter((f) => f.id !== id));
 
+  const addOpdrachtgever: AppState["addOpdrachtgever"] = (o) => {
+    const id = nextId("og");
+    setOpdrachtgevers((prev) => [...prev, { ...o, id }]);
+    return id;
+  };
+  const updateOpdrachtgever: AppState["updateOpdrachtgever"] = (id, patch) =>
+    setOpdrachtgevers((prev) => prev.map((o) => (o.id === id ? { ...o, ...patch } : o)));
+  const deleteOpdrachtgever: AppState["deleteOpdrachtgever"] = (id) =>
+    setOpdrachtgevers((prev) => prev.filter((o) => o.id !== id));
+
   const updateBedrijf: AppState["updateBedrijf"] = (patch) =>
     setBedrijf((prev) => ({ ...prev, ...patch }));
 
@@ -894,6 +918,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         rondes,
         afspraken,
         facturen,
+        opdrachtgevers,
         bedrijf,
         loonstroken,
         boetes,
@@ -952,6 +977,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addFactuur,
         updateFactuur,
         deleteFactuur,
+        addOpdrachtgever,
+        updateOpdrachtgever,
+        deleteOpdrachtgever,
         updateBedrijf,
         addLoonstrook,
         updateLoonstrook,

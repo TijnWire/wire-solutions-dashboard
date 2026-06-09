@@ -247,12 +247,24 @@ export type Factuur = {
   klantPostcodePlaats: string;
   tav?: string; // t.a.v. contactpersoon
   relatienummer?: string; // relatienummer bij de klant (bv. Stedin)
+  email?: string; // adres waar de factuur naartoe moet
   pdNummer?: string; // PD-nummer als kopregel op de factuur
   betaaltermijn?: number; // dagen (standaard 14)
   regels: FactuurRegel[];
   btwPercentage: number;
   status: FactuurStatus;
   notitie: string;
+};
+
+// Vaste opdrachtgever-gegevens — per factuur te kiezen zodat de klantvelden automatisch invullen.
+export type Opdrachtgever = {
+  id: string;
+  naam: string;
+  relatienummer: string;
+  adres: string;
+  postcodePlaats: string;
+  email: string; // waar de factuur naartoe moet
+  tav?: string;
 };
 
 // ── Loonstroken ──
