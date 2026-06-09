@@ -4,20 +4,18 @@ import type { Voorschouw, JaNee } from "./types";
 // ⚙️ Vul hier het Stedin-mailadres in waar de voorschouwen naartoe moeten.
 export const STEDIN_EMAIL = "";
 
-// Het officiële Stedin-formulier staat in /public; we vullen de gegevens er exact overheen.
-// Bestandsnaam bewust zonder spaties — spaties in statische URL's zijn fragiel op de host + service worker.
-const SJABLOON = "/opzet-voorschouw-gas.pdf";
 const SZ = 10.5; // tekstgrootte van de waarden
 const PW = 595.3, PH = 841.9; // A4 in punten (zoals opgemeten in het sjabloon)
 
-async function laadSjabloon(): Promise<ArrayBuffer | null> {
+// Het officiële Stedin-formulier zit als base64 gebundeld in de app (src/lib/voorschouwSjabloon.ts).
+// Géén netwerk-fetch → de download werkt altijd, op laptop én mobiel (geen cache-/service-worker-/deploy-issues).
+async function laadSjabloon(): Promise<Uint8Array | null> {
   try {
-    const r = await fetch(SJABLOON, { cache: "no-store" });
-    if (!r.ok) return null;
-    const buf = await r.arrayBuffer();
-    // Controleer dat het écht een PDF is (en niet bv. een HTML-fallback uit de cache).
-    const kop = String.fromCharCode(...new Uint8Array(buf.slice(0, 5)));
-    return kop.startsWith("%PDF") ? buf : null;
+    const { VOORSCHOUW_SJABLOON_B64 } = await import("./voorschouwSjabloon");
+    const bin = atob(VOORSCHOUW_SJABLOON_B64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes.length && bytes[0] === 0x25 ? bytes : null; // 0x25 = '%' (start van %PDF)
   } catch {
     return null;
   }
@@ -35,7 +33,7 @@ function dataUrlNaarBytes(durl: string): { bytes: Uint8Array; png: boolean } {
 // Bouwt de ingevulde PDF op basis van het officiële sjabloon (gegevens worden eroverheen geplaatst).
 async function maakVoorschouwPdfBytes(v: Voorschouw): Promise<Uint8Array> {
   const sjabloon = await laadSjabloon();
-  if (!sjabloon) throw new Error("‘Opzet voorschouw gas.pdf’ niet gevonden in /public");
+  if (!sjabloon) throw new Error("Voorschouwsjabloon kon niet worden geladen");
   const { PDFDocument, StandardFonts, rgb } = await import("pdf-lib");
   const DONKER = rgb(0.149, 0.165, 0.212);
   const ROOD = rgb(0.85, 0.12, 0.12);
@@ -137,7 +135,7 @@ function triggerDownload(blob: Blob, naam: string) {
 }
 
 function meldFout() {
-  if (typeof alert !== "undefined") alert("De voorschouw-PDF kon niet worden gemaakt. Controleer of ‘Opzet voorschouw gas.pdf’ in de /public-map staat.");
+  if (typeof alert !== "undefined") alert("De voorschouw-PDF kon niet worden gemaakt. Ververs de app en probeer het opnieuw.");
 }
 
 // Bundelt meerdere voorschouwen tot één ZIP-blob (kan throwen als het sjabloon ontbreekt).
