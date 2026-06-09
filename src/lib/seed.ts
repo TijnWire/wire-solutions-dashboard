@@ -66,11 +66,12 @@ export const SEED_BEDRIJF: Bedrijf = {
   naam: "Wire Solutions B.V.",
   adres: "Reedijk 7 T 16",
   postcodePlaats: "3274 KE Heinenoord",
-  telefoon: "",
-  email: "",
+  telefoon: "06-51611469",
+  email: "info@wiresolutions.nl",
   kvk: "80190782",
-  btw: "",
-  iban: "",
+  btw: "NL861583140B01",
+  iban: "NL97RABO0366741535",
+  bic: "RABONL2U",
 };
 
 export const SEED_FACTUREN: Factuur[] = [];

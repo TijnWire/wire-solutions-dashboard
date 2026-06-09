@@ -227,6 +227,7 @@ export type Bedrijf = {
   kvk: string;
   btw: string;
   iban: string;
+  bic?: string;
 };
 
 export type FactuurRegel = {
@@ -244,6 +245,10 @@ export type Factuur = {
   klantNaam: string;
   klantAdres: string;
   klantPostcodePlaats: string;
+  tav?: string; // t.a.v. contactpersoon
+  relatienummer?: string; // relatienummer bij de klant (bv. Stedin)
+  pdNummer?: string; // PD-nummer als kopregel op de factuur
+  betaaltermijn?: number; // dagen (standaard 14)
   regels: FactuurRegel[];
   btwPercentage: number;
   status: FactuurStatus;

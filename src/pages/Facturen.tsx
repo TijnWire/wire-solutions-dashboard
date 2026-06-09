@@ -6,7 +6,7 @@ import { Keuze } from "../components/Keuze";
 import { Card, Badge, Bevestig } from "../components/ui";
 import { downloadFactuurPdf, factuurTotalen, euro } from "../lib/factuurPdf";
 import { exporteerExcel } from "../lib/excel";
-import type { Factuur, FactuurRegel, FactuurStatus } from "../lib/types";
+import type { Factuur, FactuurRegel, FactuurStatus, Project } from "../lib/types";
 
 const statusTone: Record<FactuurStatus, string> = {
   Concept: "amber",
@@ -14,6 +14,15 @@ const statusTone: Record<FactuurStatus, string> = {
   Betaald: "green",
 };
 const datumKort = (iso: string) => { const d = iso.slice(0, 10).split("-"); return d.length === 3 ? `${d[2]}-${d[1]}-${d[0]}` : iso; };
+
+// Vaste klantgegevens voor Stedin-facturen (snel invullen).
+const STEDIN_KLANT = {
+  klantNaam: "Stedin Netbeheer B.V.",
+  tav: "Rune Zwijnenburg",
+  klantAdres: "Nijverheidsweg 15",
+  klantPostcodePlaats: "3534 AM Utrecht",
+  relatienummer: "20200015",
+};
 const FACTUUR_STATUSSEN: FactuurStatus[] = ["Concept", "Verstuurd", "Betaald"];
 
 const veld =
@@ -21,20 +30,24 @@ const veld =
 const labelCls = "mb-1 block text-xs font-semibold text-ink-600";
 
 // ── Factuur aanmaken / bewerken ──
-function FactuurForm({ bestaande, onKlaar }: { bestaande?: Factuur; onKlaar: () => void }) {
+function FactuurForm({ bestaande, initieel, onKlaar }: { bestaande?: Factuur; initieel?: Omit<Factuur, "id">; onKlaar: () => void }) {
   const { bedrijf, facturen, addFactuur, updateFactuur } = useApp();
   const volgnr = String(facturen.length + 1).padStart(4, "0");
   const [f, setF] = useState<Omit<Factuur, "id">>(
-    bestaande ?? {
+    bestaande ?? initieel ?? {
       nummer: `${new Date().getFullYear()}-${volgnr}`,
       datum: new Date().toISOString().slice(0, 10),
       klantNaam: "",
       klantAdres: "",
       klantPostcodePlaats: "",
+      tav: "",
+      relatienummer: "",
+      pdNummer: "",
+      betaaltermijn: 14,
       regels: [{ omschrijving: "", aantal: 1, prijs: 0 }],
       btwPercentage: 21,
       status: "Concept",
-      notitie: "Betaling binnen 14 dagen o.v.v. het factuurnummer.",
+      notitie: "",
     }
   );
   const set = (patch: Partial<typeof f>) => setF((x) => ({ ...x, ...patch }));
@@ -76,16 +89,38 @@ function FactuurForm({ bestaande, onKlaar }: { bestaande?: Factuur; onKlaar: () 
         </div>
         <div className="grid gap-3 sm:grid-cols-3">
           <div>
+            <label className={labelCls}>Relatienummer</label>
+            <input value={f.relatienummer ?? ""} onChange={(e) => set({ relatienummer: e.target.value })} placeholder="20200015" className={veld} />
+          </div>
+          <div>
+            <label className={labelCls}>PD-nummer</label>
+            <input value={f.pdNummer ?? ""} onChange={(e) => set({ pdNummer: e.target.value })} placeholder="PD153335" className={veld} />
+          </div>
+          <div>
+            <label className={labelCls}>Betaaltermijn (dagen)</label>
+            <input type="number" value={f.betaaltermijn ?? 14} onChange={(e) => set({ betaaltermijn: Number(e.target.value) })} placeholder="14" className={veld} />
+          </div>
+        </div>
+        <div className="flex items-center justify-between border-t border-ink-100 pt-3">
+          <span className="text-xs font-semibold text-ink-500">Klantgegevens</span>
+          <button type="button" onClick={() => set({ ...STEDIN_KLANT })} className="text-xs font-semibold text-brand-600 hover:text-brand-700">Stedin invullen</button>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
             <label className={labelCls}>Klantnaam</label>
             <input value={f.klantNaam} onChange={(e) => set({ klantNaam: e.target.value })} placeholder="Stedin Netbeheer B.V." className={veld} />
           </div>
           <div>
+            <label className={labelCls}>T.a.v.</label>
+            <input value={f.tav ?? ""} onChange={(e) => set({ tav: e.target.value })} placeholder="Contactpersoon" className={veld} />
+          </div>
+          <div>
             <label className={labelCls}>Adres klant</label>
-            <input value={f.klantAdres} onChange={(e) => set({ klantAdres: e.target.value })} placeholder="Straat 1" className={veld} />
+            <input value={f.klantAdres} onChange={(e) => set({ klantAdres: e.target.value })} placeholder="Nijverheidsweg 15" className={veld} />
           </div>
           <div>
             <label className={labelCls}>Postcode + plaats</label>
-            <input value={f.klantPostcodePlaats} onChange={(e) => set({ klantPostcodePlaats: e.target.value })} placeholder="1234 AB Rotterdam" className={veld} />
+            <input value={f.klantPostcodePlaats} onChange={(e) => set({ klantPostcodePlaats: e.target.value })} placeholder="3534 AM Utrecht" className={veld} />
           </div>
         </div>
       </Card>
@@ -151,7 +186,24 @@ export function Facturen({ initieelFactuur }: { initieelFactuur?: string }) {
   const teFactureren = projects.filter((p) => p.boekhouding === "te_factureren");
   const [modus, setModus] = useState<"lijst" | "formulier">("lijst");
   const [bewerk, setBewerk] = useState<Factuur | undefined>(undefined);
+  const [nieuwVan, setNieuwVan] = useState<Omit<Factuur, "id"> | undefined>(undefined);
   const [verwijder, setVerwijder] = useState<Factuur | null>(null);
+
+  // Maakt automatisch een concept-factuur op basis van een doorgeschakeld project
+  // (Stedin-klantgegevens + PD-nummer + wijk als regel). Aantal en tarief vul je nog in.
+  const maakConcept = (p: Project): Omit<Factuur, "id"> => ({
+    nummer: `${new Date().getFullYear()}-${String(facturen.length + 1).padStart(4, "0")}`,
+    datum: new Date().toISOString().slice(0, 10),
+    ...STEDIN_KLANT,
+    pdNummer: p.pdNummer ?? "",
+    betaaltermijn: 14,
+    regels: [{ omschrijving: p.wijk, aantal: 1, prijs: 0 }],
+    btwPercentage: 21,
+    status: "Concept",
+    notitie: "",
+  });
+  const nieuweLege = () => { setBewerk(undefined); setNieuwVan(undefined); setModus("formulier"); };
+  const nieuweVanProject = (p: Project) => { setBewerk(undefined); setNieuwVan(maakConcept(p)); setModus("formulier"); };
 
   // Deep-link: open meteen de factuur die vanuit een andere flow is aangemaakt.
   useEffect(() => {
@@ -175,7 +227,7 @@ export function Facturen({ initieelFactuur }: { initieelFactuur?: string }) {
   };
 
   if (modus === "formulier") {
-    return <FactuurForm bestaande={bewerk} onKlaar={() => setModus("lijst")} />;
+    return <FactuurForm bestaande={bewerk} initieel={nieuwVan} onKlaar={() => setModus("lijst")} />;
   }
 
   return (
@@ -191,7 +243,7 @@ export function Facturen({ initieelFactuur }: { initieelFactuur?: string }) {
               <FileSpreadsheet className="h-4 w-4 text-green-600" /> Excel
             </button>
           )}
-          <button type="button" onClick={() => { setBewerk(undefined); setModus("formulier"); }} className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-brand-700">
+          <button type="button" onClick={nieuweLege} className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-brand-700">
             <Plus className="h-4 w-4" /> Nieuwe factuur
           </button>
         </div>
@@ -217,7 +269,7 @@ export function Facturen({ initieelFactuur }: { initieelFactuur?: string }) {
                   <div className="text-xs text-ink-500">{[p.wijk, p.doorgestuurdOp ? `doorgeschakeld ${datumKort(p.doorgestuurdOp)}` : ""].filter(Boolean).join(" · ")}</div>
                 </div>
                 <div className="flex w-full items-center gap-2 sm:w-auto">
-                  <button type="button" onClick={() => { setBewerk(undefined); setModus("formulier"); }} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700 sm:flex-none"><Plus className="h-4 w-4" /> Factuur maken</button>
+                  <button type="button" onClick={() => nieuweVanProject(p)} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700 sm:flex-none"><Plus className="h-4 w-4" /> Factuur maken</button>
                   <button type="button" onClick={() => updateProject(p.id, { boekhouding: "gefactureerd", gefactureerdOp: new Date().toISOString() })} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm font-semibold text-green-700 hover:bg-green-100 sm:flex-none"><Check className="h-4 w-4" /> Gefactureerd</button>
                 </div>
               </div>

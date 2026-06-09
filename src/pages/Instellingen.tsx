@@ -30,7 +30,7 @@ function BedrijfTab({ isLeiding }: { isLeiding: boolean }) {
     <div>
       <label className={labelCls}>{label}</label>
       <input
-        value={draft[key]}
+        value={draft[key] ?? ""}
         disabled={!bewerk}
         onChange={(e) => setDraft((d) => ({ ...d, [key]: e.target.value }))}
         placeholder={ph}
@@ -84,6 +84,7 @@ function BedrijfTab({ isLeiding }: { isLeiding: boolean }) {
             {rij("KvK-nummer", "kvk")}
             {rij("BTW-nummer", "btw")}
             {rij("IBAN", "iban")}
+            {rij("BIC", "bic")}
           </div>
 
           <p className="text-xs text-ink-400">
