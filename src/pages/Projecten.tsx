@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Plus, FolderKanban, X, FileScan, CalendarRange, Send, ArrowUpRight, Check } from "lucide-react";
+import { Plus, FolderKanban, X, FileScan, CalendarRange, Send, ArrowUpRight, Check, ChevronRight, Database } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { useNav } from "../store/NavContext";
 import { Card, Badge } from "../components/ui";
@@ -31,54 +31,206 @@ function KoppelRij({ label, value, opties, onKies, onOpen }: { label: string; va
   );
 }
 
-export function Projecten({ initieelProject }: { initieelProject?: string }) {
-  const { users, projects, taken, addTaak, addProject, updateProject, rondes, saneringen, voorschouwMappen, tauwOpdrachten } = useApp();
+// Eén projectkaart — standaard ingeklapt; klik op de kop om uit te klappen.
+function ProjectKaart({ project, initieelProject, onScan }: { project: Project; initieelProject?: string; onScan: (p: { id: string; naam: string }) => void }) {
+  const { users, taken, addTaak, updateProject, rondes, saneringen, voorschouwMappen, tauwOpdrachten } = useApp();
   const { navigeer } = useNav();
-  const doelRef = useRef<HTMLDivElement | null>(null);
-  const [scan, setScan] = useState<{ id: string; naam: string } | null>(null);
-
-  // Keuzelijsten om een project te koppelen aan werk uit de andere onderdelen.
-  const rondeOpties: KeuzeOptie[] = rondes.map((b) => ({ waarde: b.id, label: [b.straat, b.plaats].filter(Boolean).join(", ") || "Ronde" }));
-  const saneringOpties: KeuzeOptie[] = saneringen.map((s) => ({ waarde: s.id, label: [s.naam, s.regio].filter(Boolean).join(" · ") || "Sanering" }));
-  const voorschouwOpties: KeuzeOptie[] = voorschouwMappen.map((v) => ({ waarde: v.id, label: v.naam || "Map" }));
-  const tauwOpties: KeuzeOptie[] = tauwOpdrachten.map((t) => ({ waarde: t.id, label: [t.referentie, t.regio].filter(Boolean).join(" · ") || "TAUW" }));
-  const zetKoppeling = (p: Project, sleutel: KoppelSleutel, waarde: string) => {
-    const k = { ...(p.koppelingen ?? {}) };
-    if (waarde) k[sleutel] = waarde; else delete k[sleutel];
-    updateProject(p.id, { koppelingen: k });
-  };
-  // Afgeronde projecten die nog niet naar de boekhouding zijn gestuurd — klaar voor de volgende stap.
-  const afgerondKlaar = projects.filter((p) => p.afgerondOp && !p.boekhouding);
-  const naarBoekhouding = (id: string) => updateProject(id, { boekhouding: "te_factureren", doorgestuurdOp: new Date().toISOString() });
-
-  // Scroll naar het project waar een melding naartoe linkt.
-  useEffect(() => {
-    if (initieelProject) doelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [initieelProject]);
-
-  const [taakBijProject, setTaakBijProject] = useState<string | null>(null);
+  const [open, setOpen] = useState(project.id === initieelProject); // deep-link opent meteen
+  const [taakOpen, setTaakOpen] = useState(false);
   const [taakTitel, setTaakTitel] = useState("");
   const [taakNotitie, setTaakNotitie] = useState("");
   const [taakDeadline, setTaakDeadline] = useState("");
   const [taakPersoon, setTaakPersoon] = useState(""); // "" = hele team
 
+  const projectTaken = taken.filter((t) => t.projectId === project.id);
+  const rondeOpties: KeuzeOptie[] = rondes.map((b) => ({ waarde: b.id, label: [b.straat, b.plaats].filter(Boolean).join(", ") || "Ronde" }));
+  const saneringOpties: KeuzeOptie[] = saneringen.map((s) => ({ waarde: s.id, label: [s.naam, s.regio].filter(Boolean).join(" · ") || "Sanering" }));
+  const voorschouwOpties: KeuzeOptie[] = voorschouwMappen.map((v) => ({ waarde: v.id, label: v.naam || "Map" }));
+  const tauwOpties: KeuzeOptie[] = tauwOpdrachten.map((t) => ({ waarde: t.id, label: [t.referentie, t.regio].filter(Boolean).join(" · ") || "TAUW" }));
+  const zetKoppeling = (sleutel: KoppelSleutel, waarde: string) => {
+    const k = { ...(project.koppelingen ?? {}) };
+    if (waarde) k[sleutel] = waarde; else delete k[sleutel];
+    updateProject(project.id, { koppelingen: k });
+  };
+  const voegTaakToe = () => {
+    if (!taakTitel.trim()) return;
+    addTaak({ projectId: project.id, titel: taakTitel.trim(), toegewezenAan: taakPersoon, deadline: taakDeadline ? datumKort(taakDeadline) : "Nog te plannen", status: "Te doen", notitie: taakNotitie.trim() });
+    setTaakTitel(""); setTaakNotitie(""); setTaakDeadline(""); setTaakOpen(false);
+  };
+
+  const stageBadge = project.boekhouding === "gefactureerd" ? <Badge tone="green">Gefactureerd</Badge>
+    : project.boekhouding === "te_factureren" ? <Badge tone="indigo">Bij boekhouding</Badge>
+    : project.afgerondOp ? <Badge tone="amber">Afgerond</Badge>
+    : null;
+
+  return (
+    <Card className="overflow-hidden">
+      {/* Kop — klikbaar om in/uit te klappen */}
+      <div className="flex items-center justify-between gap-2 border-b border-ink-100 px-5 py-4">
+        <button type="button" onClick={() => setOpen((o) => !o)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+          <ChevronRight className={`h-4 w-4 shrink-0 text-ink-400 transition-transform ${open ? "rotate-90" : ""}`} />
+          <div className="rounded-lg bg-brand-50 p-2 text-brand-600"><FolderKanban className="h-5 w-5" /></div>
+          <div className="min-w-0">
+            <h3 className="truncate text-sm font-semibold text-ink-900">{project.naam}</h3>
+            <p className="truncate text-xs text-ink-500">{[project.wijk, project.pdNummer].filter(Boolean).join(" · ")}</p>
+          </div>
+          {stageBadge && <span className="hidden shrink-0 sm:inline">{stageBadge}</span>}
+        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          <button type="button" onClick={() => navigeer("planning", { project: project.id })} className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-2.5 py-1.5 text-xs font-semibold text-ink-600 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700" title="Stedin-weekplanning openen en invullen">
+            <CalendarRange className="h-4 w-4" /> Planning
+          </button>
+          <button type="button" onClick={() => onScan({ id: project.id, naam: project.naam })} className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-2.5 py-1.5 text-xs font-semibold text-ink-600 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700" title="Bestand (PDF/Excel) scannen en adressen importeren">
+            <FileScan className="h-4 w-4" /> Scan
+          </button>
+          <span className="hidden text-xs text-ink-400 sm:inline">{projectTaken.filter((t) => t.status === "Klaar").length}/{projectTaken.length} klaar</span>
+        </div>
+      </div>
+
+      {open && (
+        <>
+          {/* PD-nummer + doorschakelen naar de boekhouding */}
+          <div className="flex flex-wrap items-center gap-2 border-b border-ink-100 bg-ink-50/40 px-5 py-2.5">
+            <span className="text-xs font-semibold text-ink-500">PD-nummer</span>
+            <input
+              value={project.pdNummer ?? ""}
+              onChange={(e) => updateProject(project.id, { pdNummer: e.target.value })}
+              placeholder="bijv. PD153335"
+              className="w-40 rounded-lg border border-ink-200 px-2.5 py-1.5 text-sm font-medium text-ink-800 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+            />
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              {project.boekhouding === "gefactureerd" ? (
+                <>
+                  <Badge tone="green">Gefactureerd ✓</Badge>
+                  <button type="button" onClick={() => updateProject(project.id, { boekhouding: "te_factureren", gefactureerdOp: undefined })} className="text-xs font-medium text-ink-400 hover:text-ink-600" title="Per ongeluk gefactureerd? Zet terug naar de boekhouding">corrigeren</button>
+                </>
+              ) : project.boekhouding === "te_factureren" ? (
+                <>
+                  <Badge tone="indigo">Bij boekhouding</Badge>
+                  <button type="button" onClick={() => updateProject(project.id, { boekhouding: undefined, doorgestuurdOp: undefined })} className="text-xs font-medium text-ink-400 hover:text-ink-600">terughalen</button>
+                </>
+              ) : project.afgerondOp ? (
+                <>
+                  <Badge tone="amber">Afgerond</Badge>
+                  <button
+                    type="button"
+                    onClick={() => updateProject(project.id, { boekhouding: "te_factureren", doorgestuurdOp: new Date().toISOString() })}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-700 hover:bg-green-100"
+                    title="Dit afgeronde project doorschakelen naar de boekhouding"
+                  >
+                    <Send className="h-3.5 w-3.5" /> Naar boekhouding
+                  </button>
+                  <button type="button" onClick={() => updateProject(project.id, { afgerondOp: undefined })} className="text-xs font-medium text-ink-400 hover:text-ink-600">heropenen</button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => updateProject(project.id, { afgerondOp: new Date().toISOString() })}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-100"
+                  title="Markeer dit project als afgerond — de leiding krijgt er een melding van"
+                >
+                  <Check className="h-3.5 w-3.5" /> Project afronden
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Koppelen aan werk uit andere onderdelen */}
+          <div className="space-y-2 border-b border-ink-100 px-5 py-3">
+            <span className="text-xs font-semibold text-ink-500">Gekoppeld werk</span>
+            <div className="grid gap-2 lg:grid-cols-2">
+              <KoppelRij label="Brieven & Routes" value={project.koppelingen?.brievenronde ?? ""} opties={rondeOpties} onKies={(v) => zetKoppeling("brievenronde", v)} onOpen={() => navigeer("brieven", { ronde: project.koppelingen?.brievenronde })} />
+              <KoppelRij label="Saneren" value={project.koppelingen?.sanering ?? ""} opties={saneringOpties} onKies={(v) => zetKoppeling("sanering", v)} onOpen={() => navigeer("saneren", { saneringId: project.koppelingen?.sanering })} />
+              <KoppelRij label="Voorschouwen" value={project.koppelingen?.voorschouwMap ?? ""} opties={voorschouwOpties} onKies={(v) => zetKoppeling("voorschouwMap", v)} onOpen={() => navigeer("voorschouwen")} />
+              <KoppelRij label="TAUW" value={project.koppelingen?.tauw ?? ""} opties={tauwOpties} onKies={(v) => zetKoppeling("tauw", v)} onOpen={() => navigeer("tauw", { tauwId: project.koppelingen?.tauw })} />
+            </div>
+          </div>
+
+          <div className="space-y-2.5 p-4">
+            {projectTaken.length === 0 && (
+              <p className="px-1 text-sm text-ink-400">Nog geen taken in dit project.</p>
+            )}
+            {projectTaken.map((t) => (
+              <TaakKaart key={t.id} taak={t} toonToewijzing />
+            ))}
+
+            {taakOpen ? (
+              <div className="space-y-2 rounded-xl border border-ink-200 bg-ink-50/50 p-3">
+                <input
+                  autoFocus
+                  value={taakTitel}
+                  onChange={(e) => setTaakTitel(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && voegTaakToe()}
+                  placeholder="Wat moet er gebeuren?"
+                  className="w-full rounded-lg border border-ink-200 px-3 py-2 text-sm font-medium outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+                />
+                <textarea
+                  value={taakNotitie}
+                  onChange={(e) => setTaakNotitie(e.target.value)}
+                  rows={2}
+                  placeholder="Notitie / extra uitleg — waar moet de werknemer op letten? (optioneel)"
+                  className="w-full resize-none rounded-lg border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+                />
+                <div className="flex flex-wrap items-end gap-2">
+                  <label className="block">
+                    <span className="mb-1 block text-[11px] font-semibold text-ink-500">Voor wie?</span>
+                    <Keuze value={taakPersoon} onChange={setTaakPersoon} opties={[{ waarde: "", label: "Hele team" }, ...users.map((u) => ({ waarde: u.id, label: u.naam }))]} />
+                  </label>
+                  <label className="block w-48">
+                    <span className="mb-1 block text-[11px] font-semibold text-ink-500">Deadline (optioneel)</span>
+                    <DatumKiezer value={taakDeadline} onChange={setTaakDeadline} placeholder="Geen deadline" />
+                  </label>
+                  <button type="button" onClick={voegTaakToe} disabled={!taakTitel.trim()} className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-40">
+                    Taak toevoegen
+                  </button>
+                  <button type="button" onClick={() => setTaakOpen(false)} className="rounded-lg px-2 py-2 text-sm text-ink-500 hover:bg-ink-50">Annuleer</button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => { setTaakOpen(true); setTaakTitel(""); setTaakNotitie(""); setTaakDeadline(""); setTaakPersoon(""); }}
+                className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-medium text-ink-500 hover:bg-ink-50 hover:text-ink-700"
+              >
+                <Plus className="h-4 w-4" />
+                Taak toevoegen
+              </button>
+            )}
+          </div>
+
+          <ProjectBord projectId={project.id} defaultOpen={project.id === initieelProject} />
+        </>
+      )}
+    </Card>
+  );
+}
+
+export function Projecten({ initieelProject }: { initieelProject?: string }) {
+  const { projects, addProject, updateProject } = useApp();
+  const doelRef = useRef<HTMLDivElement | null>(null);
+  const [scan, setScan] = useState<{ id: string; naam: string } | null>(null);
+
+  // Gefactureerde projecten gaan automatisch naar de "Database" (uit de actieve lijst, maar bewaard + gesynct).
+  const actief = projects.filter((p) => p.boekhouding !== "gefactureerd");
+  const gearchiveerd = projects.filter((p) => p.boekhouding === "gefactureerd");
+  const [dbOpen, setDbOpen] = useState(gearchiveerd.some((p) => p.id === initieelProject));
+
+  // Afgeronde projecten die nog niet naar de boekhouding zijn gestuurd — actie voor de leiding.
+  const afgerondKlaar = projects.filter((p) => p.afgerondOp && !p.boekhouding);
+  const naarBoekhouding = (id: string) => updateProject(id, { boekhouding: "te_factureren", doorgestuurdOp: new Date().toISOString() });
+
+  // Scroll naar het project waar een melding naartoe linkt (open de Database als het daar staat).
+  useEffect(() => {
+    if (!initieelProject) return;
+    if (gearchiveerd.some((p) => p.id === initieelProject)) setDbOpen(true);
+    doelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initieelProject]);
+
   const [nieuwProject, setNieuwProject] = useState(false);
   const [projNaam, setProjNaam] = useState("");
   const [projWijk, setProjWijk] = useState("");
   const [projPd, setProjPd] = useState("");
-
-  const voegTaakToe = (projectId: string) => {
-    if (!taakTitel.trim()) return;
-    addTaak({
-      projectId,
-      titel: taakTitel.trim(),
-      toegewezenAan: taakPersoon, // "" = hele team
-      deadline: taakDeadline ? datumKort(taakDeadline) : "Nog te plannen",
-      status: "Te doen",
-      notitie: taakNotitie.trim(),
-    });
-    setTaakTitel(""); setTaakNotitie(""); setTaakDeadline(""); setTaakBijProject(null);
-  };
 
   const voegProjectToe = () => {
     if (!projNaam.trim()) return;
@@ -91,11 +243,12 @@ export function Projecten({ initieelProject }: { initieelProject?: string }) {
 
   return (
     <div className="space-y-6">
-      {/* Projecten header + nieuw project */}
+      {/* Header + nieuw project */}
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-ink-700">Alle projecten</h3>
+        <h3 className="text-sm font-semibold text-ink-700">Lopende projecten</h3>
         {!nieuwProject && (
           <button
+            type="button"
             onClick={() => setNieuwProject(true)}
             className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700"
           >
@@ -109,7 +262,7 @@ export function Projecten({ initieelProject }: { initieelProject?: string }) {
         <Card className="p-4">
           <div className="mb-3 flex items-center justify-between">
             <h4 className="text-sm font-semibold text-ink-900">Nieuw project</h4>
-            <button onClick={() => setNieuwProject(false)} className="text-ink-400 hover:text-ink-600">
+            <button type="button" onClick={() => setNieuwProject(false)} title="Sluiten" className="text-ink-400 hover:text-ink-600">
               <X className="h-4 w-4" />
             </button>
           </div>
@@ -137,6 +290,7 @@ export function Projecten({ initieelProject }: { initieelProject?: string }) {
             </div>
           </div>
           <button
+            type="button"
             onClick={voegProjectToe}
             className="mt-3 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
           >
@@ -145,7 +299,7 @@ export function Projecten({ initieelProject }: { initieelProject?: string }) {
         </Card>
       )}
 
-      {/* Afgeronde projecten die nog naar de boekhouding moeten — melding/actie voor de leiding */}
+      {/* Afgeronde projecten die nog naar de boekhouding moeten */}
       {afgerondKlaar.length > 0 && (
         <Card className="border-2 border-amber-200 bg-amber-50/50 p-4">
           <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-ink-900">
@@ -169,169 +323,40 @@ export function Projecten({ initieelProject }: { initieelProject?: string }) {
         </Card>
       )}
 
-      {projects.length === 0 && !nieuwProject && (
+      {actief.length === 0 && !nieuwProject && (
         <Card className="p-10 text-center">
           <FolderKanban className="mx-auto h-10 w-10 text-ink-300" />
-          <p className="mt-3 text-sm text-ink-500">Nog geen projecten. Klik op <span className="font-medium">Nieuw project</span> om te beginnen.</p>
+          <p className="mt-3 text-sm text-ink-500">{gearchiveerd.length > 0 ? "Geen lopende projecten — afgeronde staan in de Database hieronder." : <>Nog geen projecten. Klik op <span className="font-medium">Nieuw project</span> om te beginnen.</>}</p>
         </Card>
       )}
 
-      {/* Projectkaarten */}
-      {projects.map((project) => {
-        const projectTaken = taken.filter((t) => t.projectId === project.id);
-        return (
-          <div key={project.id} ref={project.id === initieelProject ? doelRef : undefined}>
-          <Card className="overflow-hidden">
-            <div className="flex items-center justify-between border-b border-ink-100 px-5 py-4">
-              <div className="flex items-center gap-3">
-                <div className="rounded-lg bg-brand-50 p-2 text-brand-600">
-                  <FolderKanban className="h-5 w-5" />
+      {/* Actieve projectkaarten (standaard ingeklapt) */}
+      {actief.map((project) => (
+        <div key={project.id} ref={project.id === initieelProject ? doelRef : undefined}>
+          <ProjectKaart project={project} initieelProject={initieelProject} onScan={setScan} />
+        </div>
+      ))}
+
+      {/* Database — gefactureerde projecten (uit de werkmappen, maar bewaard + gesynct) */}
+      {gearchiveerd.length > 0 && (
+        <div className="pt-1">
+          <button type="button" onClick={() => setDbOpen((o) => !o)} className="flex w-full items-center gap-2 rounded-xl border border-ink-200 bg-white px-4 py-3 text-sm font-semibold text-ink-700 shadow-card hover:bg-ink-50">
+            <Database className="h-4 w-4 text-ink-500" />
+            Database — gefactureerde projecten
+            <span className="rounded-full bg-ink-200 px-2 py-0.5 text-xs font-bold text-ink-600">{gearchiveerd.length}</span>
+            <ChevronRight className={`ml-auto h-4 w-4 text-ink-400 transition-transform ${dbOpen ? "rotate-90" : ""}`} />
+          </button>
+          {dbOpen && (
+            <div className="mt-3 space-y-6">
+              {gearchiveerd.map((project) => (
+                <div key={project.id} ref={project.id === initieelProject ? doelRef : undefined}>
+                  <ProjectKaart project={project} initieelProject={initieelProject} onScan={setScan} />
                 </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-ink-900">{project.naam}</h3>
-                  <p className="text-xs text-ink-500">{project.wijk}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => navigeer("planning", { project: project.id })}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-2.5 py-1.5 text-xs font-semibold text-ink-600 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700"
-                  title="Stedin-weekplanning openen en invullen"
-                >
-                  <CalendarRange className="h-4 w-4" /> Planning
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setScan({ id: project.id, naam: project.naam })}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-2.5 py-1.5 text-xs font-semibold text-ink-600 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700"
-                  title="Bestand (PDF/Excel) scannen en adressen importeren"
-                >
-                  <FileScan className="h-4 w-4" /> Scan
-                </button>
-                <span className="hidden text-xs text-ink-400 sm:inline">
-                  {projectTaken.filter((t) => t.status === "Klaar").length}/{projectTaken.length} klaar
-                </span>
-              </div>
-            </div>
-
-            {/* PD-nummer + doorschakelen naar de boekhouding */}
-            <div className="flex flex-wrap items-center gap-2 border-b border-ink-100 bg-ink-50/40 px-5 py-2.5">
-              <span className="text-xs font-semibold text-ink-500">PD-nummer</span>
-              <input
-                value={project.pdNummer ?? ""}
-                onChange={(e) => updateProject(project.id, { pdNummer: e.target.value })}
-                placeholder="bijv. PD153335"
-                className="w-40 rounded-lg border border-ink-200 px-2.5 py-1.5 text-sm font-medium text-ink-800 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
-              />
-              <div className="ml-auto flex flex-wrap items-center gap-2">
-                {project.boekhouding === "gefactureerd" ? (
-                  <>
-                    <Badge tone="green">Gefactureerd ✓</Badge>
-                    <button type="button" onClick={() => updateProject(project.id, { boekhouding: "te_factureren", gefactureerdOp: undefined })} className="text-xs font-medium text-ink-400 hover:text-ink-600" title="Per ongeluk gefactureerd? Zet terug naar de boekhouding">corrigeren</button>
-                  </>
-                ) : project.boekhouding === "te_factureren" ? (
-                  <>
-                    <Badge tone="indigo">Bij boekhouding</Badge>
-                    <button type="button" onClick={() => updateProject(project.id, { boekhouding: undefined, doorgestuurdOp: undefined })} className="text-xs font-medium text-ink-400 hover:text-ink-600">terughalen</button>
-                  </>
-                ) : project.afgerondOp ? (
-                  <>
-                    <Badge tone="amber">Afgerond</Badge>
-                    <button
-                      type="button"
-                      onClick={() => updateProject(project.id, { boekhouding: "te_factureren", doorgestuurdOp: new Date().toISOString() })}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-700 hover:bg-green-100"
-                      title="Dit afgeronde project doorschakelen naar de boekhouding"
-                    >
-                      <Send className="h-3.5 w-3.5" /> Naar boekhouding
-                    </button>
-                    <button type="button" onClick={() => updateProject(project.id, { afgerondOp: undefined })} className="text-xs font-medium text-ink-400 hover:text-ink-600">heropenen</button>
-                  </>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => updateProject(project.id, { afgerondOp: new Date().toISOString() })}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-100"
-                    title="Markeer dit project als afgerond — de leiding krijgt er een melding van"
-                  >
-                    <Check className="h-3.5 w-3.5" /> Project afronden
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Koppelen aan werk uit andere onderdelen */}
-            <div className="space-y-2 border-b border-ink-100 px-5 py-3">
-              <span className="text-xs font-semibold text-ink-500">Gekoppeld werk</span>
-              <div className="grid gap-2 lg:grid-cols-2">
-                <KoppelRij label="Brieven & Routes" value={project.koppelingen?.brievenronde ?? ""} opties={rondeOpties} onKies={(v) => zetKoppeling(project, "brievenronde", v)} onOpen={() => navigeer("brieven", { ronde: project.koppelingen?.brievenronde })} />
-                <KoppelRij label="Saneren" value={project.koppelingen?.sanering ?? ""} opties={saneringOpties} onKies={(v) => zetKoppeling(project, "sanering", v)} onOpen={() => navigeer("saneren", { saneringId: project.koppelingen?.sanering })} />
-                <KoppelRij label="Voorschouwen" value={project.koppelingen?.voorschouwMap ?? ""} opties={voorschouwOpties} onKies={(v) => zetKoppeling(project, "voorschouwMap", v)} onOpen={() => navigeer("voorschouwen")} />
-                <KoppelRij label="TAUW" value={project.koppelingen?.tauw ?? ""} opties={tauwOpties} onKies={(v) => zetKoppeling(project, "tauw", v)} onOpen={() => navigeer("tauw", { tauwId: project.koppelingen?.tauw })} />
-              </div>
-            </div>
-
-            <div className="space-y-2.5 p-4">
-              {projectTaken.length === 0 && (
-                <p className="px-1 text-sm text-ink-400">Nog geen taken in dit project.</p>
-              )}
-              {projectTaken.map((t) => (
-                <TaakKaart key={t.id} taak={t} toonToewijzing />
               ))}
-
-              {taakBijProject === project.id ? (
-                <div className="space-y-2 rounded-xl border border-ink-200 bg-ink-50/50 p-3">
-                  <input
-                    autoFocus
-                    value={taakTitel}
-                    onChange={(e) => setTaakTitel(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && voegTaakToe(project.id)}
-                    placeholder="Wat moet er gebeuren?"
-                    className="w-full rounded-lg border border-ink-200 px-3 py-2 text-sm font-medium outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
-                  />
-                  <textarea
-                    value={taakNotitie}
-                    onChange={(e) => setTaakNotitie(e.target.value)}
-                    rows={2}
-                    placeholder="Notitie / extra uitleg — waar moet de werknemer op letten? (optioneel)"
-                    className="w-full resize-none rounded-lg border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
-                  />
-                  <div className="flex flex-wrap items-end gap-2">
-                    <label className="block">
-                      <span className="mb-1 block text-[11px] font-semibold text-ink-500">Voor wie?</span>
-                      <Keuze value={taakPersoon} onChange={setTaakPersoon} opties={[{ waarde: "", label: "Hele team" }, ...users.map((u) => ({ waarde: u.id, label: u.naam }))]} />
-                    </label>
-                    <label className="block w-48">
-                      <span className="mb-1 block text-[11px] font-semibold text-ink-500">Deadline (optioneel)</span>
-                      <DatumKiezer value={taakDeadline} onChange={setTaakDeadline} placeholder="Geen deadline" />
-                    </label>
-                    <button type="button" onClick={() => voegTaakToe(project.id)} disabled={!taakTitel.trim()} className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-40">
-                      Taak toevoegen
-                    </button>
-                    <button type="button" onClick={() => setTaakBijProject(null)} className="rounded-lg px-2 py-2 text-sm text-ink-500 hover:bg-ink-50">Annuleer</button>
-                  </div>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTaakBijProject(project.id);
-                    setTaakTitel(""); setTaakNotitie(""); setTaakDeadline(""); setTaakPersoon("");
-                  }}
-                  className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-medium text-ink-500 hover:bg-ink-50 hover:text-ink-700"
-                >
-                  <Plus className="h-4 w-4" />
-                  Taak toevoegen
-                </button>
-              )}
             </div>
-
-            <ProjectBord projectId={project.id} defaultOpen={project.id === initieelProject} />
-          </Card>
-          </div>
-        );
-      })}
+          )}
+        </div>
+      )}
 
       <BestandScanModal open={!!scan} projectId={scan?.id ?? ""} projectNaam={scan?.naam ?? ""} onSluit={() => setScan(null)} />
     </div>
