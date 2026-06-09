@@ -1,4 +1,5 @@
 import type { Bedrijf, Instellingen, Verlof, Taak, Brievenronde, Afspraak, Voorschouw, User, Project, ProjectPost, TauwOpdracht, Sanering } from "./types";
+import { supabaseAan } from "./supabase";
 
 const isISODatum = (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d);
 const dezeISO = (offset = 0) => { const t = new Date(); t.setDate(t.getDate() + offset); return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`; };
@@ -15,7 +16,7 @@ export type Melding = {
 // Systeemmeldingen voor de leiding (incomplete gegevens, integraties, openstaande aanvragen).
 export function berekenMeldingen(bedrijf: Bedrijf, inst: Instellingen, verlof: Verlof[]): Melding[] {
   const m: Melding[] = [];
-  if (!inst.supabaseUrl) m.push({ id: "db", ernst: "info", titel: "Geen centrale database", tekst: "Gegevens staan nu lokaal op elk apparaat. Koppel Supabase om alles te delen.", navKey: "instellingen" });
+  if (!supabaseAan && !inst.supabaseUrl) m.push({ id: "db", ernst: "info", titel: "Geen centrale database", tekst: "Gegevens staan nu lokaal op elk apparaat. Koppel Supabase om alles te delen.", navKey: "instellingen" });
   if (!inst.whatsappToken) m.push({ id: "wa", ernst: "info", titel: "WhatsApp-API niet ingesteld", tekst: "Berichten worden nu handmatig geopend.", navKey: "instellingen" });
   if (!bedrijf.btw) m.push({ id: "btw", ernst: "waarschuwing", titel: "BTW-nummer ontbreekt", tekst: "Vul je BTW-nummer in bij Instellingen voor volledige facturen.", navKey: "instellingen" });
   if (!bedrijf.iban) m.push({ id: "iban", ernst: "waarschuwing", titel: "IBAN ontbreekt", tekst: "Vul je IBAN in zodat klanten weten waarheen te betalen.", navKey: "instellingen" });
