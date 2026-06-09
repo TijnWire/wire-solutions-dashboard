@@ -25,8 +25,13 @@
     height: 100%;
     overflow: hidden;
   }
-  /* Voorkom dat iOS inzoomt bij het focussen van een invoerveld (gebeurt bij lettergrootte < 16px). */
+  /* Mobiel: de hele app iets compacter. Tailwind-afstanden en -tekst gebruiken rem, dus een
+     kleinere basismaat verkleint alles proportioneel — zo past er meer op het scherm. */
   @media (max-width: 640px) {
+    html {
+      font-size: 14px;
+    }
+    /* Invoervelden tóch op 16px houden, anders zoomt iOS in bij het focussen. */
     input,
     textarea,
     select {
