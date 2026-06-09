@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { Plus, FolderKanban, Users2, X, FileScan, CalendarRange } from "lucide-react";
+import { Plus, FolderKanban, Users2, X, FileScan, CalendarRange, Send } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { useNav } from "../store/NavContext";
-import { Card } from "../components/ui";
+import { Card, Badge } from "../components/ui";
 import { TaakKaart } from "../components/TaakKaart";
 import { ProjectBord } from "../components/ProjectBord";
 import { BestandScanModal } from "../components/BestandScanModal";
@@ -14,7 +14,7 @@ import { ROL_LABEL } from "../lib/types";
 const datumKort = (iso: string) => { const d = iso.slice(0, 10).split("-"); return d.length === 3 ? `${d[2]}-${d[1]}-${d[0]}` : iso; };
 
 export function TeamProjecten({ initieelProject }: { initieelProject?: string }) {
-  const { users, projects, taken, addTaak, addProject } = useApp();
+  const { users, projects, taken, addTaak, addProject, updateProject } = useApp();
   const { navigeer } = useNav();
   const doelRef = useRef<HTMLDivElement | null>(null);
   const [scan, setScan] = useState<{ id: string; naam: string } | null>(null);
@@ -183,6 +183,36 @@ export function TeamProjecten({ initieelProject }: { initieelProject?: string })
                 <span className="hidden text-xs text-ink-400 sm:inline">
                   {projectTaken.filter((t) => t.status === "Klaar").length}/{projectTaken.length} klaar
                 </span>
+              </div>
+            </div>
+
+            {/* PD-nummer + doorschakelen naar de boekhouding */}
+            <div className="flex flex-wrap items-center gap-2 border-b border-ink-100 bg-ink-50/40 px-5 py-2.5">
+              <span className="text-xs font-semibold text-ink-500">PD-nummer</span>
+              <input
+                value={project.pdNummer ?? ""}
+                onChange={(e) => updateProject(project.id, { pdNummer: e.target.value })}
+                placeholder="bijv. PD153335"
+                className="w-40 rounded-lg border border-ink-200 px-2.5 py-1.5 text-sm font-medium text-ink-800 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+              />
+              <div className="ml-auto flex items-center gap-2">
+                {project.boekhouding === "gefactureerd" ? (
+                  <Badge tone="green">Gefactureerd</Badge>
+                ) : project.boekhouding === "te_factureren" ? (
+                  <>
+                    <Badge tone="indigo">Bij boekhouding</Badge>
+                    <button type="button" onClick={() => updateProject(project.id, { boekhouding: undefined, doorgestuurdOp: undefined })} className="text-xs font-medium text-ink-400 hover:text-ink-600">terughalen</button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => updateProject(project.id, { boekhouding: "te_factureren", doorgestuurdOp: new Date().toISOString() })}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-700 hover:bg-green-100"
+                    title="Dit afgeronde project doorschakelen naar de boekhouding"
+                  >
+                    <Send className="h-3.5 w-3.5" /> Naar boekhouding
+                  </button>
+                )}
               </div>
             </div>
 

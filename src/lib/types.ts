@@ -46,11 +46,17 @@ export type Taak = {
   notitie: string;
 };
 
+// Status richting de boekhouding: doorgeschakeld om te factureren, of al gefactureerd.
+export type BoekhoudStatus = "te_factureren" | "gefactureerd";
 export type Project = {
   id: string;
   naam: string;
   wijk: string;
   toegewezenAan: string[]; // user ids
+  pdNummer?: string; // Stedin PD-nummer dat aan dit project hangt
+  boekhouding?: BoekhoudStatus; // leeg = nog niet doorgeschakeld naar de boekhouding
+  doorgestuurdOp?: string; // ISO — wanneer als afgerond naar de boekhouding gestuurd
+  gefactureerdOp?: string; // ISO
 };
 
 // ── Projectberichten: updates ("afgerond") en vragen, met reacties en afhandeling door de leiding ──

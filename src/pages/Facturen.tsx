@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Plus, ArrowLeft, Download, Pencil, Trash2, Receipt, X, FileSpreadsheet } from "lucide-react";
+import { Plus, ArrowLeft, Download, Pencil, Trash2, Receipt, X, FileSpreadsheet, Check } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { DatumKiezer } from "../components/DatumKiezer";
 import { Keuze } from "../components/Keuze";
@@ -13,6 +13,7 @@ const statusTone: Record<FactuurStatus, string> = {
   Verstuurd: "indigo",
   Betaald: "green",
 };
+const datumKort = (iso: string) => { const d = iso.slice(0, 10).split("-"); return d.length === 3 ? `${d[2]}-${d[1]}-${d[0]}` : iso; };
 const FACTUUR_STATUSSEN: FactuurStatus[] = ["Concept", "Verstuurd", "Betaald"];
 
 const veld =
@@ -146,7 +147,8 @@ function FactuurForm({ bestaande, onKlaar }: { bestaande?: Factuur; onKlaar: () 
 
 // ── Hoofdcomponent ──
 export function Facturen({ initieelFactuur }: { initieelFactuur?: string }) {
-  const { facturen, bedrijf, deleteFactuur } = useApp();
+  const { facturen, bedrijf, deleteFactuur, projects, updateProject } = useApp();
+  const teFactureren = projects.filter((p) => p.boekhouding === "te_factureren");
   const [modus, setModus] = useState<"lijst" | "formulier">("lijst");
   const [bewerk, setBewerk] = useState<Factuur | undefined>(undefined);
   const [verwijder, setVerwijder] = useState<Factuur | null>(null);
@@ -194,6 +196,35 @@ export function Facturen({ initieelFactuur }: { initieelFactuur?: string }) {
           </button>
         </div>
       </div>
+
+      {/* Te factureren: afgeronde projecten die de leiding heeft doorgeschakeld */}
+      {teFactureren.length > 0 && (
+        <Card className="overflow-hidden">
+          <div className="flex flex-wrap items-center gap-2 border-b border-ink-100 bg-amber-50/60 px-5 py-3">
+            <Receipt className="h-4 w-4 text-amber-600" />
+            <h3 className="text-sm font-bold text-ink-900">Te factureren</h3>
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">{teFactureren.length}</span>
+            <span className="ml-1 hidden text-xs text-ink-400 sm:inline">Afgeronde projecten, doorgeschakeld door de leiding</span>
+          </div>
+          <div className="divide-y divide-ink-100">
+            {teFactureren.map((p) => (
+              <div key={p.id} className="flex flex-wrap items-center gap-3 px-5 py-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {p.pdNummer && <span className="rounded-md bg-ink-900 px-2 py-0.5 text-xs font-bold tracking-wide text-white">{p.pdNummer}</span>}
+                    <span className="truncate text-sm font-semibold text-ink-900">{p.naam}</span>
+                  </div>
+                  <div className="text-xs text-ink-500">{[p.wijk, p.doorgestuurdOp ? `doorgeschakeld ${datumKort(p.doorgestuurdOp)}` : ""].filter(Boolean).join(" · ")}</div>
+                </div>
+                <div className="flex w-full items-center gap-2 sm:w-auto">
+                  <button type="button" onClick={() => { setBewerk(undefined); setModus("formulier"); }} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700 sm:flex-none"><Plus className="h-4 w-4" /> Factuur maken</button>
+                  <button type="button" onClick={() => updateProject(p.id, { boekhouding: "gefactureerd", gefactureerdOp: new Date().toISOString() })} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm font-semibold text-green-700 hover:bg-green-100 sm:flex-none"><Check className="h-4 w-4" /> Gefactureerd</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {facturen.length === 0 ? (
         <Card className="p-10 text-center">
