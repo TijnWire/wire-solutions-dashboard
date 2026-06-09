@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ChevronLeft, ChevronRight, Plus, Check, X, Trash2, CalendarDays, Plane } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { Card, Badge } from "../components/ui";
@@ -44,6 +44,16 @@ export function Agenda({ startForm = false }: { startForm?: boolean }) {
   const [vVan, setVVan] = useState(toISO(vandaag));
   const [vTot, setVTot] = useState(toISO(vandaag));
   const [vNotitie, setVNotitie] = useState("");
+
+  // Bij het openen van het verlofformulier: er soepel naartoe scrollen + even laten oplichten.
+  const [netGeopend, setNetGeopend] = useState(false);
+  useEffect(() => {
+    if (!formOpen) return;
+    document.getElementById("verlof-form")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    setNetGeopend(true);
+    const t = setTimeout(() => setNetGeopend(false), 1200);
+    return () => clearTimeout(t);
+  }, [formOpen]);
 
   const opslaanVerlof = () => {
     if (!vVan || !vTot) return;
@@ -180,18 +190,23 @@ export function Agenda({ startForm = false }: { startForm?: boolean }) {
 
       {/* Verlofformulier */}
       {formOpen && (
-        <Card className="space-y-3 p-4 ring-2 ring-brand-200">
+        <Card id="verlof-form" className={`space-y-3 p-4 transition-all duration-500 ${netGeopend ? "ring-4 ring-brand-400" : "ring-2 ring-brand-200"}`}>
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-ink-900">Verlof aanvragen</h3>
             <button type="button" onClick={() => setFormOpen(false)} className="text-ink-400 hover:text-ink-600"><X className="h-5 w-5" /></button>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
-            {isLeiding && (
-              <div>
-                <label className={labelCls}>Medewerker</label>
-                <Keuze value={vMedewerker} onChange={setVMedewerker} opties={users.map((u) => ({ waarde: u.id, label: u.naam }))} title="Medewerker" />
-              </div>
-            )}
+            <div>
+              <label className={labelCls}>Medewerker</label>
+              {/* Werknemer kan alleen voor zichzelf verlof aanvragen; leiding mag iedereen kiezen. */}
+              <Keuze
+                value={isLeiding ? vMedewerker : currentUser.id}
+                onChange={isLeiding ? setVMedewerker : () => {}}
+                opties={isLeiding ? users.map((u) => ({ waarde: u.id, label: u.naam })) : [{ waarde: currentUser.id, label: currentUser.naam }]}
+                disabled={!isLeiding}
+                title="Medewerker"
+              />
+            </div>
             <div>
               <label className={labelCls}>Soort</label>
               <Keuze value={vType} onChange={(w) => setVType(w as VerlofType)} opties={VERLOF_TYPES.map((t) => ({ waarde: t, label: t }))} title="Soort verlof" />
