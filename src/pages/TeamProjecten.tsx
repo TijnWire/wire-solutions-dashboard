@@ -33,6 +33,7 @@ export function TeamProjecten({ initieelProject }: { initieelProject?: string })
   const [nieuwProject, setNieuwProject] = useState(false);
   const [projNaam, setProjNaam] = useState("");
   const [projWijk, setProjWijk] = useState("");
+  const [projPd, setProjPd] = useState("");
 
   const voegTaakToe = (projectId: string) => {
     if (!taakTitel.trim()) return;
@@ -49,9 +50,10 @@ export function TeamProjecten({ initieelProject }: { initieelProject?: string })
 
   const voegProjectToe = () => {
     if (!projNaam.trim()) return;
-    addProject({ naam: projNaam.trim(), wijk: projWijk.trim() || "—", toegewezenAan: [] });
+    addProject({ naam: projNaam.trim(), wijk: projWijk.trim() || "—", toegewezenAan: [], pdNummer: projPd.trim() || undefined });
     setProjNaam("");
     setProjWijk("");
+    setProjPd("");
     setNieuwProject(false);
   };
 
@@ -123,20 +125,28 @@ export function TeamProjecten({ initieelProject }: { initieelProject?: string })
               <X className="h-4 w-4" />
             </button>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-3">
             <input
               autoFocus
               value={projNaam}
               onChange={(e) => setProjNaam(e.target.value)}
               placeholder="Projectnaam (bijv. Stedin-batch Delft)"
-              className="rounded-lg border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+              className="w-full rounded-lg border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
             />
-            <input
-              value={projWijk}
-              onChange={(e) => setProjWijk(e.target.value)}
-              placeholder="Wijk / locatie"
-              className="rounded-lg border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
-            />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <input
+                value={projWijk}
+                onChange={(e) => setProjWijk(e.target.value)}
+                placeholder="Wijk / locatie"
+                className="rounded-lg border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+              />
+              <input
+                value={projPd}
+                onChange={(e) => setProjPd(e.target.value)}
+                placeholder="PD-nummer (bijv. PD153335)"
+                className="rounded-lg border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+              />
+            </div>
           </div>
           <button
             onClick={voegProjectToe}
