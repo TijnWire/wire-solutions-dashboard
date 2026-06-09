@@ -57,19 +57,19 @@ function ContractKaart({ user }: { user: User }) {
         </div>
         <div>
           <label className={labelMini}>Uren per {periodeType.toLowerCase()}</label>
-          <input type="number" value={uren} onChange={(e) => setUren(Number(e.target.value))} title="Uren per periode" placeholder="0" className={veldCls} />
+          <input type="number" value={uren || ""} onChange={(e) => setUren(e.target.value === "" ? 0 : Number(e.target.value))} title="Uren per periode" placeholder="0" className={veldCls} />
         </div>
         <div>
           <label className={labelMini}>Bruto (€)</label>
-          <input type="number" step="0.01" value={bruto} onChange={(e) => setBruto(Number(e.target.value))} title="Bruto" placeholder="0" className={veldCls} />
+          <input type="number" step="0.01" value={bruto || ""} onChange={(e) => setBruto(e.target.value === "" ? 0 : Number(e.target.value))} title="Bruto" placeholder="0" className={veldCls} />
         </div>
         <div>
           <label className={labelMini}>Netto (€)</label>
-          <input type="number" step="0.01" value={netto} onChange={(e) => setNetto(Number(e.target.value))} title="Netto" placeholder="0" className={veldCls} />
+          <input type="number" step="0.01" value={netto || ""} onChange={(e) => setNetto(e.target.value === "" ? 0 : Number(e.target.value))} title="Netto" placeholder="0" className={veldCls} />
         </div>
         <div>
           <label className={labelMini}>Bijtelling auto (€)</label>
-          <input type="number" step="0.01" value={bijtelling} onChange={(e) => setBijtelling(Number(e.target.value))} title="Bijtelling auto" placeholder="0" className={veldCls} />
+          <input type="number" step="0.01" value={bijtelling || ""} onChange={(e) => setBijtelling(e.target.value === "" ? 0 : Number(e.target.value))} title="Bijtelling auto" placeholder="0" className={veldCls} />
         </div>
       </div>
       <div className="mt-3 flex items-center gap-3">

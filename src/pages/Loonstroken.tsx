@@ -105,7 +105,7 @@ function LoonstrookForm({ bestaande, onKlaar }: { bestaande?: Loonstrook; onKlaa
       <Card className="space-y-4 p-4">
         <div>
           <label className={labelCls}>Medewerker</label>
-          <Keuze value={d.medewerkerId} onChange={(w) => { set({ medewerkerId: w, boetes: 0, ...contractWaarden(users.find((u) => u.id === w)) }); setVerreken(new Set()); }} opties={users.map((u) => ({ waarde: u.id, label: u.naam }))} title="Medewerker" />
+          <Keuze value={d.medewerkerId} onChange={(w) => { set({ medewerkerId: w, boetes: 0, bestand: undefined, bestandsnaam: undefined, ...contractWaarden(users.find((u) => u.id === w)) }); setVerreken(new Set()); }} opties={users.map((u) => ({ waarde: u.id, label: u.naam }))} title="Medewerker" />
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
@@ -129,23 +129,23 @@ function LoonstrookForm({ bestaande, onKlaar }: { bestaande?: Loonstrook; onKlaa
         <div className="grid gap-3 sm:grid-cols-3">
           <div>
             <label className={labelCls}>Bruto (€)</label>
-            <input type="number" step="0.01" value={d.bruto} onChange={(e) => set({ bruto: Number(e.target.value) })} className={veld} />
+            <input type="number" step="0.01" value={d.bruto || ""} onChange={(e) => set({ bruto: e.target.value === "" ? 0 : Number(e.target.value) })} className={veld} />
           </div>
           <div>
             <label className={labelCls}>Bijtelling auto (€)</label>
-            <input type="number" step="0.01" value={d.bijtelling} onChange={(e) => set({ bijtelling: Number(e.target.value) })} className={veld} />
+            <input type="number" step="0.01" value={d.bijtelling || ""} onChange={(e) => set({ bijtelling: e.target.value === "" ? 0 : Number(e.target.value) })} className={veld} />
           </div>
           <div>
             <label className={labelCls}>Uren</label>
-            <input type="number" value={d.uren} onChange={(e) => set({ uren: Number(e.target.value) })} className={veld} />
+            <input type="number" value={d.uren || ""} onChange={(e) => set({ uren: e.target.value === "" ? 0 : Number(e.target.value) })} className={veld} />
           </div>
           <div>
             <label className={labelCls}>Netto (€)</label>
-            <input type="number" step="0.01" value={d.netto} onChange={(e) => set({ netto: Number(e.target.value) })} className={veld} />
+            <input type="number" step="0.01" value={d.netto || ""} onChange={(e) => set({ netto: e.target.value === "" ? 0 : Number(e.target.value) })} className={veld} />
           </div>
           <div>
             <label className={labelCls}>Ingehouden boetes (€)</label>
-            <input type="number" step="0.01" value={d.boetes} onChange={(e) => set({ boetes: Number(e.target.value) })} className={veld} />
+            <input type="number" step="0.01" value={d.boetes || ""} onChange={(e) => set({ boetes: e.target.value === "" ? 0 : Number(e.target.value) })} className={veld} />
           </div>
         </div>
 
