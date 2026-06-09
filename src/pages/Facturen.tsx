@@ -47,6 +47,9 @@ function FactuurForm({ bestaande, initieel, onKlaar }: { bestaande?: Factuur; in
   const setRegel = (i: number, patch: Partial<FactuurRegel>) =>
     set({ regels: f.regels.map((r, idx) => (idx === i ? { ...r, ...patch } : r)) });
   const addRegel = (regel: FactuurRegel) => set({ regels: [...f.regels, regel] });
+  // Bij Brieven/Uren: nog lege omschrijving-regels vervallen, zodat alleen de toegevoegde regel blijft.
+  // Een regel met al een omschrijving (bijv. "Auto") blijft gewoon staan.
+  const addPreset = (regel: FactuurRegel) => set({ regels: [...f.regels.filter((r) => r.omschrijving.trim() !== ""), regel] });
   const delRegel = (i: number) => set({ regels: f.regels.filter((_, idx) => idx !== i) });
   // Klantvelden in één keer invullen vanuit een opgeslagen opdrachtgever.
   const kiesOpdrachtgever = (id: string) => {
@@ -151,10 +154,10 @@ function FactuurForm({ bestaande, initieel, onKlaar }: { bestaande?: Factuur; in
           </div>
         ))}
         <div className="flex flex-wrap items-center gap-2">
-          <button type="button" onClick={() => addRegel({ omschrijving: "Brieven", aantal: 1, prijs: 2.2 })} className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-2.5 py-1.5 text-sm font-semibold text-ink-700 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700">
+          <button type="button" onClick={() => addPreset({ omschrijving: "Brieven", aantal: 1, prijs: 2.2 })} className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-2.5 py-1.5 text-sm font-semibold text-ink-700 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700">
             <Plus className="h-4 w-4" /> Brieven (€2,20)
           </button>
-          <button type="button" onClick={() => addRegel({ omschrijving: "Uren", aantal: 1, prijs: 42.35 })} className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-2.5 py-1.5 text-sm font-semibold text-ink-700 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700">
+          <button type="button" onClick={() => addPreset({ omschrijving: "Uren", aantal: 1, prijs: 42.35 })} className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-2.5 py-1.5 text-sm font-semibold text-ink-700 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700">
             <Plus className="h-4 w-4" /> Uren (€42,35)
           </button>
           <button type="button" onClick={() => addRegel({ omschrijving: "", aantal: 1, prijs: 0 })} className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-medium text-brand-600 hover:bg-brand-50">
