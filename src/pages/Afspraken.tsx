@@ -18,6 +18,7 @@ import { useApp } from "../store/AppContext";
 import { Card, Badge, Bevestig } from "../components/ui";
 import { WerknemerKiezer } from "../components/WerknemerKiezer";
 import { DatumKiezer } from "../components/DatumKiezer";
+import { TijdKiezer } from "../components/TijdKiezer";
 import { Keuze } from "../components/Keuze";
 import { whatsappBevestiging, googleMapsAfspraak, datumLabel, googleMapsRoute, adresVanGroep, adresVanAfspraak, MAX_ROUTE_STOPS } from "../lib/afspraak";
 import {
@@ -154,7 +155,7 @@ function RegelEditor({
         </div>
         <div>
           <label className={labelCls}>Tijd</label>
-          <input type="time" value={regel.tijd} onChange={(e) => onChange({ tijd: e.target.value })} className={veld} />
+          <TijdKiezer value={regel.tijd} onChange={(tijd) => onChange({ tijd })} />
         </div>
       </div>
 
@@ -249,7 +250,7 @@ function ToevoegBalk({
           </div>
           <div>
             <label className={labelCls}>Tijd</label>
-            <input type="time" value={bt} onChange={(e) => setBt(e.target.value)} className={veld} />
+            <TijdKiezer value={bt} onChange={setBt} />
           </div>
           <button type="button" onClick={() => onBasis(bd, bt, false)} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">Vul bij iedereen in</button>
           <button type="button" onClick={() => onBasis(bd, bt, true)} className="rounded-lg border border-ink-200 px-4 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-50">Alleen waar leeg</button>
@@ -261,15 +262,15 @@ function ToevoegBalk({
         <div className="flex flex-wrap items-end gap-2">
           <div>
             <label className={labelCls}>Van</label>
-            <input value={van} onChange={(e) => setVan(e.target.value)} inputMode="numeric" placeholder="1" className="w-20 rounded-lg border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500" />
+            <input value={van} onChange={(e) => setVan(e.target.value)} inputMode="numeric" placeholder="1" className="w-24 rounded-lg border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500" />
           </div>
           <div>
             <label className={labelCls}>Tot</label>
-            <input value={tot} onChange={(e) => setTot(e.target.value)} inputMode="numeric" placeholder="30" className="w-20 rounded-lg border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500" />
+            <input value={tot} onChange={(e) => setTot(e.target.value)} inputMode="numeric" placeholder="30" className="w-24 rounded-lg border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500" />
           </div>
           <div>
             <label className={labelCls}>Kant</label>
-            <div className="w-28"><Keuze value={kant} onChange={(w) => setKant(w as typeof kant)} opties={[{ waarde: "alle", label: "Alle" }, { waarde: "oneven", label: "Oneven" }, { waarde: "even", label: "Even" }]} size="sm" title="Kant" /></div>
+            <div className="w-24"><Keuze value={kant} onChange={(w) => setKant(w as typeof kant)} opties={[{ waarde: "alle", label: "Alle" }, { waarde: "oneven", label: "Oneven" }, { waarde: "even", label: "Even" }]} title="Kant" /></div>
           </div>
           <button
             type="button"
@@ -289,7 +290,7 @@ function ToevoegBalk({
           <span className="text-ink-300">|</span>
           <div>
             <label className={labelCls}>Eén nummer</label>
-            <input value={los} onChange={(e) => setLos(e.target.value)} placeholder="12-A" className="w-28 rounded-lg border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500" />
+            <input value={los} onChange={(e) => setLos(e.target.value)} placeholder="12-A" className="w-24 rounded-lg border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500" />
           </div>
           <button
             type="button"
