@@ -4,7 +4,7 @@ import { useApp } from "../store/AppContext";
 import { DatumKiezer } from "../components/DatumKiezer";
 import { Keuze } from "../components/Keuze";
 import { Card, Badge, Bevestig } from "../components/ui";
-import { PERIODE_TYPES, type Loonstrook, type PeriodeType } from "../lib/types";
+import { PERIODE_TYPES, type Loonstrook, type PeriodeType, type User } from "../lib/types";
 
 const euro = (n: number) => n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
 const veld = "w-full rounded-lg border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100";
@@ -43,18 +43,22 @@ function downloadBestand(l: Loonstrook) {
 
 function LoonstrookForm({ bestaande, onKlaar }: { bestaande?: Loonstrook; onKlaar: () => void }) {
   const { users, boetes, addLoonstrook, updateLoonstrook, updateBoete } = useApp();
+  // Standaardbedragen uit het contract van de medewerker (Medewerkers-pagina).
+  const contractWaarden = (u?: User) => ({
+    periodeType: (u?.contract?.periodeType ?? "Maand") as PeriodeType,
+    bruto: u?.contract?.bruto ?? 0,
+    bijtelling: u?.contract?.bijtelling ?? 0,
+    netto: u?.contract?.netto ?? 0,
+    uren: u?.contract?.uren ?? 0,
+  });
   const [d, setD] = useState<Omit<Loonstrook, "id">>(
     bestaande ?? {
       medewerkerId: users[0]?.id ?? "",
-      periodeType: "Maand",
       refDatum: new Date().toISOString().slice(0, 10),
       periode: "",
-      bruto: 0,
-      bijtelling: 0,
-      netto: 0,
       boetes: 0,
-      uren: 0,
       notitie: "",
+      ...contractWaarden(users[0]),
     }
   );
   const [verreken, setVerreken] = useState<Set<string>>(new Set());
@@ -101,7 +105,7 @@ function LoonstrookForm({ bestaande, onKlaar }: { bestaande?: Loonstrook; onKlaa
       <Card className="space-y-4 p-4">
         <div>
           <label className={labelCls}>Medewerker</label>
-          <Keuze value={d.medewerkerId} onChange={(w) => { set({ medewerkerId: w, boetes: 0 }); setVerreken(new Set()); }} opties={users.map((u) => ({ waarde: u.id, label: u.naam }))} title="Medewerker" />
+          <Keuze value={d.medewerkerId} onChange={(w) => { set({ medewerkerId: w, boetes: 0, ...contractWaarden(users.find((u) => u.id === w)) }); setVerreken(new Set()); }} opties={users.map((u) => ({ waarde: u.id, label: u.naam }))} title="Medewerker" />
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">

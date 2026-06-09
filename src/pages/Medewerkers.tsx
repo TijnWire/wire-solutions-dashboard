@@ -17,10 +17,68 @@ import {
 import { useApp } from "../store/AppContext";
 import { useNav } from "../store/NavContext";
 import { Card, Badge } from "../components/ui";
-import { ROL_LABEL, type User, type AfspraakStatus } from "../lib/types";
+import { ROL_LABEL, PERIODE_TYPES, type User, type AfspraakStatus, type PeriodeType } from "../lib/types";
 
 const euro = (n: number) => n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
 const rolTone: Record<string, string> = { eigenaar: "green", beheer: "amber", monteur: "slate" };
+const veldCls = "w-full rounded-lg border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100";
+const labelMini = "mb-1 block text-xs font-semibold text-ink-600";
+
+// Vast contract / standaardloon per medewerker — wordt automatisch in een nieuwe loonstrook gezet.
+function ContractKaart({ user }: { user: User }) {
+  const { updateUser } = useApp();
+  const c = user.contract;
+  const [periodeType, setPeriodeType] = useState<PeriodeType>(c?.periodeType ?? "Maand");
+  const [bruto, setBruto] = useState(c?.bruto ?? 0);
+  const [netto, setNetto] = useState(c?.netto ?? 0);
+  const [bijtelling, setBijtelling] = useState(c?.bijtelling ?? 0);
+  const [uren, setUren] = useState(c?.uren ?? 0);
+  const [bewaard, setBewaard] = useState(false);
+  const opslaan = () => {
+    updateUser(user.id, { contract: { periodeType, bruto, netto, bijtelling, uren } });
+    setBewaard(true);
+    setTimeout(() => setBewaard(false), 2500);
+  };
+  return (
+    <Card className="p-5">
+      <div className="mb-1 flex items-center gap-2">
+        <Wallet className="h-4 w-4 text-ink-500" />
+        <h3 className="text-sm font-bold text-ink-900">Contract / standaardloon</h3>
+      </div>
+      <p className="mb-3 text-xs text-ink-500">Vul dit één keer in. Bij een nieuwe loonstrook voor {user.naam.split(" ")[0]} staan deze bedragen er dan automatisch al in — je hoeft het alleen nog na te checken.</p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label className={labelMini}>Periode</label>
+          <div className="flex gap-1.5">
+            {PERIODE_TYPES.map((p) => (
+              <button key={p} type="button" onClick={() => setPeriodeType(p)} className={`flex-1 rounded-lg px-2 py-2 text-sm font-semibold ${periodeType === p ? "bg-brand-600 text-white" : "bg-ink-100 text-ink-600 hover:bg-ink-200"}`}>{p}</button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <label className={labelMini}>Uren per {periodeType.toLowerCase()}</label>
+          <input type="number" value={uren} onChange={(e) => setUren(Number(e.target.value))} title="Uren per periode" placeholder="0" className={veldCls} />
+        </div>
+        <div>
+          <label className={labelMini}>Bruto (€)</label>
+          <input type="number" step="0.01" value={bruto} onChange={(e) => setBruto(Number(e.target.value))} title="Bruto" placeholder="0" className={veldCls} />
+        </div>
+        <div>
+          <label className={labelMini}>Netto (€)</label>
+          <input type="number" step="0.01" value={netto} onChange={(e) => setNetto(Number(e.target.value))} title="Netto" placeholder="0" className={veldCls} />
+        </div>
+        <div>
+          <label className={labelMini}>Bijtelling auto (€)</label>
+          <input type="number" step="0.01" value={bijtelling} onChange={(e) => setBijtelling(Number(e.target.value))} title="Bijtelling auto" placeholder="0" className={veldCls} />
+        </div>
+      </div>
+      <div className="mt-3 flex items-center gap-3">
+        <button type="button" onClick={opslaan} className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">Contract opslaan</button>
+        {bewaard && <span className="text-sm font-medium text-green-600">Opgeslagen ✓</span>}
+      </div>
+    </Card>
+  );
+}
 
 function MedewerkerDetail({ user, onTerug }: { user: User; onTerug: () => void }) {
   const { taken, rondes, afspraken, loonstroken, boetes, voorschouwen } = useApp();
@@ -81,6 +139,9 @@ function MedewerkerDetail({ user, onTerug }: { user: User; onTerug: () => void }
           );
         })}
       </div>
+
+      {/* Contract / standaardloon */}
+      <ContractKaart key={user.id} user={user} />
 
       {/* Openstaande taken */}
       <Card className="p-5">

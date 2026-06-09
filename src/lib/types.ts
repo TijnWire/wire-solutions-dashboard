@@ -13,6 +13,8 @@ export type User = {
   functie: string;
   werknemer?: boolean; // beheerder die óók veldwerk doet
   beheerRechten?: string[]; // welke onderdelen een beheerder mag beheren (nav-keys); undefined = alles
+  // Vast contract / standaardloon — wordt automatisch in een nieuwe loonstrook ingevuld.
+  contract?: { periodeType?: PeriodeType; bruto?: number; bijtelling?: number; netto?: number; uren?: number };
 };
 
 // Onderdelen die een beheerder van de eigenaar mag beheren
