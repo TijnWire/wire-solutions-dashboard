@@ -81,6 +81,8 @@ function AdresRij({
   stap,
   navigeerUrl,
   vergrendeld = false,
+  geselecteerd = false,
+  onToggleSelectie,
   onUpdate,
   onVerwijder,
 }: {
@@ -88,6 +90,8 @@ function AdresRij({
   stap: number;
   navigeerUrl: string;
   vergrendeld?: boolean;
+  geselecteerd?: boolean;
+  onToggleSelectie?: () => void;
   onUpdate: (patch: Partial<Adres>) => void;
   onVerwijder: () => void;
 }) {
@@ -95,8 +99,11 @@ function AdresRij({
   const isBedrijf = adres.type === "bedrijf";
 
   return (
-    <div className={`rounded-xl border border-l-4 border-ink-200 bg-white ${statusRand[adres.status]}`}>
+    <div className={`rounded-xl border border-l-4 border-ink-200 bg-white ${statusRand[adres.status]} ${geselecteerd ? "ring-2 ring-brand-300" : ""}`}>
       <div className="flex flex-wrap items-center gap-3 p-3">
+        {onToggleSelectie && (
+          <input type="checkbox" checked={geselecteerd} onChange={onToggleSelectie} aria-label={`Selecteer ${adresLabel(adres)}`} className="h-4 w-4 shrink-0 rounded border-ink-300 text-brand-600 focus:ring-brand-200" />
+        )}
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-ink-100 text-xs font-bold text-ink-600">
           {stap}
         </div>
@@ -197,6 +204,7 @@ function RondeDetail({ ronde, onTerug }: { ronde: Brievenronde; onTerug: () => v
   const [verwijder, setVerwijder] = useState(false);
   const [naarDb, setNaarDb] = useState(false);
   const [bevestigGereed, setBevestigGereed] = useState(false);
+  const [selectie, setSelectie] = useState<Set<string>>(new Set());
 
   // Rol-gebaseerde levenscyclus (zelfde stappen als TAUW).
   const status = ronde.status;
@@ -269,6 +277,11 @@ function RondeDetail({ ronde, onTerug }: { ronde: Brievenronde; onTerug: () => v
   };
 
   const route = looproute(adressen);
+  // Selecteren + in één keer een status zetten (gegooid / blanco / niet thuis).
+  const toggleSel = (id: string) => setSelectie((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const allesGeselecteerd = route.length > 0 && route.every((a) => selectie.has(a.id));
+  const toggleAlles = () => setSelectie(allesGeselecteerd ? new Set() : new Set(route.map((a) => a.id)));
+  const bulkStatus = (s: BriefStatus) => { setAdressen(adressen.map((a) => (selectie.has(a.id) ? { ...a, status: s } : a))); setSelectie(new Set()); };
   const nogTeDoen = route.filter((a) => a.status !== "Gegooid" && a.status !== "Blanco");
   const mapsBron = nogTeDoen.length ? nogTeDoen : route;
   const maps = mapsBron.length
@@ -592,6 +605,28 @@ function RondeDetail({ ronde, onTerug }: { ronde: Brievenronde; onTerug: () => v
           </Card>
         )}
 
+        {/* Selecteren + in één keer een status zetten */}
+        {bewerkbaar && route.length > 0 && (
+          <div className="mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-ink-200 bg-ink-50/60 px-3 py-2">
+            <label className="flex items-center gap-2 text-sm font-medium text-ink-700">
+              <input type="checkbox" checked={allesGeselecteerd} onChange={toggleAlles} className="h-4 w-4 rounded border-ink-300 text-brand-600 focus:ring-brand-200" />
+              Alles selecteren
+            </label>
+            {selectie.size > 0 ? (
+              <>
+                <span className="text-xs font-medium text-ink-500">{selectie.size} geselecteerd:</span>
+                <button type="button" onClick={() => bulkStatus("Gegooid")} className="rounded-lg bg-green-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-green-700">Gegooid</button>
+                <button type="button" onClick={() => bulkStatus("Blanco")} className="rounded-lg bg-slate-500 px-2.5 py-1 text-xs font-semibold text-white hover:bg-slate-600">Blanco</button>
+                <button type="button" onClick={() => bulkStatus("Niet thuis")} className="rounded-lg bg-amber-500 px-2.5 py-1 text-xs font-semibold text-white hover:bg-amber-600">Niet thuis</button>
+                <button type="button" onClick={() => bulkStatus("Te doen")} className="rounded-lg border border-ink-200 px-2.5 py-1 text-xs font-medium text-ink-500 hover:bg-ink-100">Te doen</button>
+                <button type="button" onClick={() => setSelectie(new Set())} className="ml-auto text-xs font-medium text-ink-400 hover:text-ink-600">wis selectie</button>
+              </>
+            ) : (
+              <span className="text-xs text-ink-400">Vink adressen aan om ze in één keer op gegooid, blanco of niet thuis te zetten.</span>
+            )}
+          </div>
+        )}
+
         {route.length === 0 ? (
           <Card className="p-8 text-center text-sm text-ink-500">
             Nog geen adressen. Voeg een reeks toe (bijv. 1 t/m 30) om de looproute te maken.
@@ -604,6 +639,8 @@ function RondeDetail({ ronde, onTerug }: { ronde: Brievenronde; onTerug: () => v
                 adres={a}
                 stap={i + 1}
                 vergrendeld={!bewerkbaar}
+                geselecteerd={selectie.has(a.id)}
+                onToggleSelectie={bewerkbaar ? () => toggleSel(a.id) : undefined}
                 navigeerUrl={googleMapsAdresUrl(ronde.straat, ronde.postcode, ronde.plaats, a)}
                 onUpdate={(patch) => updateAdres(a.id, patch)}
                 onVerwijder={() => verwijderAdres(a.id)}
