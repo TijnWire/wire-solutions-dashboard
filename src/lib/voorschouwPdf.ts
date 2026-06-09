@@ -36,7 +36,7 @@ async function maakVoorschouwPdfBytes(v: Voorschouw): Promise<Uint8Array> {
   if (!sjabloon) throw new Error("Voorschouwsjabloon kon niet worden geladen");
   const { PDFDocument, StandardFonts, rgb } = await import("pdf-lib");
   const DONKER = rgb(0.149, 0.165, 0.212);
-  const ROOD = rgb(0.85, 0.12, 0.12);
+  const WIT = rgb(1, 1, 1);
 
   const pdf = await PDFDocument.load(sjabloon);
   const font = await pdf.embedFont(StandardFonts.Helvetica);
@@ -65,15 +65,16 @@ async function maakVoorschouwPdfBytes(v: Voorschouw): Promise<Uint8Array> {
     page.drawText(t, { x: 96, y, size, font, color: DONKER });
   };
 
-  // Zet het gekozen antwoord (JA/NEE) vetgedrukt en rood over het formulier — geen rondje meer.
+  // Toont alleen het gekozen antwoord: dekt de hele "JA / NEE" uit het sjabloon af met wit en
+  // zet daarna alleen het gekozen woord terug — zodat er op de print geen verwarring tussen zit.
   const janee = (xStart: number, y: number, keuze: JaNee) => {
     if (keuze !== "JA" && keuze !== "NEE") return;
     const wJa = font.widthOfTextAtSize("JA", SZ);
     const wSep = font.widthOfTextAtSize(" / ", SZ);
-    const ja = keuze === "JA";
-    const woord = ja ? "JA" : "NEE";
-    const wordX = ja ? xStart : xStart + wJa + wSep;
-    page.drawText(woord, { x: wordX, y, size: SZ, font: fontBold, color: ROOD });
+    const wNee = font.widthOfTextAtSize("NEE", SZ);
+    const totaal = wJa + wSep + wNee;
+    page.drawRectangle({ x: xStart - 1, y: y - 3, width: totaal + 7, height: 14, color: WIT });
+    page.drawText(keuze, { x: xStart, y, size: SZ, font: fontBold, color: DONKER });
   };
 
   // ── Velden plaatsen (coördinaten opgemeten in het sjabloon, oorsprong linksonder) ──
