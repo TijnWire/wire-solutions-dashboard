@@ -5,13 +5,22 @@ import type { Voorschouw, JaNee } from "./types";
 export const STEDIN_EMAIL = "";
 
 // Het officiële Stedin-formulier staat in /public; we vullen de gegevens er exact overheen.
-const SJABLOON = "/Opzet%20voorschouw%20gas.pdf";
+// Bestandsnaam bewust zonder spaties — spaties in statische URL's zijn fragiel op de host + service worker.
+const SJABLOON = "/opzet-voorschouw-gas.pdf";
 const SZ = 10.5; // tekstgrootte van de waarden
 const PW = 595.3, PH = 841.9; // A4 in punten (zoals opgemeten in het sjabloon)
 
 async function laadSjabloon(): Promise<ArrayBuffer | null> {
-  try { const r = await fetch(SJABLOON); if (r.ok) return await r.arrayBuffer(); } catch { /* niet gevonden */ }
-  return null;
+  try {
+    const r = await fetch(SJABLOON, { cache: "no-store" });
+    if (!r.ok) return null;
+    const buf = await r.arrayBuffer();
+    // Controleer dat het écht een PDF is (en niet bv. een HTML-fallback uit de cache).
+    const kop = String.fromCharCode(...new Uint8Array(buf.slice(0, 5)));
+    return kop.startsWith("%PDF") ? buf : null;
+  } catch {
+    return null;
+  }
 }
 
 function dataUrlNaarBytes(durl: string): { bytes: Uint8Array; png: boolean } {
