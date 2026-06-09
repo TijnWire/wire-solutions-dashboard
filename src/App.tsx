@@ -78,7 +78,7 @@ export default function App() {
       case "team":
         return <Team />;
       case "projecten":
-        return <Projecten initieelProject={target?.project} />;
+        return <Projecten key={target?.project ?? "lijst"} initieelProject={target?.project} />;
       case "planning":
         return <Planning key={target?.project ?? "geen"} projectId={target?.project} />;
       case "voorschouwen":
