@@ -142,8 +142,8 @@ function IntegratiesTab({ isLeiding }: { isLeiding: boolean }) {
 }
 
 function SysteemTab({ isLeiding }: { isLeiding: boolean }) {
-  const { bedrijf, instellingen, verlof } = useApp();
-  const meldingen = berekenMeldingen(bedrijf, instellingen, verlof);
+  const { bedrijf, instellingen, verlof, projects } = useApp();
+  const meldingen = berekenMeldingen(bedrijf, instellingen, verlof, projects);
   const [opslag, setOpslag] = useState<{ used: number; quota: number } | null>(null);
   const [reset, setReset] = useState(false);
 

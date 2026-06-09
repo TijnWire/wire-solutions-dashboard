@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Plus, FolderKanban, X, FileScan, CalendarRange, Send, ArrowUpRight } from "lucide-react";
+import { Plus, FolderKanban, X, FileScan, CalendarRange, Send, ArrowUpRight, Check } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { useNav } from "../store/NavContext";
 import { Card, Badge } from "../components/ui";
@@ -47,6 +47,9 @@ export function Projecten({ initieelProject }: { initieelProject?: string }) {
     if (waarde) k[sleutel] = waarde; else delete k[sleutel];
     updateProject(p.id, { koppelingen: k });
   };
+  // Afgeronde projecten die nog niet naar de boekhouding zijn gestuurd — klaar voor de volgende stap.
+  const afgerondKlaar = projects.filter((p) => p.afgerondOp && !p.boekhouding);
+  const naarBoekhouding = (id: string) => updateProject(id, { boekhouding: "te_factureren", doorgestuurdOp: new Date().toISOString() });
 
   // Scroll naar het project waar een melding naartoe linkt.
   useEffect(() => {
@@ -142,6 +145,30 @@ export function Projecten({ initieelProject }: { initieelProject?: string }) {
         </Card>
       )}
 
+      {/* Afgeronde projecten die nog naar de boekhouding moeten — melding/actie voor de leiding */}
+      {afgerondKlaar.length > 0 && (
+        <Card className="border-2 border-amber-200 bg-amber-50/50 p-4">
+          <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-ink-900">
+            <Send className="h-4 w-4 text-amber-600" /> Afgerond — klaar voor de boekhouding
+            <span className="rounded-full bg-amber-500 px-2 py-0.5 text-xs font-bold text-white">{afgerondKlaar.length}</span>
+          </h3>
+          <div className="space-y-2">
+            {afgerondKlaar.map((p) => (
+              <div key={p.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-200 bg-white p-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {p.pdNummer && <span className="rounded-md bg-ink-900 px-2 py-0.5 text-xs font-bold tracking-wide text-white">{p.pdNummer}</span>}
+                    <span className="truncate text-sm font-semibold text-ink-900">{p.naam}</span>
+                  </div>
+                  <div className="text-xs text-ink-500">{[p.wijk, p.afgerondOp ? `afgerond ${datumKort(p.afgerondOp)}` : ""].filter(Boolean).join(" · ")}</div>
+                </div>
+                <button type="button" onClick={() => naarBoekhouding(p.id)} className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-2 text-sm font-semibold text-white hover:bg-green-700"><Send className="h-4 w-4" /> Naar boekhouding</button>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
       {projects.length === 0 && !nieuwProject && (
         <Card className="p-10 text-center">
           <FolderKanban className="mx-auto h-10 w-10 text-ink-300" />
@@ -197,22 +224,35 @@ export function Projecten({ initieelProject }: { initieelProject?: string }) {
                 placeholder="bijv. PD153335"
                 className="w-40 rounded-lg border border-ink-200 px-2.5 py-1.5 text-sm font-medium text-ink-800 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
               />
-              <div className="ml-auto flex items-center gap-2">
+              <div className="ml-auto flex flex-wrap items-center gap-2">
                 {project.boekhouding === "gefactureerd" ? (
-                  <Badge tone="green">Gefactureerd</Badge>
+                  <Badge tone="green">Gefactureerd ✓</Badge>
                 ) : project.boekhouding === "te_factureren" ? (
                   <>
                     <Badge tone="indigo">Bij boekhouding</Badge>
                     <button type="button" onClick={() => updateProject(project.id, { boekhouding: undefined, doorgestuurdOp: undefined })} className="text-xs font-medium text-ink-400 hover:text-ink-600">terughalen</button>
                   </>
+                ) : project.afgerondOp ? (
+                  <>
+                    <Badge tone="amber">Afgerond</Badge>
+                    <button
+                      type="button"
+                      onClick={() => updateProject(project.id, { boekhouding: "te_factureren", doorgestuurdOp: new Date().toISOString() })}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-700 hover:bg-green-100"
+                      title="Dit afgeronde project doorschakelen naar de boekhouding"
+                    >
+                      <Send className="h-3.5 w-3.5" /> Naar boekhouding
+                    </button>
+                    <button type="button" onClick={() => updateProject(project.id, { afgerondOp: undefined })} className="text-xs font-medium text-ink-400 hover:text-ink-600">heropenen</button>
+                  </>
                 ) : (
                   <button
                     type="button"
-                    onClick={() => updateProject(project.id, { boekhouding: "te_factureren", doorgestuurdOp: new Date().toISOString() })}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-700 hover:bg-green-100"
-                    title="Dit afgeronde project doorschakelen naar de boekhouding"
+                    onClick={() => updateProject(project.id, { afgerondOp: new Date().toISOString() })}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-100"
+                    title="Markeer dit project als afgerond — de leiding krijgt er een melding van"
                   >
-                    <Send className="h-3.5 w-3.5" /> Naar boekhouding
+                    <Check className="h-3.5 w-3.5" /> Project afronden
                   </button>
                 )}
               </div>

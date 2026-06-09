@@ -14,8 +14,12 @@ export type Melding = {
 };
 
 // Systeemmeldingen voor de leiding (incomplete gegevens, integraties, openstaande aanvragen).
-export function berekenMeldingen(bedrijf: Bedrijf, inst: Instellingen, verlof: Verlof[]): Melding[] {
+export function berekenMeldingen(bedrijf: Bedrijf, inst: Instellingen, verlof: Verlof[], projects: Project[]): Melding[] {
   const m: Melding[] = [];
+  // Afgeronde projecten die nog naar de boekhouding gestuurd moeten worden.
+  for (const p of projects.filter((p) => p.afgerondOp && !p.boekhouding)) {
+    m.push({ id: "proj-klaar-" + p.id, ernst: "info", titel: `Project afgerond: ${p.naam}`, tekst: "Klaar om naar de boekhouding te sturen.", navKey: "projecten", target: { project: p.id } });
+  }
   if (!supabaseAan && !inst.supabaseUrl) m.push({ id: "db", ernst: "info", titel: "Geen centrale database", tekst: "Gegevens staan nu lokaal op elk apparaat. Koppel Supabase om alles te delen.", navKey: "instellingen" });
   if (!inst.whatsappToken) m.push({ id: "wa", ernst: "info", titel: "WhatsApp-API niet ingesteld", tekst: "Berichten worden nu handmatig geopend.", navKey: "instellingen" });
   if (!bedrijf.btw) m.push({ id: "btw", ernst: "waarschuwing", titel: "BTW-nummer ontbreekt", tekst: "Vul je BTW-nummer in bij Instellingen voor volledige facturen.", navKey: "instellingen" });
@@ -121,7 +125,7 @@ export function meldingenVoor(user: User, data: MeldingData): Melding[] {
   }
 
   // Systeemmeldingen voor de leiding erbij
-  if (isLeiding) m.push(...berekenMeldingen(bedrijf, instellingen, verlof));
+  if (isLeiding) m.push(...berekenMeldingen(bedrijf, instellingen, verlof, projects));
 
   return m;
 }
