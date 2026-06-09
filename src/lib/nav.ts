@@ -53,9 +53,9 @@ export const NAV: NavItem[] = [
   { key: "documenten", label: "Documenten", icon: FileText, group: "Operatie", roles: LEIDING },
 
   { key: "facturen", label: "Facturen", icon: Receipt, group: "Boekhouding", roles: LEIDING },
-  { key: "loonstroken", label: "Loonstroken", icon: Wallet, group: "Boekhouding", roles: LEIDING },
-  { key: "boetes", label: "Boetes", icon: AlertTriangle, group: "Boekhouding", roles: LEIDING },
-  { key: "agenda", label: "Agenda", icon: CalendarDays, group: "Boekhouding", roles: LEIDING },
+  { key: "loonstroken", label: "Loonstroken", icon: Wallet, group: "Boekhouding", roles: ALLE },
+  { key: "boetes", label: "Boetes", icon: AlertTriangle, group: "Boekhouding", roles: ALLE },
+  { key: "agenda", label: "Agenda", icon: CalendarDays, group: "Boekhouding", roles: ALLE },
   { key: "medewerkers", label: "Medewerkers", icon: Users, group: "Boekhouding", roles: LEIDING },
   { key: "communicatie", label: "Communicatie", icon: MessagesSquare, badge: "AI", group: "Operatie", roles: ALLE },
   { key: "klanten", label: "Klanten & Database", icon: Database, group: "Operatie", roles: LEIDING },
