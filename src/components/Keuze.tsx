@@ -36,16 +36,19 @@ export function Keuze({ value, onChange, opties, placeholder = "Kies…", disabl
     if (!open) return;
     const buiten = (e: MouseEvent) => { if (btnRef.current?.contains(e.target as Node) || popRef.current?.contains(e.target as Node)) return; setOpen(false); };
     const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
-    const dicht = () => setOpen(false); // bij scrollen/resizen sluiten zodat de positie klopt
+    // Sluiten bij scrollen van de achtergrond (anders staat het menu op de verkeerde plek),
+    // maar NIET als je in de lijst zelf naar beneden scrollt.
+    const bijScroll = (e: Event) => { if (popRef.current?.contains(e.target as Node)) return; setOpen(false); };
+    const bijResize = () => setOpen(false);
     document.addEventListener("mousedown", buiten);
     document.addEventListener("keydown", esc);
-    window.addEventListener("scroll", dicht, true);
-    window.addEventListener("resize", dicht);
+    window.addEventListener("scroll", bijScroll, true);
+    window.addEventListener("resize", bijResize);
     return () => {
       document.removeEventListener("mousedown", buiten);
       document.removeEventListener("keydown", esc);
-      window.removeEventListener("scroll", dicht, true);
-      window.removeEventListener("resize", dicht);
+      window.removeEventListener("scroll", bijScroll, true);
+      window.removeEventListener("resize", bijResize);
     };
   }, [open]);
 
