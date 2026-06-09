@@ -438,13 +438,13 @@ export function Voorschouwen() {
             </button>
           )}
 
-          <div className="ml-auto flex flex-wrap items-center gap-2">
+          <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto">
             <span className="hidden text-xs text-ink-400 sm:inline">Verstuur naar Stedin:</span>
             <button
               type="button"
               disabled={selectie.size === 0 || bezig}
               onClick={exporteerMail}
-              className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-40"
+              className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-brand-600 px-3.5 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-40 sm:flex-none sm:py-2"
             >
               {bezig ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
               Mail naar Stedin
@@ -453,7 +453,7 @@ export function Voorschouwen() {
               type="button"
               disabled={selectie.size === 0 || bezig}
               onClick={exporteerZip}
-              className="inline-flex items-center gap-2 rounded-lg border border-ink-200 bg-white px-3.5 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-50 disabled:cursor-not-allowed disabled:opacity-40"
+              className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-ink-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50 disabled:cursor-not-allowed disabled:opacity-40 sm:flex-none sm:py-2"
             >
               {bezig ? <Loader2 className="h-4 w-4 animate-spin" /> : <FolderArchive className="h-4 w-4" />}
               Download als map (ZIP)
@@ -520,17 +520,19 @@ export function Voorschouwen() {
                         <span className="truncate text-base font-bold text-ink-900">{g.map ? g.map.naam : "Zonder map"}</span>
                         <span className="shrink-0 rounded-full bg-ink-100 px-2.5 py-0.5 text-xs font-medium text-ink-500">{g.items.length}</span>
                       </button>
-                      {isLeiding && g.map && (
-                        <>
-                          <button type="button" onClick={() => startBewerkMap(g.map!.id, g.map!.naam)} title="Naam wijzigen" aria-label="Map hernoemen" className="rounded-lg p-2 text-ink-400 hover:bg-ink-100 hover:text-brand-600"><Pencil className="h-4 w-4" /></button>
-                          <button type="button" onClick={() => verwijderMap(g.map!.id, g.map!.naam)} title="Map verwijderen" aria-label="Map verwijderen" className="rounded-lg p-2 text-red-400 hover:bg-red-50 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
-                          <button type="button" onClick={() => naarDatabase(g.map!.id, g.map!.naam, g.items)} disabled={g.items.length === 0} title="Map naar de database versturen" className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm font-semibold text-green-700 hover:bg-green-100 disabled:cursor-not-allowed disabled:opacity-40"><Database className="h-4 w-4" /> Naar database</button>
-                        </>
-                      )}
-                      <button type="button" onClick={() => void downloadMap(g.items)} disabled={g.items.length === 0 || bezig} title="Download deze map (ZIP)" className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-3 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-50 disabled:cursor-not-allowed disabled:opacity-40">
-                        {bezig ? <Loader2 className="h-4 w-4 animate-spin" /> : <FolderArchive className="h-4 w-4" />}
-                        Download
-                      </button>
+                      <div className="flex w-full items-center gap-2 sm:w-auto">
+                        {isLeiding && g.map && (
+                          <>
+                            <button type="button" onClick={() => startBewerkMap(g.map!.id, g.map!.naam)} title="Naam wijzigen" aria-label="Map hernoemen" className="shrink-0 rounded-lg p-2 text-ink-400 hover:bg-ink-100 hover:text-brand-600"><Pencil className="h-4 w-4" /></button>
+                            <button type="button" onClick={() => verwijderMap(g.map!.id, g.map!.naam)} title="Map verwijderen" aria-label="Map verwijderen" className="shrink-0 rounded-lg p-2 text-red-400 hover:bg-red-50 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
+                            <button type="button" onClick={() => naarDatabase(g.map!.id, g.map!.naam, g.items)} disabled={g.items.length === 0} title="Map naar de database versturen" className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-3 py-2.5 text-sm font-semibold text-green-700 hover:bg-green-100 disabled:cursor-not-allowed disabled:opacity-40 sm:flex-none sm:py-2"><Database className="h-4 w-4 shrink-0" /> Naar database</button>
+                          </>
+                        )}
+                        <button type="button" onClick={() => void downloadMap(g.items)} disabled={g.items.length === 0 || bezig} title="Download deze map (ZIP)" className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-ink-200 px-3 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50 disabled:cursor-not-allowed disabled:opacity-40 sm:flex-none sm:py-2">
+                          {bezig ? <Loader2 className="h-4 w-4 animate-spin" /> : <FolderArchive className="h-4 w-4 shrink-0" />}
+                          Download
+                        </button>
+                      </div>
                     </>
                   )}
                 </div>
