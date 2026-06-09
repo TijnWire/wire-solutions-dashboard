@@ -85,6 +85,8 @@ export function Agenda({ startForm = false }: { startForm?: boolean }) {
   const vandaagISO = toISO(vandaag);
   const mijnVerlof = isLeiding ? verlof : verlof.filter((v) => v.medewerkerId === currentUser.id);
   const sortedVerlof = [...mijnVerlof].sort((a, b) => a.van.localeCompare(b.van));
+  // Openstaande aanvragen die de leiding/boekhouding nog moet goedkeuren.
+  const aangevraagd = verlof.filter((v) => v.status === "Aangevraagd").sort((a, b) => a.van.localeCompare(b.van));
 
   return (
     <div className="space-y-5">
@@ -97,6 +99,71 @@ export function Agenda({ startForm = false }: { startForm?: boolean }) {
           <Plane className="h-4 w-4" /> Verlof aanvragen
         </button>
       </div>
+
+      {/* Verlof aanvragen — bovenaan zodat je 'm meteen ziet */}
+      {formOpen && (
+        <Card id="verlof-form" className={`space-y-3 p-4 transition-all duration-500 ${netGeopend ? "ring-4 ring-brand-400" : "ring-2 ring-brand-200"}`}>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold text-ink-900">Verlof aanvragen</h3>
+            <button type="button" onClick={() => setFormOpen(false)} className="text-ink-400 hover:text-ink-600" title="Sluiten"><X className="h-5 w-5" /></button>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className={labelCls}>Medewerker</label>
+              {/* Werknemer kan alleen voor zichzelf verlof aanvragen; leiding mag iedereen kiezen. */}
+              <Keuze
+                value={isLeiding ? vMedewerker : currentUser.id}
+                onChange={isLeiding ? setVMedewerker : () => {}}
+                opties={isLeiding ? users.map((u) => ({ waarde: u.id, label: u.naam })) : [{ waarde: currentUser.id, label: currentUser.naam }]}
+                disabled={!isLeiding}
+                title="Medewerker"
+              />
+            </div>
+            <div>
+              <label className={labelCls}>Soort</label>
+              <Keuze value={vType} onChange={(w) => setVType(w as VerlofType)} opties={VERLOF_TYPES.map((t) => ({ waarde: t, label: t }))} title="Soort verlof" />
+            </div>
+            <div>
+              <label className={labelCls}>Van</label>
+              <DatumKiezer value={vVan} onChange={setVVan} />
+            </div>
+            <div>
+              <label className={labelCls}>Tot en met</label>
+              <DatumKiezer value={vTot} onChange={setVTot} />
+            </div>
+          </div>
+          <div>
+            <label className={labelCls}>Notitie (optioneel)</label>
+            <input value={vNotitie} onChange={(e) => setVNotitie(e.target.value)} placeholder="Bijv. reden of bijzonderheid" className={veld} />
+          </div>
+          <button type="button" onClick={opslaanVerlof} className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-700">
+            <Plus className="h-4 w-4" /> {isLeiding ? "Inplannen" : "Aanvragen"}
+          </button>
+        </Card>
+      )}
+
+      {/* Goedkeuren — openstaande verlofaanvragen voor de leiding/boekhouding */}
+      {isLeiding && aangevraagd.length > 0 && (
+        <Card className="border-2 border-amber-200 bg-amber-50/50 p-4">
+          <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-ink-900">
+            <Plane className="h-4 w-4 text-amber-600" /> Te beoordelen verlofaanvragen
+            <span className="rounded-full bg-amber-500 px-2 py-0.5 text-xs font-bold text-white">{aangevraagd.length}</span>
+          </h3>
+          <div className="space-y-2">
+            {aangevraagd.map((v) => (
+              <div key={v.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-200 bg-white p-3">
+                <span className={`h-3 w-3 shrink-0 rounded-full ${verlofKleur[v.type]}`} />
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-medium text-ink-900">{naamVan(v.medewerkerId)} · {v.type}</div>
+                  <div className="text-xs text-ink-500">{fmt(v.van)} t/m {fmt(v.tot)}{v.notitie ? ` · ${v.notitie}` : ""}</div>
+                </div>
+                <button type="button" onClick={() => updateVerlof(v.id, { status: "Goedgekeurd" })} className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-green-700"><Check className="h-4 w-4" /> Goedkeuren</button>
+                <button type="button" onClick={() => updateVerlof(v.id, { status: "Afgewezen" })} className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-sm font-semibold text-red-600 hover:bg-red-50"><X className="h-4 w-4" /> Afwijzen</button>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {/* Kalender */}
       <Card className="p-5">
@@ -185,48 +252,6 @@ export function Agenda({ startForm = false }: { startForm?: boolean }) {
               )}
             </div>
           </div>
-        </Card>
-      )}
-
-      {/* Verlofformulier */}
-      {formOpen && (
-        <Card id="verlof-form" className={`space-y-3 p-4 transition-all duration-500 ${netGeopend ? "ring-4 ring-brand-400" : "ring-2 ring-brand-200"}`}>
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-ink-900">Verlof aanvragen</h3>
-            <button type="button" onClick={() => setFormOpen(false)} className="text-ink-400 hover:text-ink-600"><X className="h-5 w-5" /></button>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <label className={labelCls}>Medewerker</label>
-              {/* Werknemer kan alleen voor zichzelf verlof aanvragen; leiding mag iedereen kiezen. */}
-              <Keuze
-                value={isLeiding ? vMedewerker : currentUser.id}
-                onChange={isLeiding ? setVMedewerker : () => {}}
-                opties={isLeiding ? users.map((u) => ({ waarde: u.id, label: u.naam })) : [{ waarde: currentUser.id, label: currentUser.naam }]}
-                disabled={!isLeiding}
-                title="Medewerker"
-              />
-            </div>
-            <div>
-              <label className={labelCls}>Soort</label>
-              <Keuze value={vType} onChange={(w) => setVType(w as VerlofType)} opties={VERLOF_TYPES.map((t) => ({ waarde: t, label: t }))} title="Soort verlof" />
-            </div>
-            <div>
-              <label className={labelCls}>Van</label>
-              <DatumKiezer value={vVan} onChange={setVVan} />
-            </div>
-            <div>
-              <label className={labelCls}>Tot en met</label>
-              <DatumKiezer value={vTot} onChange={setVTot} />
-            </div>
-          </div>
-          <div>
-            <label className={labelCls}>Notitie (optioneel)</label>
-            <input value={vNotitie} onChange={(e) => setVNotitie(e.target.value)} className={veld} />
-          </div>
-          <button type="button" onClick={opslaanVerlof} className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-700">
-            <Plus className="h-4 w-4" /> {isLeiding ? "Inplannen" : "Aanvragen"}
-          </button>
         </Card>
       )}
 
