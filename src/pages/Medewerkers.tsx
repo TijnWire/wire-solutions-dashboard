@@ -35,7 +35,7 @@ function ContractKaart({ user }: { user: User }) {
   const [bijtelling, setBijtelling] = useState(c?.bijtelling ?? 0);
   const [uren, setUren] = useState(c?.uren ?? 0);
   const [bewaard, setBewaard] = useState(false);
-  const [open, setOpen] = useState(!c); // dicht als er al een contract is, open om in te vullen
+  const [open, setOpen] = useState(false); // standaard ingeklapt; open via Invullen/Bewerken
   const opslaan = () => {
     updateUser(user.id, { contract: { periodeType, bruto, netto, bijtelling, uren } });
     setBewaard(true);
