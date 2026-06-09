@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Plus, FolderKanban, X, FileScan, CalendarRange, Send } from "lucide-react";
+import { Plus, FolderKanban, X, FileScan, CalendarRange, Send, ArrowUpRight } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { useNav } from "../store/NavContext";
 import { Card, Badge } from "../components/ui";
@@ -7,15 +7,46 @@ import { TaakKaart } from "../components/TaakKaart";
 import { ProjectBord } from "../components/ProjectBord";
 import { BestandScanModal } from "../components/BestandScanModal";
 import { DatumKiezer } from "../components/DatumKiezer";
-import { Keuze } from "../components/Keuze";
+import { Keuze, type KeuzeOptie } from "../components/Keuze";
+import type { Project } from "../lib/types";
 
 const datumKort = (iso: string) => { const d = iso.slice(0, 10).split("-"); return d.length === 3 ? `${d[2]}-${d[1]}-${d[0]}` : iso; };
 
+type KoppelSleutel = "brievenronde" | "sanering" | "voorschouwMap" | "tauw";
+
+// Eén koppel-regel op de projectkaart: kies een item uit een ander onderdeel + spring ernaartoe.
+function KoppelRij({ label, value, opties, onKies, onOpen }: { label: string; value: string; opties: KeuzeOptie[]; onKies: (v: string) => void; onOpen: () => void }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="w-32 shrink-0 text-xs font-medium text-ink-500">{label}</span>
+      <div className="min-w-0 flex-1">
+        <Keuze size="sm" value={value} onChange={onKies} opties={[{ waarde: "", label: "— geen —" }, ...opties]} title={label} />
+      </div>
+      {value && (
+        <button type="button" onClick={onOpen} className="shrink-0 rounded-lg p-1.5 text-ink-400 hover:bg-ink-100 hover:text-brand-600" title="Openen">
+          <ArrowUpRight className="h-4 w-4" />
+        </button>
+      )}
+    </div>
+  );
+}
+
 export function Projecten({ initieelProject }: { initieelProject?: string }) {
-  const { users, projects, taken, addTaak, addProject, updateProject } = useApp();
+  const { users, projects, taken, addTaak, addProject, updateProject, rondes, saneringen, voorschouwMappen, tauwOpdrachten } = useApp();
   const { navigeer } = useNav();
   const doelRef = useRef<HTMLDivElement | null>(null);
   const [scan, setScan] = useState<{ id: string; naam: string } | null>(null);
+
+  // Keuzelijsten om een project te koppelen aan werk uit de andere onderdelen.
+  const rondeOpties: KeuzeOptie[] = rondes.map((b) => ({ waarde: b.id, label: [b.straat, b.plaats].filter(Boolean).join(", ") || "Ronde" }));
+  const saneringOpties: KeuzeOptie[] = saneringen.map((s) => ({ waarde: s.id, label: [s.naam, s.regio].filter(Boolean).join(" · ") || "Sanering" }));
+  const voorschouwOpties: KeuzeOptie[] = voorschouwMappen.map((v) => ({ waarde: v.id, label: v.naam || "Map" }));
+  const tauwOpties: KeuzeOptie[] = tauwOpdrachten.map((t) => ({ waarde: t.id, label: [t.referentie, t.regio].filter(Boolean).join(" · ") || "TAUW" }));
+  const zetKoppeling = (p: Project, sleutel: KoppelSleutel, waarde: string) => {
+    const k = { ...(p.koppelingen ?? {}) };
+    if (waarde) k[sleutel] = waarde; else delete k[sleutel];
+    updateProject(p.id, { koppelingen: k });
+  };
 
   // Scroll naar het project waar een melding naartoe linkt.
   useEffect(() => {
@@ -184,6 +215,17 @@ export function Projecten({ initieelProject }: { initieelProject?: string }) {
                     <Send className="h-3.5 w-3.5" /> Naar boekhouding
                   </button>
                 )}
+              </div>
+            </div>
+
+            {/* Koppelen aan werk uit andere onderdelen */}
+            <div className="space-y-2 border-b border-ink-100 px-5 py-3">
+              <span className="text-xs font-semibold text-ink-500">Gekoppeld werk</span>
+              <div className="grid gap-2 lg:grid-cols-2">
+                <KoppelRij label="Brieven & Routes" value={project.koppelingen?.brievenronde ?? ""} opties={rondeOpties} onKies={(v) => zetKoppeling(project, "brievenronde", v)} onOpen={() => navigeer("brieven", { ronde: project.koppelingen?.brievenronde })} />
+                <KoppelRij label="Saneren" value={project.koppelingen?.sanering ?? ""} opties={saneringOpties} onKies={(v) => zetKoppeling(project, "sanering", v)} onOpen={() => navigeer("saneren", { saneringId: project.koppelingen?.sanering })} />
+                <KoppelRij label="Voorschouwen" value={project.koppelingen?.voorschouwMap ?? ""} opties={voorschouwOpties} onKies={(v) => zetKoppeling(project, "voorschouwMap", v)} onOpen={() => navigeer("voorschouwen")} />
+                <KoppelRij label="TAUW" value={project.koppelingen?.tauw ?? ""} opties={tauwOpties} onKies={(v) => zetKoppeling(project, "tauw", v)} onOpen={() => navigeer("tauw", { tauwId: project.koppelingen?.tauw })} />
               </div>
             </div>
 

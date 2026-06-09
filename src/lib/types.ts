@@ -58,6 +58,13 @@ export type Project = {
   boekhouding?: BoekhoudStatus; // leeg = nog niet doorgeschakeld naar de boekhouding
   doorgestuurdOp?: string; // ISO — wanneer als afgerond naar de boekhouding gestuurd
   gefactureerdOp?: string; // ISO
+  // Koppelingen naar werk in andere onderdelen (Brieven & Routes, Saneren, Voorschouwen, TAUW)
+  koppelingen?: {
+    brievenronde?: string; // Brievenronde.id
+    sanering?: string; // Sanering.id
+    voorschouwMap?: string; // VoorschouwMap.id
+    tauw?: string; // TauwOpdracht.id
+  };
 };
 
 // ── Projectberichten: updates ("afgerond") en vragen, met reacties en afhandeling door de leiding ──
