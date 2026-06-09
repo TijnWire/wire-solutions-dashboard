@@ -42,6 +42,7 @@ async function maakVoorschouwPdfBytes(v: Voorschouw): Promise<Uint8Array> {
 
   const pdf = await PDFDocument.load(sjabloon);
   const font = await pdf.embedFont(StandardFonts.Helvetica);
+  const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
   let page = pdf.getPage(0);
 
   // "Label: <waarde>" — waarde net na het label (nieuwe regels worden samengevoegd).
@@ -66,16 +67,15 @@ async function maakVoorschouwPdfBytes(v: Voorschouw): Promise<Uint8Array> {
     page.drawText(t, { x: 96, y, size, font, color: DONKER });
   };
 
-  // Omcirkelt het gekozen antwoord in "JA / NEE".
+  // Zet het gekozen antwoord (JA/NEE) vetgedrukt en rood over het formulier — geen rondje meer.
   const janee = (xStart: number, y: number, keuze: JaNee) => {
     if (keuze !== "JA" && keuze !== "NEE") return;
     const wJa = font.widthOfTextAtSize("JA", SZ);
     const wSep = font.widthOfTextAtSize(" / ", SZ);
-    const wNee = font.widthOfTextAtSize("NEE", SZ);
     const ja = keuze === "JA";
-    const wWord = ja ? wJa : wNee;
+    const woord = ja ? "JA" : "NEE";
     const wordX = ja ? xStart : xStart + wJa + wSep;
-    page.drawEllipse({ x: wordX + wWord / 2, y: y + 3, xScale: wWord / 2 + 4, yScale: 8, borderColor: ROOD, borderWidth: 1.3 });
+    page.drawText(woord, { x: wordX, y, size: SZ, font: fontBold, color: ROOD });
   };
 
   // ── Velden plaatsen (coördinaten opgemeten in het sjabloon, oorsprong linksonder) ──
