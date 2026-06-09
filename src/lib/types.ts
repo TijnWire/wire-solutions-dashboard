@@ -18,7 +18,8 @@ export type User = {
 // Onderdelen die een beheerder van de eigenaar mag beheren
 export const BEHEER_GEBIEDEN: { key: string; label: string }[] = [
   { key: "overzicht", label: "Dashboard" },
-  { key: "team", label: "Team & Projecten" },
+  { key: "team", label: "Team" },
+  { key: "projecten", label: "Projecten" },
   { key: "afspraken", label: "Afspraken" },
   { key: "brieven", label: "Brieven & Routes" },
   { key: "documenten", label: "Documenten" },

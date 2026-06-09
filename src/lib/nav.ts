@@ -40,7 +40,8 @@ const LEIDING: Role[] = ["eigenaar", "beheer"];
 export const NAV: NavItem[] = [
   { key: "mijnwerk", label: "Mijn werk", icon: ClipboardList, group: "Werk", roles: ALLE },
   { key: "overzicht", label: "Dashboard", icon: LayoutDashboard, group: "Werk", roles: LEIDING },
-  { key: "team", label: "Team & Projecten", icon: FolderKanban, group: "Werk", roles: LEIDING },
+  { key: "team", label: "Team", icon: Users, group: "Werk", roles: LEIDING },
+  { key: "projecten", label: "Projecten", icon: FolderKanban, group: "Werk", roles: LEIDING },
   { key: "verlof", label: "Verlof", icon: Plane, group: "Werk", roles: ALLE },
 
   { key: "brieven", label: "Brieven & Routes", icon: Mailbox, group: "Projecten", roles: ALLE },

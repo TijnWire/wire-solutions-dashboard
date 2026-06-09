@@ -4,10 +4,10 @@ import { NAV, magZien } from "../lib/nav";
 import { useApp } from "../store/AppContext";
 
 // Volgorde van voorkeur voor de mobiele onderbalk; de eerste 4 zichtbare items komen erin.
-const PRIMAIR = ["overzicht", "mijnwerk", "team", "afspraken", "brieven", "tauw", "saneren", "klanten", "facturen", "agenda"];
+const PRIMAIR = ["overzicht", "mijnwerk", "team", "projecten", "afspraken", "brieven", "tauw", "saneren", "klanten", "facturen", "agenda"];
 // Korte labels die passen in een smalle tab.
 const KORT: Record<string, string> = {
-  overzicht: "Start", mijnwerk: "Werk", team: "Team", afspraken: "Afspraken",
+  overzicht: "Start", mijnwerk: "Werk", team: "Team", projecten: "Projecten", afspraken: "Afspraken",
   brieven: "Brieven", tauw: "TAUW", saneren: "Saneren", klanten: "Klanten",
   facturen: "Facturen", agenda: "Agenda",
 };

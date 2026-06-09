@@ -7,7 +7,8 @@ import { DevSwitcher } from "./components/DevSwitcher";
 import { Login } from "./pages/Login";
 import { Overzicht } from "./pages/Overzicht";
 import { MijnWerk } from "./pages/MijnWerk";
-import { TeamProjecten } from "./pages/TeamProjecten";
+import { Team } from "./pages/Team";
+import { Projecten } from "./pages/Projecten";
 import { Planning } from "./pages/Planning";
 import { Voorschouwen } from "./pages/Voorschouwen";
 import { Saneren } from "./pages/Saneren";
@@ -75,7 +76,9 @@ export default function App() {
       case "mijnwerk":
         return <MijnWerk initieelProject={target?.project} />;
       case "team":
-        return <TeamProjecten initieelProject={target?.project} />;
+        return <Team />;
+      case "projecten":
+        return <Projecten initieelProject={target?.project} />;
       case "planning":
         return <Planning key={target?.project ?? "geen"} projectId={target?.project} />;
       case "voorschouwen":

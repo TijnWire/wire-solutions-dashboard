@@ -24,8 +24,8 @@ export function Planning({ projectId }: { projectId?: string }) {
   if (!projectId || !project) {
     return (
       <div className="space-y-5">
-        <button type="button" onClick={() => navigeer("team")} className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-500 hover:text-ink-800">
-          <ArrowLeft className="h-4 w-4" /> Terug naar Team &amp; Projecten
+        <button type="button" onClick={() => navigeer("projecten")} className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-500 hover:text-ink-800">
+          <ArrowLeft className="h-4 w-4" /> Terug naar Projecten
         </button>
         <Card className="p-10 text-center text-sm text-ink-500">Geen project gekozen. Open een planning via een projectkaart.</Card>
       </div>

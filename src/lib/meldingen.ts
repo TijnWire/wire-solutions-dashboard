@@ -84,7 +84,7 @@ export function meldingenVoor(user: User, data: MeldingData): Melding[] {
   const voornaam = (id: string) => users.find((u) => u.id === id)?.naam.split(" ")[0] ?? "Iemand";
   const inProject = (p: Project) =>
     isLeiding || p.toegewezenAan.includes(user.id) || taken.some((t) => t.projectId === p.id && (t.toegewezenAan === user.id || t.toegewezenAan === ""));
-  const projectNav = isLeiding ? "team" : "mijnwerk";
+  const projectNav = isLeiding ? "projecten" : "mijnwerk";
   for (const post of projectPosts) {
     if (post.afgehandeld) continue;
     const project = projectById.get(post.projectId);
