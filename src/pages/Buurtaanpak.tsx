@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, ArrowLeft, Trash2, Upload, MessageSquare, Send, Check, Copy, Cable, ChevronRight, Phone, MapPin } from "lucide-react";
+import { Plus, ArrowLeft, Trash2, Upload, MessageSquare, Send, Check, Copy, Cable, ChevronRight, Phone, MapPin, Search } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { Card, Badge, Bevestig } from "../components/ui";
 import { DatumKiezer } from "../components/DatumKiezer";
@@ -157,6 +157,7 @@ function Detail({ project, onTerug, isLeiding }: { project: BuurtaanpakT; onTeru
   const [verwijder, setVerwijder] = useState(false);
   const [importFout, setImportFout] = useState<string | null>(null);
   const [toonWa, setToonWa] = useState(false);
+  const [zoek, setZoek] = useState("");
 
   const setAdres = (id: string, patch: Partial<BuurtAdres>) =>
     updateBuurtaanpak(project.id, { adressen: project.adressen.map((a) => (a.id === id ? { ...a, ...patch } : a)) });
@@ -176,6 +177,10 @@ function Detail({ project, onTerug, isLeiding }: { project: BuurtaanpakT; onTeru
   };
 
   const groepen = groepeerPerStraat(project.adressen);
+  const q = zoek.trim().toLowerCase();
+  const groepenZichtbaar = q
+    ? groepen.map((g) => ({ ...g, adressen: g.adressen.filter((a) => `${a.straat} ${a.huisnummer} ${a.postcode} ${a.bijzonderheid} ${a.telefoon}`.toLowerCase().includes(q)) })).filter((g) => g.adressen.length > 0)
+    : groepen;
   const waTekst = whatsappBevestiging(project.adressen);
   const bevestigd = project.adressen.filter((a) => a.bevestigd).length;
   const uitgevoerd = project.adressen.filter((a) => a.uitgevoerd).length;
@@ -282,24 +287,36 @@ function Detail({ project, onTerug, isLeiding }: { project: BuurtaanpakT; onTeru
       {project.adressen.length === 0 ? (
         <Card className="p-8 text-center text-sm text-ink-500">Nog geen adressen. {isLeiding ? "Importeer de planning-Excel hierboven, of voeg handmatig toe." : "De planning is nog niet ingeladen."}</Card>
       ) : (
-        <div className="space-y-4">
-          {groepen.map((g) => (
+        <div className="space-y-3">
+          {/* Zoekbalk */}
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" />
+            <input value={zoek} onChange={(e) => setZoek(e.target.value)} placeholder="Zoek op straat, huisnummer, postcode of bijzonderheid…" className="w-full rounded-xl border border-ink-200 py-2.5 pl-9 pr-3 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100" />
+          </div>
+
+          {groepenZichtbaar.length === 0 ? (
+            <Card className="p-6 text-center text-sm text-ink-400">Geen adressen gevonden voor “{zoek}”.</Card>
+          ) : groepenZichtbaar.map((g) => (
             <Card key={g.straat} className="overflow-hidden">
-              <div className="flex items-center gap-2 border-b border-ink-100 bg-ink-50/50 px-4 py-2.5">
+              <div className="flex items-center gap-2 border-b border-ink-100 bg-ink-50/50 px-4 py-2">
                 <MapPin className="h-4 w-4 text-brand-600" />
                 <span className="text-sm font-bold text-ink-900">{g.straat}</span>
                 <span className="text-xs text-ink-400">{g.adressen.length} adres{g.adressen.length === 1 ? "" : "sen"}{g.adressen[0]?.postcode ? ` · ${g.adressen[0].postcode}` : ""}</span>
               </div>
               <div className="divide-y divide-ink-100">
                 {g.adressen.map((a) => (
-                  <div key={a.id} className="flex flex-wrap items-center gap-2 px-4 py-2.5">
-                    <span className="w-10 text-sm font-bold text-ink-900">{a.huisnummer || "—"}</span>
-                    <div className="w-32"><Keuze size="sm" value={a.soort} onChange={(w) => setAdres(a.id, { soort: w as BuurtAdres["soort"] })} opties={BUURT_SOORTEN.map((s) => ({ waarde: s, label: BUURT_SOORT_KORT[s] }))} title="Soort werkzaamheden" /></div>
-                    <div className="w-36"><DatumKiezer value={a.datum} onChange={(iso) => setAdres(a.id, { datum: iso })} placeholder="Datum" /></div>
-                    <input value={a.telefoon} onChange={(e) => setAdres(a.id, { telefoon: e.target.value })} placeholder="06-…" className={klein + " w-32"} />
-                    <input value={a.bijzonderheid} onChange={(e) => setAdres(a.id, { bijzonderheid: e.target.value })} placeholder="Bijzonderheid (TVM / boorder / sleutel…)" className={klein + " min-w-[10rem] flex-1"} />
-                    <label className="inline-flex items-center gap-1 text-xs text-ink-600"><input type="checkbox" aria-label="Bevestigd met bewoner" checked={a.bevestigd} onChange={(e) => setAdres(a.id, { bevestigd: e.target.checked })} className="h-4 w-4 accent-brand-600" /> bevestigd</label>
-                    <label className="inline-flex items-center gap-1 text-xs text-ink-600"><input type="checkbox" aria-label="Uitgevoerd" checked={a.uitgevoerd} onChange={(e) => setAdres(a.id, { uitgevoerd: e.target.checked })} className="h-4 w-4 accent-green-600" /> uitgevoerd</label>
+                  <div key={a.id} className="flex flex-wrap items-center gap-2 px-3 py-2">
+                    <span className={`flex h-8 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-bold ${a.uitgevoerd ? "bg-green-500 text-white" : a.bevestigd ? "bg-green-100 text-green-700" : "bg-ink-100 text-ink-700"}`}>{a.huisnummer || "—"}</span>
+                    <div className="w-28"><Keuze size="sm" value={a.soort} onChange={(w) => setAdres(a.id, { soort: w as BuurtAdres["soort"] })} opties={BUURT_SOORTEN.map((s) => ({ waarde: s, label: BUURT_SOORT_KORT[s] }))} title="Soort werkzaamheden" /></div>
+                    <div className="w-28"><DatumKiezer compact value={a.datum} onChange={(iso) => setAdres(a.id, { datum: iso })} placeholder="Datum" /></div>
+                    <input value={a.telefoon} onChange={(e) => setAdres(a.id, { telefoon: e.target.value })} placeholder="06-…" className={klein + " w-28"} />
+                    <input value={a.bijzonderheid} onChange={(e) => setAdres(a.id, { bijzonderheid: e.target.value })} placeholder="Bijzonderheid (TVM / boorder / sleutel…)" className={klein + " min-w-[9rem] flex-1"} />
+                    <label className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg border px-2 py-1.5 text-xs font-semibold ${a.bevestigd ? "border-green-300 bg-green-50 text-green-700" : "border-ink-200 text-ink-500 hover:bg-ink-50"}`} title="Afspraak bevestigd met de bewoner">
+                      <input type="checkbox" aria-label="Bevestigd met bewoner" checked={a.bevestigd} onChange={(e) => setAdres(a.id, { bevestigd: e.target.checked })} className="h-3.5 w-3.5 accent-green-600" /> Bevestigd
+                    </label>
+                    <label className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg border px-2 py-1.5 text-xs font-semibold ${a.uitgevoerd ? "border-brand-300 bg-brand-50 text-brand-700" : "border-ink-200 text-ink-500 hover:bg-ink-50"}`} title="Werk uitgevoerd">
+                      <input type="checkbox" aria-label="Uitgevoerd" checked={a.uitgevoerd} onChange={(e) => setAdres(a.id, { uitgevoerd: e.target.checked })} className="h-3.5 w-3.5 accent-brand-600" /> Uitgevoerd
+                    </label>
                     {a.telefoon.trim() && (
                       <a href={smsLink(a.telefoon, smsHerinneringTekst(a, bedrijf?.naam))} onClick={() => setAdres(a.id, { herinnerVerstuurdOp: nu() })} className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1.5 text-xs font-semibold ${a.herinnerVerstuurdOp ? "border-green-200 bg-green-50 text-green-700" : "border-ink-200 text-ink-600 hover:bg-ink-50"}`} title="SMS-herinnering naar bewoner (dag van tevoren)">
                         <Phone className="h-3.5 w-3.5" /> SMS

@@ -16,11 +16,13 @@ export function DatumKiezer({
   onChange,
   placeholder = "Kies datum",
   disabled = false,
+  compact = false,
 }: {
   value: string;
   onChange: (iso: string) => void;
   placeholder?: string;
   disabled?: boolean;
+  compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
@@ -82,7 +84,7 @@ export function DatumKiezer({
 
   const vandaagISO = toISO(new Date());
   const label = value
-    ? new Date(value + "T00:00:00").toLocaleDateString("nl-NL", { weekday: "short", day: "numeric", month: "short", year: "numeric" })
+    ? new Date(value + "T00:00:00").toLocaleDateString("nl-NL", compact ? { day: "numeric", month: "short", year: "numeric" } : { weekday: "short", day: "numeric", month: "short", year: "numeric" })
     : placeholder;
 
   return (
@@ -92,9 +94,9 @@ export function DatumKiezer({
         type="button"
         disabled={disabled}
         onClick={() => (open ? setOpen(false) : openen())}
-        className="flex w-full items-center justify-between gap-2 rounded-xl border border-ink-200 px-3.5 py-2.5 text-sm text-ink-800 outline-none hover:border-ink-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 disabled:cursor-not-allowed disabled:bg-ink-50 disabled:text-ink-400"
+        className={`flex w-full items-center justify-between gap-1.5 border border-ink-200 text-sm text-ink-800 outline-none hover:border-ink-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 disabled:cursor-not-allowed disabled:bg-ink-50 disabled:text-ink-400 ${compact ? "rounded-lg px-2.5 py-1.5" : "rounded-xl px-3.5 py-2.5"}`}
       >
-        <span className={value ? "" : "text-ink-400"}>{label}</span>
+        <span className={`truncate ${value ? "" : "text-ink-400"}`}>{label}</span>
         <Calendar className="h-4 w-4 shrink-0 text-ink-400" />
       </button>
 
