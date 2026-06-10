@@ -142,6 +142,7 @@ type AppState = {
   deleteTaak: (id: string) => void;
   addProject: (p: Omit<Project, "id">) => string;
   updateProject: (id: string, patch: Partial<Project>) => void;
+  deleteProject: (id: string) => void;
 
   // Projectberichten (updates & vragen) en hun reacties / afhandeling
   addProjectPost: (p: Omit<ProjectPost, "id" | "aangemaakt" | "afgehandeld" | "reacties">) => string;
@@ -632,6 +633,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const updateProject: AppState["updateProject"] = (id, patch) =>
     setProjects((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
 
+  // Project verwijderen + de bijbehorende taken en projectberichten opruimen (geen wezen).
+  const deleteProject: AppState["deleteProject"] = (id) => {
+    setProjects((prev) => prev.filter((p) => p.id !== id));
+    setTaken((prev) => prev.filter((t) => t.projectId !== id));
+    setProjectPosts((prev) => prev.filter((p) => p.projectId !== id));
+  };
+
   const updateTaak: AppState["updateTaak"] = (id, patch) =>
     setTaken((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
 
@@ -942,6 +950,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         deleteTaak,
         addProject,
         updateProject,
+        deleteProject,
         addProjectPost,
         deleteProjectPost,
         addProjectReactie,

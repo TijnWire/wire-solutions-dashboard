@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { Plus, FolderKanban, X, FileScan, CalendarRange, Send, ArrowUpRight, Check, ChevronRight, Database } from "lucide-react";
+import { Plus, FolderKanban, X, FileScan, CalendarRange, Send, ArrowUpRight, Check, ChevronRight, Database, Trash2 } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { useNav } from "../store/NavContext";
-import { Card, Badge } from "../components/ui";
+import { Card, Badge, Bevestig } from "../components/ui";
 import { TaakKaart } from "../components/TaakKaart";
 import { ProjectBord } from "../components/ProjectBord";
 import { BestandScanModal } from "../components/BestandScanModal";
@@ -33,10 +33,11 @@ function KoppelRij({ label, value, opties, onKies, onOpen }: { label: string; va
 
 // Eén projectkaart — standaard ingeklapt; klik op de kop om uit te klappen.
 function ProjectKaart({ project, initieelProject, onScan }: { project: Project; initieelProject?: string; onScan: (p: { id: string; naam: string }) => void }) {
-  const { users, taken, addTaak, updateProject, rondes, saneringen, voorschouwMappen, tauwOpdrachten } = useApp();
+  const { users, taken, addTaak, updateProject, deleteProject, rondes, saneringen, voorschouwMappen, tauwOpdrachten } = useApp();
   const { navigeer } = useNav();
   const [open, setOpen] = useState(project.id === initieelProject); // deep-link opent meteen
   const [taakOpen, setTaakOpen] = useState(false);
+  const [verwijder, setVerwijder] = useState(false);
   const [taakTitel, setTaakTitel] = useState("");
   const [taakNotitie, setTaakNotitie] = useState("");
   const [taakDeadline, setTaakDeadline] = useState("");
@@ -84,6 +85,9 @@ function ProjectKaart({ project, initieelProject, onScan }: { project: Project; 
             <FileScan className="h-4 w-4" /> Scan
           </button>
           <span className="hidden text-xs text-ink-400 sm:inline">{projectTaken.filter((t) => t.status === "Klaar").length}/{projectTaken.length} klaar</span>
+          <button type="button" onClick={() => setVerwijder(true)} className="rounded-lg p-1.5 text-ink-400 hover:bg-red-50 hover:text-red-600" title="Project verwijderen">
+            <Trash2 className="h-4 w-4" />
+          </button>
         </div>
       </div>
 
@@ -201,6 +205,14 @@ function ProjectKaart({ project, initieelProject, onScan }: { project: Project; 
           <ProjectBord projectId={project.id} defaultOpen={project.id === initieelProject} />
         </>
       )}
+
+      <Bevestig
+        open={verwijder}
+        titel="Project verwijderen"
+        tekst={`Weet je zeker dat je "${project.naam}" wilt verwijderen? De taken en updates van dit project worden ook verwijderd. Dit kan niet ongedaan worden gemaakt.`}
+        onBevestig={() => { deleteProject(project.id); setVerwijder(false); }}
+        onAnnuleer={() => setVerwijder(false)}
+      />
     </Card>
   );
 }
