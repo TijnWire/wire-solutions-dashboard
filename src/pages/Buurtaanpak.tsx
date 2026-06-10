@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useCallback, memo } from "react";
+import { useState, useMemo, useRef, useCallback, memo, Fragment } from "react";
 import { Plus, ArrowLeft, Trash2, Upload, MessageSquare, Send, Check, Copy, Cable, ChevronRight, Phone, MapPin, Search } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { Card, Badge, Bevestig } from "../components/ui";
@@ -10,6 +10,19 @@ import { parseKlantafspraaklijst, whatsappPerDag, groepeerPerStraat, smsHerinner
 const veld = "w-full rounded-lg border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100";
 const klein = "rounded-lg border border-ink-200 px-2.5 py-1.5 text-sm outline-none focus:border-brand-400";
 const nu = () => new Date().toISOString();
+
+// Levenscyclus van een buurtaanpak (zelfde stijl als Brieven & Routes).
+const STAPPEN = ["nieuw", "toegewezen", "afgerond", "boekhouding", "gefactureerd"] as const;
+type BuurtStap = (typeof STAPPEN)[number];
+const STAP_LABEL: Record<BuurtStap, string> = { nieuw: "Aangemaakt", toegewezen: "Bij werknemer", afgerond: "Afgerond", boekhouding: "Bij boekhouding", gefactureerd: "Gefactureerd" };
+const STAP_TONE: Record<BuurtStap, string> = { nieuw: "slate", toegewezen: "amber", afgerond: "amber", boekhouding: "indigo", gefactureerd: "green" };
+function buurtStap(b: BuurtaanpakT): BuurtStap {
+  if (b.boekhouding === "gefactureerd") return "gefactureerd";
+  if (b.boekhouding === "te_factureren") return "boekhouding";
+  if (b.afgerondOp) return "afgerond";
+  if (b.toegewezenAan) return "toegewezen";
+  return "nieuw";
+}
 
 // Excel-cel → tekst (datum als ISO yyyy-mm-dd).
 function celTekst(v: unknown): string {
@@ -257,6 +270,9 @@ function Detail({ project, onTerug, isLeiding }: { project: BuurtaanpakT; onTeru
   };
   const bevestigd = stats.bevestigd;
   const uitgevoerd = stats.uitgevoerd;
+  const stap = buurtStap(project);
+  const stapIndex = STAPPEN.indexOf(stap);
+  const monteur = users.find((u) => u.id === project.toegewezenAan);
 
   return (
     <div className="space-y-5">
@@ -266,14 +282,66 @@ function Detail({ project, onTerug, isLeiding }: { project: BuurtaanpakT; onTeru
 
       {/* Kop */}
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-bold text-ink-900">{project.naam}</h2>
-          <p className="text-sm text-ink-500">{[project.regio, project.opdrachtgever].filter(Boolean).join(" · ")} · {project.adressen.length} adressen · {bevestigd} bevestigd · {uitgevoerd} uitgevoerd</p>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="truncate text-xl font-bold text-ink-900">{project.naam}</h2>
+            <Badge tone={STAP_TONE[stap]}>{STAP_LABEL[stap]}</Badge>
+          </div>
+          <p className="text-sm text-ink-500">{[project.opdrachtgever, project.regio, `${project.adressen.length} adressen`, `${bevestigd} bevestigd`, `${uitgevoerd} uitgevoerd`, monteur?.naam].filter(Boolean).join(" · ")}</p>
         </div>
         {isLeiding && (
-          <button type="button" onClick={() => setVerwijder(true)} className="inline-flex items-center gap-1.5 text-sm font-medium text-red-500 hover:text-red-700"><Trash2 className="h-4 w-4" /> Verwijderen</button>
+          <button type="button" onClick={() => setVerwijder(true)} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50"><Trash2 className="h-4 w-4" /> Verwijderen</button>
         )}
       </div>
+
+      {/* Levenscyclus — zelfde stappenbalk als Brieven & Routes */}
+      <Card className="space-y-3 p-4">
+        <div className="flex flex-wrap items-center gap-x-1 gap-y-2">
+          {STAPPEN.map((s, i) => {
+            const gedaan = i < stapIndex, isNu = i === stapIndex;
+            return (
+              <Fragment key={s}>
+                <span className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${isNu ? "bg-brand-600 text-white" : gedaan ? "bg-green-100 text-green-700" : "bg-ink-100 text-ink-400"}`}>
+                  <span className={`flex h-4 w-4 items-center justify-center rounded-full text-[10px] ${isNu ? "bg-white/25 text-white" : gedaan ? "bg-green-500 text-white" : "bg-ink-300 text-white"}`}>{gedaan ? "✓" : i + 1}</span>
+                  {STAP_LABEL[s]}
+                </span>
+                {i < STAPPEN.length - 1 && <ChevronRight className="h-3.5 w-3.5 text-ink-300" />}
+              </Fragment>
+            );
+          })}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 border-t border-ink-100 pt-3">
+          {isLeiding ? (
+            <>
+              <span className="text-xs font-semibold text-ink-500">PD-nummer</span>
+              <input value={project.pdNummer ?? ""} onChange={(e) => updateBuurtaanpak(project.id, { pdNummer: e.target.value })} placeholder="bijv. PD153335" className="w-40 rounded-lg border border-ink-200 px-2.5 py-1.5 text-sm font-medium text-ink-800 outline-none focus:border-brand-400" />
+              <div className="ml-auto flex flex-wrap items-center gap-2">
+                {project.boekhouding === "gefactureerd" ? (
+                  <button type="button" onClick={() => updateBuurtaanpak(project.id, { boekhouding: "te_factureren", gefactureerdOp: undefined })} className="text-xs font-medium text-ink-400 hover:text-ink-600">corrigeren</button>
+                ) : project.boekhouding === "te_factureren" ? (
+                  <button type="button" onClick={() => updateBuurtaanpak(project.id, { boekhouding: undefined, doorgestuurdOp: undefined })} className="text-xs font-medium text-ink-400 hover:text-ink-600">terughalen naar afgerond</button>
+                ) : project.afgerondOp ? (
+                  <>
+                    <button type="button" onClick={() => updateBuurtaanpak(project.id, { boekhouding: "te_factureren", doorgestuurdOp: nu() })} className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-700 hover:bg-green-100"><Send className="h-3.5 w-3.5" /> Naar boekhouding</button>
+                    <button type="button" onClick={() => updateBuurtaanpak(project.id, { afgerondOp: undefined })} className="text-xs font-medium text-ink-400 hover:text-ink-600">heropenen</button>
+                  </>
+                ) : (
+                  <button type="button" onClick={() => setBevestigAfronden(true)} className="inline-flex items-center gap-1.5 rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-100"><Check className="h-3.5 w-3.5" /> Buurtaanpak afronden</button>
+                )}
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-ink-600">
+              {stap === "toegewezen" ? "Toegewezen aan jou — voer de adressen uit en vink ze af."
+                : stap === "afgerond" ? "Afgerond — wordt verder verwerkt door de leiding."
+                : stap === "boekhouding" ? "Doorgestuurd naar de boekhouding."
+                : stap === "gefactureerd" ? "Gefactureerd en afgerond."
+                : "Nog niet toegewezen."}
+            </p>
+          )}
+        </div>
+      </Card>
 
       {isLeiding && (
         <Card className="space-y-3 p-4">
@@ -310,33 +378,6 @@ function Detail({ project, onTerug, isLeiding }: { project: BuurtaanpakT; onTeru
             </div>
             {importFout && <p className="mt-2 text-xs font-medium text-red-600">{importFout}</p>}
             <p className="mt-1 text-xs text-ink-400">De adressen worden automatisch per straat gesorteerd (straat maar 1× open). Hele-dag (08:00–16:00) en korte (tot 09:30) werkzaamheden worden herkend.</p>
-          </div>
-
-          {/* PD-nummer + boekhouding (zelfde stappen als een project) */}
-          <div className="flex flex-wrap items-center gap-2 border-t border-ink-100 pt-3">
-            <span className="text-xs font-semibold text-ink-500">PD-nummer</span>
-            <input value={project.pdNummer ?? ""} onChange={(e) => updateBuurtaanpak(project.id, { pdNummer: e.target.value })} placeholder="bijv. PD153335" className="w-40 rounded-lg border border-ink-200 px-2.5 py-1.5 text-sm font-medium text-ink-800 outline-none focus:border-brand-400" />
-            <div className="ml-auto flex flex-wrap items-center gap-2">
-              {project.boekhouding === "gefactureerd" ? (
-                <>
-                  <Badge tone="green">Gefactureerd ✓</Badge>
-                  <button type="button" onClick={() => updateBuurtaanpak(project.id, { boekhouding: "te_factureren", gefactureerdOp: undefined })} className="text-xs font-medium text-ink-400 hover:text-ink-600">corrigeren</button>
-                </>
-              ) : project.boekhouding === "te_factureren" ? (
-                <>
-                  <Badge tone="indigo">Bij boekhouding</Badge>
-                  <button type="button" onClick={() => updateBuurtaanpak(project.id, { boekhouding: undefined, doorgestuurdOp: undefined })} className="text-xs font-medium text-ink-400 hover:text-ink-600">terughalen</button>
-                </>
-              ) : project.afgerondOp ? (
-                <>
-                  <Badge tone="amber">Afgerond</Badge>
-                  <button type="button" onClick={() => updateBuurtaanpak(project.id, { boekhouding: "te_factureren", doorgestuurdOp: nu() })} className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-700 hover:bg-green-100"><Send className="h-3.5 w-3.5" /> Naar boekhouding</button>
-                  <button type="button" onClick={() => updateBuurtaanpak(project.id, { afgerondOp: undefined })} className="text-xs font-medium text-ink-400 hover:text-ink-600">heropenen</button>
-                </>
-              ) : (
-                <button type="button" onClick={() => setBevestigAfronden(true)} className="inline-flex items-center gap-1.5 rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-100"><Check className="h-3.5 w-3.5" /> Buurtaanpak afronden</button>
-              )}
-            </div>
           </div>
         </Card>
       )}
