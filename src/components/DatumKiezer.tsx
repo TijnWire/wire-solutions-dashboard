@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Calendar, ChevronLeft, ChevronRight } from "lucide-react";
 
@@ -74,10 +74,13 @@ export function DatumKiezer({
     setMaand(b.getMonth());
   }, [value, open]);
 
-  const eerste = new Date(jaar, maand, 1);
-  const start = (eerste.getDay() + 6) % 7;
-  const cellen: Date[] = [];
-  for (let i = 0; i < 42; i++) cellen.push(new Date(jaar, maand, 1 - start + i));
+  const cellen = useMemo(() => {
+    const eerste = new Date(jaar, maand, 1);
+    const start = (eerste.getDay() + 6) % 7;
+    const c: Date[] = [];
+    for (let i = 0; i < 42; i++) c.push(new Date(jaar, maand, 1 - start + i));
+    return c;
+  }, [jaar, maand]);
 
   const vorige = () => { if (maand === 0) { setMaand(11); setJaar((j) => j - 1); } else setMaand((m) => m - 1); };
   const volgende = () => { if (maand === 11) { setMaand(0); setJaar((j) => j + 1); } else setMaand((m) => m + 1); };

@@ -231,6 +231,10 @@ function Detail({ project, onTerug, isLeiding }: { project: BuurtaanpakT; onTeru
   const groepenZichtbaar = useMemo(() => !q
     ? groepen
     : groepen.map((g) => ({ ...g, adressen: g.adressen.filter((a) => `${a.straat} ${a.huisnummer} ${a.postcode} ${a.bijzonderheid} ${a.telefoon}`.toLowerCase().includes(q)) })).filter((g) => g.adressen.length > 0), [groepen, q]);
+  // Straatgroepen standaard ingeklapt bij veel straten — alleen de geopende straat rendert z'n regels (snel, ook bij 700+ adressen).
+  const [openStraten, setOpenStraten] = useState<Set<string>>(() => new Set(groepen.length <= 6 ? groepen.map((g) => g.straat) : []));
+  const toggleStraat = (straat: string) => setOpenStraten((prev) => { const n = new Set(prev); if (n.has(straat)) n.delete(straat); else n.add(straat); return n; });
+  const alleUit = groepenZichtbaar.length > 0 && groepenZichtbaar.every((g) => openStraten.has(g.straat));
   const whatsappDagen = useMemo(() => whatsappPerDag(project.adressen), [project.adressen]);
   const aantalOnverstuurd = whatsappDagen.filter((d) => !project.whatsappVerstuurd?.[d.datum]).length;
   const markeerVerstuurd = (datum: string) => updateBuurtaanpak(project.id, { whatsappVerstuurd: { ...(project.whatsappVerstuurd ?? {}), [datum]: nu() } });
@@ -382,20 +386,45 @@ function Detail({ project, onTerug, isLeiding }: { project: BuurtaanpakT; onTeru
 
           {groepenZichtbaar.length === 0 ? (
             <Card className="p-6 text-center text-sm text-ink-400">Geen adressen gevonden voor “{zoek}”.</Card>
-          ) : groepenZichtbaar.map((g) => (
-            <Card key={g.straat} className="overflow-hidden">
-              <div className="flex items-center gap-2 border-b border-ink-100 bg-ink-50/50 px-4 py-2">
-                <MapPin className="h-4 w-4 text-brand-600" />
-                <span className="text-sm font-bold text-ink-900">{g.straat}</span>
-                <span className="text-xs text-ink-400">{g.adressen.length} adres{g.adressen.length === 1 ? "" : "sen"}{g.adressen[0]?.postcode ? ` · ${g.adressen[0].postcode}` : ""}</span>
-              </div>
-              <div className="divide-y divide-ink-100">
-                {g.adressen.map((a) => (
-                  <BuurtAdresRij key={a.id} adres={a} onPatch={patchAdres} onVerwijder={verwijderAdres} isLeiding={isLeiding} bedrijfNaam={bedrijf?.naam} />
-                ))}
-              </div>
-            </Card>
-          ))}
+          ) : (
+            <>
+              {!q && groepenZichtbaar.length > 1 && (
+                <div className="flex items-center justify-between px-1 text-xs text-ink-400">
+                  <span>{groepenZichtbaar.length} straten · tik een straat om te openen</span>
+                  <button type="button" onClick={() => setOpenStraten(alleUit ? new Set() : new Set(groepenZichtbaar.map((g) => g.straat)))} className="font-semibold text-brand-600 hover:underline">
+                    {alleUit ? "Alles inklappen" : "Alles uitklappen"}
+                  </button>
+                </div>
+              )}
+              {groepenZichtbaar.map((g) => {
+                const open = q ? true : openStraten.has(g.straat);
+                const gUit = g.adressen.filter((a) => a.uitgevoerd).length;
+                const gBev = g.adressen.filter((a) => a.bevestigd).length;
+                return (
+                  <Card key={g.straat} className="overflow-hidden">
+                    <button type="button" onClick={() => { if (!q) toggleStraat(g.straat); }} className="flex w-full items-center gap-2 bg-ink-50/50 px-4 py-2.5 text-left hover:bg-ink-100/60">
+                      <MapPin className="h-4 w-4 shrink-0 text-brand-600" />
+                      <span className="text-sm font-bold text-ink-900">{g.straat}</span>
+                      <span className="hidden truncate text-xs text-ink-400 sm:inline">{g.adressen.length} adres{g.adressen.length === 1 ? "" : "sen"}{g.adressen[0]?.postcode ? ` · ${g.adressen[0].postcode}` : ""}</span>
+                      <span className="ml-auto flex shrink-0 items-center gap-1.5">
+                        <span className="text-xs text-ink-400 sm:hidden">{g.adressen.length}×</span>
+                        {gUit > 0 && <span className="rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-700">{gUit} uitgevoerd</span>}
+                        {gBev > 0 && <span className="hidden rounded-full bg-ink-100 px-2 py-0.5 text-[11px] font-semibold text-ink-600 sm:inline">{gBev} bevestigd</span>}
+                        {!q && <ChevronRight className={`h-4 w-4 text-ink-300 transition-transform ${open ? "rotate-90" : ""}`} />}
+                      </span>
+                    </button>
+                    {open && (
+                      <div className="divide-y divide-ink-100 border-t border-ink-100">
+                        {g.adressen.map((a) => (
+                          <BuurtAdresRij key={a.id} adres={a} onPatch={patchAdres} onVerwijder={verwijderAdres} isLeiding={isLeiding} bedrijfNaam={bedrijf?.naam} />
+                        ))}
+                      </div>
+                    )}
+                  </Card>
+                );
+              })}
+            </>
+          )}
           {isLeiding && (
             <button type="button" onClick={voegAdresToe} className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-medium text-brand-600 hover:bg-brand-50">
               <Plus className="h-4 w-4" /> Adres handmatig toevoegen
