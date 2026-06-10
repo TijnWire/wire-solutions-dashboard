@@ -48,12 +48,18 @@ async function maakFactuurPdfBytes(f: Factuur): Promise<Uint8Array> {
     const fnt = opts?.bold ? bold : font;
     page.drawText(s, { x: xR - fnt.widthOfTextAtSize(s, size), y: PH - yTop, size, font: fnt, color: DONKER });
   };
+  const midden = (s: string, xc: number, yTop: number, opts?: { bold?: boolean; size?: number }) => {
+    const size = opts?.size ?? SZ;
+    const fnt = opts?.bold ? bold : font;
+    page.drawText(s, { x: xc - fnt.widthOfTextAtSize(s, size) / 2, y: PH - yTop, size, font: fnt, color: DONKER });
+  };
   const lijn = (x0: number, x1: number, yTop: number, dik = 0.5) =>
     page.drawLine({ start: { x: x0, y: PH - yTop }, end: { x: x1, y: PH - yTop }, thickness: dik, color: DONKER });
 
   // Kolommen (rechterrand voor uitgelijnde bedragen) — opgemeten in het voorbeeld
   const xL = 39.5;
-  const xAantalR = 395, xTariefR = 468, xBedragR = 530;
+  const aantalMid = 360.4 + bold.widthOfTextAtSize("Aantal", SZ) / 2; // midden van de "Aantal"-kop
+  const xTariefR = 468, xBedragR = 530;
 
   // ── Geadresseerde (klant) — links, baselines uit het voorbeeld ──
   const klant = [f.klantNaam, f.tav ? `T.a.v. ${f.tav}` : "", f.klantAdres, f.klantPostcodePlaats].filter(Boolean);
@@ -102,7 +108,7 @@ async function maakFactuurPdfBytes(f: Factuur): Promise<Uint8Array> {
   for (const r of f.regels) {
     const oms = wrap(r.omschrijving, 300);
     oms.forEach((regel, i) => tekst(regel, xL, yTop + i * 12.1));
-    rechts(String(r.aantal), xAantalR, yTop);
+    midden(String(r.aantal), aantalMid, yTop);
     rechts(schoonEuro(r.prijs), xTariefR, yTop);
     rechts(schoonEuro(r.aantal * r.prijs), xBedragR, yTop);
     yTop += Math.max(20, oms.length * 12.1 + 8);
@@ -117,7 +123,7 @@ async function maakFactuurPdfBytes(f: Factuur): Promise<Uint8Array> {
   const yTot = yBtw + 39;
   tekst("Totaal", xL, yTot);
   rechts(schoonEuro(totaal), xBedragR, yTot);
-  lijn(xBedragR - 55, xBedragR, yTot + 2.5, 0.4);
+  lijn(xBedragR - 60, xBedragR, yTot + 2.5, 1.1);
 
   // ── Betaaltermijn + eventuele notitie ──
   let yBet = yTot + 70;
