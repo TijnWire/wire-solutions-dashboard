@@ -161,25 +161,32 @@ const BuurtAdresRij = memo(function BuurtAdresRij({ adres: a, onPatch, onVerwijd
   bedrijfNaam?: string;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-2 px-3 py-2">
-      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-bold ${a.uitgevoerd ? "bg-green-500 text-white" : a.bevestigd ? "bg-green-100 text-green-700" : "bg-ink-100 text-ink-700"}`}>{a.huisnummer || "—"}</span>
-      <div className="w-36 shrink-0"><Keuze size="sm" value={a.soort} onChange={(w) => onPatch(a.id, { soort: w as BuurtAdres["soort"] })} opties={BUURT_SOORTEN.map((s) => ({ waarde: s, label: BUURT_SOORT_KORT[s] }))} title="Soort werkzaamheden" /></div>
-      <div className="w-36 shrink-0"><DatumKiezer compact value={a.datum} onChange={(iso) => onPatch(a.id, { datum: iso })} placeholder="Datum" /></div>
-      <input value={a.telefoon} onChange={(e) => onPatch(a.id, { telefoon: e.target.value })} placeholder="06-…" className={klein + " w-36 shrink-0"} />
-      <input value={a.bijzonderheid} onChange={(e) => onPatch(a.id, { bijzonderheid: e.target.value })} placeholder="Bijzonderheid (TVM / boorder / sleutel…)" className={klein + " min-w-[12rem] max-w-[30rem] flex-1"} />
-      <div className="ml-auto flex shrink-0 items-center gap-2">
-        <label className={`flex w-28 cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-2 py-1.5 text-xs font-semibold ${a.bevestigd ? "border-green-300 bg-green-50 text-green-700" : "border-ink-200 text-ink-500 hover:bg-ink-50"}`} title="Afspraak bevestigd met de bewoner">
+    <div className="flex flex-col gap-2 px-3 py-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2 sm:py-2">
+      {/* Nummer + soort + datum (op desktop plat via contents) */}
+      <div className="flex items-center gap-2 sm:contents">
+        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-bold ${a.uitgevoerd ? "bg-green-500 text-white" : a.bevestigd ? "bg-green-100 text-green-700" : "bg-ink-100 text-ink-700"}`}>{a.huisnummer || "—"}</span>
+        <div className="min-w-0 flex-1 sm:w-36 sm:flex-none"><Keuze size="sm" value={a.soort} onChange={(w) => onPatch(a.id, { soort: w as BuurtAdres["soort"] })} opties={BUURT_SOORTEN.map((s) => ({ waarde: s, label: BUURT_SOORT_KORT[s] }))} title="Soort werkzaamheden" /></div>
+        <div className="min-w-0 flex-1 sm:w-36 sm:flex-none"><DatumKiezer compact value={a.datum} onChange={(iso) => onPatch(a.id, { datum: iso })} placeholder="Datum" /></div>
+      </div>
+      {/* Telefoon + bijzonderheid */}
+      <div className="flex items-center gap-2 sm:contents">
+        <input value={a.telefoon} onChange={(e) => onPatch(a.id, { telefoon: e.target.value })} placeholder="06-…" inputMode="tel" className={klein + " w-32 shrink-0 sm:w-36"} />
+        <input value={a.bijzonderheid} onChange={(e) => onPatch(a.id, { bijzonderheid: e.target.value })} placeholder="Bijzonderheid (TVM / boorder / sleutel…)" className={klein + " min-w-0 flex-1 sm:max-w-[30rem]"} />
+      </div>
+      {/* Bevestigd / uitgevoerd / SMS / verwijder */}
+      <div className="flex flex-wrap items-center gap-2 sm:ml-auto sm:flex-nowrap">
+        <label className={`flex cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs font-semibold sm:w-28 sm:py-1.5 ${a.bevestigd ? "border-green-300 bg-green-50 text-green-700" : "border-ink-200 text-ink-500 hover:bg-ink-50"}`} title="Afspraak bevestigd met de bewoner">
           <input type="checkbox" aria-label="Bevestigd met bewoner" checked={a.bevestigd} onChange={(e) => onPatch(a.id, { bevestigd: e.target.checked })} className="h-3.5 w-3.5 accent-green-600" /> Bevestigd
         </label>
-        <label className={`flex w-28 cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-2 py-1.5 text-xs font-semibold ${a.uitgevoerd ? "border-brand-300 bg-brand-50 text-brand-700" : "border-ink-200 text-ink-500 hover:bg-ink-50"}`} title="Werk uitgevoerd">
+        <label className={`flex cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs font-semibold sm:w-28 sm:py-1.5 ${a.uitgevoerd ? "border-brand-300 bg-brand-50 text-brand-700" : "border-ink-200 text-ink-500 hover:bg-ink-50"}`} title="Werk uitgevoerd">
           <input type="checkbox" aria-label="Uitgevoerd" checked={a.uitgevoerd} onChange={(e) => onPatch(a.id, { uitgevoerd: e.target.checked })} className="h-3.5 w-3.5 accent-brand-600" /> Uitgevoerd
         </label>
         {a.telefoon.trim() ? (
-          <a href={smsLink(a.telefoon, smsHerinneringTekst(a, bedrijfNaam))} onClick={() => onPatch(a.id, { herinnerVerstuurdOp: nu() })} className={`flex w-16 items-center justify-center gap-1 rounded-lg border px-2 py-1.5 text-xs font-semibold ${a.herinnerVerstuurdOp ? "border-green-200 bg-green-50 text-green-700" : "border-ink-200 text-ink-600 hover:bg-ink-50"}`} title="SMS-herinnering naar bewoner (dag van tevoren)">
+          <a href={smsLink(a.telefoon, smsHerinneringTekst(a, bedrijfNaam))} onClick={() => onPatch(a.id, { herinnerVerstuurdOp: nu() })} className={`flex items-center justify-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-semibold sm:w-16 sm:px-2 ${a.herinnerVerstuurdOp ? "border-green-200 bg-green-50 text-green-700" : "border-ink-200 text-ink-600 hover:bg-ink-50"}`} title="SMS-herinnering naar bewoner (dag van tevoren)">
             <Phone className="h-3.5 w-3.5" /> SMS
           </a>
         ) : (
-          <span className="w-16 shrink-0" aria-hidden="true" />
+          <span className="hidden sm:block sm:w-16" aria-hidden="true" />
         )}
         {isLeiding && <button type="button" onClick={() => onVerwijder(a.id)} className="rounded-lg p-1.5 text-ink-300 hover:bg-red-50 hover:text-red-600" title="Adres verwijderen"><Trash2 className="h-4 w-4" /></button>}
       </div>
