@@ -22,7 +22,7 @@ import {
   Mail,
   Receipt,
 } from "lucide-react";
-import { Navigation } from "lucide-react";
+import { Navigation, ExternalLink } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { useNav } from "../store/NavContext";
 import { Keuze } from "../components/Keuze";
@@ -454,49 +454,60 @@ function RondeDetail({ ronde, onTerug }: { ronde: Brievenronde; onTerug: () => v
         </div>
       </Card>
 
-      {/* Open in Google Maps — automatisch in delen van max. 10 stops */}
+      {/* Looproute openen in Google Maps — automatisch in delen van max. 10 stops */}
       {routeDelen.length > 0 && (
-        <div>
+        <Card className="p-4">
+          <div className="mb-3 flex items-center gap-2.5">
+            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600"><MapPin className="h-5 w-5" /></span>
+            <div className="min-w-0">
+              <h4 className="text-sm font-bold text-ink-900">Looproute in Google Maps</h4>
+              <p className="text-xs text-ink-500">
+                {routeDelen.length === 1
+                  ? `${routeDelen[0].aantal} ${routeDelen[0].aantal === 1 ? "adres" : "adressen"} — open de wandelroute`
+                  : `${mapsBron.length} adressen, opgedeeld in ${routeDelen.length} delen van max. 10 stops`}
+              </p>
+            </div>
+          </div>
+
           {routeDelen.length === 1 ? (
             <a
               href={routeDelen[0].url}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 py-3 text-sm font-semibold text-white shadow-card hover:bg-brand-700"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 py-3 text-sm font-semibold text-white hover:bg-brand-700"
             >
-              <Navigation className="h-4 w-4" />
-              Open looproute in Google Maps
-              <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs">{routeDelen[0].aantal} stops</span>
+              <Navigation className="h-4 w-4" /> Open looproute in Google Maps
+              <ExternalLink className="h-4 w-4 opacity-80" />
             </a>
           ) : (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 text-sm font-semibold text-ink-700">
-                <Navigation className="h-4 w-4 text-brand-600" />
-                Looproute in {routeDelen.length} delen — {mapsBron.length} adressen, max. 10 per route
-              </div>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-                {routeDelen.map((deel, i) => (
-                  <a
-                    key={i}
-                    href={deel.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-between gap-1.5 rounded-lg border border-brand-200 bg-brand-50 px-3 py-2.5 text-sm font-semibold text-brand-700 hover:bg-brand-100"
-                  >
-                    <span className="inline-flex items-center gap-1.5"><Navigation className="h-3.5 w-3.5" /> Deel {i + 1}</span>
-                    <span className="text-xs font-medium text-brand-600">{deel.van}–{deel.tot}</span>
-                  </a>
-                ))}
-              </div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {routeDelen.map((deel, i) => (
+                <a
+                  key={i}
+                  href={deel.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group flex items-center gap-3 rounded-xl border border-ink-200 bg-ink-50/40 px-3 py-2.5 transition-colors hover:border-brand-300 hover:bg-brand-50"
+                >
+                  <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-600 text-sm font-bold text-white">{i + 1}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-bold text-ink-900">Deel {i + 1}</div>
+                    <div className="text-xs text-ink-500">Adres {deel.van}–{deel.tot} · {deel.aantal} stops</div>
+                  </div>
+                  <ExternalLink className="h-4 w-4 shrink-0 text-ink-300 transition-colors group-hover:text-brand-600" />
+                </a>
+              ))}
             </div>
           )}
-          <p className="mt-1.5 text-center text-xs text-ink-400">
-            {nogTeDoen.length
-              ? "Bevat de adressen die nog gedaan moeten worden, in looproute-volgorde."
-              : "Alles is al gegooid — dit is de volledige looproute."}
-            {routeDelen.length > 1 && " Google Maps doet max. 10 stops per route, dus loop de delen één voor één."}
+
+          <p className="mt-3 flex items-start gap-1.5 text-xs text-ink-400">
+            <Navigation className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span>
+              {nogTeDoen.length ? "De adressen die nog gedaan moeten worden, in looproute-volgorde." : "Alles is al gegooid — dit is de volledige looproute."}
+              {routeDelen.length > 1 && " Google Maps doet max. 10 stops per route, dus loop de delen één voor één."}
+            </span>
           </p>
-        </div>
+        </Card>
       )}
 
       {/* Bedrijfspanden */}
