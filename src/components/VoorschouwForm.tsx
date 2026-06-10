@@ -241,18 +241,18 @@ export function VoorschouwForm({
           Algemene informatie
         </h3>
         <Tekstveld label="Straatnaam" value={data.straatnaam} onChange={(v) => set({ straatnaam: v })} placeholder="bijv. Dorpsstraat" />
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Tekstveld label="Postcode" value={data.postcode} onChange={(v) => set({ postcode: v })} placeholder="1234 AB" />
           <Tekstveld label="Plaats" value={data.plaats} onChange={(v) => set({ plaats: v })} placeholder="Rotterdam" />
         </div>
         <JaNeeKnop label="Gebouw aan meerdere straten verbonden" value={data.meerdereStraten} onChange={(v) => set({ meerdereStraten: v })} />
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Tekstveld label="Aantal woningen / adressen" value={data.aantalWoningen} onChange={(v) => set({ aantalWoningen: v })} placeholder="bijv. 24" />
           <Tekstveld label="Aantal entrees" value={data.aantalEntrees} onChange={(v) => set({ aantalEntrees: v })} placeholder="bijv. 3" />
         </div>
         <Tekstveld label="Namen huisbaas / VVE" value={data.namenHuisbaasVVE} onChange={(v) => set({ namenHuisbaasVVE: v })} textarea />
         <Tekstveld label="Adressen huisbaas / VVE" value={data.adressenHuisbaasVVE} onChange={(v) => set({ adressenHuisbaasVVE: v })} textarea />
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <JaNeeKnop label="Gasloos" value={data.gasloos} onChange={(v) => set({ gasloos: v })} />
           <JaNeeKnop label="Blokverwarming" value={data.blokverwarming} onChange={(v) => set({ blokverwarming: v })} />
         </div>

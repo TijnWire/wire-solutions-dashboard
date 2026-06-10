@@ -143,14 +143,14 @@ export function Overzicht() {
               {perMonteur.map((m) => {
                 const totaal = m.ingediend + m.concept;
                 return (
-                  <div key={m.naam} className="flex items-center gap-3">
+                  <div key={m.naam} className="flex items-center gap-2 sm:gap-3">
                     <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-ink-800 text-xs font-semibold text-white">{m.initialen}</div>
-                    <div className="w-32 shrink-0 truncate text-sm font-medium text-ink-700">{m.naam}</div>
+                    <div className="w-20 shrink-0 truncate text-sm font-medium text-ink-700 sm:w-32">{m.naam}</div>
                     <div className="flex h-2.5 flex-1 overflow-hidden rounded-full bg-ink-100">
                       <div className="h-full bg-green-500" style={{ width: `${(m.ingediend / maxPer) * 100}%` }} />
                       <div className="h-full bg-orange-400" style={{ width: `${(m.concept / maxPer) * 100}%` }} />
                     </div>
-                    <div className="w-24 shrink-0 text-right text-xs text-ink-500">
+                    <div className="w-16 shrink-0 text-right text-xs text-ink-500 sm:w-24">
                       <span className="font-semibold text-ink-800">{totaal}</span> voorschouw{totaal === 1 ? "" : "en"}
                     </div>
                   </div>

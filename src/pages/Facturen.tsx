@@ -145,10 +145,22 @@ function FactuurForm({ bestaande, initieel, onKlaar }: { bestaande?: Factuur; in
         {f.regels.map((r, i) => (
           <div key={i} className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_5rem_6rem_6rem_2rem] sm:items-center">
             <input value={r.omschrijving} onChange={(e) => setRegel(i, { omschrijving: e.target.value })} placeholder="Omschrijving" className={veld} />
-            <input type="number" value={r.aantal} onChange={(e) => setRegel(i, { aantal: Number(e.target.value) })} className={veld + " sm:text-right"} />
-            <input type="number" step="0.01" value={r.prijs} onChange={(e) => setRegel(i, { prijs: Number(e.target.value) })} className={veld + " sm:text-right"} />
-            <div className="px-1 text-right text-sm font-semibold text-ink-800">{euro(r.aantal * r.prijs)}</div>
-            <button type="button" onClick={() => delRegel(i)} className="justify-self-end rounded-lg p-1.5 text-red-400 hover:bg-red-50 hover:text-red-600" title="Regel verwijderen">
+            {/* Aantal + prijs naast elkaar op mobiel (met label), platgeslagen in de desktop-grid via sm:contents */}
+            <div className="grid grid-cols-2 gap-2 sm:contents">
+              <label className="block">
+                <span className="mb-1 block text-xs text-ink-500 sm:hidden">Aantal</span>
+                <input type="number" inputMode="numeric" value={r.aantal} onChange={(e) => setRegel(i, { aantal: Number(e.target.value) })} className={veld + " sm:text-right"} />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xs text-ink-500 sm:hidden">Prijs (€)</span>
+                <input type="number" inputMode="decimal" step="0.01" value={r.prijs} onChange={(e) => setRegel(i, { prijs: Number(e.target.value) })} className={veld + " sm:text-right"} />
+              </label>
+            </div>
+            <div className="flex items-center justify-between border-t border-ink-100 px-1 pt-2 text-sm sm:block sm:border-0 sm:pt-0 sm:text-right">
+              <span className="text-xs text-ink-500 sm:hidden">Totaal</span>
+              <span className="font-semibold text-ink-800">{euro(r.aantal * r.prijs)}</span>
+            </div>
+            <button type="button" onClick={() => delRegel(i)} className="justify-self-end rounded-lg p-2.5 text-red-400 hover:bg-red-50 hover:text-red-600 sm:p-1.5" title="Regel verwijderen">
               <X className="h-4 w-4" />
             </button>
           </div>
@@ -451,14 +463,14 @@ export function Facturen({ initieelFactuur }: { initieelFactuur?: string }) {
                   <div className="font-bold text-ink-900">{euro(t.totaal)}</div>
                   <div className="text-xs text-ink-400">incl. btw</div>
                 </div>
-                <div className="flex items-center gap-1">
-                  <button type="button" onClick={() => void downloadFactuurPdf(f, bedrijf)} className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-3 py-1.5 text-xs font-medium text-ink-700 hover:bg-ink-50">
+                <div className="flex w-full items-center justify-end gap-1 sm:w-auto">
+                  <button type="button" onClick={() => void downloadFactuurPdf(f, bedrijf)} className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-3 py-2 text-xs font-medium text-ink-700 hover:bg-ink-50 sm:py-1.5">
                     <Download className="h-3.5 w-3.5" /> PDF
                   </button>
-                  <button type="button" onClick={() => { setBewerk(f); setModus("formulier"); }} className="rounded-lg p-2 text-ink-400 hover:bg-ink-100 hover:text-ink-700" title="Bewerken">
+                  <button type="button" onClick={() => { setBewerk(f); setModus("formulier"); }} className="rounded-lg p-2.5 text-ink-400 hover:bg-ink-100 hover:text-ink-700 sm:p-2" title="Bewerken">
                     <Pencil className="h-4 w-4" />
                   </button>
-                  <button type="button" onClick={() => setVerwijder(f)} className="rounded-lg p-2 text-red-400 hover:bg-red-50 hover:text-red-600" title="Verwijderen">
+                  <button type="button" onClick={() => setVerwijder(f)} className="rounded-lg p-2.5 text-red-400 hover:bg-red-50 hover:text-red-600 sm:p-2" title="Verwijderen">
                     <Trash2 className="h-4 w-4" />
                   </button>
                 </div>

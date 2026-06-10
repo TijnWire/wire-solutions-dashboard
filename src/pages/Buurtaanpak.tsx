@@ -245,7 +245,7 @@ const BuurtAdresRij = memo(function BuurtAdresRij({ adres: a, onPatch, onVerwijd
       </div>
       {/* Telefoon + bijzonderheid */}
       <div className="flex items-center gap-2 sm:contents">
-        <input value={a.telefoon} onChange={(e) => onPatch(a.id, { telefoon: e.target.value })} placeholder="06-…" inputMode="tel" className={klein + " w-32 shrink-0 sm:w-36"} />
+        <input value={a.telefoon} onChange={(e) => onPatch(a.id, { telefoon: e.target.value })} placeholder="06-…" inputMode="tel" className={klein + " w-28 shrink-0 sm:w-36"} />
         <input value={a.bijzonderheid} onChange={(e) => onPatch(a.id, { bijzonderheid: e.target.value })} placeholder="Bijzonderheid (TVM / boorder / sleutel…)" className={klein + " min-w-0 flex-1 sm:max-w-[30rem]"} />
       </div>
       {/* Bevestigd / uitgevoerd / SMS / verwijder */}
@@ -257,13 +257,13 @@ const BuurtAdresRij = memo(function BuurtAdresRij({ adres: a, onPatch, onVerwijd
           <input type="checkbox" aria-label="Uitgevoerd" checked={a.uitgevoerd} onChange={(e) => onPatch(a.id, { uitgevoerd: e.target.checked })} className="h-3.5 w-3.5 accent-brand-600" /> Uitgevoerd
         </label>
         {a.telefoon.trim() ? (
-          <a href={smsLink(a.telefoon, smsHerinneringTekst(a, bedrijfNaam))} onClick={() => onPatch(a.id, { herinnerVerstuurdOp: nu() })} className={`flex items-center justify-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-semibold sm:w-16 sm:px-2 ${a.herinnerVerstuurdOp ? "border-green-200 bg-green-50 text-green-700" : "border-ink-200 text-ink-600 hover:bg-ink-50"}`} title="SMS-herinnering naar bewoner (dag van tevoren)">
+          <a href={smsLink(a.telefoon, smsHerinneringTekst(a, bedrijfNaam))} onClick={() => onPatch(a.id, { herinnerVerstuurdOp: nu() })} className={`flex items-center justify-center gap-1 rounded-lg border px-3 py-2 text-xs font-semibold sm:w-16 sm:px-2 sm:py-1.5 ${a.herinnerVerstuurdOp ? "border-green-200 bg-green-50 text-green-700" : "border-ink-200 text-ink-600 hover:bg-ink-50"}`} title="SMS-herinnering naar bewoner (dag van tevoren)">
             <Phone className="h-3.5 w-3.5" /> SMS
           </a>
         ) : (
           <span className="hidden sm:block sm:w-16" aria-hidden="true" />
         )}
-        {isLeiding && <button type="button" onClick={() => onVerwijder(a.id)} className="rounded-lg p-1.5 text-ink-300 hover:bg-red-50 hover:text-red-600" title="Adres verwijderen"><Trash2 className="h-4 w-4" /></button>}
+        {isLeiding && <button type="button" onClick={() => onVerwijder(a.id)} className="shrink-0 rounded-lg p-2.5 text-ink-300 hover:bg-red-50 hover:text-red-600 sm:p-1.5" title="Adres verwijderen"><Trash2 className="h-4 w-4" /></button>}
       </div>
     </div>
   );
@@ -374,7 +374,7 @@ function Detail({ project, onTerug, isLeiding }: { project: BuurtaanpakT; onTeru
             const gedaan = i < stapIndex, isNu = i === stapIndex;
             return (
               <Fragment key={s}>
-                <span className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${isNu ? "bg-brand-600 text-white" : gedaan ? "bg-green-100 text-green-700" : "bg-ink-100 text-ink-400"}`}>
+                <span className={`flex items-center gap-1.5 rounded-full px-2 py-1 text-[11px] font-semibold sm:px-2.5 sm:text-xs ${isNu ? "bg-brand-600 text-white" : gedaan ? "bg-green-100 text-green-700" : "bg-ink-100 text-ink-400"}`}>
                   <span className={`flex h-4 w-4 items-center justify-center rounded-full text-[10px] ${isNu ? "bg-white/25 text-white" : gedaan ? "bg-green-500 text-white" : "bg-ink-300 text-white"}`}>{gedaan ? "✓" : i + 1}</span>
                   {STAP_LABEL[s]}
                 </span>

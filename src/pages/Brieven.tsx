@@ -100,15 +100,15 @@ function AdresRij({
 
   return (
     <div className={`rounded-xl border border-l-4 border-ink-200 bg-white ${statusRand[adres.status]} ${geselecteerd ? "ring-2 ring-brand-300" : ""}`}>
-      <div className="flex flex-wrap items-center gap-3 p-3">
+      <div className="flex flex-wrap items-center gap-2 p-3 sm:gap-3">
         {onToggleSelectie && (
           <input type="checkbox" checked={geselecteerd} onChange={onToggleSelectie} aria-label={`Selecteer ${adresLabel(adres)}`} className="h-4 w-4 shrink-0 rounded border-ink-300 text-brand-600 focus:ring-brand-200" />
         )}
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-ink-100 text-xs font-bold text-ink-600">
           {stap}
         </div>
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm font-bold text-ink-900">{adresLabel(adres)}</span>
             {isBedrijf && (
               <span className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-semibold text-brand-700 ring-1 ring-inset ring-brand-200">
@@ -119,9 +119,9 @@ function AdresRij({
           </div>
         </div>
 
-        <div className="ml-auto flex items-center gap-2">
-          <span className={`h-2.5 w-2.5 rounded-full ${statusDot[adres.status]}`} />
-          <div className="w-32"><Keuze value={adres.status} onChange={(w) => onUpdate({ status: w as BriefStatus })} opties={BRIEF_STATUSSEN.map((s) => ({ waarde: s, label: s }))} disabled={vergrendeld} size="sm" title="Status van dit adres" /></div>
+        <div className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">
+          <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${statusDot[adres.status]}`} />
+          <div className="min-w-0 flex-1 sm:w-32 sm:flex-none"><Keuze value={adres.status} onChange={(w) => onUpdate({ status: w as BriefStatus })} opties={BRIEF_STATUSSEN.map((s) => ({ waarde: s, label: s }))} disabled={vergrendeld} size="sm" title="Status van dit adres" /></div>
           <a
             href={navigeerUrl}
             target="_blank"
@@ -330,7 +330,7 @@ function RondeDetail({ ronde, onTerug }: { ronde: Brievenronde; onTerug: () => v
             const gedaan = i < huidigIndex, isNu = i === huidigIndex;
             return (
               <Fragment key={s}>
-                <span className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${isNu ? "bg-brand-600 text-white" : gedaan ? "bg-green-100 text-green-700" : "bg-ink-100 text-ink-400"}`}>
+                <span className={`flex items-center gap-1.5 rounded-full px-2 py-1 text-[11px] font-semibold sm:px-2.5 sm:text-xs ${isNu ? "bg-brand-600 text-white" : gedaan ? "bg-green-100 text-green-700" : "bg-ink-100 text-ink-400"}`}>
                   <span className={`flex h-4 w-4 items-center justify-center rounded-full text-[10px] ${isNu ? "bg-white/25 text-white" : gedaan ? "bg-green-500 text-white" : "bg-ink-300 text-white"}`}>{gedaan ? "✓" : i + 1}</span>
                   {STATUS_LABEL[s]}
                 </span>
@@ -392,7 +392,7 @@ function RondeDetail({ ronde, onTerug }: { ronde: Brievenronde; onTerug: () => v
           <span className="text-sm text-ink-600">Deadline</span>
           {isLeiding ? (
             <>
-              <div className="w-48"><DatumKiezer value={ronde.deadline ?? ""} onChange={(iso) => updateRonde(ronde.id, { deadline: iso || undefined })} placeholder="Geen deadline" /></div>
+              <div className="w-full sm:w-48"><DatumKiezer value={ronde.deadline ?? ""} onChange={(iso) => updateRonde(ronde.id, { deadline: iso || undefined })} placeholder="Geen deadline" /></div>
               {ronde.deadline && <button type="button" onClick={() => updateRonde(ronde.id, { deadline: undefined })} className="text-xs font-medium text-ink-400 hover:text-ink-600">wissen</button>}
             </>
           ) : (
@@ -404,7 +404,7 @@ function RondeDetail({ ronde, onTerug }: { ronde: Brievenronde; onTerug: () => v
       {/* Regio — bepaalt de groepering in de database */}
       <Card className="flex flex-wrap items-center gap-x-3 gap-y-2 p-4">
         <span className="text-sm font-medium text-ink-600">Regio</span>
-        <input value={ronde.regio ?? ""} disabled={!bewerkbaar} onChange={(e) => updateRonde(ronde.id, { regio: e.target.value })} placeholder="Onbekend" className="w-40 rounded-lg border border-ink-200 px-2.5 py-1.5 text-sm outline-none focus:border-brand-400 disabled:bg-ink-50 disabled:text-ink-500" />
+        <input value={ronde.regio ?? ""} disabled={!bewerkbaar} onChange={(e) => updateRonde(ronde.id, { regio: e.target.value })} placeholder="Onbekend" className="w-full rounded-lg border border-ink-200 px-2.5 py-1.5 text-sm outline-none focus:border-brand-400 disabled:bg-ink-50 disabled:text-ink-500 sm:w-40" />
         {bewerkbaar && <button type="button" onClick={() => updateRonde(ronde.id, { regio: afleidRegio(ronde.postcode, ronde.plaats) })} className={knopKlein}><Wand2 className="h-3.5 w-3.5" /> Auto uit postcode</button>}
       </Card>
 
@@ -439,7 +439,7 @@ function RondeDetail({ ronde, onTerug }: { ronde: Brievenronde; onTerug: () => v
         <div className="h-2.5 overflow-hidden rounded-full bg-ink-100">
           <div className="h-full rounded-full bg-green-500" style={{ width: `${pct}%` }} />
         </div>
-        <div className="mt-4 grid grid-cols-3 gap-3 text-center">
+        <div className="mt-4 grid grid-cols-2 gap-3 text-center sm:grid-cols-3">
           <div className="rounded-lg bg-ink-50 p-3">
             <div className="text-lg font-bold text-ink-900">{teBezorgen.length}</div>
             <div className="text-xs text-ink-500">Adressen</div>

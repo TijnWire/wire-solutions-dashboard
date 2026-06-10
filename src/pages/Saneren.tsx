@@ -293,7 +293,7 @@ function SaneringDetail({ sanering, onTerug }: { sanering: Sanering; onTerug: ()
             const gedaan = i < huidigIndex, isNu = i === huidigIndex;
             return (
               <Fragment key={s}>
-                <span className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${isNu ? "bg-brand-600 text-white" : gedaan ? "bg-green-100 text-green-700" : "bg-ink-100 text-ink-400"}`}>
+                <span className={`flex items-center gap-1.5 rounded-full px-2 py-1 text-[11px] font-semibold sm:px-2.5 sm:text-xs ${isNu ? "bg-brand-600 text-white" : gedaan ? "bg-green-100 text-green-700" : "bg-ink-100 text-ink-400"}`}>
                   <span className={`flex h-4 w-4 items-center justify-center rounded-full text-[10px] ${isNu ? "bg-white/25 text-white" : gedaan ? "bg-green-500 text-white" : "bg-ink-300 text-white"}`}>{gedaan ? "✓" : i + 1}</span>
                   {TAUW_STATUS_LABEL[s]}
                 </span>
@@ -355,7 +355,7 @@ function SaneringDetail({ sanering, onTerug }: { sanering: Sanering; onTerug: ()
           <span className="text-sm text-ink-600">Deadline</span>
           {isLeiding ? (
             <>
-              <div className="w-48"><DatumKiezer value={sanering.deadline ?? ""} onChange={(iso) => updateSanering(sanering.id, { deadline: iso || undefined })} placeholder="Geen deadline" /></div>
+              <div className="w-full sm:w-48"><DatumKiezer value={sanering.deadline ?? ""} onChange={(iso) => updateSanering(sanering.id, { deadline: iso || undefined })} placeholder="Geen deadline" /></div>
               {sanering.deadline && <button type="button" onClick={() => updateSanering(sanering.id, { deadline: undefined })} className="text-xs font-medium text-ink-400 hover:text-ink-600">wissen</button>}
             </>
           ) : (
@@ -367,7 +367,7 @@ function SaneringDetail({ sanering, onTerug }: { sanering: Sanering; onTerug: ()
       {/* Regio */}
       <Card className="flex flex-wrap items-center gap-x-3 gap-y-2 p-4">
         <span className="text-sm font-medium text-ink-600">Regio</span>
-        <input value={sanering.regio} disabled={!bewerkbaar} onChange={(e) => updateSanering(sanering.id, { regio: e.target.value })} placeholder="Onbekend" className="w-40 rounded-lg border border-ink-200 px-2.5 py-1.5 text-sm outline-none focus:border-brand-400 disabled:bg-ink-50 disabled:text-ink-500" />
+        <input value={sanering.regio} disabled={!bewerkbaar} onChange={(e) => updateSanering(sanering.id, { regio: e.target.value })} placeholder="Onbekend" className="w-full rounded-lg border border-ink-200 px-2.5 py-1.5 text-sm outline-none focus:border-brand-400 disabled:bg-ink-50 disabled:text-ink-500 sm:w-40" />
         {bewerkbaar && <button type="button" onClick={() => updateSanering(sanering.id, { regio: afleidRegio(eerstePostcode?.postcode ?? "", eerstePostcode?.plaats ?? "") })} className={knopKlein}><Wand2 className="h-3.5 w-3.5" /> Auto uit postcode</button>}
       </Card>
 
