@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { X } from "lucide-react";
 import { Sidebar } from "./components/Sidebar";
 import { BottomNav } from "./components/BottomNav";
@@ -26,8 +26,8 @@ import { Agenda } from "./pages/Agenda";
 import { Kennisbank } from "./pages/Kennisbank";
 import { Instellingen } from "./pages/Instellingen";
 import { Klanten } from "./pages/Klanten";
-import { meldingenVoor } from "./lib/meldingen";
-import { zoekResultaten } from "./lib/zoeken";
+import { meldingenVoor, type Melding } from "./lib/meldingen";
+import { zoekResultaten, type ZoekItem } from "./lib/zoeken";
 import { Gebruikersbeheer } from "./pages/Gebruikersbeheer";
 import { Module } from "./pages/Module";
 import { NAV } from "./lib/nav";
@@ -44,7 +44,7 @@ function Splash() {
 }
 
 export default function App() {
-  const { currentUser, hydrated, bedrijf, instellingen, verlof, taken, rondes, afspraken, voorschouwen, klanten, facturen, users, kennis, projects, projectPosts, tauwOpdrachten, saneringen } = useApp();
+  const { currentUser, hydrated, bedrijf, instellingen, verlof, taken, rondes, afspraken, voorschouwen, klanten, facturen, users, kennis, projects, projectPosts, tauwOpdrachten, saneringen, logout } = useApp();
   const [active, setActive] = useState("overzicht");
   const [target, setTarget] = useState<NavTarget>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -54,21 +54,32 @@ export default function App() {
     setActive(currentUser?.rol === "monteur" ? "mijnwerk" : "overzicht");
   }, [currentUser?.id]);
 
-  // Navigeren naar een module, eventueel met een te openen item
-  const navigeer = (key: string, t: NavTarget = null) => {
-    setActive(key);
-    setTarget(t);
-    setMenuOpen(false);
-  };
+  // Stabiele callbacks + gememoiseerde afgeleiden, zodat de app-shell (Sidebar/BottomNav/Topbar)
+  // en useNav-consumenten NIET hertekenen bij een data-wijziging (bv. een vinkje in Buurtaanpak).
+  const navigeer = useCallback((key: string, t: NavTarget = null) => { setActive(key); setTarget(t); setMenuOpen(false); }, []);
+  const ga = useCallback((key: string) => navigeer(key), [navigeer]);
+  const onMenu = useCallback(() => setMenuOpen(true), []);
+  const logoutRef = useRef(logout); logoutRef.current = logout;
+  const onLogout = useCallback(() => logoutRef.current(), []);
+  const onMelding = useCallback((m: Melding) => { if (m.navKey) navigeer(m.navKey, m.target ?? null); }, [navigeer]);
+  const onResultaat = useCallback((it: ZoekItem) => navigeer(it.navKey, it.target ?? null), [navigeer]);
+  const zoekRef = useRef({ afspraken, rondes, voorschouwen, klanten, facturen, users, kennis, projects, currentUser });
+  zoekRef.current = { afspraken, rondes, voorschouwen, klanten, facturen, users, kennis, projects, currentUser };
+  const onZoek = useCallback((zoekterm: string) => {
+    const z = zoekRef.current;
+    return zoekResultaten(zoekterm, { afspraken: z.afspraken, rondes: z.rondes, voorschouwen: z.voorschouwen, klanten: z.klanten, facturen: z.facturen, users: z.users, kennis: z.kennis, projects: z.projects }, z.currentUser);
+  }, []);
+  const navContextValue = useMemo(() => ({ navigeer }), [navigeer]);
+  const meldingen = useMemo(
+    () => (currentUser ? meldingenVoor(currentUser, { taken, rondes, afspraken, voorschouwen, projects, projectPosts, tauwOpdrachten, saneringen, users, bedrijf, instellingen, verlof }) : []),
+    [currentUser, taken, rondes, afspraken, voorschouwen, projects, projectPosts, tauwOpdrachten, saneringen, users, bedrijf, instellingen, verlof]
+  );
 
   if (!hydrated) return <Splash />;
   if (!currentUser) return <><Login /><DevSwitcher /></>;
 
   const item = NAV.find((n) => n.key === active);
   const titel = active === "overzicht" ? "Dashboard" : active === "planning" ? "Weekplanning" : item?.label ?? "Dashboard";
-  const meldingen = meldingenVoor(currentUser, { taken, rondes, afspraken, voorschouwen, projects, projectPosts, tauwOpdrachten, saneringen, users, bedrijf, instellingen, verlof });
-
-  const ga = (key: string) => navigeer(key);
 
   const render = () => {
     switch (active) {
@@ -124,11 +135,11 @@ export default function App() {
   };
 
   return (
-    <NavContext.Provider value={{ navigeer }}>
+    <NavContext.Provider value={navContextValue}>
     <div className="flex h-full overflow-hidden bg-ink-100">
       {/* Vaste zijbalk op desktop */}
       <div className="hidden md:flex">
-        <Sidebar active={active} onSelect={ga} />
+        <Sidebar active={active} onSelect={ga} currentUser={currentUser} onLogout={onLogout} />
       </div>
 
       {/* Uitschuifmenu op mobiel */}
@@ -144,7 +155,7 @@ export default function App() {
             >
               <X className="h-5 w-5" />
             </button>
-            <Sidebar active={active} onSelect={ga} />
+            <Sidebar active={active} onSelect={ga} currentUser={currentUser} onLogout={onLogout} />
           </div>
         </div>
       )}
@@ -152,17 +163,17 @@ export default function App() {
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar
           title={titel}
-          onMenu={() => setMenuOpen(true)}
+          onMenu={onMenu}
           meldingen={meldingen}
-          onMelding={(m) => { if (m.navKey) navigeer(m.navKey, m.target ?? null); }}
-          onZoek={(q) => zoekResultaten(q, { afspraken, rondes, voorschouwen, klanten, facturen, users, kennis, projects }, currentUser)}
-          onResultaat={(item) => navigeer(item.navKey, item.target ?? null)}
+          onMelding={onMelding}
+          onZoek={onZoek}
+          onResultaat={onResultaat}
         />
         <main className="scrollbar-thin flex-1 overflow-y-auto overflow-x-hidden overscroll-contain p-4 pb-[calc(5rem+env(safe-area-inset-bottom))] md:p-6 md:pb-6">{render()}</main>
       </div>
 
       {/* App-achtige onderbalk op mobiel */}
-      <BottomNav active={active} onSelect={ga} onMeer={() => setMenuOpen(true)} />
+      <BottomNav active={active} onSelect={ga} onMeer={onMenu} currentUser={currentUser} />
 
       <DevSwitcher />
     </div>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useState } from "react";
 import { Search, Bell, Menu, Info, AlertTriangle, ChevronRight, X, FolderKanban, SearchX } from "lucide-react";
 import type { Melding } from "../lib/meldingen";
 import type { ZoekGroep, ZoekItem } from "../lib/zoeken";
@@ -67,7 +67,7 @@ function ZoekLijst({ groepen, totaal, onKies }: { groepen: ZoekGroep[]; totaal: 
   );
 }
 
-export function Topbar({
+export const Topbar = memo(function Topbar({
   title,
   onMenu,
   meldingen = [],
@@ -255,4 +255,4 @@ export function Topbar({
       )}
     </>
   );
-}
+});

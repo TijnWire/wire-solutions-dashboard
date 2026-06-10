@@ -235,16 +235,27 @@ function Detail({ project, onTerug, isLeiding }: { project: BuurtaanpakT; onTeru
   const [openStraten, setOpenStraten] = useState<Set<string>>(() => new Set(groepen.length <= 6 ? groepen.map((g) => g.straat) : []));
   const toggleStraat = (straat: string) => setOpenStraten((prev) => { const n = new Set(prev); if (n.has(straat)) n.delete(straat); else n.add(straat); return n; });
   const alleUit = groepenZichtbaar.length > 0 && groepenZichtbaar.every((g) => openStraten.has(g.straat));
-  const whatsappDagen = useMemo(() => whatsappPerDag(project.adressen), [project.adressen]);
-  const aantalOnverstuurd = whatsappDagen.filter((d) => !project.whatsappVerstuurd?.[d.datum]).length;
+  // Goedkope tellingen in één pass; de zware WhatsApp-tekst pas opbouwen als het paneel open is.
+  const stats = useMemo(() => {
+    let bev = 0, uit = 0;
+    const datums = new Set<string>();
+    for (const a of project.adressen) { if (a.bevestigd) bev++; if (a.uitgevoerd) uit++; if (a.datum) datums.add(a.datum); }
+    return { bevestigd: bev, uitgevoerd: uit, datums };
+  }, [project.adressen]);
+  const aantalOnverstuurd = useMemo(() => {
+    let n = 0;
+    for (const d of stats.datums) if (!project.whatsappVerstuurd?.[d]) n++;
+    return n;
+  }, [stats, project.whatsappVerstuurd]);
+  const whatsappDagen = useMemo(() => (toonWa ? whatsappPerDag(project.adressen) : []), [toonWa, project.adressen]);
   const markeerVerstuurd = (datum: string) => updateBuurtaanpak(project.id, { whatsappVerstuurd: { ...(project.whatsappVerstuurd ?? {}), [datum]: nu() } });
   const markeerNietVerstuurd = (datum: string) => {
     const v = { ...(project.whatsappVerstuurd ?? {}) };
     delete v[datum];
     updateBuurtaanpak(project.id, { whatsappVerstuurd: v });
   };
-  const bevestigd = project.adressen.filter((a) => a.bevestigd).length;
-  const uitgevoerd = project.adressen.filter((a) => a.uitgevoerd).length;
+  const bevestigd = stats.bevestigd;
+  const uitgevoerd = stats.uitgevoerd;
 
   return (
     <div className="space-y-5">

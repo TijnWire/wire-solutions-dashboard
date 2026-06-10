@@ -1,20 +1,22 @@
+import { memo, useMemo } from "react";
 import { LogOut } from "lucide-react";
 import { NAV, GROUPS, magZien } from "../lib/nav";
-import { useApp } from "../store/AppContext";
-import { ROL_LABEL } from "../lib/types";
+import { ROL_LABEL, type User } from "../lib/types";
 
-export function Sidebar({
+export const Sidebar = memo(function Sidebar({
   active,
   onSelect,
+  currentUser,
+  onLogout,
 }: {
   active: string;
   onSelect: (key: string) => void;
+  currentUser: User | null;
+  onLogout: () => void;
 }) {
-  const { currentUser, logout } = useApp();
+  const items = useMemo(() => (currentUser ? NAV.filter((n) => magZien(currentUser, n)) : []), [currentUser]);
+  const groups = useMemo(() => GROUPS.filter((g) => items.some((i) => i.group === g)), [items]);
   if (!currentUser) return null;
-
-  const items = NAV.filter((n) => magZien(currentUser, n));
-  const groups = GROUPS.filter((g) => items.some((i) => i.group === g));
 
   return (
     <aside className="flex h-full w-64 shrink-0 flex-col border-r border-ink-200 bg-white pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] text-ink-600">
@@ -75,7 +77,7 @@ export function Sidebar({
             <div className="truncate text-[11px] text-ink-400">{ROL_LABEL[currentUser.rol]}</div>
           </div>
           <button
-            onClick={logout}
+            onClick={onLogout}
             title="Uitloggen"
             className="rounded-lg p-2 text-ink-400 hover:bg-ink-100 hover:text-ink-700"
           >
@@ -85,4 +87,4 @@ export function Sidebar({
       </div>
     </aside>
   );
-}
+});

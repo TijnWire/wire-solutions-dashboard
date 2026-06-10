@@ -264,6 +264,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Supabase: actieve sessie + bijhouden wat we al gesynct hebben (tegen terugkaats-lussen).
   const [sbSessie, setSbSessie] = useState(false);
   const sync = useRef<{ klaar: boolean; gezien: Record<string, string> }>({ klaar: false, gezien: {} });
+  // Laatst-gepushte referentie per slice — zo serialiseren we alleen de slice die écht wijzigde (niet alle 23 per klik).
+  const pushRef = useRef<Record<string, unknown>>({});
 
   // Eenmalig inladen vanuit de lokale database (IndexedDB).
   useEffect(() => {
@@ -587,6 +589,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!supabaseAan || !sbSessie || !hydrated || !sync.current.klaar) return;
     for (const key of Object.keys(setters)) {
+      if (pushRef.current[key] === waarden[key]) continue; // referentie ongewijzigd → slice niet veranderd, niet serialiseren
+      pushRef.current[key] = waarden[key];
       const j = JSON.stringify(waarden[key]);
       if (sync.current.gezien[key] !== j) {
         sync.current.gezien[key] = j;

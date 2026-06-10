@@ -1,7 +1,7 @@
-import type { ReactNode } from "react";
+import { memo, useMemo, type ReactNode } from "react";
 import { MoreHorizontal } from "lucide-react";
 import { NAV, magZien } from "../lib/nav";
-import { useApp } from "../store/AppContext";
+import type { User } from "../lib/types";
 
 // Volgorde van voorkeur voor de mobiele onderbalk; de eerste 4 zichtbare items komen erin.
 const PRIMAIR = ["overzicht", "mijnwerk", "team", "projecten", "afspraken", "brieven", "tauw", "saneren", "klanten", "facturen", "agenda"];
@@ -13,12 +13,11 @@ const KORT: Record<string, string> = {
 };
 
 // App-achtige onderbalk op mobiel: de belangrijkste bestemmingen + "Meer" (opent het volledige menu).
-export function BottomNav({ active, onSelect, onMeer }: { active: string; onSelect: (key: string) => void; onMeer: () => void }) {
-  const { currentUser } = useApp();
+export const BottomNav = memo(function BottomNav({ active, onSelect, onMeer, currentUser }: { active: string; onSelect: (key: string) => void; onMeer: () => void; currentUser: User | null }) {
+  const zichtbaar = useMemo(() => (currentUser ? NAV.filter((n) => magZien(currentUser, n)) : []), [currentUser]);
+  const primair = useMemo(() => PRIMAIR.map((k) => zichtbaar.find((n) => n.key === k)).filter(Boolean).slice(0, 4) as typeof NAV, [zichtbaar]);
   if (!currentUser) return null;
 
-  const zichtbaar = NAV.filter((n) => magZien(currentUser, n));
-  const primair = PRIMAIR.map((k) => zichtbaar.find((n) => n.key === k)).filter(Boolean).slice(0, 4) as typeof NAV;
   const inPrimair = primair.some((p) => p.key === active);
 
   const Tab = ({ label, isActive, onClick, children }: { label: string; isActive: boolean; onClick: () => void; children: ReactNode }) => (
@@ -47,4 +46,4 @@ export function BottomNav({ active, onSelect, onMeer }: { active: string; onSele
       </Tab>
     </nav>
   );
-}
+});
