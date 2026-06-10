@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ListTodo, Loader2, CheckCircle2, Plus, FolderKanban, Mailbox, CalendarCheck, ChevronRight, FileScan, FlaskConical, CalendarDays, CalendarClock } from "lucide-react";
+import { ListTodo, Loader2, CheckCircle2, Plus, FolderKanban, Mailbox, CalendarCheck, ChevronRight, FileScan, FlaskConical, CalendarDays, CalendarClock, Mail, AlertTriangle } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { useNav } from "../store/NavContext";
 import { TAUW_TYPE_LABEL } from "../lib/types";
+import { meldingenVoor } from "../lib/meldingen";
 
 const datumKort = (iso: string) => { const d = iso.slice(0, 10).split("-"); return d.length === 3 ? `${d[2]}-${d[1]}-${d[0]}` : iso; };
 // ISO-weeknummer van een ISO-datum (yyyy-mm-dd of vollere ISO-string).
@@ -29,7 +30,7 @@ import { MededelingenBord } from "../components/MededelingenBord";
 import type { LucideIcon } from "lucide-react";
 
 export function MijnWerk({ initieelProject }: { initieelProject?: string }) {
-  const { currentUser, projects, taken, rondes, afspraken, tauwOpdrachten, addTaak } = useApp();
+  const { currentUser, projects, taken, rondes, afspraken, tauwOpdrachten, addTaak, voorschouwen, projectPosts, saneringen, users, bedrijf, instellingen, verlof } = useApp();
   const { navigeer } = useNav();
   const [nieuwBijProject, setNieuwBijProject] = useState<string | null>(null);
   const [nieuweTitel, setNieuweTitel] = useState("");
@@ -42,6 +43,9 @@ export function MijnWerk({ initieelProject }: { initieelProject?: string }) {
   }, [initieelProject]);
 
   if (!currentUser) return null;
+
+  // Mailbox = persoonlijke meldingen/berichten voor deze gebruiker (zelfde als de bel, hier op de pagina).
+  const mailbox = meldingenVoor(currentUser, { taken, rondes, afspraken, voorschouwen, projects, projectPosts, tauwOpdrachten, saneringen, users, bedrijf, instellingen, verlof });
 
   const mijnTaken = taken.filter((t) => t.toegewezenAan === currentUser.id || t.toegewezenAan === ""); // "" = hele team
   const mijnProjecten = projects.filter(
@@ -175,6 +179,43 @@ export function MijnWerk({ initieelProject }: { initieelProject?: string }) {
 
       {/* Mededelingen van de beheerder */}
       <MededelingenBord />
+
+      {/* Mailbox — persoonlijke berichten & meldingen */}
+      <div>
+        <h3 className="mb-2.5 flex items-center gap-2 text-sm font-bold text-ink-700">
+          <Mailbox className="h-4 w-4 text-ink-500" /> Mailbox
+          {mailbox.length > 0 && <span className="rounded-full bg-brand-100 px-2 py-0.5 text-xs font-semibold text-brand-700">{mailbox.length}</span>}
+        </h3>
+        <Card className="overflow-hidden">
+          {mailbox.length === 0 ? (
+            <p className="p-6 text-center text-sm text-ink-400">Geen nieuwe berichten.</p>
+          ) : (
+            <div className="divide-y divide-ink-100">
+              {mailbox.map((m) => {
+                const waarschuwing = m.ernst === "waarschuwing";
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => m.navKey && navigeer(m.navKey, m.target ?? null)}
+                    disabled={!m.navKey}
+                    className="flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-ink-50 disabled:cursor-default disabled:hover:bg-transparent"
+                  >
+                    <span className={`mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${waarschuwing ? "bg-amber-50 text-amber-600" : "bg-brand-50 text-brand-600"}`}>
+                      {waarschuwing ? <AlertTriangle className="h-4 w-4" /> : <Mail className="h-4 w-4" />}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-semibold text-ink-900">{m.titel}</div>
+                      <div className="text-xs text-ink-500">{m.tekst}</div>
+                    </div>
+                    {m.navKey && <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-ink-300" />}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </Card>
+      </div>
 
       {/* Werkbonnen van de manager */}
       <div>
