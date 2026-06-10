@@ -16,6 +16,7 @@ import type {
   PlanningDag,
   PlanningSlot,
   Sanering,
+  Buurtaanpak,
   TauwOpdracht,
   FlowStap,
   Voorschouw,
@@ -55,6 +56,7 @@ import {
   SEED_INSTELLINGEN,
   SEED_KLANTEN,
   SEED_OPDRACHTGEVERS,
+  SEED_BUURTAANPAK,
 } from "../lib/seed";
 import { idbGet, idbSet } from "./db";
 import { supabaseAan, sb, sbLeesAlles, sbSchrijf, sbLogin, sbLogout, sbSessieEmail } from "../lib/supabase";
@@ -67,6 +69,7 @@ const LS = {
   projectPosts: "wire.projectPosts",
   planningen: "wire.planningen",
   saneringen: "wire.saneringen",
+  buurtaanpak: "wire.buurtaanpak",
   tauw: "wire.tauw",
   voorschouwen: "wire.voorschouwen",
   voorschouwMappen: "wire.voorschouwMappen",
@@ -111,6 +114,7 @@ type AppState = {
   projectPosts: ProjectPost[];
   planningen: Weekplanning[];
   saneringen: Sanering[];
+  buurtaanpak: Buurtaanpak[];
   tauwOpdrachten: TauwOpdracht[];
   voorschouwen: Voorschouw[];
   voorschouwMappen: VoorschouwMap[];
@@ -164,6 +168,9 @@ type AppState = {
   addSanering: (s: Omit<Sanering, "id">) => string;
   updateSanering: (id: string, patch: Partial<Sanering>) => void;
   deleteSanering: (id: string) => void;
+  addBuurtaanpak: (b: Omit<Buurtaanpak, "id">) => string;
+  updateBuurtaanpak: (id: string, patch: Partial<Buurtaanpak>) => void;
+  deleteBuurtaanpak: (id: string) => void;
 
   // TAUW-opdrachten + werkstroomstappen
   addTauw: (t: Omit<TauwOpdracht, "id">) => string;
@@ -236,6 +243,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [projectPosts, setProjectPosts] = useState<ProjectPost[]>(SEED_PROJECT_POSTS);
   const [planningen, setPlanningen] = useState<Weekplanning[]>([]);
   const [saneringen, setSaneringen] = useState<Sanering[]>(SEED_SANERINGEN);
+  const [buurtaanpak, setBuurtaanpak] = useState<Buurtaanpak[]>(SEED_BUURTAANPAK);
   const [tauwOpdrachten, setTauwOpdrachten] = useState<TauwOpdracht[]>(SEED_TAUW);
   const [voorschouwen, setVoorschouwen] = useState<Voorschouw[]>([]);
   const [voorschouwMappen, setVoorschouwMappen] = useState<VoorschouwMap[]>([]);
@@ -261,7 +269,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let actief = true;
     (async () => {
-      let [u, p, t, pp, pl, san, tw, v, r, af, fac, bed, loon, boe, communicatie, verl, kn, inst, kl, s, vm, med, og] = await Promise.all([
+      let [u, p, t, pp, pl, san, tw, v, r, af, fac, bed, loon, boe, communicatie, verl, kn, inst, kl, s, vm, med, og, ba] = await Promise.all([
         laadSlice<User[]>("users", LS.users, SEED_USERS),
         laadSlice<Project[]>("projects", LS.projects, SEED_PROJECTS),
         laadSlice<Taak[]>("taken", LS.taken, SEED_TAKEN),
@@ -285,6 +293,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         laadSlice<VoorschouwMap[]>("voorschouwMappen", LS.voorschouwMappen, []),
         laadSlice<Mededeling[]>("mededelingen", LS.mededelingen, []),
         laadSlice<Opdrachtgever[]>("opdrachtgevers", LS.opdrachtgevers, SEED_OPDRACHTGEVERS),
+        laadSlice<Buurtaanpak[]>("buurtaanpak", LS.buurtaanpak, SEED_BUURTAANPAK),
       ]);
       if (!actief) return;
       // Eenmalige schoonmaak: verwijder de voorbeeld-/demoprojecten en bijbehorende data, zodat het
@@ -385,6 +394,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       );
       setFacturen(fac);
       setOpdrachtgevers(og);
+      setBuurtaanpak(ba);
       // Start met de echte bedrijfsgegevens en zet daar de (niet-lege) opgeslagen waarden overheen.
       // Zo ontbreken vaste velden als BTW/IBAN/BIC nooit — ook niet bij oudere, onvolledige lokale data.
       const schoonBed: Bedrijf = { ...SEED_BEDRIJF };
@@ -433,6 +443,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (hydrated) void idbSet("saneringen", saneringen);
   }, [saneringen, hydrated]);
+  useEffect(() => {
+    if (hydrated) void idbSet("buurtaanpak", buurtaanpak);
+  }, [buurtaanpak, hydrated]);
   useEffect(() => {
     if (hydrated) void idbSet("tauw", tauwOpdrachten);
   }, [tauwOpdrachten, hydrated]);
@@ -494,6 +507,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     projectPosts: (v) => setProjectPosts(v as ProjectPost[]),
     planningen: (v) => setPlanningen(v as Weekplanning[]),
     saneringen: (v) => setSaneringen(v as Sanering[]),
+    buurtaanpak: (v) => setBuurtaanpak(v as Buurtaanpak[]),
     tauw: (v) => setTauwOpdrachten(v as TauwOpdracht[]),
     voorschouwen: (v) => setVoorschouwen(v as Voorschouw[]),
     voorschouwMappen: (v) => setVoorschouwMappen(v as VoorschouwMap[]),
@@ -514,7 +528,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const waarden: Record<string, unknown> = {
     users, projects, taken, projectPosts, planningen, saneringen, tauw: tauwOpdrachten,
     voorschouwen, voorschouwMappen, mededelingen, rondes, afspraken, facturen, bedrijf,
-    loonstroken, boetes, comm, verlof, kennis, instellingen, klanten, opdrachtgevers,
+    loonstroken, boetes, comm, verlof, kennis, instellingen, klanten, opdrachtgevers, buurtaanpak,
   };
 
   // 1) Houd bij of er een Supabase-sessie is.
@@ -580,7 +594,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supabaseAan, sbSessie, hydrated, users, projects, taken, projectPosts, planningen, saneringen, tauwOpdrachten, voorschouwen, voorschouwMappen, mededelingen, rondes, afspraken, facturen, bedrijf, loonstroken, boetes, comm, verlof, kennis, instellingen, klanten, opdrachtgevers]);
+  }, [supabaseAan, sbSessie, hydrated, users, projects, taken, projectPosts, planningen, saneringen, tauwOpdrachten, voorschouwen, voorschouwMappen, mededelingen, rondes, afspraken, facturen, bedrijf, loonstroken, boetes, comm, verlof, kennis, instellingen, klanten, opdrachtgevers, buurtaanpak]);
 
   const currentUser = users.find((u) => u.id === currentUserId) ?? null;
 
@@ -748,6 +762,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setSaneringen((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
   const deleteSanering: AppState["deleteSanering"] = (id) =>
     setSaneringen((prev) => prev.filter((s) => s.id !== id));
+
+  const addBuurtaanpak: AppState["addBuurtaanpak"] = (b) => {
+    const id = nextId("ba");
+    setBuurtaanpak((prev) => [{ ...b, id }, ...prev]);
+    return id;
+  };
+  const updateBuurtaanpak: AppState["updateBuurtaanpak"] = (id, patch) =>
+    setBuurtaanpak((prev) => prev.map((b) => (b.id === id ? { ...b, ...patch } : b)));
+  const deleteBuurtaanpak: AppState["deleteBuurtaanpak"] = (id) =>
+    setBuurtaanpak((prev) => prev.filter((b) => b.id !== id));
   const addTauw: AppState["addTauw"] = (t) => {
     const id = nextId("tauw");
     setTauwOpdrachten((prev) => [{ ...t, id }, ...prev]);
@@ -922,6 +946,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         projectPosts,
         planningen,
         saneringen,
+        buurtaanpak,
         tauwOpdrachten,
         voorschouwen,
         voorschouwMappen,
@@ -966,6 +991,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addSanering,
         updateSanering,
         deleteSanering,
+        addBuurtaanpak,
+        updateBuurtaanpak,
+        deleteBuurtaanpak,
         addTauw,
         updateTauw,
         deleteTauw,

@@ -1,4 +1,4 @@
-import type { User, Project, Taak, ProjectPost, Sanering, TauwOpdracht, Brievenronde, Afspraak, Factuur, Bedrijf, Loonstrook, Boete, Communicatie, Verlof, KennisArtikel, Instellingen, Klant, Opdrachtgever } from "./types";
+import type { User, Project, Taak, ProjectPost, Sanering, TauwOpdracht, Brievenronde, Afspraak, Factuur, Bedrijf, Loonstrook, Boete, Communicatie, Verlof, KennisArtikel, Instellingen, Klant, Opdrachtgever, Buurtaanpak } from "./types";
 
 // Saneren-dossiers en TAUW-opdrachten starten leeg; aanmaken via de bijbehorende pagina.
 export const SEED_SANERINGEN: Sanering[] = [];
@@ -78,6 +78,8 @@ export const SEED_BEDRIJF: Bedrijf = {
 export const SEED_OPDRACHTGEVERS: Opdrachtgever[] = [
   { id: "og-stedin", naam: "Stedin Netbeheer B.V.", relatienummer: "20200015", adres: "Nijverheidsweg 15", postcodePlaats: "3534 AM Utrecht", email: "", tav: "Rune Zwijnenburg" },
 ];
+
+export const SEED_BUURTAANPAK: Buurtaanpak[] = [];
 
 export const SEED_FACTUREN: Factuur[] = [];
 

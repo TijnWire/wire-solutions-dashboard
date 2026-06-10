@@ -19,6 +19,7 @@ import {
   Plane,
   Recycle,
   FlaskConical,
+  Cable,
   type LucideIcon,
 } from "lucide-react";
 import type { Role } from "./types";
@@ -45,6 +46,7 @@ export const NAV: NavItem[] = [
   { key: "verlof", label: "Verlof", icon: Plane, group: "Werk", roles: ALLE },
 
   { key: "brieven", label: "Brieven & Routes", icon: Mailbox, group: "Projecten", roles: ALLE },
+  { key: "buurtaanpak", label: "Buurtaanpak", icon: Cable, group: "Projecten", roles: ALLE },
   { key: "saneren", label: "Saneren", icon: Recycle, group: "Projecten", roles: ALLE },
   { key: "voorschouwen", label: "Voorschouwen", icon: ClipboardCheck, group: "Projecten", roles: ALLE },
   { key: "tauw", label: "TAUW", icon: FlaskConical, group: "Projecten", roles: ALLE },

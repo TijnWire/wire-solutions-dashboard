@@ -6,7 +6,7 @@ import { Keuze } from "../components/Keuze";
 import { Card, Badge, Bevestig } from "../components/ui";
 import { downloadFactuurPdf, factuurTotalen, euro } from "../lib/factuurPdf";
 import { exporteerExcel } from "../lib/excel";
-import type { Factuur, FactuurRegel, FactuurStatus, Project, Opdrachtgever } from "../lib/types";
+import type { Factuur, FactuurRegel, FactuurStatus, Project, Opdrachtgever, Buurtaanpak } from "../lib/types";
 
 const statusTone: Record<FactuurStatus, string> = {
   Concept: "amber",
@@ -271,8 +271,9 @@ function OpdrachtgeverBeheer({ onKlaar }: { onKlaar: () => void }) {
 
 // ── Hoofdcomponent ──
 export function Facturen({ initieelFactuur }: { initieelFactuur?: string }) {
-  const { facturen, bedrijf, deleteFactuur, projects, updateProject, opdrachtgevers } = useApp();
+  const { facturen, bedrijf, deleteFactuur, projects, updateProject, opdrachtgevers, buurtaanpak, updateBuurtaanpak } = useApp();
   const teFactureren = projects.filter((p) => p.boekhouding === "te_factureren");
+  const teFacturerenBuurt = buurtaanpak.filter((b) => b.boekhouding === "te_factureren");
   const [modus, setModus] = useState<"lijst" | "formulier" | "opdrachtgevers">("lijst");
   const [bewerk, setBewerk] = useState<Factuur | undefined>(undefined);
   const [nieuwVan, setNieuwVan] = useState<Omit<Factuur, "id"> | undefined>(undefined);
@@ -280,7 +281,7 @@ export function Facturen({ initieelFactuur }: { initieelFactuur?: string }) {
 
   // Maakt automatisch een concept-factuur op basis van een doorgeschakeld project:
   // klantgegevens van de Stedin-opdrachtgever + PD-nummer + wijk als regel. Aantal/tarief vul je nog in.
-  const maakConcept = (p: Project): Omit<Factuur, "id"> => {
+  const maakConceptVan = (pdNummer: string, omschrijving: string): Omit<Factuur, "id"> => {
     const og = opdrachtgevers.find((o) => o.id === "og-stedin") ?? opdrachtgevers[0];
     return {
       nummer: `${new Date().getFullYear()}-${String(facturen.length + 1).padStart(4, "0")}`,
@@ -291,16 +292,17 @@ export function Facturen({ initieelFactuur }: { initieelFactuur?: string }) {
       klantPostcodePlaats: og?.postcodePlaats ?? "",
       relatienummer: og?.relatienummer ?? "",
       email: og?.email ?? "",
-      pdNummer: p.pdNummer ?? "",
+      pdNummer: pdNummer || "",
       betaaltermijn: 14,
-      regels: [{ omschrijving: p.wijk, aantal: 1, prijs: 0 }],
+      regels: [{ omschrijving, aantal: 1, prijs: 0 }],
       btwPercentage: 21,
       status: "Concept",
       notitie: "",
     };
   };
   const nieuweLege = () => { setBewerk(undefined); setNieuwVan(undefined); setModus("formulier"); };
-  const nieuweVanProject = (p: Project) => { setBewerk(undefined); setNieuwVan(maakConcept(p)); setModus("formulier"); };
+  const nieuweVanProject = (p: Project) => { setBewerk(undefined); setNieuwVan(maakConceptVan(p.pdNummer ?? "", p.wijk)); setModus("formulier"); };
+  const nieuweVanBuurt = (b: Buurtaanpak) => { setBewerk(undefined); setNieuwVan(maakConceptVan(b.pdNummer ?? "", b.naam)); setModus("formulier"); };
 
   // Deep-link: open meteen de factuur die vanuit een andere flow is aangemaakt.
   useEffect(() => {
@@ -352,14 +354,14 @@ export function Facturen({ initieelFactuur }: { initieelFactuur?: string }) {
         </div>
       </div>
 
-      {/* Te factureren: afgeronde projecten die de leiding heeft doorgeschakeld */}
-      {teFactureren.length > 0 && (
+      {/* Te factureren: afgeronde projecten + buurtaanpakken die de leiding heeft doorgeschakeld */}
+      {(teFactureren.length > 0 || teFacturerenBuurt.length > 0) && (
         <Card className="overflow-hidden">
           <div className="flex flex-wrap items-center gap-2 border-b border-ink-100 bg-amber-50/60 px-5 py-3">
             <Receipt className="h-4 w-4 text-amber-600" />
             <h3 className="text-sm font-bold text-ink-900">Te factureren</h3>
-            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">{teFactureren.length}</span>
-            <span className="ml-1 hidden text-xs text-ink-400 sm:inline">Afgeronde projecten, doorgeschakeld door de leiding</span>
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">{teFactureren.length + teFacturerenBuurt.length}</span>
+            <span className="ml-1 hidden text-xs text-ink-400 sm:inline">Afgerond werk, doorgeschakeld door de leiding</span>
           </div>
           <div className="divide-y divide-ink-100">
             {teFactureren.map((p) => (
@@ -374,6 +376,22 @@ export function Facturen({ initieelFactuur }: { initieelFactuur?: string }) {
                 <div className="flex w-full items-center gap-2 sm:w-auto">
                   <button type="button" onClick={() => nieuweVanProject(p)} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700 sm:flex-none"><Plus className="h-4 w-4" /> Factuur maken</button>
                   <button type="button" onClick={() => updateProject(p.id, { boekhouding: "gefactureerd", gefactureerdOp: new Date().toISOString() })} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm font-semibold text-green-700 hover:bg-green-100 sm:flex-none"><Check className="h-4 w-4" /> Gefactureerd</button>
+                </div>
+              </div>
+            ))}
+            {teFacturerenBuurt.map((b) => (
+              <div key={b.id} className="flex flex-wrap items-center gap-3 px-5 py-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {b.pdNummer && <span className="rounded-md bg-ink-900 px-2 py-0.5 text-xs font-bold tracking-wide text-white">{b.pdNummer}</span>}
+                    <span className="truncate text-sm font-semibold text-ink-900">{b.naam}</span>
+                    <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-semibold text-brand-700">Buurtaanpak</span>
+                  </div>
+                  <div className="text-xs text-ink-500">{[b.regio, b.doorgestuurdOp ? `doorgeschakeld ${datumKort(b.doorgestuurdOp)}` : ""].filter(Boolean).join(" · ")}</div>
+                </div>
+                <div className="flex w-full items-center gap-2 sm:w-auto">
+                  <button type="button" onClick={() => nieuweVanBuurt(b)} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700 sm:flex-none"><Plus className="h-4 w-4" /> Factuur maken</button>
+                  <button type="button" onClick={() => updateBuurtaanpak(b.id, { boekhouding: "gefactureerd", gefactureerdOp: new Date().toISOString() })} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm font-semibold text-green-700 hover:bg-green-100 sm:flex-none"><Check className="h-4 w-4" /> Gefactureerd</button>
                 </div>
               </div>
             ))}

@@ -497,6 +497,54 @@ export function legeSaneerAdres(id: string): SaneerAdres {
   return { id, straat: "", huisnummer: "", postcode: "", plaats: "", naam: "", telefoon: "", datum: "", tijd: "", bevestigd: false, notitie: "" };
 }
 
+// ── Buurtaanpak (Stedin/FUES wijkplanning): Excel-planning → afspraken per straat,
+//    hele-dag vs. korte werkzaamheden, SMS-herinnering bewoner + WhatsApp-bevestiging opdrachtgever ──
+export type BuurtSoort = "heledag" | "kort";
+export const BUURT_SOORTEN: BuurtSoort[] = ["heledag", "kort"];
+export const BUURT_SOORT_LABEL: Record<BuurtSoort, string> = {
+  heledag: "Hele dag · 08:00–16:00 (secundair → primair)",
+  kort: "Kort tot 09:30 (primair, kabel losnemen)",
+};
+export const BUURT_SOORT_KORT: Record<BuurtSoort, string> = { heledag: "Hele dag", kort: "Tot 09:30" };
+
+export type BuurtAdres = {
+  id: string;
+  straat: string;
+  huisnummer: string;
+  postcode: string;
+  soort: BuurtSoort;
+  datum: string; // ISO yyyy-mm-dd — uitvoerdatum uit de planning
+  telefoon: string;
+  bijzonderheid: string; // TVM / boorder / aggregaat / sleutel / medicatie, enz.
+  bevestigd: boolean; // afspraak bevestigd met de bewoner
+  uitgevoerd: boolean;
+  herinnerVerstuurdOp?: string; // ISO — SMS-herinnering verstuurd
+};
+
+export function legeBuurtAdres(id: string): BuurtAdres {
+  return { id, straat: "", huisnummer: "", postcode: "", soort: "heledag", datum: "", telefoon: "", bijzonderheid: "", bevestigd: false, uitgevoerd: false };
+}
+
+export type Buurtaanpak = {
+  id: string;
+  aangemaakt: string; // ISO
+  naam: string; // wijk/buurt
+  regio: string;
+  opdrachtgever: string; // bv. "Stedin / FUES"
+  toegewezenAan?: string; // user id
+  adressen: BuurtAdres[];
+  deadline?: string; // ISO yyyy-mm-dd
+  afgerondOp?: string; // ISO — klaar, klaar voor de boekhouding
+  // Boekhouding (zelfde stappen als een project)
+  pdNummer?: string;
+  boekhouding?: BoekhoudStatus;
+  doorgestuurdOp?: string; // ISO
+  gefactureerdOp?: string; // ISO
+  // Archief (Database)
+  gearchiveerd?: boolean;
+  gearchiveerdOp?: string;
+};
+
 // ── TAUW (bodemonderzoek): meerdere adressen, route over lange afstanden, Excel-planning ──
 export type TauwAdres = {
   id: string;
