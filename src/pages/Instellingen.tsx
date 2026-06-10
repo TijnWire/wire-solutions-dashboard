@@ -98,6 +98,7 @@ function BedrijfTab({ isLeiding }: { isLeiding: boolean }) {
 
 function IntegratiesTab({ isLeiding }: { isLeiding: boolean }) {
   const { instellingen, updateInstellingen } = useApp();
+  const [bewerkId, setBewerkId] = useState<string | null>(null); // welke koppeling staat open om te wijzigen
   const speechOK = !!((window as { SpeechRecognition?: unknown; webkitSpeechRecognition?: unknown }).SpeechRecognition || (window as { webkitSpeechRecognition?: unknown }).webkitSpeechRecognition);
 
   type Integratie = { id: string; naam: string; beschr: string; status: string; velden?: [keyof InstellingenT, string][] };
@@ -127,13 +128,36 @@ function IntegratiesTab({ isLeiding }: { isLeiding: boolean }) {
               </div>
               <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${si.cls}`}>{si.label}</span>
             </div>
-            {i.velden && isLeiding && (
-              <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                {i.velden.map(([k, ph]) => (
-                  <input key={k} value={instellingen[k]} onChange={(e) => updateInstellingen({ [k]: e.target.value })} placeholder={ph} className={veld} />
-                ))}
-              </div>
-            )}
+            {i.velden && isLeiding && (() => {
+              const open = bewerkId === i.id;
+              return (
+                <div className="mt-3">
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {i.velden!.map(([k, ph]) => (
+                      <input
+                        key={k}
+                        value={instellingen[k]}
+                        onChange={(e) => updateInstellingen({ [k]: e.target.value })}
+                        placeholder={ph}
+                        disabled={!open}
+                        className={veld + (open ? "" : " cursor-not-allowed bg-ink-50 text-ink-500")}
+                      />
+                    ))}
+                  </div>
+                  <div className="mt-2 flex justify-end">
+                    {open ? (
+                      <button type="button" onClick={() => setBewerkId(null)} className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700">
+                        <Save className="h-3.5 w-3.5" /> Klaar
+                      </button>
+                    ) : (
+                      <button type="button" onClick={() => setBewerkId(i.id)} className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-3 py-1.5 text-xs font-semibold text-ink-600 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700">
+                        <Pencil className="h-3.5 w-3.5" /> Wijzigen
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
           </Card>
         );
       })}
