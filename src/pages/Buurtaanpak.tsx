@@ -25,6 +25,28 @@ function celTekst(v: unknown): string {
   return String(v);
 }
 
+// Leest een Klantafspraaklijst (Excel) in en geeft de herkende adressen terug.
+async function leesExcelAdressen(file: File): Promise<BuurtAdres[]> {
+  const ExcelJS = (await import("exceljs")).default;
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(await file.arrayBuffer());
+  const ws = wb.worksheets[0];
+  const rijen: string[][] = [];
+  ws.eachRow((row) => {
+    const cols: string[] = [];
+    for (let c = 1; c <= 11; c++) cols.push(celTekst(row.getCell(c).value));
+    rijen.push(cols);
+  });
+  return parseKlantafspraaklijst(rijen);
+}
+
+// Projectnaam afleiden uit de bestandsnaam, bv. "Klantafspraaklijst bruidsluier.xlsx" -> "Bruidsluier".
+function projectNaamVanBestand(bestand: string): string {
+  const n = bestand.replace(/\.[^.]+$/, "").replace(/klantafspraaklijst/i, "").trim();
+  const basis = n || bestand.replace(/\.[^.]+$/, "");
+  return basis ? basis.charAt(0).toUpperCase() + basis.slice(1) : "Buurtaanpak";
+}
+
 export function Buurtaanpak() {
   const { buurtaanpak, addBuurtaanpak, currentUser } = useApp();
   const isLeiding = currentUser?.rol === "eigenaar" || currentUser?.rol === "beheer";
@@ -32,6 +54,8 @@ export function Buurtaanpak() {
   const [nieuw, setNieuw] = useState(false);
   const [naam, setNaam] = useState("");
   const [regio, setRegio] = useState("");
+  const [importBezig, setImportBezig] = useState(false);
+  const [importFout, setImportFout] = useState<string | null>(null);
 
   const gekozen = buurtaanpak.find((b) => b.id === selId);
   if (gekozen) return <Detail project={gekozen} onTerug={() => setSelId(null)} isLeiding={isLeiding} />;
@@ -40,6 +64,22 @@ export function Buurtaanpak() {
     if (!naam.trim()) return;
     const id = addBuurtaanpak({ aangemaakt: nu(), naam: naam.trim(), regio: regio.trim(), opdrachtgever: "Stedin / FUES", adressen: [] });
     setNaam(""); setRegio(""); setNieuw(false); setSelId(id);
+  };
+
+  // Excel uploaden → analyseren → meteen een nieuw buurtaanpak-project ervan maken.
+  const importeerNieuw = async (file?: File) => {
+    if (!file) return;
+    setImportBezig(true); setImportFout(null);
+    try {
+      const adressen = await leesExcelAdressen(file);
+      if (!adressen.length) { setImportFout("Geen adressen herkend — is dit de Klantafspraaklijst (Excel)?"); return; }
+      const id = addBuurtaanpak({ aangemaakt: nu(), naam: projectNaamVanBestand(file.name), regio: "", opdrachtgever: "Stedin / FUES", adressen });
+      setSelId(id);
+    } catch {
+      setImportFout("Kon het Excel-bestand niet lezen.");
+    } finally {
+      setImportBezig(false);
+    }
   };
 
   // Voor werknemers alleen de aan hen toegewezen buurtaanpakken
@@ -52,12 +92,21 @@ export function Buurtaanpak() {
           <h2 className="text-xl font-bold text-ink-900">Buurtaanpak</h2>
           <p className="text-sm text-ink-500">Wijkplanning van de opdrachtgever (Stedin / FUES) omzetten naar afspraken — per straat, met bevestiging.</p>
         </div>
-        {isLeiding && !nieuw && (
-          <button type="button" onClick={() => setNieuw(true)} className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-brand-700">
-            <Plus className="h-4 w-4" /> Nieuwe buurtaanpak
-          </button>
+        {isLeiding && (
+          <div className="flex flex-wrap items-center gap-2">
+            <label className={`inline-flex cursor-pointer items-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-brand-700 ${importBezig ? "pointer-events-none opacity-60" : ""}`}>
+              <Upload className="h-4 w-4" /> {importBezig ? "Bezig met inlezen…" : "Excel importeren → project"}
+              <input type="file" accept=".xlsx,.xls" title="Klantafspraaklijst (Excel)" className="hidden" disabled={importBezig} onChange={(e) => importeerNieuw(e.target.files?.[0])} />
+            </label>
+            {!nieuw && (
+              <button type="button" onClick={() => setNieuw(true)} className="inline-flex items-center gap-2 rounded-xl border border-ink-200 px-4 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50">
+                <Plus className="h-4 w-4" /> Leeg project
+              </button>
+            )}
+          </div>
         )}
       </div>
+      {importFout && <p className="-mt-2 text-sm font-medium text-red-600">{importFout}</p>}
 
       {nieuw && (
         <Card className="space-y-3 p-4">
@@ -118,17 +167,7 @@ function Detail({ project, onTerug, isLeiding }: { project: BuurtaanpakT; onTeru
     if (!file) return;
     setImportFout(null);
     try {
-      const ExcelJS = (await import("exceljs")).default;
-      const wb = new ExcelJS.Workbook();
-      await wb.xlsx.load(await file.arrayBuffer());
-      const ws = wb.worksheets[0];
-      const rijen: string[][] = [];
-      ws.eachRow((row) => {
-        const cols: string[] = [];
-        for (let c = 1; c <= 11; c++) cols.push(celTekst(row.getCell(c).value));
-        rijen.push(cols);
-      });
-      const adressen = parseKlantafspraaklijst(rijen);
+      const adressen = await leesExcelAdressen(file);
       if (adressen.length === 0) { setImportFout("Geen adressen herkend — controleer of het de Klantafspraaklijst is."); return; }
       updateBuurtaanpak(project.id, { adressen });
     } catch {
