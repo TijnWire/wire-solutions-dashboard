@@ -98,7 +98,7 @@ export default function App() {
       case "saneren":
         return <Saneren key={target?.saneringId ?? "lijst"} initieelSanering={target?.saneringId} />;
       case "buurtaanpak":
-        return <Buurtaanpak />;
+        return <Buurtaanpak key={target?.buurtaanpakId ?? "lijst"} initieelId={target?.buurtaanpakId} />;
       case "tauw":
         return <Tauw key={target?.tauwId ?? "lijst"} initieelTauw={target?.tauwId} />;
       case "agenda":

@@ -47,10 +47,10 @@ function projectNaamVanBestand(bestand: string): string {
   return basis ? basis.charAt(0).toUpperCase() + basis.slice(1) : "Buurtaanpak";
 }
 
-export function Buurtaanpak() {
+export function Buurtaanpak({ initieelId }: { initieelId?: string }) {
   const { buurtaanpak, addBuurtaanpak, currentUser } = useApp();
   const isLeiding = currentUser?.rol === "eigenaar" || currentUser?.rol === "beheer";
-  const [selId, setSelId] = useState<string | null>(null);
+  const [selId, setSelId] = useState<string | null>(initieelId ?? null);
   const [nieuw, setNieuw] = useState(false);
   const [naam, setNaam] = useState("");
   const [regio, setRegio] = useState("");

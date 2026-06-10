@@ -1,6 +1,6 @@
 import { createContext, useContext } from "react";
 
-export type NavTarget = { ronde?: string; locatie?: string; klantKey?: string; project?: string; factuur?: string; saneringId?: string; tauwId?: string } | null;
+export type NavTarget = { ronde?: string; locatie?: string; klantKey?: string; project?: string; factuur?: string; saneringId?: string; tauwId?: string; buurtaanpakId?: string } | null;
 
 export const NavContext = createContext<{
   navigeer: (key: string, target?: NavTarget) => void;

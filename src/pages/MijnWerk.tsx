@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ListTodo, Loader2, CheckCircle2, Plus, FolderKanban, Mailbox, CalendarCheck, ChevronRight, FileScan, FlaskConical, CalendarDays, CalendarClock, Mail, AlertTriangle } from "lucide-react";
+import { ListTodo, Loader2, CheckCircle2, Plus, FolderKanban, Mailbox, CalendarCheck, ChevronRight, FileScan, FlaskConical, CalendarDays, CalendarClock, Mail, AlertTriangle, Cable } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { useNav } from "../store/NavContext";
 import { TAUW_TYPE_LABEL } from "../lib/types";
@@ -30,7 +30,7 @@ import { MededelingenBord } from "../components/MededelingenBord";
 import type { LucideIcon } from "lucide-react";
 
 export function MijnWerk({ initieelProject }: { initieelProject?: string }) {
-  const { currentUser, projects, taken, rondes, afspraken, tauwOpdrachten, addTaak, voorschouwen, projectPosts, saneringen, users, bedrijf, instellingen, verlof } = useApp();
+  const { currentUser, projects, taken, rondes, afspraken, tauwOpdrachten, addTaak, voorschouwen, projectPosts, saneringen, buurtaanpak, users, bedrijf, instellingen, verlof } = useApp();
   const { navigeer } = useNav();
   const [nieuwBijProject, setNieuwBijProject] = useState<string | null>(null);
   const [nieuweTitel, setNieuweTitel] = useState("");
@@ -146,6 +146,21 @@ export function MijnWerk({ initieelProject }: { initieelProject?: string }) {
       open: () => navigeer("tauw", { tauwId: o.id }),
     });
   }
+  // Buurtaanpak die de manager aan mij heeft toegewezen
+  for (const b of buurtaanpak.filter((b) => b.toegewezenAan === currentUser.id)) {
+    const totaal = b.adressen.length;
+    const uitgevoerd = b.adressen.filter((a) => a.uitgevoerd).length;
+    werkbonnen.push({
+      key: "ba-" + b.id,
+      icon: Cable,
+      type: "Buurtaanpak",
+      titel: b.naam,
+      sub: b.regio || b.opdrachtgever || `${totaal} adressen`,
+      pct: totaal ? Math.round((uitgevoerd / totaal) * 100) : 0,
+      voortgang: `${uitgevoerd}/${totaal} uitgevoerd`,
+      open: () => navigeer("buurtaanpak", { buurtaanpakId: b.id }),
+    });
+  }
 
   return (
     <div className="space-y-6">
@@ -222,7 +237,7 @@ export function MijnWerk({ initieelProject }: { initieelProject?: string }) {
         <h3 className="mb-2.5 text-sm font-bold text-ink-700">Werkbonnen van je manager</h3>
         {werkbonnen.length === 0 ? (
           <Card className="p-6 text-center text-sm text-ink-500">
-            Je hebt nog geen werkbonnen toegewezen. Je manager wijst ze toe via Brieven, Afspraken en TAUW.
+            Je hebt nog geen werkbonnen toegewezen. Je manager wijst ze toe via Brieven, Afspraken, TAUW en Buurtaanpak.
           </Card>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
