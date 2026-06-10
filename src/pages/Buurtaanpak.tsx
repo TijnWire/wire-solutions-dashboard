@@ -197,6 +197,7 @@ const BuurtAdresRij = memo(function BuurtAdresRij({ adres: a, onPatch, onVerwijd
 function Detail({ project, onTerug, isLeiding }: { project: BuurtaanpakT; onTerug: () => void; isLeiding: boolean }) {
   const { updateBuurtaanpak, deleteBuurtaanpak, users, bedrijf } = useApp();
   const [verwijder, setVerwijder] = useState(false);
+  const [bevestigAfronden, setBevestigAfronden] = useState(false);
   const [importFout, setImportFout] = useState<string | null>(null);
   const [toonWa, setToonWa] = useState(false);
   const [zoek, setZoek] = useState("");
@@ -333,7 +334,7 @@ function Detail({ project, onTerug, isLeiding }: { project: BuurtaanpakT; onTeru
                   <button type="button" onClick={() => updateBuurtaanpak(project.id, { afgerondOp: undefined })} className="text-xs font-medium text-ink-400 hover:text-ink-600">heropenen</button>
                 </>
               ) : (
-                <button type="button" onClick={() => updateBuurtaanpak(project.id, { afgerondOp: nu() })} className="inline-flex items-center gap-1.5 rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-100"><Check className="h-3.5 w-3.5" /> Buurtaanpak afronden</button>
+                <button type="button" onClick={() => setBevestigAfronden(true)} className="inline-flex items-center gap-1.5 rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-100"><Check className="h-3.5 w-3.5" /> Buurtaanpak afronden</button>
               )}
             </div>
           </div>
@@ -450,6 +451,18 @@ function Detail({ project, onTerug, isLeiding }: { project: BuurtaanpakT; onTeru
         tekst={`Weet je zeker dat je "${project.naam}" met ${project.adressen.length} adressen wilt verwijderen? Dit kan niet ongedaan worden gemaakt.`}
         onBevestig={() => { deleteBuurtaanpak(project.id); setVerwijder(false); onTerug(); }}
         onAnnuleer={() => setVerwijder(false)}
+      />
+
+      <Bevestig
+        open={bevestigAfronden}
+        titel="Buurtaanpak afronden"
+        tekst={
+          project.adressen.length - uitgevoerd > 0
+            ? `Let op: er staan nog ${project.adressen.length - uitgevoerd} van de ${project.adressen.length} adressen open (nog niet uitgevoerd). Weet je zeker dat je "${project.naam}" wilt afronden?`
+            : `Alle ${project.adressen.length} adressen zijn uitgevoerd. Weet je zeker dat je "${project.naam}" wilt afronden? Daarna kun je 'm doorsturen naar de boekhouding.`
+        }
+        onBevestig={() => { updateBuurtaanpak(project.id, { afgerondOp: nu() }); setBevestigAfronden(false); }}
+        onAnnuleer={() => setBevestigAfronden(false)}
       />
     </div>
   );
