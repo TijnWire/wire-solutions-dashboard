@@ -540,6 +540,8 @@ export type Buurtaanpak = {
   boekhouding?: BoekhoudStatus;
   doorgestuurdOp?: string; // ISO
   gefactureerdOp?: string; // ISO
+  // Per dag bijhouden of de WhatsApp-bevestiging al naar de opdrachtgever is gestuurd (datum ISO → verstuurd-ISO).
+  whatsappVerstuurd?: Record<string, string>;
   // Archief (Database)
   gearchiveerd?: boolean;
   gearchiveerdOp?: string;

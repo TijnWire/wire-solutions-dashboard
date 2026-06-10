@@ -113,6 +113,23 @@ export function whatsappBevestiging(adressen: BuurtAdres[]): string {
   return regels.join("\n");
 }
 
+// Per dag een aparte bevestigingstekst — zodat je dagelijks/wekelijks een update kunt sturen
+// en per dag kunt bijhouden of 'ie al verstuurd is.
+export function whatsappPerDag(adressen: BuurtAdres[]): { datum: string; aantal: number; tekst: string }[] {
+  const perDatum = new Map<string, BuurtAdres[]>();
+  for (const a of adressen) {
+    if (!a.datum) continue;
+    const arr = perDatum.get(a.datum) ?? [];
+    arr.push(a);
+    perDatum.set(a.datum, arr);
+  }
+  return [...perDatum.keys()].sort().map((datum) => ({
+    datum,
+    aantal: perDatum.get(datum)!.length,
+    tekst: whatsappBevestiging(perDatum.get(datum)!),
+  }));
+}
+
 // SMS-herinnering naar de bewoner (dag van tevoren).
 export function smsHerinneringTekst(a: BuurtAdres, bedrijf = "Wire Solutions"): string {
   const wanneer = a.soort === "kort"

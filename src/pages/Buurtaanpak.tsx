@@ -5,7 +5,7 @@ import { Card, Badge, Bevestig } from "../components/ui";
 import { DatumKiezer } from "../components/DatumKiezer";
 import { Keuze } from "../components/Keuze";
 import { BUURT_SOORTEN, BUURT_SOORT_KORT, legeBuurtAdres, type Buurtaanpak as BuurtaanpakT, type BuurtAdres } from "../lib/types";
-import { parseKlantafspraaklijst, whatsappBevestiging, groepeerPerStraat, smsHerinneringTekst, smsLink } from "../lib/buurtaanpak";
+import { parseKlantafspraaklijst, whatsappPerDag, groepeerPerStraat, smsHerinneringTekst, smsLink, datumLabelNL } from "../lib/buurtaanpak";
 
 const veld = "w-full rounded-lg border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100";
 const klein = "rounded-lg border border-ink-200 px-2.5 py-1.5 text-sm outline-none focus:border-brand-400";
@@ -181,7 +181,14 @@ function Detail({ project, onTerug, isLeiding }: { project: BuurtaanpakT; onTeru
   const groepenZichtbaar = q
     ? groepen.map((g) => ({ ...g, adressen: g.adressen.filter((a) => `${a.straat} ${a.huisnummer} ${a.postcode} ${a.bijzonderheid} ${a.telefoon}`.toLowerCase().includes(q)) })).filter((g) => g.adressen.length > 0)
     : groepen;
-  const waTekst = whatsappBevestiging(project.adressen);
+  const whatsappDagen = whatsappPerDag(project.adressen);
+  const aantalOnverstuurd = whatsappDagen.filter((d) => !project.whatsappVerstuurd?.[d.datum]).length;
+  const markeerVerstuurd = (datum: string) => updateBuurtaanpak(project.id, { whatsappVerstuurd: { ...(project.whatsappVerstuurd ?? {}), [datum]: nu() } });
+  const markeerNietVerstuurd = (datum: string) => {
+    const v = { ...(project.whatsappVerstuurd ?? {}) };
+    delete v[datum];
+    updateBuurtaanpak(project.id, { whatsappVerstuurd: v });
+  };
   const bevestigd = project.adressen.filter((a) => a.bevestigd).length;
   const uitgevoerd = project.adressen.filter((a) => a.uitgevoerd).length;
 
@@ -265,19 +272,40 @@ function Detail({ project, onTerug, isLeiding }: { project: BuurtaanpakT; onTeru
         <Card className="p-4">
           <button type="button" onClick={() => setToonWa((o) => !o)} className="flex w-full items-center gap-2 text-left">
             <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-green-50 text-green-600"><MessageSquare className="h-4 w-4" /></span>
-            <span className="flex-1">
-              <span className="block text-sm font-bold text-ink-900">Bevestiging voor de opdrachtgever (WhatsApp-groep)</span>
-              <span className="block text-xs text-ink-500">Per dag, per straat de huisnummers + bijzonderheden — klaar om te plakken.</span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-bold text-ink-900">Bevestiging naar de opdrachtgever (WhatsApp-groep)</span>
+              <span className="block text-xs text-ink-500">Verstuur per dag — verstuurde dagen worden gemarkeerd, dus je stuurt nooit dubbel.</span>
             </span>
-            <ChevronRight className={`h-5 w-5 text-ink-300 transition-transform ${toonWa ? "rotate-90" : ""}`} />
+            {aantalOnverstuurd > 0 && <span className="shrink-0 rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">{aantalOnverstuurd} te versturen</span>}
+            <ChevronRight className={`h-5 w-5 shrink-0 text-ink-300 transition-transform ${toonWa ? "rotate-90" : ""}`} />
           </button>
           {toonWa && (
             <div className="mt-3 space-y-2">
-              <textarea readOnly value={waTekst} rows={Math.min(12, Math.max(3, waTekst.split("\n").length))} className="w-full resize-none rounded-lg border border-ink-200 bg-ink-50/50 px-3 py-2 font-mono text-xs text-ink-800 outline-none" />
-              <div className="flex flex-wrap gap-2">
-                <button type="button" onClick={() => navigator.clipboard?.writeText(waTekst)} className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-3 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-50"><Copy className="h-4 w-4" /> Kopiëren</button>
-                <a href={`https://wa.me/?text=${encodeURIComponent(waTekst)}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-2 text-sm font-semibold text-white hover:bg-green-700"><MessageSquare className="h-4 w-4" /> Openen in WhatsApp</a>
-              </div>
+              {whatsappDagen.length === 0 ? (
+                <p className="text-sm text-ink-400">Nog geen adressen met een datum.</p>
+              ) : whatsappDagen.map((d) => {
+                const verstuurd = project.whatsappVerstuurd?.[d.datum];
+                return (
+                  <div key={d.datum} className={`rounded-xl border p-3 ${verstuurd ? "border-green-200 bg-green-50/40" : "border-ink-200"}`}>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-semibold text-ink-900">{datumLabelNL(d.datum)}</span>
+                        <span className="text-xs text-ink-400">{d.aantal} adres{d.aantal === 1 ? "" : "sen"}</span>
+                        {verstuurd && <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-700"><Check className="h-3 w-3" /> Verstuurd</span>}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button type="button" onClick={() => navigator.clipboard?.writeText(d.tekst)} className="rounded-lg border border-ink-200 p-1.5 text-ink-500 hover:bg-ink-50" title="Kopiëren"><Copy className="h-4 w-4" /></button>
+                        {verstuurd ? (
+                          <button type="button" onClick={() => markeerNietVerstuurd(d.datum)} className="text-xs font-medium text-ink-400 hover:text-ink-600" title="Toch nog niet verstuurd? Markeer als niet-verstuurd">ongedaan</button>
+                        ) : (
+                          <a href={`https://wa.me/?text=${encodeURIComponent(d.tekst)}`} target="_blank" rel="noopener noreferrer" onClick={() => markeerVerstuurd(d.datum)} className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-green-700"><MessageSquare className="h-4 w-4" /> Versturen</a>
+                        )}
+                      </div>
+                    </div>
+                    <pre className="mt-2 whitespace-pre-wrap break-words rounded-lg bg-white/70 px-2.5 py-1.5 font-sans text-xs text-ink-700">{d.tekst}</pre>
+                  </div>
+                );
+              })}
             </div>
           )}
         </Card>
