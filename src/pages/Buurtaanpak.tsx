@@ -1,10 +1,10 @@
 import { useState, useMemo, useRef, useCallback, memo, Fragment } from "react";
-import { Plus, ArrowLeft, Trash2, Upload, MessageSquare, Send, Check, Copy, Cable, ChevronRight, Phone, MapPin, Search } from "lucide-react";
+import { Plus, ArrowLeft, Trash2, Upload, MessageSquare, Send, Check, Copy, Cable, ChevronRight, Phone, MapPin, Search, Download } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { Card, Badge, Bevestig } from "../components/ui";
 import { DatumKiezer } from "../components/DatumKiezer";
 import { Keuze } from "../components/Keuze";
-import { BUURT_SOORTEN, BUURT_SOORT_KORT, legeBuurtAdres, type Buurtaanpak as BuurtaanpakT, type BuurtAdres } from "../lib/types";
+import { BUURT_SOORTEN, BUURT_SOORT_KORT, BUURT_SOORT_LABEL, legeBuurtAdres, type Buurtaanpak as BuurtaanpakT, type BuurtAdres } from "../lib/types";
 import { parseKlantafspraaklijst, whatsappPerDag, groepeerPerStraat, smsHerinneringTekst, smsLink, datumLabelNL } from "../lib/buurtaanpak";
 
 const veld = "w-full rounded-lg border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100";
@@ -51,6 +51,68 @@ async function leesExcelAdressen(file: File): Promise<BuurtAdres[]> {
     rijen.push(cols);
   });
   return parseKlantafspraaklijst(rijen);
+}
+
+const DAGEN_NL = ["zondag", "maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag"];
+function dagNaam(iso: string): string {
+  const [j, m, d] = iso.slice(0, 10).split("-").map(Number);
+  if (!j || !m || !d) return "";
+  const n = DAGEN_NL[new Date(Date.UTC(j, m - 1, d)).getUTCDay()];
+  return n.charAt(0).toUpperCase() + n.slice(1);
+}
+
+function triggerDownload(blob: Blob, naam: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = naam;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+// Alle adressen (import + handmatig) naar een Excel-bestand — zo komen de toegevoegde adressen
+// ook in de planning-Excel terecht. Gesorteerd op datum, dan straat, dan huisnummer.
+async function exporteerNaarExcel(project: BuurtaanpakT) {
+  const ExcelJS = (await import("exceljs")).default;
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet("Adressen");
+  ws.columns = [
+    { header: "Dag", key: "dag", width: 12 },
+    { header: "Datum", key: "datum", width: 12 },
+    { header: "Straat", key: "straat", width: 22 },
+    { header: "Huisnummer", key: "huisnummer", width: 12 },
+    { header: "Postcode", key: "postcode", width: 10 },
+    { header: "Soort werkzaamheden", key: "soort", width: 22 },
+    { header: "Telefoonnummer", key: "telefoon", width: 16 },
+    { header: "Bijzonderheid", key: "bijzonderheid", width: 30 },
+    { header: "Bevestigd", key: "bevestigd", width: 10 },
+    { header: "Uitgevoerd", key: "uitgevoerd", width: 10 },
+    { header: "Toegevoegd", key: "toegevoegd", width: 12 },
+  ];
+  ws.getRow(1).font = { bold: true };
+  const gesorteerd = [...project.adressen].sort((a, b) =>
+    (a.datum || "9999").localeCompare(b.datum || "9999") || a.straat.localeCompare(b.straat) || (parseInt(a.huisnummer) || 0) - (parseInt(b.huisnummer) || 0)
+  );
+  for (const a of gesorteerd) {
+    ws.addRow({
+      dag: dagNaam(a.datum),
+      datum: a.datum,
+      straat: a.straat,
+      huisnummer: a.huisnummer,
+      postcode: a.postcode,
+      soort: BUURT_SOORT_LABEL[a.soort],
+      telefoon: a.telefoon,
+      bijzonderheid: a.bijzonderheid,
+      bevestigd: a.bevestigd ? "JA" : "",
+      uitgevoerd: a.uitgevoerd ? "JA" : "",
+      toegevoegd: a.handmatig ? "handmatig" : "",
+    });
+  }
+  const buf = await wb.xlsx.writeBuffer();
+  const naam = `${(project.naam || "buurtaanpak").replace(/[^a-z0-9]+/gi, "_").replace(/^_+|_+$/g, "")}_adressen.xlsx`;
+  triggerDownload(new Blob([buf as BlobPart], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), naam);
 }
 
 // Projectnaam afleiden uit de bestandsnaam, bv. "Klantafspraaklijst bruidsluier.xlsx" -> "Bruidsluier".
@@ -177,7 +239,7 @@ const BuurtAdresRij = memo(function BuurtAdresRij({ adres: a, onPatch, onVerwijd
     <div className="flex flex-col gap-2 px-3 py-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2 sm:py-2">
       {/* Nummer + soort + datum (op desktop plat via contents) */}
       <div className="flex items-center gap-2 sm:contents">
-        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-bold ${a.uitgevoerd ? "bg-green-500 text-white" : a.bevestigd ? "bg-green-100 text-green-700" : "bg-ink-100 text-ink-700"}`}>{a.huisnummer || "—"}</span>
+        <span title={a.handmatig ? "Handmatig toegevoegd" : undefined} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-bold ${a.uitgevoerd ? "bg-green-500 text-white" : a.bevestigd ? "bg-green-100 text-green-700" : "bg-ink-100 text-ink-700"} ${a.handmatig ? "ring-2 ring-brand-400" : ""}`}>{a.huisnummer || "—"}</span>
         <div className="min-w-0 flex-1 sm:w-36 sm:flex-none"><Keuze size="sm" value={a.soort} onChange={(w) => onPatch(a.id, { soort: w as BuurtAdres["soort"] })} opties={BUURT_SOORTEN.map((s) => ({ waarde: s, label: BUURT_SOORT_KORT[s] }))} title="Soort werkzaamheden" /></div>
         <div className="min-w-0 flex-1 sm:w-36 sm:flex-none"><DatumKiezer compact value={a.datum} onChange={(iso) => onPatch(a.id, { datum: iso })} placeholder="Datum" /></div>
       </div>
@@ -214,6 +276,8 @@ function Detail({ project, onTerug, isLeiding }: { project: BuurtaanpakT; onTeru
   const [importFout, setImportFout] = useState<string | null>(null);
   const [toonWa, setToonWa] = useState(false);
   const [zoek, setZoek] = useState("");
+  const [draft, setDraft] = useState<BuurtAdres | null>(null);
+  const [exportBezig, setExportBezig] = useState(false);
 
   // Stabiele callbacks (via refs) zodat de gememoiseerde adresregels niet onnodig hertekenen.
   const projectRef = useRef(project); projectRef.current = project;
@@ -226,7 +290,14 @@ function Detail({ project, onTerug, isLeiding }: { project: BuurtaanpakT; onTeru
     const p = projectRef.current;
     updateRef.current(p.id, { adressen: p.adressen.filter((a) => a.id !== id) });
   }, []);
-  const voegAdresToe = () => updateBuurtaanpak(project.id, { adressen: [...project.adressen, legeBuurtAdres(`m-${Date.now().toString(36)}`)] });
+  const startToevoegen = () => setDraft({ ...legeBuurtAdres(`m-${Date.now().toString(36)}`), handmatig: true });
+  const setDraftVeld = (patch: Partial<BuurtAdres>) => setDraft((d) => (d ? { ...d, ...patch } : d));
+  const bewaarToevoegen = () => {
+    if (!draft || !draft.straat.trim()) return;
+    updateBuurtaanpak(project.id, { adressen: [...project.adressen, draft] });
+    setDraft(null);
+  };
+  const exporteer = async () => { setExportBezig(true); try { await exporteerNaarExcel(project); } finally { setExportBezig(false); } };
 
   const importeer = async (file: File | undefined) => {
     if (!file) return;
@@ -234,7 +305,9 @@ function Detail({ project, onTerug, isLeiding }: { project: BuurtaanpakT; onTeru
     try {
       const adressen = await leesExcelAdressen(file);
       if (adressen.length === 0) { setImportFout("Geen adressen herkend — controleer of het de Klantafspraaklijst is."); return; }
-      updateBuurtaanpak(project.id, { adressen });
+      // Handmatig toegevoegde adressen behouden — die staan niet in de Excel maar mogen niet verloren gaan.
+      const handmatige = projectRef.current.adressen.filter((a) => a.handmatig);
+      updateBuurtaanpak(project.id, { adressen: [...adressen, ...handmatige] });
     } catch {
       setImportFout("Kon het Excel-bestand niet lezen.");
     }
@@ -478,12 +551,37 @@ function Detail({ project, onTerug, isLeiding }: { project: BuurtaanpakT; onTeru
               })}
             </>
           )}
-          {isLeiding && (
-            <button type="button" onClick={voegAdresToe} className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-medium text-brand-600 hover:bg-brand-50">
-              <Plus className="h-4 w-4" /> Adres handmatig toevoegen
-            </button>
-          )}
         </div>
+      )}
+
+      {/* Adres handmatig toevoegen + export naar Excel (leiding) */}
+      {isLeiding && (
+        <Card className="space-y-3 p-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={() => (draft ? setDraft(null) : startToevoegen())} className="inline-flex items-center gap-1.5 rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-100"><Plus className="h-4 w-4" /> Adres toevoegen</button>
+            {project.adressen.length > 0 && (
+              <button type="button" onClick={() => void exporteer()} disabled={exportBezig} className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-3 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-50 disabled:opacity-50"><Download className="h-4 w-4" /> {exportBezig ? "Bezig…" : "Exporteer naar Excel"}</button>
+            )}
+            <span className="text-xs text-ink-400">Handmatig toegevoegde adressen blijven behouden bij een her-import en staan in de export.</span>
+          </div>
+          {draft && (
+            <div className="space-y-3 rounded-xl border border-brand-200 bg-brand-50/40 p-3">
+              <div className="grid gap-2 sm:grid-cols-3">
+                <input autoFocus value={draft.straat} onChange={(e) => setDraftVeld({ straat: e.target.value })} placeholder="Straat" className={veld} />
+                <input value={draft.huisnummer} onChange={(e) => setDraftVeld({ huisnummer: e.target.value })} placeholder="Huisnummer" className={veld} />
+                <input value={draft.postcode} onChange={(e) => setDraftVeld({ postcode: e.target.value })} placeholder="Postcode" className={veld} />
+                <Keuze value={draft.soort} onChange={(w) => setDraftVeld({ soort: w as BuurtAdres["soort"] })} opties={BUURT_SOORTEN.map((s) => ({ waarde: s, label: BUURT_SOORT_KORT[s] }))} title="Soort werkzaamheden" />
+                <DatumKiezer compact value={draft.datum} onChange={(iso) => setDraftVeld({ datum: iso })} placeholder="Datum" />
+                <input value={draft.telefoon} onChange={(e) => setDraftVeld({ telefoon: e.target.value })} placeholder="06-…" inputMode="tel" className={veld} />
+              </div>
+              <input value={draft.bijzonderheid} onChange={(e) => setDraftVeld({ bijzonderheid: e.target.value })} placeholder="Bijzonderheid (TVM / boorder / sleutel…)" className={veld} />
+              <div className="flex gap-2">
+                <button type="button" onClick={bewaarToevoegen} disabled={!draft.straat.trim()} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-40">Adres toevoegen</button>
+                <button type="button" onClick={() => setDraft(null)} className="rounded-lg px-3 py-2 text-sm text-ink-500 hover:bg-ink-50">Annuleer</button>
+              </div>
+            </div>
+          )}
+        </Card>
       )}
 
       <Bevestig

@@ -523,6 +523,7 @@ export type BuurtAdres = {
   bevestigd: boolean; // afspraak bevestigd met de bewoner
   uitgevoerd: boolean;
   herinnerVerstuurdOp?: string; // ISO — SMS-herinnering verstuurd
+  handmatig?: boolean; // niet uit de Excel, maar handmatig toegevoegd → blijft behouden bij her-import + gemarkeerd in de export
 };
 
 export function legeBuurtAdres(id: string): BuurtAdres {
