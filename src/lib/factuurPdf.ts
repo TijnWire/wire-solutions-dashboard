@@ -1,15 +1,10 @@
-import { jsPDF } from "jspdf";
 import type { Factuur, Bedrijf } from "./types";
-
-const ORANJE: [number, number, number] = [234, 88, 12];
-const DONKER: [number, number, number] = [38, 42, 54];
-const GRIJS: [number, number, number] = [120, 126, 138];
-
-const LM = 18;
-const BREEDTE = 210;
 
 export const euro = (n: number) =>
   n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
+
+// jsPDF kon de smalle niet-afbreekspatie (U+202F) van Intl niet aan; pdf-lib (WinAnsi) ook niet → normaliseren.
+const schoonEuro = (n: number) => euro(n).replace(/[  ]/g, " ");
 
 export function factuurTotalen(f: Factuur) {
   const subtotaal = f.regels.reduce((s, r) => s + r.aantal * r.prijs, 0);
@@ -17,144 +12,143 @@ export function factuurTotalen(f: Factuur) {
   return { subtotaal, btw, totaal: subtotaal + btw };
 }
 
-async function laadLogo(): Promise<string | null> {
+const PH = 842; // A4-hoogte in punten (zoals het sjabloon)
+
+// De factuur-template (briefpapier mét logo, lijnpatroon en footer) zit als base64 in de app
+// (src/lib/factuurSjabloon.ts). We plaatsen de factuurgegevens er als vector overheen — exact zoals
+// het ingevulde voorbeeld in de public-map. Geen netwerk-fetch → werkt altijd, op laptop én mobiel.
+async function laadSjabloon(): Promise<Uint8Array | null> {
   try {
-    const res = await fetch("/wire-logo.png");
-    if (!res.ok) return null;
-    const blob = await res.blob();
-    return await new Promise((resolve) => {
-      const r = new FileReader();
-      r.onloadend = () => resolve(r.result as string);
-      r.readAsDataURL(blob);
-    });
+    const { FACTUUR_SJABLOON_B64 } = await import("./factuurSjabloon");
+    const bin = atob(FACTUUR_SJABLOON_B64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes.length && bytes[0] === 0x25 ? bytes : null; // 0x25 = '%' (start van %PDF)
   } catch {
     return null;
   }
 }
 
-function maakPdf(f: Factuur, bedrijf: Bedrijf, logo: string | null): jsPDF {
-  const doc = new jsPDF();
-  const RM = BREEDTE - LM; // rechtermarge (192)
+async function maakFactuurPdfBytes(f: Factuur): Promise<Uint8Array> {
+  const sjabloon = await laadSjabloon();
+  if (!sjabloon) throw new Error("Factuursjabloon kon niet worden geladen");
+  const { PDFDocument, StandardFonts, rgb } = await import("pdf-lib");
+  const DONKER = rgb(0.149, 0.165, 0.212);
 
-  // Logo links boven — groot, zoals op de template
-  if (logo) {
-    const p = doc.getImageProperties(logo);
-    let hoogte = 42;
-    let breedte = (p.width / p.height) * hoogte;
-    if (breedte > 52) { breedte = 52; hoogte = (p.height / p.width) * breedte; }
-    doc.addImage(logo, "PNG", LM, 12, breedte, hoogte);
-  } else {
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(20);
-    doc.setTextColor(...ORANJE);
-    doc.text(bedrijf.naam, LM, 30);
-  }
+  const pdf = await PDFDocument.load(sjabloon);
+  const font = await pdf.embedFont(StandardFonts.Helvetica);
+  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const page = pdf.getPage(0);
 
-  // Geadresseerde (klant) links
-  let y = 64;
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  doc.setTextColor(...DONKER);
-  doc.text([f.klantNaam, f.tav ? `T.a.v. ${f.tav}` : "", f.klantAdres, f.klantPostcodePlaats].filter(Boolean), LM, y);
+  const SZ = 10;
+  const tekst = (s: string, x: number, yTop: number, opts?: { bold?: boolean; size?: number }) =>
+    page.drawText(s, { x, y: PH - yTop, size: opts?.size ?? SZ, font: opts?.bold ? bold : font, color: DONKER });
+  const rechts = (s: string, xR: number, yTop: number, opts?: { bold?: boolean; size?: number }) => {
+    const size = opts?.size ?? SZ;
+    const fnt = opts?.bold ? bold : font;
+    page.drawText(s, { x: xR - fnt.widthOfTextAtSize(s, size), y: PH - yTop, size, font: fnt, color: DONKER });
+  };
+  const lijn = (x0: number, x1: number, yTop: number, dik = 0.5) =>
+    page.drawLine({ start: { x: x0, y: PH - yTop }, end: { x: x1, y: PH - yTop }, thickness: dik, color: DONKER });
 
-  // Metadata rechts
-  let my = 74;
+  // Kolommen (rechterrand voor uitgelijnde bedragen) — opgemeten in het voorbeeld
+  const xL = 39.5;
+  const xAantalR = 395, xTariefR = 468, xBedragR = 530;
+
+  // ── Geadresseerde (klant) — links, baselines uit het voorbeeld ──
+  const klant = [f.klantNaam, f.tav ? `T.a.v. ${f.tav}` : "", f.klantAdres, f.klantPostcodePlaats].filter(Boolean);
+  klant.forEach((r, i) => tekst(r, 36, 189.5 + i * 12.1));
+
+  // ── Metadata — rechts (label + waarde) ──
   const meta: [string, string][] = [];
   if (f.relatienummer) meta.push(["Relatienummer:", f.relatienummer]);
   meta.push(["Factuurnummer:", f.nummer]);
-  meta.push(["Datum:", new Date(f.datum + "T00:00:00").toLocaleDateString("nl-NL")]);
-  for (const [label, waarde] of meta) {
-    doc.text(label, 125, my);
-    doc.text(waarde, 160, my);
-    my += 5.5;
-  }
-
-  // Tabel
-  y = 96;
-  doc.setDrawColor(...DONKER);
-  doc.setLineWidth(0.4);
-  doc.line(LM, y, RM, y);
-  y += 6;
-  doc.setFont("helvetica", "bold");
-  doc.text("Omschrijving", 88, y, { align: "center" });
-  doc.text("Aantal", 150, y, { align: "right" });
-  doc.text("Tarief", 178, y, { align: "right" });
-  y += 3;
-  doc.line(LM, y, RM, y);
-  y += 10;
-
-  // PD-nummer als kopregel
-  if (f.pdNummer) {
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(11);
-    doc.text(f.pdNummer, LM, y);
-    y += 8;
-  }
-
-  // Regels: omschrijving · aantal · tarief · bedrag
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  f.regels.forEach((r) => {
-    const oms = doc.splitTextToSize(r.omschrijving || "", 95) as string[];
-    doc.text(oms, LM, y);
-    doc.text(String(r.aantal), 150, y, { align: "right" });
-    doc.text(euro(r.prijs), 178, y, { align: "right" });
-    doc.text(euro(r.aantal * r.prijs), RM, y, { align: "right" });
-    y += Math.max(8, oms.length * 5 + 3);
+  const [jr, mnd, dg] = f.datum.slice(0, 10).split("-");
+  meta.push(["Datum:", dg && mnd && jr ? `${dg}-${mnd}-${jr}` : f.datum]);
+  meta.forEach(([label, waarde], i) => {
+    const y = 250.2 + i * 12.3;
+    tekst(label, 355.1, y);
+    tekst(waarde, 461.5, y);
   });
 
-  // BTW + Totaal — label links, bedrag rechts met onderstreping
+  // ── Tabelkop ──
+  lijn(36, 559, 302);
+  tekst("Omschrijving", 195.5, 316.2, { bold: true });
+  tekst("Aantal", 360.4, 316.2, { bold: true });
+  tekst("Tarief", 439.2, 316.2, { bold: true });
+  lijn(36, 559, 323);
+
+  // ── PD-nummer als kopregel ──
+  let yTop = 357.9;
+  if (f.pdNummer) {
+    tekst(f.pdNummer, xL, yTop, { bold: true });
+    yTop = 384.5;
+  }
+
+  // ── Regels: omschrijving · aantal · tarief · bedrag ──
+  const wrap = (s: string, maxW: number): string[] => {
+    const woorden = (s || "").split(/\s+/).filter(Boolean);
+    if (!woorden.length) return [""];
+    const regels: string[] = [];
+    let r = "";
+    for (const w of woorden) {
+      const test = r ? `${r} ${w}` : w;
+      if (font.widthOfTextAtSize(test, SZ) > maxW && r) { regels.push(r); r = w; }
+      else r = test;
+    }
+    if (r) regels.push(r);
+    return regels;
+  };
+  for (const r of f.regels) {
+    const oms = wrap(r.omschrijving, 300);
+    oms.forEach((regel, i) => tekst(regel, xL, yTop + i * 12.1));
+    rechts(String(r.aantal), xAantalR, yTop);
+    rechts(schoonEuro(r.prijs), xTariefR, yTop);
+    rechts(schoonEuro(r.aantal * r.prijs), xBedragR, yTop);
+    yTop += Math.max(20, oms.length * 12.1 + 8);
+  }
+
+  // ── BTW + Totaal — bedrag rechts met onderstreping (posities uit het voorbeeld waar mogelijk) ──
   const { btw, totaal } = factuurTotalen(f);
-  y += 8;
-  doc.setDrawColor(...DONKER);
-  doc.setLineWidth(0.3);
-  doc.text(`BTW ${f.btwPercentage}%`, LM, y);
-  doc.text(euro(btw), RM, y, { align: "right" });
-  doc.line(RM - 28, y + 1.6, RM, y + 1.6);
-  y += 10;
-  doc.setFont("helvetica", "bold");
-  doc.text("Totaal", LM, y);
-  doc.text(euro(totaal), RM, y, { align: "right" });
-  doc.line(RM - 28, y + 1.6, RM, y + 1.6);
+  let yBtw = Math.max(yTop + 8, 428.1);
+  tekst(`BTW ${f.btwPercentage}%`, xL, yBtw);
+  rechts(schoonEuro(btw), xBedragR, yBtw);
+  lijn(xBedragR - 55, xBedragR, yBtw + 2.5, 0.4);
+  const yTot = yBtw + 39;
+  tekst("Totaal", xL, yTot);
+  rechts(schoonEuro(totaal), xBedragR, yTot);
+  lijn(xBedragR - 55, xBedragR, yTot + 2.5, 0.4);
 
-  // Betaaltermijn + eventuele notitie
-  y += 16;
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  doc.text(`Betaaltermijn ${f.betaaltermijn ?? 14} dagen`, LM, y);
+  // ── Betaaltermijn + eventuele notitie ──
+  let yBet = yTot + 70;
+  tekst(`Betaaltermijn ${f.betaaltermijn ?? 14} dagen`, xL, yBet, { size: 11 });
   if (f.notitie) {
-    y += 6;
-    doc.setFontSize(9);
-    doc.setTextColor(...GRIJS);
-    doc.text(doc.splitTextToSize(f.notitie, RM - LM) as string[], LM, y);
+    yBet += 16;
+    for (const regel of wrap(f.notitie, 500)) { tekst(regel, xL, yBet, { size: 9 }); yBet += 12; }
   }
 
-  // Voettekst onderaan — bedrijfsgegevens (oranje labels, net als de template)
-  const vy = 278;
-  doc.setFontSize(7.5);
-  doc.setTextColor(...GRIJS);
-  doc.text([bedrijf.adres, bedrijf.postcodePlaats, bedrijf.telefoon ? `T ${bedrijf.telefoon}` : "", bedrijf.email ? `E ${bedrijf.email}` : ""].filter(Boolean), LM, vy);
-  const fin: [string, string][] = [];
-  if (bedrijf.iban) fin.push(["IBAN", bedrijf.iban]);
-  if (bedrijf.bic) fin.push(["BIC", bedrijf.bic]);
-  if (bedrijf.kvk) fin.push(["KvK", bedrijf.kvk]);
-  if (bedrijf.btw) fin.push(["BTW", bedrijf.btw]);
-  let fy = vy;
-  for (const [label, waarde] of fin) {
-    doc.setTextColor(...ORANJE);
-    doc.text(label, 78, fy);
-    doc.setTextColor(...GRIJS);
-    doc.text(waarde, 90, fy);
-    fy += 3.4;
-  }
-  doc.setTextColor(...ORANJE);
-  doc.text("www.wire-solutions.nl", RM, vy, { align: "right" });
-
-  return doc;
+  return pdf.save();
 }
 
-export async function downloadFactuurPdf(f: Factuur, bedrijf: Bedrijf) {
-  const logo = await laadLogo();
-  const doc = maakPdf(f, bedrijf, logo);
-  doc.save(`Factuur_${f.nummer}.pdf`);
+const veilig = (s: string) => s.replace(/[^a-z0-9]+/gi, "_").replace(/^_+|_+$/g, "");
+
+function triggerDownload(blob: Blob, naam: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = naam;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+export async function downloadFactuurPdf(f: Factuur, _bedrijf: Bedrijf) {
+  void _bedrijf; // bedrijfsgegevens (logo/footer) zitten al in de template
+  try {
+    const bytes = await maakFactuurPdfBytes(f);
+    triggerDownload(new Blob([bytes as BlobPart], { type: "application/pdf" }), `Factuur_${veilig(f.nummer) || "concept"}.pdf`);
+  } catch {
+    if (typeof alert !== "undefined") alert("De factuur-PDF kon niet worden gemaakt. Ververs de app en probeer het opnieuw.");
+  }
 }
