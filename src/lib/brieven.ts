@@ -93,6 +93,24 @@ export function googleMapsRouteUrl(
   };
 }
 
+// Splits een lange looproute in delen van max. `maxStops` adressen — elk een losse Google Maps-route,
+// zodat je bij veel adressen (bijv. 400) gewoon deel voor deel kunt lopen.
+export function googleMapsRouteDelen(
+  straat: string,
+  postcode: string,
+  plaats: string,
+  adressen: Adres[],
+  maxStops = 10
+): { url: string; aantal: number; van: number; tot: number }[] {
+  const delen: { url: string; aantal: number; van: number; tot: number }[] = [];
+  for (let i = 0; i < adressen.length; i += maxStops) {
+    const groep = adressen.slice(i, i + maxStops);
+    const { url, aantal } = googleMapsRouteUrl(straat, postcode, plaats, groep, maxStops);
+    delen.push({ url, aantal, van: i + 1, tot: i + groep.length });
+  }
+  return delen;
+}
+
 // Navigatie naar één adres.
 export function googleMapsAdresUrl(
   straat: string,

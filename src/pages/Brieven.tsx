@@ -36,7 +36,7 @@ import {
   ontbrekendeNummers,
   maakReeks,
   nieuwAdres,
-  googleMapsRouteUrl,
+  googleMapsRouteDelen,
   googleMapsAdresUrl,
 } from "../lib/brieven";
 import {
@@ -284,9 +284,8 @@ function RondeDetail({ ronde, onTerug }: { ronde: Brievenronde; onTerug: () => v
   const bulkStatus = (s: BriefStatus) => { setAdressen(adressen.map((a) => (selectie.has(a.id) ? { ...a, status: s } : a))); setSelectie(new Set()); };
   const nogTeDoen = route.filter((a) => a.status !== "Gegooid" && a.status !== "Blanco");
   const mapsBron = nogTeDoen.length ? nogTeDoen : route;
-  const maps = mapsBron.length
-    ? googleMapsRouteUrl(ronde.straat, ronde.postcode, ronde.plaats, mapsBron)
-    : null;
+  // Google Maps doet max. 10 stops, dus de looproute wordt automatisch in delen van 10 gesplitst.
+  const routeDelen = googleMapsRouteDelen(ronde.straat, ronde.postcode, ronde.plaats, mapsBron);
   const gaten = ontbrekendeNummers(adressen);
   const bedrijven = adressen.filter((a) => a.type === "bedrijf" && !a.ontbreekt);
   const ontbrekend = adressen.filter((a) => a.ontbreekt);
@@ -455,24 +454,47 @@ function RondeDetail({ ronde, onTerug }: { ronde: Brievenronde; onTerug: () => v
         </div>
       </Card>
 
-      {/* Open in Google Maps */}
-      {maps && (
+      {/* Open in Google Maps — automatisch in delen van max. 10 stops */}
+      {routeDelen.length > 0 && (
         <div>
-          <a
-            href={maps.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 py-3 text-sm font-semibold text-white shadow-card hover:bg-brand-700"
-          >
-            <Navigation className="h-4 w-4" />
-            Open looproute in Google Maps
-            <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs">{maps.aantal} stops</span>
-          </a>
+          {routeDelen.length === 1 ? (
+            <a
+              href={routeDelen[0].url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 py-3 text-sm font-semibold text-white shadow-card hover:bg-brand-700"
+            >
+              <Navigation className="h-4 w-4" />
+              Open looproute in Google Maps
+              <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs">{routeDelen[0].aantal} stops</span>
+            </a>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-sm font-semibold text-ink-700">
+                <Navigation className="h-4 w-4 text-brand-600" />
+                Looproute in {routeDelen.length} delen — {mapsBron.length} adressen, max. 10 per route
+              </div>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+                {routeDelen.map((deel, i) => (
+                  <a
+                    key={i}
+                    href={deel.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between gap-1.5 rounded-lg border border-brand-200 bg-brand-50 px-3 py-2.5 text-sm font-semibold text-brand-700 hover:bg-brand-100"
+                  >
+                    <span className="inline-flex items-center gap-1.5"><Navigation className="h-3.5 w-3.5" /> Deel {i + 1}</span>
+                    <span className="text-xs font-medium text-brand-600">{deel.van}–{deel.tot}</span>
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
           <p className="mt-1.5 text-center text-xs text-ink-400">
             {nogTeDoen.length
               ? "Bevat de adressen die nog gedaan moeten worden, in looproute-volgorde."
               : "Alles is al gegooid — dit is de volledige looproute."}
-            {maps.afgekapt && " Google Maps toont max. 10 stops; de rest staat in de lijst hieronder."}
+            {routeDelen.length > 1 && " Google Maps doet max. 10 stops per route, dus loop de delen één voor één."}
           </p>
         </div>
       )}
