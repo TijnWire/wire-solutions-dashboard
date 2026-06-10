@@ -24,7 +24,9 @@ function parseAdresDeel(
   if (!s || /geen werkzaamheden/i.test(s)) return null;
   s = s.replace(/\s*\bok\b\s*$/i, "").trim(); // afsluitende "ok" weghalen
   if (!s) return null;
-  const m = s.match(/^(.*?[A-Za-zÀ-ÿ.])\s*(\d+\s*[A-Za-z]?)(.*)$/);
+  // Huisnummer = cijfers + evt. een direct aangeplakte toevoeging ("12A"); een spatie + woord
+  // (bijv. "9 aggregaat") is een bijzonderheid en hoort NIET bij het huisnummer.
+  const m = s.match(/^(.*?[A-Za-zÀ-ÿ.])\s*(\d+[A-Za-z]?)(?![A-Za-z])(.*)$/);
   let straat = s, huisnummer = "", bijzonderheid = "";
   if (m) {
     straat = m[1].trim();
