@@ -228,9 +228,10 @@ function RondeDetail({ ronde, onTerug }: { ronde: Brievenronde; onTerug: () => v
   // Levenscyclus-overgangen (rol-gebonden) — identiek aan TAUW/Saneren.
   const toewijzen = (id: string) => updateRonde(ronde.id, { toegewezenAan: id || undefined, status: id ? "toegewezen" : "nieuw", toegewezenOp: id ? nu() : undefined });
   const naarControle = () => updateRonde(ronde.id, { status: "ter_controle" });
-  const terugNaarWerknemer = () => updateRonde(ronde.id, { status: "toegewezen", gecontroleerdDoor: undefined, gecontroleerdOp: undefined, verstuurdOp: undefined });
+  const terugNaarWerknemer = () => updateRonde(ronde.id, { status: "toegewezen", gecontroleerdDoor: undefined, gecontroleerdOp: undefined, verstuurdOp: undefined, boekhouding: undefined, doorgestuurdOp: undefined, gefactureerdOp: undefined });
   const goedkeuren = () => updateRonde(ronde.id, { status: "gecontroleerd", gecontroleerdDoor: currentUser?.id, gecontroleerdOp: nu() });
-  const afronden = () => updateRonde(ronde.id, { status: "verstuurd", verstuurdOp: nu() });
+  // Afronden = klaar → meteen door naar de boekhouding (verschijnt bij Facturen + als melding).
+  const afronden = () => updateRonde(ronde.id, { status: "verstuurd", verstuurdOp: nu(), boekhouding: "te_factureren", doorgestuurdOp: nu() });
   const naarDatabase = () => { updateRonde(ronde.id, { gearchiveerd: true, gearchiveerdOp: nu() }); setNaarDb(false); onTerug(); };
 
   // Concept-factuur aanmaken op basis van het aantal gegooide brieven (behoud van de oude werkstroom-stap).

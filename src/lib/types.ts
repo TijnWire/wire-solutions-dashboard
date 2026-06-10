@@ -195,6 +195,10 @@ export type Brievenronde = {
   bevestigdOp?: string; // ISO
   mailVerstuurdOp?: string; // ISO — bevestigingsmail verstuurd
   factuurId?: string; // gekoppelde concept-factuur
+  // ── Boekhouding: gezet zodra de ronde is afgerond → verschijnt bij Facturen + als melding ──
+  boekhouding?: BoekhoudStatus;
+  doorgestuurdOp?: string; // ISO — wanneer naar de boekhouding gestuurd (= afgerond)
+  gefactureerdOp?: string; // ISO
   gearchiveerd?: boolean; // naar de database verstuurd → uit de actieve lijst, bewaard onder "Brieven & Routes"
   gearchiveerdOp?: string; // ISO
 };

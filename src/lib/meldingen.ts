@@ -124,6 +124,13 @@ export function meldingenVoor(user: User, data: MeldingData): Melding[] {
     }
   }
 
+  // Afgeronde brievenrondes die klaarstaan voor de boekhouding (facturatie)
+  if (isLeiding) {
+    for (const r of rondes.filter((r) => r.boekhouding === "te_factureren")) {
+      m.push({ id: "ronde-fact-" + r.id, ernst: "info", titel: `Brievenronde afgerond: ${r.straat}`, tekst: "Klaar voor facturatie — verwerk bij de boekhouding.", navKey: "facturen", target: { ronde: r.id } });
+    }
+  }
+
   // Systeemmeldingen voor de leiding erbij
   if (isLeiding) m.push(...berekenMeldingen(bedrijf, instellingen, verlof, projects));
 
