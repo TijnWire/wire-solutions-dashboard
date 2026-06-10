@@ -211,8 +211,16 @@ function Detail({ project, onTerug, isLeiding }: { project: BuurtaanpakT; onTeru
 
       {isLeiding && (
         <Card className="space-y-3 p-4">
-          {/* Toewijzen + import + boekhouding */}
+          {/* Naam + toewijzen + opdrachtgever */}
           <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-ink-600">Projectnaam</label>
+              <input value={project.naam} onChange={(e) => updateBuurtaanpak(project.id, { naam: e.target.value })} placeholder="Naam van de buurtaanpak" className={veld} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-ink-600">Wijk / regio</label>
+              <input value={project.regio} onChange={(e) => updateBuurtaanpak(project.id, { regio: e.target.value })} placeholder="Wijk / plaats" className={veld} />
+            </div>
             <div>
               <label className="mb-1 block text-xs font-semibold text-ink-600">Uitvoerder (werknemer)</label>
               <Keuze value={project.toegewezenAan ?? ""} onChange={(w) => updateBuurtaanpak(project.id, { toegewezenAan: w || undefined })} opties={[{ waarde: "", label: "— Nog niet toewijzen —" }, ...users.map((u) => ({ waarde: u.id, label: u.naam }))]} title="Uitvoerder" />
@@ -334,23 +342,27 @@ function Detail({ project, onTerug, isLeiding }: { project: BuurtaanpakT; onTeru
               <div className="divide-y divide-ink-100">
                 {g.adressen.map((a) => (
                   <div key={a.id} className="flex flex-wrap items-center gap-2 px-3 py-2">
-                    <span className={`flex h-8 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-bold ${a.uitgevoerd ? "bg-green-500 text-white" : a.bevestigd ? "bg-green-100 text-green-700" : "bg-ink-100 text-ink-700"}`}>{a.huisnummer || "—"}</span>
-                    <div className="w-28"><Keuze size="sm" value={a.soort} onChange={(w) => setAdres(a.id, { soort: w as BuurtAdres["soort"] })} opties={BUURT_SOORTEN.map((s) => ({ waarde: s, label: BUURT_SOORT_KORT[s] }))} title="Soort werkzaamheden" /></div>
-                    <div className="w-28"><DatumKiezer compact value={a.datum} onChange={(iso) => setAdres(a.id, { datum: iso })} placeholder="Datum" /></div>
-                    <input value={a.telefoon} onChange={(e) => setAdres(a.id, { telefoon: e.target.value })} placeholder="06-…" className={klein + " w-28"} />
-                    <input value={a.bijzonderheid} onChange={(e) => setAdres(a.id, { bijzonderheid: e.target.value })} placeholder="Bijzonderheid (TVM / boorder / sleutel…)" className={klein + " min-w-[9rem] flex-1"} />
-                    <label className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg border px-2 py-1.5 text-xs font-semibold ${a.bevestigd ? "border-green-300 bg-green-50 text-green-700" : "border-ink-200 text-ink-500 hover:bg-ink-50"}`} title="Afspraak bevestigd met de bewoner">
-                      <input type="checkbox" aria-label="Bevestigd met bewoner" checked={a.bevestigd} onChange={(e) => setAdres(a.id, { bevestigd: e.target.checked })} className="h-3.5 w-3.5 accent-green-600" /> Bevestigd
-                    </label>
-                    <label className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg border px-2 py-1.5 text-xs font-semibold ${a.uitgevoerd ? "border-brand-300 bg-brand-50 text-brand-700" : "border-ink-200 text-ink-500 hover:bg-ink-50"}`} title="Werk uitgevoerd">
-                      <input type="checkbox" aria-label="Uitgevoerd" checked={a.uitgevoerd} onChange={(e) => setAdres(a.id, { uitgevoerd: e.target.checked })} className="h-3.5 w-3.5 accent-brand-600" /> Uitgevoerd
-                    </label>
-                    {a.telefoon.trim() && (
-                      <a href={smsLink(a.telefoon, smsHerinneringTekst(a, bedrijf?.naam))} onClick={() => setAdres(a.id, { herinnerVerstuurdOp: nu() })} className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1.5 text-xs font-semibold ${a.herinnerVerstuurdOp ? "border-green-200 bg-green-50 text-green-700" : "border-ink-200 text-ink-600 hover:bg-ink-50"}`} title="SMS-herinnering naar bewoner (dag van tevoren)">
-                        <Phone className="h-3.5 w-3.5" /> SMS
-                      </a>
-                    )}
-                    {isLeiding && <button type="button" onClick={() => verwijderAdres(a.id)} className="rounded-lg p-1.5 text-ink-300 hover:bg-red-50 hover:text-red-600" title="Adres verwijderen"><Trash2 className="h-4 w-4" /></button>}
+                    <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-bold ${a.uitgevoerd ? "bg-green-500 text-white" : a.bevestigd ? "bg-green-100 text-green-700" : "bg-ink-100 text-ink-700"}`}>{a.huisnummer || "—"}</span>
+                    <div className="w-36 shrink-0"><Keuze size="sm" value={a.soort} onChange={(w) => setAdres(a.id, { soort: w as BuurtAdres["soort"] })} opties={BUURT_SOORTEN.map((s) => ({ waarde: s, label: BUURT_SOORT_KORT[s] }))} title="Soort werkzaamheden" /></div>
+                    <div className="w-36 shrink-0"><DatumKiezer compact value={a.datum} onChange={(iso) => setAdres(a.id, { datum: iso })} placeholder="Datum" /></div>
+                    <input value={a.telefoon} onChange={(e) => setAdres(a.id, { telefoon: e.target.value })} placeholder="06-…" className={klein + " w-36 shrink-0"} />
+                    <input value={a.bijzonderheid} onChange={(e) => setAdres(a.id, { bijzonderheid: e.target.value })} placeholder="Bijzonderheid (TVM / boorder / sleutel…)" className={klein + " min-w-[12rem] max-w-[30rem] flex-1"} />
+                    <div className="ml-auto flex shrink-0 items-center gap-2">
+                      <label className={`flex w-28 cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-2 py-1.5 text-xs font-semibold ${a.bevestigd ? "border-green-300 bg-green-50 text-green-700" : "border-ink-200 text-ink-500 hover:bg-ink-50"}`} title="Afspraak bevestigd met de bewoner">
+                        <input type="checkbox" aria-label="Bevestigd met bewoner" checked={a.bevestigd} onChange={(e) => setAdres(a.id, { bevestigd: e.target.checked })} className="h-3.5 w-3.5 accent-green-600" /> Bevestigd
+                      </label>
+                      <label className={`flex w-28 cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-2 py-1.5 text-xs font-semibold ${a.uitgevoerd ? "border-brand-300 bg-brand-50 text-brand-700" : "border-ink-200 text-ink-500 hover:bg-ink-50"}`} title="Werk uitgevoerd">
+                        <input type="checkbox" aria-label="Uitgevoerd" checked={a.uitgevoerd} onChange={(e) => setAdres(a.id, { uitgevoerd: e.target.checked })} className="h-3.5 w-3.5 accent-brand-600" /> Uitgevoerd
+                      </label>
+                      {a.telefoon.trim() ? (
+                        <a href={smsLink(a.telefoon, smsHerinneringTekst(a, bedrijf?.naam))} onClick={() => setAdres(a.id, { herinnerVerstuurdOp: nu() })} className={`flex w-16 items-center justify-center gap-1 rounded-lg border px-2 py-1.5 text-xs font-semibold ${a.herinnerVerstuurdOp ? "border-green-200 bg-green-50 text-green-700" : "border-ink-200 text-ink-600 hover:bg-ink-50"}`} title="SMS-herinnering naar bewoner (dag van tevoren)">
+                          <Phone className="h-3.5 w-3.5" /> SMS
+                        </a>
+                      ) : (
+                        <span className="w-16 shrink-0" aria-hidden="true" />
+                      )}
+                      {isLeiding && <button type="button" onClick={() => verwijderAdres(a.id)} className="rounded-lg p-1.5 text-ink-300 hover:bg-red-50 hover:text-red-600" title="Adres verwijderen"><Trash2 className="h-4 w-4" /></button>}
+                    </div>
                   </div>
                 ))}
               </div>
