@@ -187,7 +187,9 @@ export function BestandScanModal({ open, projectId, projectNaam, onSluit }: { op
   };
 
   const bevestig = () => {
-    const { aantal } = bevestigOpslaan(rijen, doel, { projectId, projectNaam, rondes, addRonde, updateRonde, addKlant, addAfspraak });
+    // Alle rondes uit dit ene bestand in één map groeperen (de bestandsnaam zonder extensie).
+    const mapNaam = bestandsnaam.replace(/\.[^.]+$/, "").trim() || undefined;
+    const { aantal } = bevestigOpslaan(rijen, doel, { projectId, projectNaam, mapNaam, rondes, addRonde, updateRonde, addKlant, addAfspraak });
     setResultaat(aantal);
     setFase("klaar");
   };

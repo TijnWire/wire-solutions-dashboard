@@ -22,7 +22,7 @@ import {
   Mail,
   Receipt,
 } from "lucide-react";
-import { Navigation, ExternalLink, FileUp } from "lucide-react";
+import { Navigation, ExternalLink, FileUp, Folder } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { useNav } from "../store/NavContext";
 import { Keuze } from "../components/Keuze";
@@ -826,6 +826,7 @@ export function Brieven({ initieelRonde }: { initieelRonde?: string }) {
   const [openId, setOpenId] = useState<string | null>(initieelRonde ?? null);
   const [nieuw, setNieuw] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
+  const [dichteMappen, setDichteMappen] = useState<Record<string, boolean>>({}); // ingeklapte import-mappen
 
   if (!currentUser) return null;
   const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer";
@@ -848,13 +849,53 @@ export function Brieven({ initieelRonde }: { initieelRonde?: string }) {
     if (pa !== pb) return pa < pb ? -1 : 1;
     return a.straat.localeCompare(b.straat, "nl");
   });
-  const weken: { key: string; label: string; items: Brievenronde[] }[] = [];
+  // Rondes uit dezelfde import (mapNaam) groeperen we als één map; de overige rondes per week.
+  const mappen: { naam: string; items: Brievenronde[] }[] = [];
+  const losse: Brievenronde[] = [];
   for (const r of gesorteerd) {
+    if (r.mapNaam) {
+      let m = mappen.find((x) => x.naam === r.mapNaam);
+      if (!m) { m = { naam: r.mapNaam, items: [] }; mappen.push(m); }
+      m.items.push(r);
+    } else losse.push(r);
+  }
+  const weken: { key: string; label: string; items: Brievenronde[] }[] = [];
+  for (const r of losse) {
     const wk = weekStartISO(peildatum(r)) || "zonder";
     let w = weken.find((x) => x.key === wk);
     if (!w) { w = { key: wk, label: weekLabel(wk), items: [] }; weken.push(w); }
     w.items.push(r);
   }
+
+  // Eén ronde-kaart (hergebruikt in de import-mappen én in de week-groepen).
+  const rondeKaart = (r: Brievenronde) => {
+    const teBezorgen = r.adressen.filter((a) => !a.ontbreekt);
+    const gegooid = teBezorgen.filter((a) => a.status === "Gegooid").length;
+    const pct = teBezorgen.length ? Math.round((gegooid / teBezorgen.length) * 100) : 0;
+    const bedrijven = r.adressen.filter((a) => a.type === "bedrijf" && !a.ontbreekt).length;
+    const openA = teBezorgen.length - gegooid;
+    const teLaat = !!r.deadline && r.deadline < vandaag && r.status !== "verstuurd";
+    return (
+      <div key={r.id} onClick={() => setOpenId(r.id)} className="cursor-pointer rounded-2xl border border-ink-200 bg-white p-4 text-left shadow-card transition-shadow hover:shadow-cardhover">
+        <div className="flex items-center gap-3">
+          <div className="rounded-lg bg-brand-50 p-2.5 text-brand-600"><MapPin className="h-5 w-5" /></div>
+          <div className="min-w-0 flex-1">
+            <div className="truncate font-semibold text-ink-900">{r.straat}</div>
+            <div className="truncate text-xs text-ink-500">{[r.plaats, `${teBezorgen.length} adressen`, bedrijven > 0 ? `${bedrijven} bedrijf` : ""].filter(Boolean).join(" · ")}</div>
+          </div>
+          <Badge tone={STATUS_TONE[r.status]}>{STATUS_LABEL[r.status]}</Badge>
+          <ChevronRight className="h-5 w-5 shrink-0 text-ink-300" />
+        </div>
+        <div className="mt-3 flex items-center justify-between gap-2 text-xs">
+          <span className="text-ink-500">{gegooid}/{teBezorgen.length} gegooid{r.status !== "verstuurd" ? ` · ${openA} open` : ""}</span>
+          {r.deadline && <span className={`inline-flex items-center gap-1 font-semibold ${teLaat ? "text-red-600" : "text-ink-500"}`}><CalendarClock className="h-3.5 w-3.5" /> {teLaat ? "Te laat" : datumKort(r.deadline)}</span>}
+        </div>
+        <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-ink-100">
+          <div className="h-full rounded-full bg-green-500" style={{ width: `${pct}%` }} />
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -906,6 +947,30 @@ export function Brieven({ initieelRonde }: { initieelRonde?: string }) {
             </div>
           </div>
 
+          {/* Import-mappen: alle rondes uit één PDF/Excel bij elkaar in een inklapbare map */}
+          {mappen.map((m) => {
+            const dicht = dichteMappen[m.naam];
+            const openInMap = m.items.filter(isOpenRonde).length;
+            const adrTotaal = m.items.reduce((s, r) => s + r.adressen.filter((a) => !a.ontbreekt).length, 0);
+            return (
+              <div key={`map-${m.naam}`} className="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-card">
+                <button type="button" onClick={() => setDichteMappen((d) => ({ ...d, [m.naam]: !d[m.naam] }))} className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-ink-50/60">
+                  <div className="rounded-lg bg-brand-50 p-2.5 text-brand-600"><Folder className="h-5 w-5" /></div>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate font-semibold text-ink-900">{m.naam}</div>
+                    <div className="truncate text-xs text-ink-500">{m.items.length} {m.items.length === 1 ? "ronde" : "rondes"} · {adrTotaal} adressen · {openInMap} open</div>
+                  </div>
+                  <ChevronDown className={`h-5 w-5 shrink-0 text-ink-400 transition-transform ${dicht ? "" : "rotate-180"}`} />
+                </button>
+                {!dicht && (
+                  <div className="grid gap-3 border-t border-ink-100 p-4 sm:grid-cols-2">
+                    {m.items.map((r) => rondeKaart(r))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
           {weken.map((g) => {
             const openInWeek = g.items.filter(isOpenRonde).length;
             return (
@@ -915,34 +980,7 @@ export function Brieven({ initieelRonde }: { initieelRonde?: string }) {
                   <span className="text-xs font-medium text-ink-500">{openInWeek} open · {g.items.length} {g.items.length === 1 ? "ronde" : "rondes"}</span>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  {g.items.map((r) => {
-                    const teBezorgen = r.adressen.filter((a) => !a.ontbreekt);
-                    const gegooid = teBezorgen.filter((a) => a.status === "Gegooid").length;
-                    const pct = teBezorgen.length ? Math.round((gegooid / teBezorgen.length) * 100) : 0;
-                    const bedrijven = r.adressen.filter((a) => a.type === "bedrijf" && !a.ontbreekt).length;
-                    const openA = teBezorgen.length - gegooid;
-                    const teLaat = !!r.deadline && r.deadline < vandaag && r.status !== "verstuurd";
-                    return (
-                      <div key={r.id} onClick={() => setOpenId(r.id)} className="cursor-pointer rounded-2xl border border-ink-200 bg-white p-4 text-left shadow-card transition-shadow hover:shadow-cardhover">
-                        <div className="flex items-center gap-3">
-                          <div className="rounded-lg bg-brand-50 p-2.5 text-brand-600"><MapPin className="h-5 w-5" /></div>
-                          <div className="min-w-0 flex-1">
-                            <div className="truncate font-semibold text-ink-900">{r.straat}</div>
-                            <div className="truncate text-xs text-ink-500">{[r.plaats, `${teBezorgen.length} adressen`, bedrijven > 0 ? `${bedrijven} bedrijf` : ""].filter(Boolean).join(" · ")}</div>
-                          </div>
-                          <Badge tone={STATUS_TONE[r.status]}>{STATUS_LABEL[r.status]}</Badge>
-                          <ChevronRight className="h-5 w-5 shrink-0 text-ink-300" />
-                        </div>
-                        <div className="mt-3 flex items-center justify-between gap-2 text-xs">
-                          <span className="text-ink-500">{gegooid}/{teBezorgen.length} gegooid{r.status !== "verstuurd" ? ` · ${openA} open` : ""}</span>
-                          {r.deadline && <span className={`inline-flex items-center gap-1 font-semibold ${teLaat ? "text-red-600" : "text-ink-500"}`}><CalendarClock className="h-3.5 w-3.5" /> {teLaat ? "Te laat" : datumKort(r.deadline)}</span>}
-                        </div>
-                        <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-ink-100">
-                          <div className="h-full rounded-full bg-green-500" style={{ width: `${pct}%` }} />
-                        </div>
-                      </div>
-                    );
-                  })}
+                  {g.items.map((r) => rondeKaart(r))}
                 </div>
               </div>
             );

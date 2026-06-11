@@ -190,6 +190,7 @@ export type Brievenronde = {
   verstuurdOp?: string; // ISO
   // ── Werkstroom-extra's (optioneel) ──
   regio?: string;
+  mapNaam?: string; // groepeert rondes uit dezelfde import samen in één map
   fase?: RondeFase; // legacy — alleen nog voor migratie naar status
   parkeerNotitie?: string;
   bevestigdOp?: string; // ISO

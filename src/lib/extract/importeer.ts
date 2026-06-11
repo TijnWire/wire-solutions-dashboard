@@ -70,6 +70,7 @@ export async function verwerkBestand(
 export type OpslaanCtx = {
   projectId: string;
   projectNaam: string;
+  mapNaam?: string; // alle rondes uit deze import in één map groeperen
   rondes: Brievenronde[];
   addRonde: (r: Omit<Brievenronde, "id">) => string;
   updateRonde: (id: string, patch: Partial<Brievenronde>) => void;
@@ -141,9 +142,9 @@ export function bevestigOpslaan(rijen: ScanRij[], doel: ImportDoel, ctx: Opslaan
       (rd) => sleutel(rd.straat) === sleutel(e.straat) && sleutel(rd.postcode) === sleutel(e.postcode) && sleutel(rd.plaats) === sleutel(e.plaats)
     );
     if (bestaande) {
-      ctx.updateRonde(bestaande.id, { adressen: [...bestaande.adressen, ...adressen], projectId: bestaande.projectId ?? ctx.projectId });
+      ctx.updateRonde(bestaande.id, { adressen: [...bestaande.adressen, ...adressen], projectId: bestaande.projectId ?? ctx.projectId, mapNaam: bestaande.mapNaam ?? ctx.mapNaam });
     } else {
-      ctx.addRonde({ straat: e.straat, postcode: e.postcode, plaats: e.plaats, projectId: ctx.projectId, aangemaakt: new Date().toISOString(), status: "nieuw", adressen });
+      ctx.addRonde({ straat: e.straat, postcode: e.postcode, plaats: e.plaats, projectId: ctx.projectId, mapNaam: ctx.mapNaam, aangemaakt: new Date().toISOString(), status: "nieuw", adressen });
     }
   }
   return { aantal: teImporteren.length };
