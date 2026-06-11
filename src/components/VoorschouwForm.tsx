@@ -76,6 +76,38 @@ function JaNeeKnop({
   );
 }
 
+// JA/NEE-knop met een toelichtingsveld dat verschijnt zodra je "JA" kiest.
+// De keuze + toelichting worden in één tekstveld bewaard ("NEE" of "JA — <toelichting>"), zodat de PDF gewoon werkt.
+function JaNeeMetTekst({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string }) {
+  const v = (value || "").trim();
+  const isJa = /^ja\b/i.test(v);
+  const isNee = /^nee\b/i.test(v);
+  const tekst = isJa ? v.replace(/^ja\b[\s—:.\-]*/i, "") : "";
+  const setKeuze = (optie: "JA" | "NEE") => {
+    if (optie === "JA") onChange(isJa ? "" : (tekst ? `JA — ${tekst}` : "JA"));
+    else onChange(isNee ? "" : "NEE");
+  };
+  const setTekst = (t: string) => onChange(t.trim() ? `JA — ${t}` : "JA");
+  return (
+    <div>
+      <span className="mb-1.5 block text-sm font-medium text-ink-700">{label}</span>
+      <div className="inline-flex overflow-hidden rounded-lg border border-ink-200">
+        {(["JA", "NEE"] as const).map((optie) => {
+          const actief = optie === "JA" ? isJa : isNee;
+          return (
+            <button key={optie} type="button" onClick={() => setKeuze(optie)} className={`px-5 py-2 text-sm font-medium transition-colors ${actief ? (optie === "JA" ? "bg-green-600 text-white" : "bg-ink-700 text-white") : "bg-white text-ink-500 hover:bg-ink-50"}`}>
+              {optie}
+            </button>
+          );
+        })}
+      </div>
+      {isJa && (
+        <textarea value={tekst} onChange={(e) => setTekst(e.target.value)} placeholder={placeholder ?? "Licht toe…"} rows={2} className="mt-2 w-full resize-none rounded-lg border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100" />
+      )}
+    </div>
+  );
+}
+
 // Dropdown om de map te kiezen, met zoek-/typveld (handig bij veel mappen) en "typ om aan te maken".
 function MapKiezer({ mappen, value, onChange, onNieuw }: {
   mappen: { id: string; naam: string }[];
@@ -256,17 +288,17 @@ export function VoorschouwForm({
           <JaNeeKnop label="Gasloos" value={data.gasloos} onChange={(v) => set({ gasloos: v })} />
           <JaNeeKnop label="Blokverwarming" value={data.blokverwarming} onChange={(v) => set({ blokverwarming: v })} />
         </div>
-        <Tekstveld
+        <JaNeeMetTekst
           label="Bijzondere locatie (verzorgingstehuis / woon- of leefgroep)"
           value={data.bijzondereLocatieZorg}
           onChange={(v) => set({ bijzondereLocatieZorg: v })}
-          textarea
+          placeholder="Bijv. verzorgingstehuis — naam / locatie / aandachtspunten…"
         />
-        <Tekstveld
+        <JaNeeMetTekst
           label="Bijzondere locatie (zelfvoorzienend / 1 centrale keuken)"
           value={data.bijzondereLocatieKeuken}
           onChange={(v) => set({ bijzondereLocatieKeuken: v })}
-          textarea
+          placeholder="Bijv. centrale keuken — toelichting…"
         />
       </Card>
 
