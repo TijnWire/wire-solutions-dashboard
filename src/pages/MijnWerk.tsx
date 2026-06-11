@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ListTodo, Loader2, CheckCircle2, Plus, FolderKanban, Mailbox, CalendarCheck, ChevronRight, FileScan, FlaskConical, CalendarDays, CalendarClock, Mail, AlertTriangle, Cable } from "lucide-react";
+import { ListTodo, Loader2, CheckCircle2, Plus, FolderKanban, Mailbox, CalendarCheck, ChevronRight, FileScan, FlaskConical, CalendarDays, CalendarClock, Mail, AlertTriangle, Cable, Phone, Check } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { useNav } from "../store/NavContext";
 import { TAUW_TYPE_LABEL } from "../lib/types";
 import { meldingenVoor } from "../lib/meldingen";
+import { smsHerinneringTekst, smsLink, datumLabelNL } from "../lib/buurtaanpak";
 
 const datumKort = (iso: string) => { const d = iso.slice(0, 10).split("-"); return d.length === 3 ? `${d[2]}-${d[1]}-${d[0]}` : iso; };
 // ISO-weeknummer van een ISO-datum (yyyy-mm-dd of vollere ISO-string).
@@ -22,6 +23,11 @@ function vandaagISO(): string {
   const t = new Date();
   return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
 }
+function morgenISO(): string {
+  const t = new Date();
+  t.setDate(t.getDate() + 1);
+  return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
+}
 import { Card } from "../components/ui";
 import { TaakKaart } from "../components/TaakKaart";
 import { ProjectBord } from "../components/ProjectBord";
@@ -30,11 +36,12 @@ import { MededelingenBord } from "../components/MededelingenBord";
 import type { LucideIcon } from "lucide-react";
 
 export function MijnWerk({ initieelProject }: { initieelProject?: string }) {
-  const { currentUser, projects, taken, rondes, afspraken, tauwOpdrachten, addTaak, voorschouwen, projectPosts, saneringen, buurtaanpak, users, bedrijf, instellingen, verlof } = useApp();
+  const { currentUser, projects, taken, rondes, afspraken, tauwOpdrachten, addTaak, voorschouwen, projectPosts, saneringen, buurtaanpak, updateBuurtaanpak, users, bedrijf, instellingen, verlof } = useApp();
   const { navigeer } = useNav();
   const [nieuwBijProject, setNieuwBijProject] = useState<string | null>(null);
   const [nieuweTitel, setNieuweTitel] = useState("");
   const [scan, setScan] = useState<{ id: string; naam: string } | null>(null);
+  const [netVerstuurd, setNetVerstuurd] = useState<Set<string>>(new Set());
   const doelRef = useRef<HTMLDivElement | null>(null);
 
   // Scroll naar het project waar een melding naartoe linkt.
@@ -46,6 +53,22 @@ export function MijnWerk({ initieelProject }: { initieelProject?: string }) {
 
   // Mailbox = persoonlijke meldingen/berichten voor deze gebruiker (zelfde als de bel, hier op de pagina).
   const mailbox = meldingenVoor(currentUser, { taken, rondes, afspraken, voorschouwen, projects, projectPosts, tauwOpdrachten, saneringen, buurtaanpak, users, bedrijf, instellingen, verlof });
+
+  // SMS-herinneringen die binnen 24u verstuurd moeten worden (bevestigd, datum vandaag/morgen, nog niet verstuurd).
+  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer";
+  const vandaagDt = vandaagISO(), morgenDt = morgenISO();
+  const smsTeVersturen = buurtaanpak
+    .filter((b) => !b.gearchiveerd && (isLeiding || b.toegewezenAan === currentUser.id))
+    .flatMap((b) => b.adressen
+      .filter((a) => a.bevestigd && /^\d{4}-\d{2}-\d{2}$/.test(a.datum) && a.datum >= vandaagDt && a.datum <= morgenDt && (!a.herinnerVerstuurdOp || netVerstuurd.has(a.id)))
+      .map((a) => ({ buurt: b, a })));
+  const setNummer = (b: typeof buurtaanpak[number], id: string, tel: string) =>
+    updateBuurtaanpak(b.id, { adressen: b.adressen.map((x) => (x.id === id ? { ...x, telefoon: tel } : x)) });
+  const markeerVerstuurd = (b: typeof buurtaanpak[number], id: string) => {
+    updateBuurtaanpak(b.id, { adressen: b.adressen.map((x) => (x.id === id ? { ...x, herinnerVerstuurdOp: new Date().toISOString() } : x)) });
+    setNetVerstuurd((prev) => new Set(prev).add(id));
+    setTimeout(() => setNetVerstuurd((prev) => { const n = new Set(prev); n.delete(id); return n; }), 2500);
+  };
 
   const mijnTaken = taken.filter((t) => t.toegewezenAan === currentUser.id || t.toegewezenAan === ""); // "" = hele team
   const mijnProjecten = projects.filter(
@@ -191,6 +214,50 @@ export function MijnWerk({ initieelProject }: { initieelProject?: string }) {
           );
         })}
       </div>
+
+      {/* SMS-herinneringen — binnen 24u versturen (1 druk: SMS klaar → verstuurd → sluit) */}
+      {smsTeVersturen.length > 0 && (
+        <div>
+          <h3 className="mb-2.5 flex items-center gap-2 text-sm font-bold text-ink-700">
+            <Phone className="h-4 w-4 text-amber-600" /> SMS-herinneringen versturen
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">{smsTeVersturen.filter((x) => !netVerstuurd.has(x.a.id)).length}</span>
+          </h3>
+          <Card className="overflow-hidden border-amber-200">
+            <div className="border-b border-amber-100 bg-amber-50/60 px-4 py-2 text-xs text-amber-700">
+              Deze bewoners hebben morgen (of vandaag) een afspraak — stuur ze 24 uur vooraf de bevestiging namens Stedin.
+            </div>
+            <div className="divide-y divide-ink-100">
+              {smsTeVersturen.map(({ buurt, a }) => {
+                const verstuurd = netVerstuurd.has(a.id);
+                const heeftNummer = a.telefoon.trim().length > 0;
+                return (
+                  <div key={buurt.id + "-" + a.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-semibold text-ink-900">{a.straat} {a.huisnummer}</div>
+                      <div className="truncate text-xs text-ink-500">{datumLabelNL(a.datum)} · {buurt.naam}</div>
+                    </div>
+                    {verstuurd ? (
+                      <span className="inline-flex items-center gap-1.5 rounded-lg bg-green-50 px-3 py-2 text-sm font-semibold text-green-700"><Check className="h-4 w-4" /> Verstuurd</span>
+                    ) : (
+                      <>
+                        <input value={a.telefoon} onChange={(e) => setNummer(buurt, a.id, e.target.value)} placeholder="06-… (nummer)" inputMode="tel" className="w-36 rounded-lg border border-ink-200 px-2.5 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100" />
+                        <a
+                          href={heeftNummer ? smsLink(a.telefoon, smsHerinneringTekst(a, currentUser.naam)) : undefined}
+                          onClick={(e) => { if (!heeftNummer) { e.preventDefault(); return; } markeerVerstuurd(buurt, a.id); }}
+                          title={heeftNummer ? "Open de SMS en markeer als verstuurd" : "Vul eerst een telefoonnummer in"}
+                          className={`inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-semibold ${heeftNummer ? "bg-brand-600 text-white hover:bg-brand-700" : "cursor-not-allowed bg-ink-100 text-ink-400"}`}
+                        >
+                          <Phone className="h-4 w-4" /> Verstuur SMS
+                        </a>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+        </div>
+      )}
 
       {/* Mededelingen van de beheerder */}
       <MededelingenBord />
