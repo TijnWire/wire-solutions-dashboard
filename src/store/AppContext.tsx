@@ -264,7 +264,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   // Supabase: actieve sessie + bijhouden wat we al gesynct hebben (tegen terugkaats-lussen).
   const [sbSessie, setSbSessie] = useState(false);
-  const sync = useRef<{ klaar: boolean; gezien: Record<string, string> }>({ klaar: false, gezien: {} });
+  const sync = useRef<{ klaar: boolean; gezien: Record<string, string>; bezig: Set<string> }>({ klaar: false, gezien: {}, bezig: new Set() });
   // Laatst-gepushte referentie per slice — zo serialiseren we alleen de slice die écht wijzigde (niet alle 23 per klik).
   const pushRef = useRef<Record<string, unknown>>({});
 
@@ -548,6 +548,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!supabaseAan || !sbSessie || !hydrated) return;
     let actief = true;
+    // Past binnenkomende remote-data toe — alleen écht gewijzigde slices, en niet terwijl we die zelf
+    // aan het wegschrijven zijn (anders zou een net-gemaakte wijziging worden teruggedraaid).
+    const pasToe = (remote: Record<string, unknown>) => {
+      for (const [key, val] of Object.entries(remote)) {
+        if (!(key in setters) || sync.current.bezig.has(key)) continue;
+        const j = JSON.stringify(val);
+        if (sync.current.gezien[key] === j) continue;
+        sync.current.gezien[key] = j;
+        setters[key]?.(val);
+      }
+    };
     (async () => {
       try {
         const remote = await sbLeesAlles();
@@ -559,7 +570,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         for (const key of Object.keys(setters)) {
           if (!(key in remote)) {
             sync.current.gezien[key] = JSON.stringify(waarden[key]);
-            void sbSchrijf(key, waarden[key]).catch(() => {});
+            sync.current.bezig.add(key);
+            void sbSchrijf(key, waarden[key]).catch(() => {}).finally(() => sync.current.bezig.delete(key));
           }
         }
         const email = await sbSessieEmail();
@@ -576,13 +588,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .on("postgres_changes", { event: "*", schema: "public", table: "wire_state" }, (payload) => {
         const row = (payload.new ?? payload.old) as { key?: string; data?: unknown } | null;
         if (!row?.key || !(row.key in setters)) return;
+        if (sync.current.bezig.has(row.key)) return; // eigen push onderweg
         const j = JSON.stringify(row.data);
         if (sync.current.gezien[row.key] === j) return; // eigen wijziging — overslaan
         sync.current.gezien[row.key] = j;
         setters[row.key](row.data);
       })
       .subscribe();
-    return () => { actief = false; sync.current.klaar = false; void sb().removeChannel(kanaal); };
+    // Automatische sync elke 30 seconden — haalt wijzigingen van álle medewerkers op, ook als realtime
+    // onverhoopt niet doorkomt. Zo blijft elk apparaat vanzelf actueel.
+    const interval = setInterval(() => {
+      if (!actief || !sync.current.klaar) return;
+      void sbLeesAlles().then((remote) => { if (actief) pasToe(remote); }).catch(() => {});
+    }, 30000);
+    return () => { actief = false; sync.current.klaar = false; clearInterval(interval); void sb().removeChannel(kanaal); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supabaseAan, sbSessie, hydrated]);
 
@@ -595,7 +614,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const j = JSON.stringify(waarden[key]);
       if (sync.current.gezien[key] !== j) {
         sync.current.gezien[key] = j;
-        void sbSchrijf(key, waarden[key]).catch(() => {});
+        sync.current.bezig.add(key); // markeer als 'wordt geschreven' zodat de 30s-pull 'm niet terugdraait
+        void sbSchrijf(key, waarden[key]).catch(() => {}).finally(() => sync.current.bezig.delete(key));
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
