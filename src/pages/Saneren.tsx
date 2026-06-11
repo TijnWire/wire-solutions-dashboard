@@ -10,7 +10,7 @@ import { DatumKiezer } from "../components/DatumKiezer";
 import { afleidRegio } from "../lib/regio";
 import { waUrl, smsUrl } from "../lib/communicatie";
 import { leesStedinPlanning } from "../lib/tauwImport";
-import { legeSaneerAdres, TAUW_STATUS_VOLGORDE, TAUW_STATUS_LABEL, type Sanering, type SaneerAdres, type TauwStatus } from "../lib/types";
+import { legeSaneerAdres, TAUW_STATUS_VOLGORDE, TAUW_STATUS_LABEL, SANEER_STAPPENPLAN, type Sanering, type SaneerAdres, type TauwStatus, type SaneerStapStatus, type User } from "../lib/types";
 
 const veld = "w-full rounded-lg border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100";
 const knopKlein = "inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-3 py-1.5 text-sm font-semibold text-ink-700 hover:bg-ink-50 disabled:cursor-not-allowed disabled:opacity-40";
@@ -195,6 +195,58 @@ function SaneerAdresKaart({ adres, nr, bewerkbaar, magVerwijderen, onChange, onV
 }
 
 // ── Projectdetail: levenscyclus, toewijzen, adressenlijst met afspraken ──
+const STAP_KLEUR: Record<string, string> = { indigo: "bg-indigo-500", violet: "bg-violet-500", rose: "bg-rose-500", orange: "bg-orange-500", amber: "bg-amber-500" };
+
+// Het 5-fase werkproces voor een sanering — interactieve checklists die de teams samen doorlopen en overdragen.
+function SaneerStappenplan({ sanering, users, onUpdate }: { sanering: Sanering; users: User[]; onUpdate: (stappen: SaneerStapStatus[]) => void }) {
+  const stappen = SANEER_STAPPENPLAN.map((_, i) => sanering.stappen?.[i] ?? { gedaan: [], afgerond: false });
+  const setStap = (i: number, patch: Partial<SaneerStapStatus>) => onUpdate(stappen.map((s, k) => (k === i ? { ...s, ...patch } : s)));
+  const toggleItem = (i: number, j: number) => { const g = [...stappen[i].gedaan]; g[j] = !g[j]; setStap(i, { gedaan: g }); };
+  const actief = stappen.findIndex((s) => !s.afgerond); // eerste nog-niet-afgeronde fase = de huidige
+  return (
+    <div>
+      <h3 className="mb-2.5 flex items-center gap-2 text-sm font-bold text-ink-700"><Recycle className="h-4 w-4 text-brand-600" /> Stappenplan Saneren</h3>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        {SANEER_STAPPENPLAN.map((def, i) => {
+          const st = stappen[i];
+          const gedaanN = def.items.filter((_, j) => st.gedaan[j]).length;
+          const alles = gedaanN === def.items.length;
+          const isActief = i === actief;
+          return (
+            <div key={i} className={`flex flex-col overflow-hidden rounded-2xl border bg-white shadow-card ${st.afgerond ? "border-green-300" : isActief ? "border-brand-400 ring-2 ring-brand-200" : "border-ink-200"}`}>
+              <div className={`flex items-center justify-between px-3 py-2.5 text-white ${STAP_KLEUR[def.kleur]}`}>
+                <div className="min-w-0">
+                  <div className="truncate text-[10px] font-semibold uppercase tracking-wide opacity-90">{def.rol}</div>
+                  <div className="text-sm font-bold leading-tight">{def.titel}</div>
+                </div>
+                <span className="text-2xl font-black leading-none opacity-70">{String(i + 1).padStart(2, "0")}</span>
+              </div>
+              <div className="flex flex-1 flex-col gap-2 p-3">
+                {def.items.map((item, j) => (
+                  <label key={j} className="flex cursor-pointer items-start gap-2 text-xs">
+                    <input type="checkbox" checked={!!st.gedaan[j]} onChange={() => toggleItem(i, j)} className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-brand-600" />
+                    <span className={st.gedaan[j] ? "text-ink-400 line-through" : "text-ink-700"}>{item}</span>
+                  </label>
+                ))}
+                <div className="mt-auto space-y-2 border-t border-ink-100 pt-2.5">
+                  <div className="flex items-center gap-2">
+                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-ink-100"><div className="h-full rounded-full bg-green-500" style={{ width: `${(gedaanN / def.items.length) * 100}%` }} /></div>
+                    <span className="shrink-0 text-[11px] font-semibold text-ink-400">{gedaanN}/{def.items.length}</span>
+                  </div>
+                  <WerknemerKiezer value={st.toegewezenAan ?? ""} onChange={(id) => setStap(i, { toegewezenAan: id || undefined })} users={users} leegLabel="Toewijzen…" />
+                  <label className={`flex cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-2 py-1.5 text-xs font-semibold ${st.afgerond ? "border-green-300 bg-green-50 text-green-700" : alles ? "border-brand-300 bg-brand-50 text-brand-700" : "border-ink-200 text-ink-500 hover:bg-ink-50"}`}>
+                    <input type="checkbox" checked={!!st.afgerond} onChange={(e) => setStap(i, { afgerond: e.target.checked })} className="h-3.5 w-3.5 accent-green-600" /> {st.afgerond ? "Afgerond" : "Stap afronden"}
+                  </label>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function SaneringDetail({ sanering, onTerug }: { sanering: Sanering; onTerug: () => void }) {
   const { users, currentUser, updateSanering, deleteSanering } = useApp();
   const [verwijder, setVerwijder] = useState(false);
@@ -370,6 +422,9 @@ function SaneringDetail({ sanering, onTerug }: { sanering: Sanering; onTerug: ()
         <input value={sanering.regio} disabled={!bewerkbaar} onChange={(e) => updateSanering(sanering.id, { regio: e.target.value })} placeholder="Onbekend" className="w-full rounded-lg border border-ink-200 px-2.5 py-1.5 text-sm outline-none focus:border-brand-400 disabled:bg-ink-50 disabled:text-ink-500 sm:w-40" />
         {bewerkbaar && <button type="button" onClick={() => updateSanering(sanering.id, { regio: afleidRegio(eerstePostcode?.postcode ?? "", eerstePostcode?.plaats ?? "") })} className={knopKlein}><Wand2 className="h-3.5 w-3.5" /> Auto uit postcode</button>}
       </Card>
+
+      {/* Stappenplan Saneren — het 5-fase werkproces */}
+      <SaneerStappenplan sanering={sanering} users={users} onUpdate={(stappen) => updateSanering(sanering.id, { stappen })} />
 
       {/* Adressen */}
       <Card className="space-y-3 p-4">

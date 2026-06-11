@@ -493,9 +493,54 @@ export type Sanering = {
   verstuurdOp?: string; // ISO
   adressen: SaneerAdres[];
   afgerondOp?: string; // ISO — wanneer alle afspraken gemaakt waren
+  // Stappenplan: per fase de afgevinkte checklist-items, de toegewezen persoon en of de fase af is.
+  stappen?: SaneerStapStatus[];
   gearchiveerd?: boolean; // naar de database verstuurd → uit de actieve lijst, bewaard onder "Saneren"
   gearchiveerdOp?: string; // ISO
 };
+
+// ── Stappenplan Saneren: het 5-fase werkproces dat de teams samen doorlopen ──
+export type SaneerStapStatus = { gedaan: boolean[]; toegewezenAan?: string; afgerond?: boolean };
+export type SaneerStapDef = { titel: string; rol: string; kleur: "indigo" | "violet" | "rose" | "orange" | "amber"; items: string[] };
+export const SANEER_STAPPENPLAN: SaneerStapDef[] = [
+  { titel: "Werkvoorbereiding", rol: "Werkvoorbereider", kleur: "indigo", items: [
+    "Minimaal 6 weken van tevoren starten",
+    "Telefoonnummers, e-mail of VVE verzamelen",
+    "Aankondigingsbrieven",
+    "Bevestigingsbrieven",
+  ] },
+  { titel: "Schouwen", rol: "Schouwer", kleur: "violet", items: [
+    "Adressen + informatie overdragen",
+    "Klantgegevens invullen",
+    "4× klantbezoek op verschillende tijden/dagen",
+    "VVE of woningbouw-gegevens uitzoeken",
+    "Bij 4× niet thuis → 17:00–19:30 langs, of buren om gegevens vragen",
+    "Klantgegevens bekend → bellen",
+    "Adres online opzoeken",
+    "Lastige vragen → communiceren met de uitvoerder",
+  ] },
+  { titel: "Werkvoorbereiding", rol: "Werkvoorbereider", kleur: "rose", items: [
+    "Informatie van de schouwer bundelen",
+    "Ontbrekende gegevens aanvullen",
+    "Uitvoering voorbereiden",
+    "Aankondigingsbrieven aanleveren",
+  ] },
+  { titel: "Afsprakenmaker", rol: "Afsprakenmaker", kleur: "orange", items: [
+    "Adressen + informatie overdragen",
+    "Klantgegevens invullen",
+    "4× klantbezoek op verschillende tijden/dagen",
+    "VVE/woningbouw-gegevens uitzoeken",
+    "Bij 4× niet thuis → 17:00–19:30 langs, of buren om gegevens vragen",
+    "Klantgegevens bekend → bellen",
+    "Adres online opzoeken",
+    "Lastige vragen → communiceren met de uitvoerder",
+  ] },
+  { titel: "Uitvoering", rol: "Uitvoerder", kleur: "amber", items: [
+    "Complexe situaties aan de uitvoerder doorgeven",
+    "Project gaat niet door → ter plaatse afzeggen",
+    "Klant niet thuis → terug naar de afsprakenmaker",
+  ] },
+];
 
 export function legeSaneerAdres(id: string): SaneerAdres {
   return { id, straat: "", huisnummer: "", postcode: "", plaats: "", naam: "", telefoon: "", datum: "", tijd: "", bevestigd: false, notitie: "" };
