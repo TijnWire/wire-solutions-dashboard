@@ -1,4 +1,4 @@
-import { CalendarCheck, Mailbox, Receipt, HardHat, MessageCircle, CheckCircle2 } from "lucide-react";
+import { CalendarCheck, Mailbox, Receipt, HardHat, MessageCircle, CheckCircle2, MapPin, Recycle, ClipboardList, CheckSquare, ArrowRight, Bell, Banknote, Plane, Send } from "lucide-react";
 import {
   ResponsiveContainer,
   BarChart,
@@ -12,15 +12,18 @@ import {
   Cell,
   Legend,
 } from "recharts";
+import type { ComponentType } from "react";
 import { Card, CardHeader, Badge } from "../components/ui";
 import { StatCard } from "../components/StatCard";
 import { useApp } from "../store/AppContext";
+import { useNav } from "../store/NavContext";
 import type { Factuur, AfspraakStatus } from "../lib/types";
 
 const euro = (n: number) =>
   n.toLocaleString("nl-NL", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
 
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const isISO = (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d);
 function weekGrenzen() {
   const t = new Date();
   const dag = (t.getDay() + 6) % 7; // maandag = 0
@@ -49,17 +52,38 @@ const AFSPRAAK_KLEUR: Record<AfspraakStatus, string> = {
 };
 const TAAK_TONE: Record<string, string> = { "Te doen": "slate", "Mee bezig": "amber", Klaar: "green" };
 
+// Eén klikbare kaart per operatie/module.
+function OperatieKaart({ icon: Icon, label, waarde, sub, onClick }: { icon: ComponentType<{ className?: string }>; label: string; waarde: number | string; sub: string; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} className="group flex items-center gap-3 rounded-2xl border border-ink-200 bg-white p-4 text-left shadow-card transition hover:border-brand-300 hover:shadow-cardhover">
+      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600"><Icon className="h-5 w-5" /></div>
+      <div className="min-w-0 flex-1">
+        <div className="text-2xl font-bold leading-none text-ink-900">{waarde}</div>
+        <div className="mt-1 truncate text-sm font-semibold text-ink-700">{label}</div>
+        <div className="truncate text-xs text-ink-400">{sub}</div>
+      </div>
+      <ArrowRight className="h-4 w-4 shrink-0 text-ink-300 transition group-hover:translate-x-0.5 group-hover:text-brand-500" />
+    </button>
+  );
+}
+
 export function Overzicht() {
-  const { afspraken, rondes, voorschouwen, facturen, taken, users, saneringen, tauwOpdrachten, verlof, projects, projectPosts } = useApp();
+  const { afspraken, rondes, voorschouwen, facturen, taken, users, saneringen, tauwOpdrachten, verlof, projects, projectPosts, buurtaanpak } = useApp();
+  const { navigeer } = useNav();
   const naamVan = (id?: string) => users.find((u) => u.id === id)?.naam ?? "—";
   const projectNaam = (id: string) => projects.find((p) => p.id === id)?.naam ?? "Project";
 
   const { start: wkStart, eind: wkEind } = weekGrenzen();
   const vandaag = iso(new Date());
+  const morgenD = new Date(); morgenD.setDate(morgenD.getDate() + 1);
+  const morgen = iso(morgenD);
   const actieveRondes = rondes.filter((r) => !r.gearchiveerd);
+  const actieveBuurt = buurtaanpak.filter((b) => !b.gearchiveerd);
+  const actieveSaneer = saneringen.filter((s) => !s.gearchiveerd);
+  const actieveTauw = tauwOpdrachten.filter((o) => !o.gearchiveerd);
   const werknemers = users.filter((u) => u.rol === "monteur");
 
-  // ── KPI's (afgeleid uit echte data) ──
+  // ── KPI's ──
   const afsprakenWeek = afspraken.filter((a) => a.datum >= wkStart && a.datum <= wkEind && a.status !== "Geannuleerd").length;
   const teBezorgen = actieveRondes.flatMap((r) => r.adressen.filter((a) => !a.ontbreekt));
   const gegooid = teBezorgen.filter((a) => a.status === "Gegooid").length;
@@ -68,9 +92,56 @@ export function Overzicht() {
   const opVerlof = new Set(verlof.filter((v) => v.status === "Goedgekeurd" && v.van <= vandaag && vandaag <= v.tot).map((v) => v.medewerkerId));
   const actief = werknemers.filter((w) => !opVerlof.has(w.id)).length;
 
-  // ── Voorschouwen — voortgang per werknemer ──
+  // ── Afgeleide cijfers per operatie ──
   const vsIngediend = voorschouwen.filter((v) => v.status === "Ingediend").length;
   const vsConcept = voorschouwen.filter((v) => v.status === "Concept").length;
+  const brievenTeGooien = teBezorgen.filter((a) => a.status !== "Gegooid").length;
+  const buurtAdressen = actieveBuurt.flatMap((b) => b.adressen);
+  const buurtBevestigd = buurtAdressen.filter((a) => a.bevestigd).length;
+  const buurtUitgevoerd = buurtAdressen.filter((a) => a.uitgevoerd).length;
+  const saneerAdressen = actieveSaneer.flatMap((s) => s.adressen).length;
+  const tauwOpen = actieveTauw.filter((o) => o.status !== "verstuurd").length;
+  const tauwControle = tauwOpdrachten.filter((o) => o.status === "ter_controle").length;
+  const afsprakenOpen = afspraken.filter((a) => a.status === "Open" || a.status === "Bevestigd").length;
+  const afsprakenVandaag = afspraken.filter((a) => a.datum === vandaag && a.status !== "Geannuleerd").length;
+  const openTaken = taken.filter((t) => t.status !== "Klaar");
+
+  // SMS-herinneringen (24u vooraf) — buurtaanpak + saneren samen, zelfde criteria als bij Mijn werk.
+  const telSms = (adressen: { bevestigd?: boolean; telefoon?: string; datum?: string; herinnerVerstuurdOp?: string }[]) =>
+    adressen.filter((a) => a.bevestigd && (a.telefoon ?? "").trim() && isISO(a.datum ?? "") && !a.herinnerVerstuurdOp && (a.datum ?? "") >= vandaag && (a.datum ?? "") <= morgen).length;
+  const smsBuurt = actieveBuurt.reduce((acc, b) => acc + telSms(b.adressen), 0);
+  const smsSaneer = actieveSaneer.reduce((acc, s) => acc + telSms(s.adressen), 0);
+  const smsTotaal = smsBuurt + smsSaneer;
+
+  // Klaar voor facturatie: afgeronde brievenrondes + afgeronde projecten die nog naar de boekhouding moeten.
+  const teFactureren = rondes.filter((r) => r.boekhouding === "te_factureren").length + projects.filter((p) => p.afgerondOp && !p.boekhouding).length;
+  const verlofOpen = verlof.filter((v) => v.status === "Aangevraagd").length;
+
+  // ── Actie vereist (alleen tonen wat openstaat) ──
+  type Actie = { label: string; n: number; navKey: string; icon: ComponentType<{ className?: string }>; urgent?: boolean };
+  const acties: Actie[] = [
+    { label: smsTotaal === 1 ? "SMS-herinnering te versturen (24u)" : "SMS-herinneringen te versturen (24u)", n: smsTotaal, navKey: smsBuurt >= smsSaneer ? "buurtaanpak" : "saneren", icon: Send, urgent: true },
+    { label: "TAUW klaar voor controle", n: tauwControle, navKey: "tauw", icon: HardHat, urgent: true },
+    { label: "Afspraken vandaag", n: afsprakenVandaag, navKey: "afspraken", icon: CalendarCheck },
+    { label: "Klaar voor facturatie", n: teFactureren, navKey: "facturen", icon: Banknote },
+    { label: "Voorschouwen nog in concept", n: vsConcept, navKey: "voorschouwen", icon: ClipboardList },
+    { label: "Brieven nog te gooien", n: brievenTeGooien, navKey: "brieven", icon: Mailbox },
+    { label: verlofOpen === 1 ? "Verlofaanvraag te beoordelen" : "Verlofaanvragen te beoordelen", n: verlofOpen, navKey: "agenda", icon: Plane },
+  ].filter((a) => a.n > 0);
+
+  // ── Operaties (klikbaar, dekt alle modules) ──
+  const operaties = [
+    { key: "voorschouwen", icon: ClipboardList, label: "Voorschouwen", waarde: vsIngediend, sub: `${vsConcept} concept · ${vsIngediend} ingediend` },
+    { key: "brieven", icon: Mailbox, label: "Brieven & routes", waarde: actieveRondes.length, sub: `${gegooid}/${teBezorgen.length} gegooid` },
+    { key: "buurtaanpak", icon: MapPin, label: "Buurtaanpak", waarde: actieveBuurt.length, sub: `${buurtBevestigd} bevestigd · ${buurtUitgevoerd} uitgevoerd` },
+    { key: "saneren", icon: Recycle, label: "Saneren", waarde: actieveSaneer.length, sub: `${saneerAdressen} adres${saneerAdressen === 1 ? "" : "sen"}` },
+    { key: "tauw", icon: HardHat, label: "TAUW", waarde: tauwOpen, sub: tauwControle > 0 ? `${tauwControle} ter controle` : "open opdrachten" },
+    { key: "afspraken", icon: CalendarCheck, label: "Afspraken", waarde: afsprakenOpen, sub: `${afsprakenVandaag} vandaag` },
+    { key: "facturen", icon: Receipt, label: "Facturen", waarde: openFacturen.length, sub: `${euro(openBedrag)} openstaand` },
+    { key: "mijnwerk", icon: CheckSquare, label: "Taken", waarde: openTaken.length, sub: "open taken" },
+  ];
+
+  // ── Voorschouwen — voortgang per werknemer ──
   const perMonteur = werknemers.map((u) => ({
     naam: u.naam,
     initialen: u.initialen,
@@ -97,21 +168,8 @@ export function Overzicht() {
     .map((s) => ({ naam: s, waarde: afspraken.filter((a) => a.status === s).length, kleur: AFSPRAAK_KLEUR[s] }))
     .filter((x) => x.waarde > 0);
 
-  // ── Recente activiteit: updates & vragen van het team ──
+  // ── Recente activiteit ──
   const recente = [...projectPosts].sort((a, b) => (a.aangemaakt < b.aangemaakt ? 1 : -1)).slice(0, 6);
-
-  // ── Werkvoorraad ──
-  const werkvoorraad = [
-    { label: "Brieven te gooien", n: teBezorgen.filter((a) => a.status !== "Gegooid").length },
-    { label: "Afspraken open", n: afspraken.filter((a) => a.status === "Open" || a.status === "Bevestigd").length },
-    { label: "Voorschouwen concept", n: vsConcept },
-    { label: "Saneer-adressen te bellen", n: saneringen.filter((s) => !s.gearchiveerd).reduce((acc, s) => acc + s.adressen.filter((a) => !a.bevestigd).length, 0) },
-    { label: "TAUW-opdrachten open", n: tauwOpdrachten.filter((o) => !o.gearchiveerd && o.status !== "verstuurd").length },
-    { label: "Taken open", n: taken.filter((t) => t.status !== "Klaar").length },
-  ];
-
-  // ── Openstaande taken ──
-  const openTaken = taken.filter((t) => t.status !== "Klaar");
 
   return (
     <div className="space-y-6">
@@ -121,6 +179,49 @@ export function Overzicht() {
         <StatCard icon={Mailbox} label="Brieven gegooid" value={gegooid.toLocaleString("nl-NL")} sub={`van ${teBezorgen.length.toLocaleString("nl-NL")} totaal`} tone="green" />
         <StatCard icon={Receipt} label="Openstaande facturen" value={String(openFacturen.length)} sub={`${euro(openBedrag)} totaal`} tone="amber" />
         <StatCard icon={HardHat} label="Werknemers actief" value={`${actief} / ${werknemers.length}`} sub="Niet met verlof vandaag" tone="green" />
+      </div>
+
+      {/* Actie vereist */}
+      <Card className={acties.some((a) => a.urgent) ? "border-orange-200" : undefined}>
+        <CardHeader
+          title="Actie vereist"
+          subtitle="Wat er vandaag opgepakt moet worden"
+          action={<Badge tone={acties.length ? "amber" : "green"}>{acties.length ? `${acties.reduce((s, a) => s + a.n, 0)} openstaand` : "alles bij"}</Badge>}
+        />
+        {acties.length === 0 ? (
+          <div className="flex items-center gap-3 px-5 py-8 text-sm text-ink-500">
+            <CheckCircle2 className="h-5 w-5 text-green-500" /> Niets dringends — alles is bijgewerkt. 🎉
+          </div>
+        ) : (
+          <div className="divide-y divide-ink-100">
+            {acties.map((a) => {
+              const Icon = a.icon;
+              return (
+                <button key={a.label} type="button" onClick={() => navigeer(a.navKey)} className="group flex w-full items-center gap-3 px-5 py-3 text-left hover:bg-ink-50/70">
+                  <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${a.urgent ? "bg-orange-100 text-orange-600" : "bg-ink-100 text-ink-600"}`}>
+                    <Icon className="h-[18px] w-[18px]" />
+                  </div>
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink-800">{a.label}</span>
+                  <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-bold ${a.urgent ? "bg-orange-500 text-white" : "bg-ink-800 text-white"}`}>{a.n}</span>
+                  <ArrowRight className="h-4 w-4 shrink-0 text-ink-300 transition group-hover:translate-x-0.5 group-hover:text-brand-500" />
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </Card>
+
+      {/* Operaties — klikbaar overzicht van alle modules */}
+      <div>
+        <div className="mb-3 flex items-center gap-2 px-1">
+          <Bell className="h-4 w-4 text-ink-400" />
+          <h2 className="text-sm font-bold uppercase tracking-wide text-ink-500">Operaties in één oogopslag</h2>
+        </div>
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {operaties.map((o) => (
+            <OperatieKaart key={o.key} icon={o.icon} label={o.label} waarde={o.waarde} sub={o.sub} onClick={() => navigeer(o.key)} />
+          ))}
+        </div>
       </div>
 
       {/* Voorschouwen — voortgang */}
@@ -209,9 +310,8 @@ export function Overzicht() {
         </Card>
       </div>
 
-      {/* Onderste rij */}
+      {/* Activiteit + taken */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Activiteit */}
         <Card className="lg:col-span-2">
           <CardHeader title="Recente activiteit" subtitle="Updates en vragen van het team" />
           {recente.length === 0 ? (
@@ -235,59 +335,31 @@ export function Overzicht() {
           )}
         </Card>
 
-        {/* Werkvoorraad */}
+        {/* Openstaande taken & deadlines */}
         <Card>
-          <CardHeader title="Werkvoorraad" subtitle="Wat er openstaat" />
-          <div className="divide-y divide-ink-100">
-            {werkvoorraad.map((r) => (
-              <div key={r.label} className="flex items-center justify-between px-5 py-3">
-                <span className="text-sm text-ink-600">{r.label}</span>
-                <span className={`text-sm font-bold ${r.n > 0 ? "text-ink-900" : "text-ink-300"}`}>{r.n}</span>
-              </div>
-            ))}
-          </div>
+          <CardHeader title="Openstaande taken" subtitle="Per medewerker" />
+          {openTaken.length === 0 ? (
+            <div className="px-5 py-10 text-center text-sm text-ink-400">Geen openstaande taken.</div>
+          ) : (
+            <ul className="divide-y divide-ink-100">
+              {openTaken.slice(0, 8).map((t) => {
+                const teamtaak = t.toegewezenAan === "";
+                const u = users.find((x) => x.id === t.toegewezenAan);
+                return (
+                  <li key={t.id} className="flex items-center gap-3 px-5 py-3 hover:bg-ink-50/60">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-ink-800 text-xs font-semibold text-white">{teamtaak ? "•" : u?.initialen ?? "?"}</div>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-medium text-ink-800">{t.titel}</div>
+                      <div className="truncate text-xs text-ink-400">{teamtaak ? "Hele team" : u?.naam ?? "—"}{t.deadline ? ` · ${t.deadline}` : ""}</div>
+                    </div>
+                    <Badge tone={TAAK_TONE[t.status] ?? "slate"}>{t.status}</Badge>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </Card>
       </div>
-
-      {/* Taken / deadlines */}
-      <Card>
-        <CardHeader title="Openstaande taken & deadlines" subtitle="Per medewerker" />
-        {openTaken.length === 0 ? (
-          <div className="px-5 py-10 text-center text-sm text-ink-400">Geen openstaande taken.</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-ink-100 text-xs uppercase tracking-wide text-ink-400">
-                  <th className="px-5 py-3 font-medium">Medewerker</th>
-                  <th className="px-5 py-3 font-medium">Taak</th>
-                  <th className="px-5 py-3 font-medium">Deadline</th>
-                  <th className="px-5 py-3 font-medium">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-ink-100">
-                {openTaken.map((t) => {
-                  const teamtaak = t.toegewezenAan === "";
-                  const u = users.find((x) => x.id === t.toegewezenAan);
-                  return (
-                    <tr key={t.id} className="hover:bg-ink-50/60">
-                      <td className="px-5 py-3.5">
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-ink-800 text-xs font-semibold text-white">{teamtaak ? "•" : u?.initialen ?? "?"}</div>
-                          <span className="font-medium text-ink-800">{teamtaak ? "Hele team" : u?.naam ?? "—"}</span>
-                        </div>
-                      </td>
-                      <td className="px-5 py-3.5 text-ink-600">{t.titel}</td>
-                      <td className="px-5 py-3.5 text-ink-600">{t.deadline || "—"}</td>
-                      <td className="px-5 py-3.5"><Badge tone={TAAK_TONE[t.status] ?? "slate"}>{t.status}</Badge></td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Card>
     </div>
   );
 }
