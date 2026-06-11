@@ -97,7 +97,7 @@ function BedrijfTab({ isLeiding }: { isLeiding: boolean }) {
 }
 
 function IntegratiesTab({ isLeiding }: { isLeiding: boolean }) {
-  const { instellingen, updateInstellingen } = useApp();
+  const { instellingen, updateInstellingen, synced } = useApp();
   const [bewerkId, setBewerkId] = useState<string | null>(null); // welke koppeling staat open om te wijzigen
   const speechOK = !!((window as { SpeechRecognition?: unknown; webkitSpeechRecognition?: unknown }).SpeechRecognition || (window as { webkitSpeechRecognition?: unknown }).webkitSpeechRecognition);
 
@@ -113,6 +113,20 @@ function IntegratiesTab({ isLeiding }: { isLeiding: boolean }) {
 
   return (
     <div className="space-y-3">
+      {/* Sync-status van DIT apparaat — zo zie je meteen of wijzigingen gedeeld worden */}
+      <Card className={`flex items-start gap-3 p-4 ${synced ? "border-green-300 bg-green-50/60" : "border-amber-300 bg-amber-50/60"}`}>
+        <div className={`rounded-lg p-2 ${synced ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
+          {synced ? <CheckCircle2 className="h-5 w-5" /> : <AlertTriangle className="h-5 w-5" />}
+        </div>
+        <div className="min-w-0">
+          <div className="text-sm font-bold text-ink-900">{synced ? "Dit apparaat is gesynchroniseerd" : "Dit apparaat synchroniseert nu NIET"}</div>
+          <div className="text-xs text-ink-500">
+            {synced
+              ? "Wijzigingen worden automatisch gedeeld met alle apparaten en het hele team."
+              : "Je werkt nu lokaal — wijzigingen blijven op dit apparaat. Log uit en weer in om te synchroniseren. Lukt dat nog niet, dan moet de centrale database eenmalig worden ingericht (zie supabase/schema.sql)."}
+          </div>
+        </div>
+      </Card>
       <p className="text-sm text-ink-500">Overzicht van alle koppelingen en hun status. Sleutels invullen kan straks voor de cloud-versie.</p>
       {integraties.map((i) => {
         const si = statusInfo[i.status];

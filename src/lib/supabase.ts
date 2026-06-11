@@ -42,6 +42,17 @@ export async function sbLogin(email: string, wachtwoord: string): Promise<boolea
   return !error;
 }
 
+// Zorgt dat dit account in Supabase Auth bestaat (zodat de cloud-sync werkt). Bestaat het al, dan is dat prima.
+// Vereist dat "Allow new users to sign up" aan staat in Supabase; staat het uit, dan faalt dit stil.
+export async function sbRegistreer(email: string, wachtwoord: string): Promise<boolean> {
+  try {
+    const { error } = await sb().auth.signUp({ email: email.trim().toLowerCase(), password: wachtwoord });
+    return !error || /already|registered|bestaat/i.test(error.message);
+  } catch {
+    return false;
+  }
+}
+
 export async function sbLogout(): Promise<void> {
   try { await sb().auth.signOut(); } catch { /* netwerk weg — lokaal toch uitloggen */ }
 }

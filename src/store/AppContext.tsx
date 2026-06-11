@@ -59,7 +59,7 @@ import {
   SEED_BUURTAANPAK,
 } from "../lib/seed";
 import { idbGet, idbSet } from "./db";
-import { supabaseAan, sb, sbLeesAlles, sbSchrijf, sbLogin, sbLogout, sbSessieEmail } from "../lib/supabase";
+import { supabaseAan, sb, sbLeesAlles, sbSchrijf, sbLogin, sbRegistreer, sbLogout, sbSessieEmail } from "../lib/supabase";
 
 // Oude browseropslag-sleutels — alleen nog om eenmalig naar IndexedDB te migreren.
 const LS = {
@@ -108,6 +108,7 @@ async function laadSlice<T>(key: string, lsKey: string, seed: T): Promise<T> {
 
 type AppState = {
   hydrated: boolean;
+  synced: boolean; // true zodra dit apparaat een Supabase-sessie heeft (= cross-device sync actief)
   users: User[];
   projects: Project[];
   taken: Taak[];
@@ -603,25 +604,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const currentUser = users.find((u) => u.id === currentUserId) ?? null;
 
   const login: AppState["login"] = async (email, wachtwoord) => {
-    // Eerst via Supabase (centrale database). Lukt dat niet, val terug op de lokale controle —
-    // zo raakt niemand buitengesloten als Supabase nog niet is ingericht of even onbereikbaar is.
+    const e = email.trim().toLowerCase();
+    // Eerst via Supabase (centrale database). Lukt dat, dan is er meteen een sessie en synct dit apparaat.
     if (supabaseAan) {
       try {
-        if (await sbLogin(email, wachtwoord)) {
-          const u = users.find((x) => x.email.toLowerCase() === email.trim().toLowerCase());
+        if (await sbLogin(e, wachtwoord)) {
+          const u = users.find((x) => x.email.toLowerCase() === e);
           if (u) setCurrentUserId(u.id);
           return true;
         }
       } catch { /* val terug op de lokale controle */ }
     }
-    const u = users.find((x) => x.email.toLowerCase() === email.trim().toLowerCase());
+    const u = users.find((x) => x.email.toLowerCase() === e);
     if (!u) return false;
     const ok = await verifieerWachtwoord(wachtwoord, u);
-    if (ok) {
-      setCurrentUserId(u.id);
-      return true;
+    if (!ok) return false;
+    // Lokaal correct, maar (nog) geen Supabase-sessie. Registreer + meld aan zodat OOK dit apparaat met de
+    // centrale database synchroniseert (self-healing). Faalt dit (signup uit, of bestaand account met ander
+    // wachtwoord), dan blijft de app gewoon lokaal werken.
+    if (supabaseAan) {
+      try { await sbRegistreer(e, wachtwoord); await sbLogin(e, wachtwoord); } catch { /* lokaal blijven werken */ }
     }
-    return false;
+    setCurrentUserId(u.id);
+    return true;
   };
 
   const logout = () => { if (supabaseAan) void sbLogout(); setCurrentUserId(null); };
@@ -944,6 +949,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     <AppCtx.Provider
       value={{
         hydrated,
+        synced: supabaseAan && sbSessie,
         users,
         projects,
         taken,
