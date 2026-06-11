@@ -264,7 +264,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   // Supabase: actieve sessie + bijhouden wat we al gesynct hebben (tegen terugkaats-lussen).
   const [sbSessie, setSbSessie] = useState(false);
-  const sync = useRef<{ klaar: boolean; gezien: Record<string, string>; bezig: Set<string> }>({ klaar: false, gezien: {}, bezig: new Set() });
+  const sync = useRef<{ klaar: boolean; gezien: Record<string, string>; bezig: Set<string>; laatsteFout: string }>({ klaar: false, gezien: {}, bezig: new Set(), laatsteFout: "" });
   // Laatst-gepushte referentie per slice — zo serialiseren we alleen de slice die écht wijzigde (niet alle 23 per klik).
   const pushRef = useRef<Record<string, unknown>>({});
 
@@ -533,6 +533,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     voorschouwen, voorschouwMappen, mededelingen, rondes, afspraken, facturen, bedrijf,
     loonstroken, boetes, comm, verlof, kennis, instellingen, klanten, opdrachtgevers, buurtaanpak,
   };
+  // Altijd de NIEUWSTE lokale waarden beschikbaar in de sync-effecten (die niet bij elke data-wijziging
+  // opnieuw opgebouwd worden). Nodig voor de wipe-bescherming hieronder.
+  const waardenRef = useRef(waarden);
+  waardenRef.current = waarden;
+  // Een gevulde lokale lijst mag NIET door een lege remote-lijst overschreven worden (en omgekeerd).
+  const wipeRisico = (key: string, remoteVal: unknown) => {
+    const lokaal = waardenRef.current[key];
+    return Array.isArray(remoteVal) && remoteVal.length === 0 && Array.isArray(lokaal) && lokaal.length > 0;
+  };
 
   // 1) Houd bij of er een Supabase-sessie is.
   useEffect(() => {
@@ -553,6 +562,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const pasToe = (remote: Record<string, unknown>) => {
       for (const [key, val] of Object.entries(remote)) {
         if (!(key in setters) || sync.current.bezig.has(key)) continue;
+        if (wipeRisico(key, val)) continue; // lege remote mag onze gevulde lijst niet wissen
         const j = JSON.stringify(val);
         if (sync.current.gezien[key] === j) continue;
         sync.current.gezien[key] = j;
@@ -564,14 +574,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const remote = await sbLeesAlles();
         if (!actief) return;
         for (const [key, val] of Object.entries(remote)) {
+          if (wipeRisico(key, val)) {
+            // Remote is leeg maar lokaal gevuld → houd lokaal en zet remote terug goed (geen dataverlies).
+            sync.current.gezien[key] = JSON.stringify(waardenRef.current[key]);
+            sync.current.bezig.add(key);
+            void sbSchrijf(key, waardenRef.current[key]).catch((e) => { sync.current.laatsteFout = String((e as Error)?.message ?? e); }).finally(() => sync.current.bezig.delete(key));
+            continue;
+          }
           sync.current.gezien[key] = JSON.stringify(val);
           setters[key]?.(val);
         }
         for (const key of Object.keys(setters)) {
           if (!(key in remote)) {
-            sync.current.gezien[key] = JSON.stringify(waarden[key]);
+            sync.current.gezien[key] = JSON.stringify(waardenRef.current[key]);
             sync.current.bezig.add(key);
-            void sbSchrijf(key, waarden[key]).catch(() => {}).finally(() => sync.current.bezig.delete(key));
+            void sbSchrijf(key, waardenRef.current[key]).catch((e) => { sync.current.laatsteFout = String((e as Error)?.message ?? e); }).finally(() => sync.current.bezig.delete(key));
           }
         }
         const email = await sbSessieEmail();
@@ -581,7 +598,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           if (ik) setCurrentUserId(ik.id);
         }
         sync.current.klaar = true;
-      } catch { /* netwerk/permissie weg — blijf local-first werken */ }
+        sync.current.laatsteFout = "";
+      } catch (e) { sync.current.laatsteFout = String((e as Error)?.message ?? e); /* blijf local-first werken */ }
     })();
     const kanaal = sb()
       .channel("wire_state")
@@ -589,6 +607,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const row = (payload.new ?? payload.old) as { key?: string; data?: unknown } | null;
         if (!row?.key || !(row.key in setters)) return;
         if (sync.current.bezig.has(row.key)) return; // eigen push onderweg
+        if (wipeRisico(row.key, row.data)) return; // lege remote mag onze gevulde lijst niet wissen
         const j = JSON.stringify(row.data);
         if (sync.current.gezien[row.key] === j) return; // eigen wijziging — overslaan
         sync.current.gezien[row.key] = j;
@@ -599,7 +618,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // onverhoopt niet doorkomt. Zo blijft elk apparaat vanzelf actueel.
     const interval = setInterval(() => {
       if (!actief || !sync.current.klaar) return;
-      void sbLeesAlles().then((remote) => { if (actief) pasToe(remote); }).catch(() => {});
+      void sbLeesAlles().then((remote) => { if (actief) pasToe(remote); }).catch((e) => { sync.current.laatsteFout = String((e as Error)?.message ?? e); });
     }, 30000);
     return () => { actief = false; sync.current.klaar = false; clearInterval(interval); void sb().removeChannel(kanaal); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -612,11 +631,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (pushRef.current[key] === waarden[key]) continue; // referentie ongewijzigd → slice niet veranderd, niet serialiseren
       pushRef.current[key] = waarden[key];
       const j = JSON.stringify(waarden[key]);
-      if (sync.current.gezien[key] !== j) {
-        sync.current.gezien[key] = j;
-        sync.current.bezig.add(key); // markeer als 'wordt geschreven' zodat de 30s-pull 'm niet terugdraait
-        void sbSchrijf(key, waarden[key]).catch(() => {}).finally(() => sync.current.bezig.delete(key));
+      if (sync.current.gezien[key] === j) continue;
+      // Wipe-bescherming: een lijst die net leeg is geraakt mag een gevulde remote NIET overschrijven
+      // (bijna altijd ongewenst dataverlies, bv. door een opschoning op een ander apparaat).
+      if (Array.isArray(waarden[key]) && (waarden[key] as unknown[]).length === 0 && sync.current.gezien[key] && sync.current.gezien[key] !== "[]") {
+        sync.current.laatsteFout = `Wissen van ${key} geblokkeerd (lokaal leeg, centraal gevuld).`;
+        continue;
       }
+      sync.current.gezien[key] = j;
+      sync.current.bezig.add(key); // markeer als 'wordt geschreven' zodat de 30s-pull 'm niet terugdraait
+      void sbSchrijf(key, waarden[key]).catch((e) => { sync.current.laatsteFout = String((e as Error)?.message ?? e); }).finally(() => sync.current.bezig.delete(key));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supabaseAan, sbSessie, hydrated, users, projects, taken, projectPosts, planningen, saneringen, tauwOpdrachten, voorschouwen, voorschouwMappen, mededelingen, rondes, afspraken, facturen, bedrijf, loonstroken, boetes, comm, verlof, kennis, instellingen, klanten, opdrachtgevers, buurtaanpak]);

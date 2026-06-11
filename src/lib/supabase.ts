@@ -88,6 +88,19 @@ export async function sbSyncTest(): Promise<SyncTest> {
   return r;
 }
 
+// Aantallen per onderdeel in de centrale database — om naast de lokale aantallen te tonen.
+// Zo zie je direct of data wél/niet in de cloud staat (bv. lokaal 7, centraal 0 = schrijven faalt).
+export async function sbAantallen(): Promise<{ ok: boolean; aantallen: Record<string, number>; fout?: string }> {
+  try {
+    const remote = await sbLeesAlles();
+    const aantallen: Record<string, number> = {};
+    for (const [k, v] of Object.entries(remote)) aantallen[k] = Array.isArray(v) ? v.length : v ? 1 : 0;
+    return { ok: true, aantallen };
+  } catch (e) {
+    return { ok: false, aantallen: {}, fout: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 export async function sbSessieEmail(): Promise<string | null> {
   try {
     const { data } = await sb().auth.getSession();
