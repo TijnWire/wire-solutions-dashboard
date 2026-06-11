@@ -31,7 +31,7 @@ function parseStraat(blok: string): { straat: string; huisnummer: string; toevoe
   return { straat: m[1].trim(), huisnummer: m[2], toevoeging: m[3].trim() };
 }
 
-export type PdfTekstResultaat = { ok: true; rijen: RuweRij[] } | { ok: false; fout: string };
+export type PdfTekstResultaat = { ok: true; rijen: RuweRij[]; pdNummer?: string } | { ok: false; fout: string };
 
 export async function leesPdfTekst(file: File): Promise<PdfTekstResultaat> {
   try {
@@ -67,7 +67,10 @@ export async function leesPdfTekst(file: File): Promise<PdfTekstResultaat> {
     if (rijen.length === 0) {
       return { ok: false, fout: "Geen adressen herkend. Verwacht een Stedin-afschakelbrief-PDF met blokken 'Aan de bewoners van …'." };
     }
-    return { ok: true, rijen };
+    // Stedin-ordernummer (PD…) — staat op de brieven als "Ordernummer PD137103".
+    const pd = plat.match(/Ordernummer\s+(PD\s?\d{4,})/i);
+    const pdNummer = pd ? pd[1].replace(/\s+/g, "") : undefined;
+    return { ok: true, rijen, pdNummer };
   } catch (e) {
     return { ok: false, fout: `Kon de PDF niet lezen: ${e instanceof Error ? e.message : String(e)}` };
   }

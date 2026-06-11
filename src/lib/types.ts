@@ -191,6 +191,7 @@ export type Brievenronde = {
   // ── Werkstroom-extra's (optioneel) ──
   regio?: string;
   mapNaam?: string; // groepeert rondes uit dezelfde import samen in één map
+  pdNummer?: string; // Stedin-ordernummer (bijv. PD137103), per import-map
   fase?: RondeFase; // legacy — alleen nog voor migratie naar status
   parkeerNotitie?: string;
   bevestigdOp?: string; // ISO

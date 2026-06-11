@@ -22,7 +22,7 @@ import {
   Mail,
   Receipt,
 } from "lucide-react";
-import { Navigation, ExternalLink, FileUp, Folder } from "lucide-react";
+import { Navigation, ExternalLink, FileUp, Folder, Pencil } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { useNav } from "../store/NavContext";
 import { Keuze } from "../components/Keuze";
@@ -39,6 +39,8 @@ import {
   nieuwAdres,
   googleMapsRouteDelen,
   googleMapsAdresUrl,
+  adresVolledig,
+  googleMapsRouteVanTeksten,
 } from "../lib/brieven";
 import {
   BRIEF_STATUSSEN,
@@ -820,13 +822,115 @@ const teGooien = (r: Brievenronde) => r.adressen.filter((a) => !a.ontbreekt && a
 const isOpenRonde = (r: Brievenronde) => r.status !== "verstuurd";
 // Peildatum voor sortering/groepering: deadline → aanmaakdatum.
 const peildatum = (r: Brievenronde) => r.deadline || r.aangemaakt.slice(0, 10);
+const sorteerAdr = (adr: Adres[]) => [...adr].sort((a, b) => a.huisnummer - b.huisnummer || a.toevoeging.localeCompare(b.toevoeging, "nl", { numeric: true }));
+
+// Eén import-map: alle rondes uit hetzelfde bestand. Map-brede acties (naam, PD-nummer, deadline,
+// toewijzen, route, boekhouding) en de adressen per straat in looproute-volgorde.
+function BrievenMap({ naam, rondes, isLeiding, onOpenRonde }: { naam: string; rondes: Brievenronde[]; isLeiding: boolean; onOpenRonde: (id: string) => void }) {
+  const { updateRonde, users } = useApp();
+  const [open, setOpen] = useState(false);
+  const [naamBewerk, setNaamBewerk] = useState<string | null>(null);
+  const [routeOpen, setRouteOpen] = useState(false);
+  const [vraagBoek, setVraagBoek] = useState(false);
+  const nu = () => new Date().toISOString();
+
+  const straten = [...rondes].sort((a, b) => a.straat.localeCompare(b.straat, "nl") || a.postcode.localeCompare(b.postcode));
+  const teBezorgen = rondes.flatMap((r) => r.adressen.filter((a) => !a.ontbreekt));
+  const gegooid = teBezorgen.filter((a) => a.status === "Gegooid").length;
+  const openA = teBezorgen.length - gegooid;
+  const pct = teBezorgen.length ? Math.round((gegooid / teBezorgen.length) * 100) : 0;
+  const alAfgerond = rondes.length > 0 && rondes.every((r) => r.status === "verstuurd");
+  const pd = rondes.find((r) => r.pdNummer)?.pdNummer ?? "";
+  const deadline = rondes.find((r) => r.deadline)?.deadline ?? "";
+  const toegewezen = rondes.find((r) => r.toegewezenAan)?.toegewezenAan ?? "";
+
+  const routeStops = straten.flatMap((r) => sorteerAdr(r.adressen.filter((a) => !a.ontbreekt)).map((a) => adresVolledig(r.straat, r.postcode, r.plaats, a)));
+  const routeDelen = googleMapsRouteVanTeksten(routeStops);
+
+  const hernoem = (v: string) => { const n = v.trim(); if (n) rondes.forEach((r) => updateRonde(r.id, { mapNaam: n })); setNaamBewerk(null); };
+  const zetPd = (v: string) => rondes.forEach((r) => updateRonde(r.id, { pdNummer: v.trim() || undefined }));
+  const zetDeadline = (d: string) => rondes.forEach((r) => updateRonde(r.id, { deadline: d || undefined }));
+  const zetToegewezen = (id: string) => rondes.forEach((r) => updateRonde(r.id, id && r.status === "nieuw" ? { toegewezenAan: id || undefined, status: "toegewezen", toegewezenOp: nu() } : { toegewezenAan: id || undefined }));
+  const naarBoekhouding = () => { rondes.forEach((r) => updateRonde(r.id, { status: "verstuurd", verstuurdOp: nu(), boekhouding: "te_factureren", doorgestuurdOp: nu() })); setVraagBoek(false); };
+  const zetAdres = (rid: string, aid: string, status: BriefStatus) => { const r = rondes.find((x) => x.id === rid); if (!r) return; updateRonde(rid, { adressen: r.adressen.map((a) => (a.id === aid ? { ...a, status } : a)) }); };
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-card">
+      <div className="flex items-center gap-2 px-4 py-3">
+        <button type="button" onClick={() => setOpen((o) => !o)} className="shrink-0 rounded-lg bg-brand-50 p-2.5 text-brand-600 hover:bg-brand-100" title="Uit-/inklappen"><Folder className="h-5 w-5" /></button>
+        <div className="min-w-0 flex-1">
+          {naamBewerk !== null ? (
+            <input autoFocus aria-label="Mapnaam" value={naamBewerk} onChange={(e) => setNaamBewerk(e.target.value)} onBlur={() => hernoem(naamBewerk)} onKeyDown={(e) => { if (e.key === "Enter") hernoem(naamBewerk); if (e.key === "Escape") setNaamBewerk(null); }} className="w-full rounded border border-ink-300 px-2 py-1 text-sm font-semibold outline-none focus:border-brand-400" />
+          ) : (
+            <button type="button" onClick={() => setOpen((o) => !o)} className="block w-full truncate text-left font-semibold text-ink-900">{naam}</button>
+          )}
+          <div className="truncate text-xs text-ink-500">{rondes.length} {rondes.length === 1 ? "ronde" : "rondes"} · {teBezorgen.length} adressen · {openA} open{pd ? ` · ${pd}` : ""}{alAfgerond ? " · ✓ boekhouding" : ""}</div>
+        </div>
+        {isLeiding && naamBewerk === null && <button type="button" onClick={() => setNaamBewerk(naam)} className="shrink-0 rounded-lg p-2 text-ink-400 hover:bg-ink-100" title="Naam wijzigen"><Pencil className="h-4 w-4" /></button>}
+        <button type="button" onClick={() => setOpen((o) => !o)} className="shrink-0 rounded-lg p-1 text-ink-400" title="Uit-/inklappen"><ChevronDown className={`h-5 w-5 transition-transform ${open ? "rotate-180" : ""}`} /></button>
+      </div>
+      <div className="h-1 bg-ink-100"><div className="h-full bg-green-500" style={{ width: `${pct}%` }} /></div>
+
+      {open && (
+        <div className="space-y-4 border-t border-ink-100 p-4">
+          {isLeiding && (
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="block">
+                <span className="mb-1 block text-xs font-semibold text-ink-600">PD-nummer</span>
+                <input defaultValue={pd} onBlur={(e) => zetPd(e.target.value)} placeholder="bijv. PD137103" className="w-40 rounded-lg border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-400" />
+              </label>
+              <div>
+                <span className="mb-1 block text-xs font-semibold text-ink-600">Deadline (week)</span>
+                <div className="w-44"><DatumKiezer value={deadline} onChange={zetDeadline} placeholder="Geen deadline" /></div>
+              </div>
+              <div>
+                <span className="mb-1 block text-xs font-semibold text-ink-600">Toewijzen</span>
+                <WerknemerKiezer value={toegewezen} onChange={zetToegewezen} users={users} leegLabel="Niemand" />
+              </div>
+            </div>
+          )}
+
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => setRouteOpen((o) => !o)} className="inline-flex items-center gap-2 rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-50"><Route className="h-4 w-4" /> Google Maps route{routeDelen.length > 1 ? ` (${routeDelen.length} delen)` : ""}</button>
+            {isLeiding && !alAfgerond && <button type="button" onClick={() => setVraagBoek(true)} className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700"><Receipt className="h-4 w-4" /> Hele map naar boekhouding</button>}
+          </div>
+          {routeOpen && (
+            <div className="flex flex-wrap gap-2">
+              {routeDelen.length === 0 ? <span className="text-xs text-ink-400">Geen adressen.</span> : routeDelen.map((d, i) => (
+                <a key={i} href={d.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 bg-ink-50 px-3 py-1.5 text-xs font-medium text-ink-700 hover:bg-ink-100"><Navigation className="h-3.5 w-3.5" /> {routeDelen.length > 1 ? `Deel ${i + 1}: ` : "Route: "}adres {d.van}–{d.tot} <ExternalLink className="h-3 w-3" /></a>
+              ))}
+            </div>
+          )}
+
+          <div className="space-y-3">
+            {straten.map((r) => (
+              <div key={r.id}>
+                <button type="button" onClick={() => onOpenRonde(r.id)} className="mb-1.5 truncate text-sm font-semibold text-ink-800 hover:text-brand-700">{r.straat} <span className="font-normal text-ink-400">· {r.plaats} · {r.adressen.filter((a) => !a.ontbreekt).length}</span></button>
+                <div className="flex flex-wrap gap-1.5">
+                  {sorteerAdr(r.adressen).map((a) => {
+                    const gegooidA = a.status === "Gegooid";
+                    return (
+                      <button key={a.id} type="button" onClick={() => zetAdres(r.id, a.id, gegooidA ? "Te doen" : "Gegooid")} title={a.ontbreekt ? "Ontbrekend huisnummer" : gegooidA ? "Gegooid — klik = te doen" : "Klik = gegooid"} className={`rounded-md px-2 py-1 text-xs font-medium transition-colors ${a.ontbreekt ? "bg-amber-100 text-amber-700" : gegooidA ? "bg-green-500 text-white" : "bg-ink-100 text-ink-700 hover:bg-ink-200"}`}>
+                        {a.huisnummer}{a.toevoeging ? ` ${a.toevoeging}` : ""}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      <Bevestig open={vraagBoek} titel="Hele map naar de boekhouding?" tekst={`Alle ${rondes.length} rondes (${teBezorgen.length} adressen) van "${naam}" worden afgerond en doorgestuurd naar de boekhouding.`} bevestigLabel="Naar boekhouding" bevestigTone="brand" onBevestig={naarBoekhouding} onAnnuleer={() => setVraagBoek(false)} />
+    </div>
+  );
+}
 
 export function Brieven({ initieelRonde }: { initieelRonde?: string }) {
   const { rondes, currentUser } = useApp();
   const [openId, setOpenId] = useState<string | null>(initieelRonde ?? null);
   const [nieuw, setNieuw] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
-  const [dichteMappen, setDichteMappen] = useState<Record<string, boolean>>({}); // ingeklapte import-mappen
 
   if (!currentUser) return null;
   const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer";
@@ -849,7 +953,8 @@ export function Brieven({ initieelRonde }: { initieelRonde?: string }) {
     if (pa !== pb) return pa < pb ? -1 : 1;
     return a.straat.localeCompare(b.straat, "nl");
   });
-  // Rondes uit dezelfde import (mapNaam) groeperen we als één map; de overige rondes per week.
+  // Rondes uit dezelfde import (mapNaam) groeperen we als één map; daarna alles per week sorteren —
+  // maps én losse rondes komen in de week van hun (vroegste) peildatum.
   const mappen: { naam: string; items: Brievenronde[] }[] = [];
   const losse: Brievenronde[] = [];
   for (const r of gesorteerd) {
@@ -859,13 +964,15 @@ export function Brieven({ initieelRonde }: { initieelRonde?: string }) {
       m.items.push(r);
     } else losse.push(r);
   }
-  const weken: { key: string; label: string; items: Brievenronde[] }[] = [];
-  for (const r of losse) {
-    const wk = weekStartISO(peildatum(r)) || "zonder";
-    let w = weken.find((x) => x.key === wk);
-    if (!w) { w = { key: wk, label: weekLabel(wk), items: [] }; weken.push(w); }
-    w.items.push(r);
+  type Week = { key: string; label: string; mappen: { naam: string; items: Brievenronde[] }[]; rondes: Brievenronde[] };
+  const weken: Week[] = [];
+  const weekVoor = (key: string): Week => { let w = weken.find((x) => x.key === key); if (!w) { w = { key, label: weekLabel(key), mappen: [], rondes: [] }; weken.push(w); } return w; };
+  for (const m of mappen) {
+    const peil = m.items.map(peildatum).sort()[0] || "";
+    weekVoor(weekStartISO(peil) || "zonder").mappen.push(m);
   }
+  for (const r of losse) weekVoor(weekStartISO(peildatum(r)) || "zonder").rondes.push(r);
+  weken.sort((a, b) => (a.key === "zonder" ? 1 : b.key === "zonder" ? -1 : a.key.localeCompare(b.key)));
 
   // Eén ronde-kaart (hergebruikt in de import-mappen én in de week-groepen).
   const rondeKaart = (r: Brievenronde) => {
@@ -947,40 +1054,24 @@ export function Brieven({ initieelRonde }: { initieelRonde?: string }) {
             </div>
           </div>
 
-          {/* Import-mappen: alle rondes uit één PDF/Excel bij elkaar in een inklapbare map */}
-          {mappen.map((m) => {
-            const dicht = dichteMappen[m.naam];
-            const openInMap = m.items.filter(isOpenRonde).length;
-            const adrTotaal = m.items.reduce((s, r) => s + r.adressen.filter((a) => !a.ontbreekt).length, 0);
-            return (
-              <div key={`map-${m.naam}`} className="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-card">
-                <button type="button" onClick={() => setDichteMappen((d) => ({ ...d, [m.naam]: !d[m.naam] }))} className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-ink-50/60">
-                  <div className="rounded-lg bg-brand-50 p-2.5 text-brand-600"><Folder className="h-5 w-5" /></div>
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate font-semibold text-ink-900">{m.naam}</div>
-                    <div className="truncate text-xs text-ink-500">{m.items.length} {m.items.length === 1 ? "ronde" : "rondes"} · {adrTotaal} adressen · {openInMap} open</div>
-                  </div>
-                  <ChevronDown className={`h-5 w-5 shrink-0 text-ink-400 transition-transform ${dicht ? "" : "rotate-180"}`} />
-                </button>
-                {!dicht && (
-                  <div className="grid gap-3 border-t border-ink-100 p-4 sm:grid-cols-2">
-                    {m.items.map((r) => rondeKaart(r))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-
           {weken.map((g) => {
-            const openInWeek = g.items.filter(isOpenRonde).length;
+            const alle = [...g.mappen.flatMap((m) => m.items), ...g.rondes];
+            const openInWeek = alle.filter(isOpenRonde).length;
             return (
               <div key={g.key}>
                 <div className="mb-2.5 flex items-center justify-between gap-2">
                   <h3 className="text-sm font-bold text-ink-700">{g.label}</h3>
-                  <span className="text-xs font-medium text-ink-500">{openInWeek} open · {g.items.length} {g.items.length === 1 ? "ronde" : "rondes"}</span>
+                  <span className="text-xs font-medium text-ink-500">{openInWeek} open · {alle.length} {alle.length === 1 ? "ronde" : "rondes"}</span>
                 </div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {g.items.map((r) => rondeKaart(r))}
+                <div className="space-y-3">
+                  {g.mappen.map((m) => (
+                    <BrievenMap key={`map-${m.naam}`} naam={m.naam} rondes={m.items} isLeiding={isLeiding} onOpenRonde={setOpenId} />
+                  ))}
+                  {g.rondes.length > 0 && (
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {g.rondes.map((r) => rondeKaart(r))}
+                    </div>
+                  )}
                 </div>
               </div>
             );

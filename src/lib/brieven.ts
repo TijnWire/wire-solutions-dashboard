@@ -111,6 +111,29 @@ export function googleMapsRouteDelen(
   return delen;
 }
 
+// Volledige adres-tekst (publiek) — voor een route over meerdere straten (hele import-map).
+export function adresVolledig(straat: string, postcode: string, plaats: string, a: Adres): string {
+  return adresTekst(straat, postcode, plaats, a);
+}
+
+// Bouwt Google Maps wandelroutes uit volledige adres-teksten (meerdere straten mogelijk), in delen
+// van max. `maxStops`. Voor een hele map: alle adressen in looproute-volgorde, deel voor deel.
+export function googleMapsRouteVanTeksten(stops: string[], maxStops = 10): { url: string; van: number; tot: number }[] {
+  const delen: { url: string; van: number; tot: number }[] = [];
+  for (let i = 0; i < stops.length; i += maxStops) {
+    const groep = stops.slice(i, i + maxStops);
+    if (groep.length === 0) continue;
+    const params = new URLSearchParams();
+    params.set("api", "1");
+    params.set("travelmode", "walking");
+    params.set("destination", groep[groep.length - 1]);
+    const waypoints = groep.slice(0, -1);
+    if (waypoints.length) params.set("waypoints", waypoints.join("|"));
+    delen.push({ url: `https://www.google.com/maps/dir/?${params.toString()}`, van: i + 1, tot: i + groep.length });
+  }
+  return delen;
+}
+
 // Navigatie naar één adres.
 export function googleMapsAdresUrl(
   straat: string,

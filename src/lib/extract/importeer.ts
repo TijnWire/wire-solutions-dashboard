@@ -15,7 +15,7 @@ export function bestandsoort(file: File): Bestandsoort {
 }
 
 export type VerwerkResultaat =
-  | { ok: true; rijen: ScanRij[]; herkend?: string[]; onherkend?: string[] }
+  | { ok: true; rijen: ScanRij[]; herkend?: string[]; onherkend?: string[]; pdNummer?: string }
   | { ok: false; fout: string };
 
 // Leest een bestand → genormaliseerde, gededupliceerde ScanRij[] (klaar voor de review-tabel).
@@ -34,6 +34,7 @@ export async function verwerkBestand(
   let genormaliseerd: ScanRij[];
   let herkend: string[] | undefined;
   let onherkend: string[] | undefined;
+  let pdNummer: string | undefined;
 
   if (soort === "excel") {
     const r = await leesExcel(file);
@@ -47,6 +48,7 @@ export async function verwerkBestand(
     const tekst = await leesPdfTekst(file);
     if (tekst.ok) {
       genormaliseerd = tekst.rijen.map((x, i) => normaliseerRij(x, i + 1, 1));
+      pdNummer = tekst.pdNummer;
     } else if (apiKey.trim()) {
       const r = await leesPdfViaClaude(file, apiKey, signal);
       if (!r.ok) return r;
@@ -63,7 +65,7 @@ export async function verwerkBestand(
   }
 
   const rijen = markeerDuplicaten(genormaliseerd, rondes, klanten);
-  return { ok: true, rijen, herkend, onherkend };
+  return { ok: true, rijen, herkend, onherkend, pdNummer };
 }
 
 // ── Opslaan ──
@@ -71,6 +73,7 @@ export type OpslaanCtx = {
   projectId: string;
   projectNaam: string;
   mapNaam?: string; // alle rondes uit deze import in één map groeperen
+  pdNummer?: string; // Stedin-ordernummer uit de PDF
   rondes: Brievenronde[];
   addRonde: (r: Omit<Brievenronde, "id">) => string;
   updateRonde: (id: string, patch: Partial<Brievenronde>) => void;
@@ -142,9 +145,9 @@ export function bevestigOpslaan(rijen: ScanRij[], doel: ImportDoel, ctx: Opslaan
       (rd) => sleutel(rd.straat) === sleutel(e.straat) && sleutel(rd.postcode) === sleutel(e.postcode) && sleutel(rd.plaats) === sleutel(e.plaats)
     );
     if (bestaande) {
-      ctx.updateRonde(bestaande.id, { adressen: [...bestaande.adressen, ...adressen], projectId: bestaande.projectId ?? ctx.projectId, mapNaam: bestaande.mapNaam ?? ctx.mapNaam });
+      ctx.updateRonde(bestaande.id, { adressen: [...bestaande.adressen, ...adressen], projectId: bestaande.projectId ?? ctx.projectId, mapNaam: bestaande.mapNaam ?? ctx.mapNaam, pdNummer: bestaande.pdNummer ?? ctx.pdNummer });
     } else {
-      ctx.addRonde({ straat: e.straat, postcode: e.postcode, plaats: e.plaats, projectId: ctx.projectId, mapNaam: ctx.mapNaam, aangemaakt: new Date().toISOString(), status: "nieuw", adressen });
+      ctx.addRonde({ straat: e.straat, postcode: e.postcode, plaats: e.plaats, projectId: ctx.projectId, mapNaam: ctx.mapNaam, pdNummer: ctx.pdNummer, aangemaakt: new Date().toISOString(), status: "nieuw", adressen });
     }
   }
   return { aantal: teImporteren.length };

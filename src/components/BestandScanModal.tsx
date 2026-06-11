@@ -118,6 +118,7 @@ export function BestandScanModal({ open, projectId, projectNaam, onSluit }: { op
   const { navigeer } = useNav();
   const [fase, setFase] = useState<Fase>("idle");
   const [rijen, setRijen] = useState<ScanRij[]>([]);
+  const [pdNummer, setPdNummer] = useState<string | undefined>(undefined);
   const [doel, setDoel] = useState<ImportDoel>("brievenronde");
   const [fout, setFout] = useState<string | null>(null);
   const [bestandsnaam, setBestandsnaam] = useState("");
@@ -169,6 +170,7 @@ export function BestandScanModal({ open, projectId, projectNaam, onSluit }: { op
       return;
     }
     setRijen(r.rijen);
+    setPdNummer(r.pdNummer);
     setFase("review");
   };
 
@@ -189,7 +191,7 @@ export function BestandScanModal({ open, projectId, projectNaam, onSluit }: { op
   const bevestig = () => {
     // Alle rondes uit dit ene bestand in één map groeperen (de bestandsnaam zonder extensie).
     const mapNaam = bestandsnaam.replace(/\.[^.]+$/, "").trim() || undefined;
-    const { aantal } = bevestigOpslaan(rijen, doel, { projectId, projectNaam, mapNaam, rondes, addRonde, updateRonde, addKlant, addAfspraak });
+    const { aantal } = bevestigOpslaan(rijen, doel, { projectId, projectNaam, mapNaam, pdNummer, rondes, addRonde, updateRonde, addKlant, addAfspraak });
     setResultaat(aantal);
     setFase("klaar");
   };
