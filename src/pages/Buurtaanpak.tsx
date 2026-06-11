@@ -303,6 +303,27 @@ function Detail({ project, onTerug, isLeiding }: { project: BuurtaanpakT; onTeru
     setDraft(null);
   };
   const exporteer = async () => { setExportBezig(true); try { await exporteerNaarExcel(project); } finally { setExportBezig(false); } };
+  // Het invul-formulier voor een nieuw adres — wordt zowel inline in een dag-groep als onderaan getoond.
+  const renderAdresForm = () => {
+    if (!draft) return null;
+    return (
+      <div className="space-y-3 rounded-xl border border-brand-200 bg-brand-50/40 p-3">
+        <div className="grid gap-2 sm:grid-cols-3">
+          <input autoFocus value={draft.straat} onChange={(e) => setDraftVeld({ straat: e.target.value })} placeholder="Straat" className={veld} />
+          <input value={draft.huisnummer} onChange={(e) => setDraftVeld({ huisnummer: e.target.value })} placeholder="Huisnummer" className={veld} />
+          <input value={draft.postcode} onChange={(e) => setDraftVeld({ postcode: e.target.value })} placeholder="Postcode" className={veld} />
+          <Keuze value={draft.soort} onChange={(w) => setDraftVeld({ soort: w as BuurtAdres["soort"] })} opties={BUURT_SOORTEN.map((s) => ({ waarde: s, label: BUURT_SOORT_KORT[s] }))} title="Soort werkzaamheden" />
+          <DatumKiezer compact value={draft.datum} onChange={(iso) => setDraftVeld({ datum: iso })} placeholder="Datum" />
+          <input value={draft.telefoon} onChange={(e) => setDraftVeld({ telefoon: e.target.value })} placeholder="06-…" inputMode="tel" className={veld} />
+        </div>
+        <input value={draft.bijzonderheid} onChange={(e) => setDraftVeld({ bijzonderheid: e.target.value })} placeholder="Bijzonderheid (TVM / boorder / sleutel…)" className={veld} />
+        <div className="flex gap-2">
+          <button type="button" onClick={bewaarToevoegen} disabled={!draft.straat.trim()} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-40">Adres toevoegen</button>
+          <button type="button" onClick={() => setDraft(null)} className="rounded-lg px-3 py-2 text-sm text-ink-500 hover:bg-ink-50">Annuleer</button>
+        </div>
+      </div>
+    );
+  };
 
   const importeer = async (file: File | undefined) => {
     if (!file) return;
@@ -553,6 +574,7 @@ function Detail({ project, onTerug, isLeiding }: { project: BuurtaanpakT; onTeru
                         {g.adressen.map((a) => (
                           <BuurtAdresRij key={a.id} adres={a} onPatch={patchAdres} onVerwijder={verwijderAdres} isLeiding={isLeiding} afspraakmaker={currentUser?.naam} />
                         ))}
+                        {draft && draft.datum === g.datum && <div className="bg-brand-50/30 p-3">{renderAdresForm()}</div>}
                       </div>
                     )}
                   </Card>
@@ -573,23 +595,7 @@ function Detail({ project, onTerug, isLeiding }: { project: BuurtaanpakT; onTeru
             )}
             <span className="text-xs text-ink-400">Handmatig toegevoegde adressen blijven behouden bij een her-import en staan in de export.</span>
           </div>
-          {draft && (
-            <div className="space-y-3 rounded-xl border border-brand-200 bg-brand-50/40 p-3">
-              <div className="grid gap-2 sm:grid-cols-3">
-                <input autoFocus value={draft.straat} onChange={(e) => setDraftVeld({ straat: e.target.value })} placeholder="Straat" className={veld} />
-                <input value={draft.huisnummer} onChange={(e) => setDraftVeld({ huisnummer: e.target.value })} placeholder="Huisnummer" className={veld} />
-                <input value={draft.postcode} onChange={(e) => setDraftVeld({ postcode: e.target.value })} placeholder="Postcode" className={veld} />
-                <Keuze value={draft.soort} onChange={(w) => setDraftVeld({ soort: w as BuurtAdres["soort"] })} opties={BUURT_SOORTEN.map((s) => ({ waarde: s, label: BUURT_SOORT_KORT[s] }))} title="Soort werkzaamheden" />
-                <DatumKiezer compact value={draft.datum} onChange={(iso) => setDraftVeld({ datum: iso })} placeholder="Datum" />
-                <input value={draft.telefoon} onChange={(e) => setDraftVeld({ telefoon: e.target.value })} placeholder="06-…" inputMode="tel" className={veld} />
-              </div>
-              <input value={draft.bijzonderheid} onChange={(e) => setDraftVeld({ bijzonderheid: e.target.value })} placeholder="Bijzonderheid (TVM / boorder / sleutel…)" className={veld} />
-              <div className="flex gap-2">
-                <button type="button" onClick={bewaarToevoegen} disabled={!draft.straat.trim()} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-40">Adres toevoegen</button>
-                <button type="button" onClick={() => setDraft(null)} className="rounded-lg px-3 py-2 text-sm text-ink-500 hover:bg-ink-50">Annuleer</button>
-              </div>
-            </div>
-          )}
+          {draft && !draft.datum && renderAdresForm()}
         </Card>
       )}
 
