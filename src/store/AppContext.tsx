@@ -633,6 +633,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
             pasToe(data);
           }
           for (const k of gewijzigd) sync.current.versies[k] = versies[k];
+          // Veiligheidsnet: lokale onderdelen die data hebben maar nog NIET in de centrale database staan,
+          // worden vanzelf geüpload (geen handmatige actie nodig). Eenmaal geüpload staan ze in 'versies'.
+          for (const key of Object.keys(setters)) {
+            if (key in versies || sync.current.bezig.has(key)) continue;
+            const lokaal = waardenRef.current[key];
+            const heeftData = Array.isArray(lokaal) ? lokaal.length > 0 : !!lokaal;
+            if (!heeftData) continue;
+            sync.current.bezig.add(key);
+            void sbSchrijf(key, lokaal).then((ua) => { sync.current.versies[key] = ua; }).catch((e) => { sync.current.laatsteFout = String((e as Error)?.message ?? e); }).finally(() => sync.current.bezig.delete(key));
+          }
           sync.current.laatsteFout = "";
         } catch (e) { sync.current.laatsteFout = String((e as Error)?.message ?? e); }
       })();
