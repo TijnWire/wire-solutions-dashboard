@@ -59,7 +59,7 @@ import {
   SEED_BUURTAANPAK,
 } from "../lib/seed";
 import { idbGet, idbSet } from "./db";
-import { supabaseAan, sb, sbLeesAlles, sbSchrijf, sbLogin, sbRegistreer, sbLogout, sbSessieEmail } from "../lib/supabase";
+import { supabaseAan, sb, sbLeesAlles, sbSchrijf, sbVersies, sbLeesKeys, sbLogin, sbRegistreer, sbLogout, sbSessieEmail } from "../lib/supabase";
 
 // Oude browseropslag-sleutels — alleen nog om eenmalig naar IndexedDB te migreren.
 const LS = {
@@ -264,7 +264,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   // Supabase: actieve sessie + bijhouden wat we al gesynct hebben (tegen terugkaats-lussen).
   const [sbSessie, setSbSessie] = useState(false);
-  const sync = useRef<{ klaar: boolean; gezien: Record<string, string>; bezig: Set<string>; laatsteFout: string }>({ klaar: false, gezien: {}, bezig: new Set(), laatsteFout: "" });
+  const sync = useRef<{ klaar: boolean; gezien: Record<string, string>; bezig: Set<string>; laatsteFout: string; versies: Record<string, string> }>({ klaar: false, gezien: {}, bezig: new Set(), laatsteFout: "", versies: {} });
   // Laatst-gepushte referentie per slice — zo serialiseren we alleen de slice die écht wijzigde (niet alle 23 per klik).
   const pushRef = useRef<Record<string, unknown>>({});
 
@@ -569,6 +569,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setters[key]?.(val);
       }
     };
+    const onthoudVersie = (key: string) => (ua: string) => { sync.current.versies[key] = ua; };
     (async () => {
       try {
         const remote = await sbLeesAlles();
@@ -578,7 +579,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             // Remote is leeg maar lokaal gevuld → houd lokaal en zet remote terug goed (geen dataverlies).
             sync.current.gezien[key] = JSON.stringify(waardenRef.current[key]);
             sync.current.bezig.add(key);
-            void sbSchrijf(key, waardenRef.current[key]).catch((e) => { sync.current.laatsteFout = String((e as Error)?.message ?? e); }).finally(() => sync.current.bezig.delete(key));
+            void sbSchrijf(key, waardenRef.current[key]).then(onthoudVersie(key)).catch((e) => { sync.current.laatsteFout = String((e as Error)?.message ?? e); }).finally(() => sync.current.bezig.delete(key));
             continue;
           }
           sync.current.gezien[key] = JSON.stringify(val);
@@ -588,7 +589,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           if (!(key in remote)) {
             sync.current.gezien[key] = JSON.stringify(waardenRef.current[key]);
             sync.current.bezig.add(key);
-            void sbSchrijf(key, waardenRef.current[key]).catch((e) => { sync.current.laatsteFout = String((e as Error)?.message ?? e); }).finally(() => sync.current.bezig.delete(key));
+            void sbSchrijf(key, waardenRef.current[key]).then(onthoudVersie(key)).catch((e) => { sync.current.laatsteFout = String((e as Error)?.message ?? e); }).finally(() => sync.current.bezig.delete(key));
           }
         }
         const email = await sbSessieEmail();
@@ -597,6 +598,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const ik = lijst.find((u) => u.email.toLowerCase() === email.toLowerCase());
           if (ik) setCurrentUserId(ik.id);
         }
+        try { sync.current.versies = { ...sync.current.versies, ...(await sbVersies()) }; } catch { /* tijdstempels niet kritisch */ }
         sync.current.klaar = true;
         sync.current.laatsteFout = "";
       } catch (e) { sync.current.laatsteFout = String((e as Error)?.message ?? e); /* blijf local-first werken */ }
@@ -604,8 +606,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const kanaal = sb()
       .channel("wire_state")
       .on("postgres_changes", { event: "*", schema: "public", table: "wire_state" }, (payload) => {
-        const row = (payload.new ?? payload.old) as { key?: string; data?: unknown } | null;
+        const row = (payload.new ?? payload.old) as { key?: string; data?: unknown; updated_at?: string } | null;
         if (!row?.key || !(row.key in setters)) return;
+        if (row.updated_at) sync.current.versies[row.key] = row.updated_at; // bijgewerkt → 5s-poll haalt 'm niet nogmaals op
         if (sync.current.bezig.has(row.key)) return; // eigen push onderweg
         if (wipeRisico(row.key, row.data)) return; // lege remote mag onze gevulde lijst niet wissen
         const j = JSON.stringify(row.data);
@@ -614,12 +617,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setters[row.key](row.data);
       })
       .subscribe();
-    // Automatische sync elke 30 seconden — haalt wijzigingen van álle medewerkers op, ook als realtime
-    // onverhoopt niet doorkomt. Zo blijft elk apparaat vanzelf actueel.
+    // Automatische sync elke 5 seconden: eerst een piepkleine check op tijdstempels, en alléén de
+    // daadwerkelijk gewijzigde onderdelen ophalen. Zo blijft elk apparaat snel actueel (wijzigingen van
+    // collega's en van je andere apparaat verschijnen binnen ~5s) zónder telkens alle data te downloaden.
     const interval = setInterval(() => {
       if (!actief || !sync.current.klaar) return;
-      void sbLeesAlles().then((remote) => { if (actief) pasToe(remote); }).catch((e) => { sync.current.laatsteFout = String((e as Error)?.message ?? e); });
-    }, 30000);
+      void (async () => {
+        try {
+          const versies = await sbVersies();
+          if (!actief) return;
+          const gewijzigd = Object.keys(versies).filter((k) => k in setters && !sync.current.bezig.has(k) && versies[k] !== sync.current.versies[k]);
+          if (gewijzigd.length) {
+            const data = await sbLeesKeys(gewijzigd);
+            if (!actief) return;
+            pasToe(data);
+          }
+          for (const k of gewijzigd) sync.current.versies[k] = versies[k];
+          sync.current.laatsteFout = "";
+        } catch (e) { sync.current.laatsteFout = String((e as Error)?.message ?? e); }
+      })();
+    }, 5000);
     return () => { actief = false; sync.current.klaar = false; clearInterval(interval); void sb().removeChannel(kanaal); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supabaseAan, sbSessie, hydrated]);
@@ -639,8 +656,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         continue;
       }
       sync.current.gezien[key] = j;
-      sync.current.bezig.add(key); // markeer als 'wordt geschreven' zodat de 30s-pull 'm niet terugdraait
-      void sbSchrijf(key, waarden[key]).catch((e) => { sync.current.laatsteFout = String((e as Error)?.message ?? e); }).finally(() => sync.current.bezig.delete(key));
+      sync.current.bezig.add(key); // markeer als 'wordt geschreven' zodat de 5s-pull 'm niet terughaalt
+      void sbSchrijf(key, waarden[key]).then((ua) => { sync.current.versies[key] = ua; }).catch((e) => { sync.current.laatsteFout = String((e as Error)?.message ?? e); }).finally(() => sync.current.bezig.delete(key));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supabaseAan, sbSessie, hydrated, users, projects, taken, projectPosts, planningen, saneringen, tauwOpdrachten, voorschouwen, voorschouwMappen, mededelingen, rondes, afspraken, facturen, bedrijf, loonstroken, boetes, comm, verlof, kennis, instellingen, klanten, opdrachtgevers, buurtaanpak]);

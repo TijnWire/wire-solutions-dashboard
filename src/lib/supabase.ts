@@ -28,12 +28,30 @@ export async function sbLeesAlles(): Promise<Record<string, unknown>> {
   return out;
 }
 
-export async function sbSchrijf(key: string, data: unknown): Promise<void> {
-  const { error } = await sb().from("wire_state").upsert(
-    { key, data, updated_at: new Date().toISOString() },
-    { onConflict: "key" }
-  );
+export async function sbSchrijf(key: string, data: unknown): Promise<string> {
+  const updated_at = new Date().toISOString();
+  const { error } = await sb().from("wire_state").upsert({ key, data, updated_at }, { onConflict: "key" });
   if (error) throw error;
+  return updated_at; // zodat de aanroeper weet welke versie hij zojuist schreef (tegen onnodig terughalen)
+}
+
+// Lichtgewicht check: alleen key + updated_at (geen data) — om elke paar seconden te zien wat er gewijzigd is.
+export async function sbVersies(): Promise<Record<string, string>> {
+  const { data, error } = await sb().from("wire_state").select("key,updated_at");
+  if (error) throw error;
+  const out: Record<string, string> = {};
+  for (const r of (data ?? []) as { key: string; updated_at: string }[]) out[r.key] = r.updated_at;
+  return out;
+}
+
+// Haal alleen de data van specifieke onderdelen op (de onderdelen die daadwerkelijk gewijzigd zijn).
+export async function sbLeesKeys(keys: string[]): Promise<Record<string, unknown>> {
+  if (!keys.length) return {};
+  const { data, error } = await sb().from("wire_state").select("key,data").in("key", keys);
+  if (error) throw error;
+  const out: Record<string, unknown> = {};
+  for (const r of (data ?? []) as { key: string; data: unknown }[]) out[r.key] = r.data;
+  return out;
 }
 
 // ── Auth ──
