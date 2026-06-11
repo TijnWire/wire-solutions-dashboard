@@ -1,0 +1,33 @@
+name: Mail-import (automatische brieven/Excel)
+
+# Leest elke 10 minuten de mailbox uit, herkent Excel-bijlagen en zet ze in de centrale database.
+# Vereist secrets (repo Settings -> Secrets and variables -> Actions):
+#   IMAP_USER, IMAP_PASS, BOT_EMAIL, BOT_PASS  (en optioneel IMAP_HOST, MAIL_AFZENDERS)
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}
+
+concurrency:
+  group: mail-import
+  cancel-in-progress: false
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm ci
+      - name: Mailbox uitlezen en importeren
+        run: node scripts/mail-import.mjs
+        env:
+          IMAP_HOST: ${{ secrets.IMAP_HOST }}
+          IMAP_USER: ${{ secrets.IMAP_USER }}
+          IMAP_PASS: ${{ secrets.IMAP_PASS }}
+          BOT_EMAIL: ${{ secrets.BOT_EMAIL }}
+          BOT_PASS: ${{ secrets.BOT_PASS }}
+          MAIL_AFZENDERS: ${{ secrets.MAIL_AFZENDERS }}
