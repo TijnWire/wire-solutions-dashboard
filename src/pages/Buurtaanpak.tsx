@@ -1,11 +1,11 @@
 import { useState, useMemo, useRef, useCallback, memo, Fragment } from "react";
-import { Plus, ArrowLeft, Trash2, Upload, MessageSquare, Send, Check, Copy, Cable, ChevronRight, Phone, MapPin, Search, Download } from "lucide-react";
+import { Plus, ArrowLeft, Trash2, Upload, MessageSquare, Send, Check, Copy, Cable, ChevronRight, Phone, Search, Download, CalendarDays } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { Card, Badge, Bevestig } from "../components/ui";
 import { DatumKiezer } from "../components/DatumKiezer";
 import { Keuze } from "../components/Keuze";
 import { BUURT_SOORTEN, BUURT_SOORT_KORT, BUURT_SOORT_LABEL, legeBuurtAdres, type Buurtaanpak as BuurtaanpakT, type BuurtAdres } from "../lib/types";
-import { parseKlantafspraaklijst, whatsappPerDag, groepeerPerStraat, smsHerinneringTekst, smsLink, datumLabelNL } from "../lib/buurtaanpak";
+import { parseKlantafspraaklijst, whatsappPerDag, groepeerPerDatum, smsHerinneringTekst, smsLink, datumLabelNL } from "../lib/buurtaanpak";
 
 const veld = "w-full rounded-lg border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100";
 const klein = "rounded-lg border border-ink-200 px-2.5 py-1.5 text-sm outline-none focus:border-brand-400";
@@ -228,36 +228,40 @@ export function Buurtaanpak({ initieelId }: { initieelId?: string }) {
 }
 
 // Eén adresregel — gememoiseerd zodat bij 700+ adressen alleen de gewijzigde regel hertekent (geen lag).
-const BuurtAdresRij = memo(function BuurtAdresRij({ adres: a, onPatch, onVerwijder, isLeiding, bedrijfNaam }: {
+const BuurtAdresRij = memo(function BuurtAdresRij({ adres: a, onPatch, onVerwijder, isLeiding, afspraakmaker }: {
   adres: BuurtAdres;
   onPatch: (id: string, patch: Partial<BuurtAdres>) => void;
   onVerwijder: (id: string) => void;
   isLeiding: boolean;
-  bedrijfNaam?: string;
+  afspraakmaker?: string;
 }) {
+  // SMS is "aangemaakt" zodra de afspraak bevestigd is; versturen kan zodra er een telefoonnummer is.
+  const smsKlaar = a.bevestigd && a.telefoon.trim().length > 0;
   return (
     <div className="flex flex-col gap-2 px-3 py-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2 sm:py-2">
-      {/* Nummer + soort + datum (op desktop plat via contents) */}
+      {/* Status-badge + straat + huisnummer + soort */}
       <div className="flex items-center gap-2 sm:contents">
-        <span title={a.handmatig ? "Handmatig toegevoegd" : undefined} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-bold ${a.uitgevoerd ? "bg-green-500 text-white" : a.bevestigd ? "bg-green-100 text-green-700" : "bg-ink-100 text-ink-700"} ${a.handmatig ? "ring-2 ring-brand-400" : ""}`}>{a.huisnummer || "—"}</span>
-        <div className="min-w-0 flex-1 sm:w-36 sm:flex-none"><Keuze size="sm" value={a.soort} onChange={(w) => onPatch(a.id, { soort: w as BuurtAdres["soort"] })} opties={BUURT_SOORTEN.map((s) => ({ waarde: s, label: BUURT_SOORT_KORT[s] }))} title="Soort werkzaamheden" /></div>
-        <div className="min-w-0 flex-1 sm:w-36 sm:flex-none"><DatumKiezer compact value={a.datum} onChange={(iso) => onPatch(a.id, { datum: iso })} placeholder="Datum" /></div>
+        <span title={a.handmatig ? "Handmatig toegevoegd" : undefined} className={`h-3 w-3 shrink-0 rounded-full ${a.uitgevoerd ? "bg-green-500" : a.bevestigd ? "bg-green-300" : "bg-ink-300"} ${a.handmatig ? "ring-2 ring-brand-400" : ""}`} />
+        <input value={a.straat} onChange={(e) => onPatch(a.id, { straat: e.target.value })} placeholder="Straat" className={klein + " min-w-0 flex-1 font-medium text-ink-800 sm:w-40 sm:flex-none"} />
+        <input value={a.huisnummer} onChange={(e) => onPatch(a.id, { huisnummer: e.target.value })} placeholder="nr" inputMode="numeric" className={klein + " w-14 shrink-0 text-center font-semibold"} />
+        <div className="w-28 shrink-0 sm:w-32"><Keuze size="sm" value={a.soort} onChange={(w) => onPatch(a.id, { soort: w as BuurtAdres["soort"] })} opties={BUURT_SOORTEN.map((s) => ({ waarde: s, label: BUURT_SOORT_KORT[s] }))} title="Soort werkzaamheden" /></div>
       </div>
-      {/* Telefoon + bijzonderheid */}
+      {/* Datum (verplaatsen naar andere dag) + telefoon */}
       <div className="flex items-center gap-2 sm:contents">
-        <input value={a.telefoon} onChange={(e) => onPatch(a.id, { telefoon: e.target.value })} placeholder="06-…" inputMode="tel" className={klein + " w-28 shrink-0 sm:w-36"} />
-        <input value={a.bijzonderheid} onChange={(e) => onPatch(a.id, { bijzonderheid: e.target.value })} placeholder="Bijzonderheid (TVM / boorder / sleutel…)" className={klein + " min-w-0 flex-1 sm:max-w-[30rem]"} />
+        <div className="w-32 shrink-0 sm:w-32"><DatumKiezer compact value={a.datum} onChange={(iso) => onPatch(a.id, { datum: iso })} placeholder="Datum" /></div>
+        <input value={a.telefoon} onChange={(e) => onPatch(a.id, { telefoon: e.target.value })} placeholder="06-…" inputMode="tel" className={klein + " min-w-0 flex-1 sm:w-32 sm:flex-none"} />
       </div>
+      <input value={a.bijzonderheid} onChange={(e) => onPatch(a.id, { bijzonderheid: e.target.value })} placeholder="Bijzonderheid (TVM / boorder / sleutel…)" className={klein + " min-w-0 flex-1 sm:max-w-[22rem]"} />
       {/* Bevestigd / uitgevoerd / SMS / verwijder */}
       <div className="flex flex-wrap items-center gap-2 sm:ml-auto sm:flex-nowrap">
-        <label className={`flex cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs font-semibold sm:w-28 sm:py-1.5 ${a.bevestigd ? "border-green-300 bg-green-50 text-green-700" : "border-ink-200 text-ink-500 hover:bg-ink-50"}`} title="Afspraak bevestigd met de bewoner">
+        <label className={`flex cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs font-semibold sm:w-28 sm:py-1.5 ${a.bevestigd ? "border-green-300 bg-green-50 text-green-700" : "border-ink-200 text-ink-500 hover:bg-ink-50"}`} title="Afspraak bevestigd met de bewoner — maakt de SMS klaar">
           <input type="checkbox" aria-label="Bevestigd met bewoner" checked={a.bevestigd} onChange={(e) => onPatch(a.id, { bevestigd: e.target.checked })} className="h-3.5 w-3.5 accent-green-600" /> Bevestigd
         </label>
         <label className={`flex cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs font-semibold sm:w-28 sm:py-1.5 ${a.uitgevoerd ? "border-brand-300 bg-brand-50 text-brand-700" : "border-ink-200 text-ink-500 hover:bg-ink-50"}`} title="Werk uitgevoerd">
           <input type="checkbox" aria-label="Uitgevoerd" checked={a.uitgevoerd} onChange={(e) => onPatch(a.id, { uitgevoerd: e.target.checked })} className="h-3.5 w-3.5 accent-brand-600" /> Uitgevoerd
         </label>
-        {a.telefoon.trim() ? (
-          <a href={smsLink(a.telefoon, smsHerinneringTekst(a, bedrijfNaam))} onClick={() => onPatch(a.id, { herinnerVerstuurdOp: nu() })} className={`flex items-center justify-center gap-1 rounded-lg border px-3 py-2 text-xs font-semibold sm:w-16 sm:px-2 sm:py-1.5 ${a.herinnerVerstuurdOp ? "border-green-200 bg-green-50 text-green-700" : "border-ink-200 text-ink-600 hover:bg-ink-50"}`} title="SMS-herinnering naar bewoner (dag van tevoren)">
+        {smsKlaar ? (
+          <a href={smsLink(a.telefoon, smsHerinneringTekst(a, afspraakmaker))} onClick={() => onPatch(a.id, { herinnerVerstuurdOp: nu() })} className={`flex items-center justify-center gap-1 rounded-lg border px-3 py-2 text-xs font-semibold sm:w-16 sm:px-2 sm:py-1.5 ${a.herinnerVerstuurdOp ? "border-green-200 bg-green-50 text-green-700" : "border-brand-300 bg-brand-50 text-brand-700 hover:bg-brand-100"}`} title={a.herinnerVerstuurdOp ? "SMS verstuurd — opnieuw versturen" : "Stuur de SMS-herinnering (dag van tevoren)"}>
             <Phone className="h-3.5 w-3.5" /> SMS
           </a>
         ) : (
@@ -270,7 +274,7 @@ const BuurtAdresRij = memo(function BuurtAdresRij({ adres: a, onPatch, onVerwijd
 });
 
 function Detail({ project, onTerug, isLeiding }: { project: BuurtaanpakT; onTerug: () => void; isLeiding: boolean }) {
-  const { updateBuurtaanpak, deleteBuurtaanpak, users, bedrijf } = useApp();
+  const { updateBuurtaanpak, deleteBuurtaanpak, users, currentUser } = useApp();
   const [verwijder, setVerwijder] = useState(false);
   const [bevestigAfronden, setBevestigAfronden] = useState(false);
   const [importFout, setImportFout] = useState<string | null>(null);
@@ -291,6 +295,7 @@ function Detail({ project, onTerug, isLeiding }: { project: BuurtaanpakT; onTeru
     updateRef.current(p.id, { adressen: p.adressen.filter((a) => a.id !== id) });
   }, []);
   const startToevoegen = () => setDraft({ ...legeBuurtAdres(`m-${Date.now().toString(36)}`), handmatig: true });
+  const startToevoegenOpDatum = (datum: string) => { setDraft({ ...legeBuurtAdres(`m-${Date.now().toString(36)}`), handmatig: true, datum }); setOpenDagen((prev) => new Set(prev).add(datum)); };
   const setDraftVeld = (patch: Partial<BuurtAdres>) => setDraft((d) => (d ? { ...d, ...patch } : d));
   const bewaarToevoegen = () => {
     if (!draft || !draft.straat.trim()) return;
@@ -313,15 +318,15 @@ function Detail({ project, onTerug, isLeiding }: { project: BuurtaanpakT; onTeru
     }
   };
 
-  const groepen = useMemo(() => groepeerPerStraat(project.adressen), [project.adressen]);
+  const groepen = useMemo(() => groepeerPerDatum(project.adressen), [project.adressen]);
   const q = zoek.trim().toLowerCase();
   const groepenZichtbaar = useMemo(() => !q
     ? groepen
     : groepen.map((g) => ({ ...g, adressen: g.adressen.filter((a) => `${a.straat} ${a.huisnummer} ${a.postcode} ${a.bijzonderheid} ${a.telefoon}`.toLowerCase().includes(q)) })).filter((g) => g.adressen.length > 0), [groepen, q]);
-  // Straatgroepen standaard ingeklapt bij veel straten — alleen de geopende straat rendert z'n regels (snel, ook bij 700+ adressen).
-  const [openStraten, setOpenStraten] = useState<Set<string>>(() => new Set(groepen.length <= 6 ? groepen.map((g) => g.straat) : []));
-  const toggleStraat = (straat: string) => setOpenStraten((prev) => { const n = new Set(prev); if (n.has(straat)) n.delete(straat); else n.add(straat); return n; });
-  const alleUit = groepenZichtbaar.length > 0 && groepenZichtbaar.every((g) => openStraten.has(g.straat));
+  // Dag-groepen standaard ingeklapt bij veel dagen — alleen de geopende dag rendert z'n regels (snel, ook bij 700+ adressen).
+  const [openDagen, setOpenDagen] = useState<Set<string>>(() => new Set(groepen.length <= 6 ? groepen.map((g) => g.datum) : []));
+  const toggleDag = (datum: string) => setOpenDagen((prev) => { const n = new Set(prev); if (n.has(datum)) n.delete(datum); else n.add(datum); return n; });
+  const alleUit = groepenZichtbaar.length > 0 && groepenZichtbaar.every((g) => openDagen.has(g.datum));
   // Goedkope tellingen in één pass; de zware WhatsApp-tekst pas opbouwen als het paneel open is.
   const stats = useMemo(() => {
     let bev = 0, uit = 0;
@@ -516,33 +521,37 @@ function Detail({ project, onTerug, isLeiding }: { project: BuurtaanpakT; onTeru
             <>
               {!q && groepenZichtbaar.length > 1 && (
                 <div className="flex items-center justify-between px-1 text-xs text-ink-400">
-                  <span>{groepenZichtbaar.length} straten · tik een straat om te openen</span>
-                  <button type="button" onClick={() => setOpenStraten(alleUit ? new Set() : new Set(groepenZichtbaar.map((g) => g.straat)))} className="font-semibold text-brand-600 hover:underline">
+                  <span>{groepenZichtbaar.length} dagen · tik een dag om te openen</span>
+                  <button type="button" onClick={() => setOpenDagen(alleUit ? new Set() : new Set(groepenZichtbaar.map((g) => g.datum)))} className="font-semibold text-brand-600 hover:underline">
                     {alleUit ? "Alles inklappen" : "Alles uitklappen"}
                   </button>
                 </div>
               )}
               {groepenZichtbaar.map((g) => {
-                const open = q ? true : openStraten.has(g.straat);
+                const open = q ? true : openDagen.has(g.datum);
                 const gUit = g.adressen.filter((a) => a.uitgevoerd).length;
                 const gBev = g.adressen.filter((a) => a.bevestigd).length;
+                const straten = [...new Set(g.adressen.map((a) => a.straat).filter(Boolean))].join(", ");
                 return (
-                  <Card key={g.straat} className="overflow-hidden">
-                    <button type="button" onClick={() => { if (!q) toggleStraat(g.straat); }} className="flex w-full items-center gap-2 bg-ink-50/50 px-4 py-2.5 text-left hover:bg-ink-100/60">
-                      <MapPin className="h-4 w-4 shrink-0 text-brand-600" />
-                      <span className="text-sm font-bold text-ink-900">{g.straat}</span>
-                      <span className="hidden truncate text-xs text-ink-400 sm:inline">{g.adressen.length} adres{g.adressen.length === 1 ? "" : "sen"}{g.adressen[0]?.postcode ? ` · ${g.adressen[0].postcode}` : ""}</span>
-                      <span className="ml-auto flex shrink-0 items-center gap-1.5">
+                  <Card key={g.datum || "zonder"} className="overflow-hidden">
+                    <div className="flex w-full items-center gap-2 bg-ink-50/50 px-4 py-2.5">
+                      <button type="button" onClick={() => { if (!q) toggleDag(g.datum); }} className="flex min-w-0 flex-1 items-center gap-2 text-left hover:opacity-80">
+                        <CalendarDays className="h-4 w-4 shrink-0 text-brand-600" />
+                        <span className="shrink-0 text-sm font-bold text-ink-900">{g.label}</span>
+                        <span className="hidden min-w-0 truncate text-xs text-ink-400 sm:inline">· {g.adressen.length} adres{g.adressen.length === 1 ? "" : "sen"}{straten ? ` · ${straten}` : ""}</span>
+                      </button>
+                      <span className="flex shrink-0 items-center gap-1.5">
                         <span className="text-xs text-ink-400 sm:hidden">{g.adressen.length}×</span>
                         {gUit > 0 && <span className="rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-700">{gUit} uitgevoerd</span>}
                         {gBev > 0 && <span className="hidden rounded-full bg-ink-100 px-2 py-0.5 text-[11px] font-semibold text-ink-600 sm:inline">{gBev} bevestigd</span>}
-                        {!q && <ChevronRight className={`h-4 w-4 text-ink-300 transition-transform ${open ? "rotate-90" : ""}`} />}
+                        {isLeiding && g.datum && <button type="button" onClick={() => startToevoegenOpDatum(g.datum)} className="rounded-lg p-1.5 text-brand-600 hover:bg-brand-50" title="Adres toevoegen op deze dag"><Plus className="h-4 w-4" /></button>}
+                        {!q && <button type="button" onClick={() => toggleDag(g.datum)} className="rounded-lg p-1 text-ink-300 hover:bg-ink-100" title={open ? "Inklappen" : "Uitklappen"}><ChevronRight className={`h-4 w-4 transition-transform ${open ? "rotate-90" : ""}`} /></button>}
                       </span>
-                    </button>
+                    </div>
                     {open && (
                       <div className="divide-y divide-ink-100 border-t border-ink-100">
                         {g.adressen.map((a) => (
-                          <BuurtAdresRij key={a.id} adres={a} onPatch={patchAdres} onVerwijder={verwijderAdres} isLeiding={isLeiding} bedrijfNaam={bedrijf?.naam} />
+                          <BuurtAdresRij key={a.id} adres={a} onPatch={patchAdres} onVerwijder={verwijderAdres} isLeiding={isLeiding} afspraakmaker={currentUser?.naam} />
                         ))}
                       </div>
                     )}

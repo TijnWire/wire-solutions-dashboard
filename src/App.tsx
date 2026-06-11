@@ -44,7 +44,7 @@ function Splash() {
 }
 
 export default function App() {
-  const { currentUser, hydrated, bedrijf, instellingen, verlof, taken, rondes, afspraken, voorschouwen, klanten, facturen, users, kennis, projects, projectPosts, tauwOpdrachten, saneringen, logout } = useApp();
+  const { currentUser, hydrated, bedrijf, instellingen, verlof, taken, rondes, afspraken, voorschouwen, klanten, facturen, users, kennis, projects, projectPosts, tauwOpdrachten, saneringen, buurtaanpak, logout } = useApp();
   const [active, setActive] = useState("overzicht");
   const [target, setTarget] = useState<NavTarget>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -71,8 +71,8 @@ export default function App() {
   }, []);
   const navContextValue = useMemo(() => ({ navigeer }), [navigeer]);
   const meldingen = useMemo(
-    () => (currentUser ? meldingenVoor(currentUser, { taken, rondes, afspraken, voorschouwen, projects, projectPosts, tauwOpdrachten, saneringen, users, bedrijf, instellingen, verlof }) : []),
-    [currentUser, taken, rondes, afspraken, voorschouwen, projects, projectPosts, tauwOpdrachten, saneringen, users, bedrijf, instellingen, verlof]
+    () => (currentUser ? meldingenVoor(currentUser, { taken, rondes, afspraken, voorschouwen, projects, projectPosts, tauwOpdrachten, saneringen, buurtaanpak, users, bedrijf, instellingen, verlof }) : []),
+    [currentUser, taken, rondes, afspraken, voorschouwen, projects, projectPosts, tauwOpdrachten, saneringen, buurtaanpak, users, bedrijf, instellingen, verlof]
   );
 
   if (!hydrated) return <Splash />;

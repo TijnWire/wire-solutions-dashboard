@@ -1,4 +1,4 @@
-import type { Bedrijf, Instellingen, Verlof, Taak, Brievenronde, Afspraak, Voorschouw, User, Project, ProjectPost, TauwOpdracht, Sanering } from "./types";
+import type { Bedrijf, Instellingen, Verlof, Taak, Brievenronde, Afspraak, Voorschouw, User, Project, ProjectPost, TauwOpdracht, Sanering, Buurtaanpak } from "./types";
 import { supabaseAan } from "./supabase";
 
 const isISODatum = (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d);
@@ -10,7 +10,7 @@ export type Melding = {
   titel: string;
   tekst: string;
   navKey?: string; // waar de melding heen linkt
-  target?: { ronde?: string; locatie?: string; project?: string; tauwId?: string; saneringId?: string };
+  target?: { ronde?: string; locatie?: string; project?: string; tauwId?: string; saneringId?: string; buurtaanpakId?: string };
 };
 
 // Systeemmeldingen voor de leiding (incomplete gegevens, integraties, openstaande aanvragen).
@@ -38,6 +38,7 @@ type MeldingData = {
   projectPosts: ProjectPost[];
   tauwOpdrachten: TauwOpdracht[];
   saneringen: Sanering[];
+  buurtaanpak: Buurtaanpak[];
   users: User[];
   bedrijf: Bedrijf;
   instellingen: Instellingen;
@@ -46,7 +47,7 @@ type MeldingData = {
 
 // Persoonlijke meldingen per gebruiker — wat moet deze persoon oppakken?
 export function meldingenVoor(user: User, data: MeldingData): Melding[] {
-  const { taken, rondes, afspraken, voorschouwen, projects, projectPosts, tauwOpdrachten, saneringen, users, bedrijf, instellingen, verlof } = data;
+  const { taken, rondes, afspraken, voorschouwen, projects, projectPosts, tauwOpdrachten, saneringen, buurtaanpak, users, bedrijf, instellingen, verlof } = data;
   const m: Melding[] = [];
   const isLeiding = user.rol === "eigenaar" || user.rol === "beheer";
 
@@ -74,6 +75,13 @@ export function meldingenVoor(user: User, data: MeldingData): Melding[] {
     if (s.adressen.length === 0 || !s.adressen.every((a) => a.bevestigd)) continue;
     const teVersturen = s.adressen.filter((a) => a.telefoon.trim() && isISODatum(a.datum) && !a.herinnerVerstuurdOp && a.datum >= vandaag && a.datum <= morgen).length;
     if (teVersturen > 0) m.push({ id: "san-sms-" + s.id, ernst: "waarschuwing", titel: `${teVersturen} bevestigings-sms te versturen`, tekst: `Stuur de bewoners van “${s.naam}” vandaag nog de afspraakbevestiging — hun afspraak is vandaag of morgen (24 uur vooraf).`, navKey: "saneren", target: { saneringId: s.id } });
+  }
+
+  // Buurtaanpak: SMS-herinnering 24u vóór de afspraak — voor bevestigde adressen met een telefoonnummer
+  // waarvan de uitvoerdatum vandaag of morgen is en die nog geen herinnering hebben gehad.
+  for (const b of buurtaanpak.filter((b) => !b.gearchiveerd && (isLeiding || b.toegewezenAan === user.id))) {
+    const teVersturen = b.adressen.filter((a) => a.bevestigd && a.telefoon.trim() && isISODatum(a.datum) && !a.herinnerVerstuurdOp && a.datum >= vandaag && a.datum <= morgen).length;
+    if (teVersturen > 0) m.push({ id: "buurt-sms-" + b.id, ernst: "waarschuwing", titel: `${teVersturen} SMS-herinnering${teVersturen === 1 ? "" : "en"} te versturen`, tekst: `Stuur de bewoners van “${b.naam}” de afspraakbevestiging namens Stedin — hun afspraak is vandaag of morgen (24 uur vooraf).`, navKey: "buurtaanpak", target: { buurtaanpakId: b.id } });
   }
 
   // Concept-voorschouwen nog niet ingediend

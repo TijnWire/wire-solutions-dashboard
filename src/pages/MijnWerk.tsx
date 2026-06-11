@@ -45,7 +45,7 @@ export function MijnWerk({ initieelProject }: { initieelProject?: string }) {
   if (!currentUser) return null;
 
   // Mailbox = persoonlijke meldingen/berichten voor deze gebruiker (zelfde als de bel, hier op de pagina).
-  const mailbox = meldingenVoor(currentUser, { taken, rondes, afspraken, voorschouwen, projects, projectPosts, tauwOpdrachten, saneringen, users, bedrijf, instellingen, verlof });
+  const mailbox = meldingenVoor(currentUser, { taken, rondes, afspraken, voorschouwen, projects, projectPosts, tauwOpdrachten, saneringen, buurtaanpak, users, bedrijf, instellingen, verlof });
 
   const mijnTaken = taken.filter((t) => t.toegewezenAan === currentUser.id || t.toegewezenAan === ""); // "" = hele team
   const mijnProjecten = projects.filter(

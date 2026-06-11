@@ -12,6 +12,14 @@ export function datumLabelNL(iso: string): string {
   return `${dag.charAt(0).toUpperCase()}${dag.slice(1)} ${d} ${NL_MAANDEN[m - 1]}`;
 }
 
+// "2025-06-05" -> { dag: "Donderdag", datum: "5 juni" }
+export function dagEnDatumNL(iso: string): { dag: string; datum: string } {
+  const [j, m, d] = iso.slice(0, 10).split("-").map(Number);
+  if (!j || !m || !d) return { dag: "", datum: iso };
+  const dag = NL_DAGEN[new Date(Date.UTC(j, m - 1, d)).getUTCDay()];
+  return { dag: `${dag.charAt(0).toUpperCase()}${dag.slice(1)}`, datum: `${d} ${NL_MAANDEN[m - 1]}` };
+}
+
 // Eén adres-cel ("Klaverruiter 12 ok" / "Klaverruiter 16/spanningsonderbreking 18 en 20 ok") ontleden.
 function parseAdresDeel(
   raw: string,
@@ -22,7 +30,7 @@ function parseAdresDeel(
 ): BuurtAdres | null {
   let s = (raw || "").trim();
   if (!s || /geen werkzaamheden/i.test(s)) return null;
-  s = s.replace(/\s*\bok\b\s*$/i, "").trim(); // afsluitende "ok" weghalen
+  s = s.replace(/(\s*\bok\b)+\s*$/i, "").trim(); // afsluitende "ok" (ook herhaald: "ok ok") weghalen
   if (!s) return null;
   // Huisnummer = cijfers + evt. een direct aangeplakte toevoeging ("12A"); een spatie + woord
   // (bijv. "9 aggregaat") is een bijzonderheid en hoort NIET bij het huisnummer.
@@ -84,6 +92,25 @@ export function groepeerPerStraat(adressen: BuurtAdres[]): { straat: string; adr
     .map(([straat, lijst]) => ({ straat, adressen: [...lijst].sort((x, y) => (parseInt(x.huisnummer) || 0) - (parseInt(y.huisnummer) || 0)) }));
 }
 
+// Adressen gegroepeerd per UITVOERDATUM. De planning werkt per dag (~3-5 adressen, vaak wisselende
+// straten omdat bewoners soms niet beschikbaar zijn) — daarom is de dag het kopje, niet de straat.
+export function groepeerPerDatum(adressen: BuurtAdres[]): { datum: string; label: string; adressen: BuurtAdres[] }[] {
+  const map = new Map<string, BuurtAdres[]>();
+  for (const a of adressen) {
+    const k = a.datum || "";
+    const arr = map.get(k) ?? [];
+    arr.push(a);
+    map.set(k, arr);
+  }
+  return [...map.entries()]
+    .sort((a, b) => (a[0] || "9999-99-99").localeCompare(b[0] || "9999-99-99"))
+    .map(([datum, lijst]) => ({
+      datum,
+      label: datum ? datumLabelNL(datum) : "Zonder datum",
+      adressen: [...lijst].sort((x, y) => x.straat.localeCompare(y.straat) || (parseInt(x.huisnummer) || 0) - (parseInt(y.huisnummer) || 0)),
+    }));
+}
+
 // Bevestigingstekst voor de WhatsApp-groep van de opdrachtgever: per dag, per straat de huisnummers + bijzonderheden.
 // bv. "Loevestein nr 13 - nr 11 - nr 9 - nr 7 - nr 5 | Vrijdag 5 juni ✅ (nr 9 aggregaat vanwege medicatie)"
 export function whatsappBevestiging(adressen: BuurtAdres[]): string {
@@ -130,12 +157,11 @@ export function whatsappPerDag(adressen: BuurtAdres[]): { datum: string; aantal:
   }));
 }
 
-// SMS-herinnering naar de bewoner (dag van tevoren).
-export function smsHerinneringTekst(a: BuurtAdres, bedrijf = "Wire Solutions"): string {
-  const wanneer = a.soort === "kort"
-    ? "tussen 08:00 en 09:30 uur"
-    : "tussen 08:00 en 16:00 uur (we starten tussen 08:00 en 08:30)";
-  return `Beste bewoner van ${a.straat} ${a.huisnummer}, morgen voeren wij namens Stedin werkzaamheden uit aan uw aansluiting, ${wanneer}. Met vriendelijke groet, ${bedrijf}.`;
+// SMS-herinnering naar de bewoner (dag van tevoren) — namens STEDIN, ondertekend door de afspraakmaker.
+export function smsHerinneringTekst(a: BuurtAdres, afspraakmaker = "Tijn den Haan"): string {
+  const { dag, datum } = dagEnDatumNL(a.datum);
+  const wanneer = a.datum ? `${dag} ${datum}` : "Binnenkort";
+  return `Beste bewoners van ${a.straat} ${a.huisnummer},\n\n${wanneer} komt STEDIN bij u langs. Dit is voor de werkzaamheden om een nieuwe elektra kabel aan te leggen. Zoals afgesproken komen wij bij u aanbellen tussen 08:00-08:30.\n\nMet vriendelijke groet,\n\n${afspraakmaker} - Afspraakmaker STEDIN Netbeheer.`;
 }
 
 export function smsLink(telefoon: string, tekst: string): string {
