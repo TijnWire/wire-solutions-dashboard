@@ -57,6 +57,37 @@ export async function sbLogout(): Promise<void> {
   try { await sb().auth.signOut(); } catch { /* netwerk weg — lokaal toch uitloggen */ }
 }
 
+// Diagnose: test stap voor stap of dit apparaat met de centrale database kan praten.
+export type SyncTest = { sessie: boolean; email: string | null; lezen: boolean; schrijven: boolean; melding: string };
+export async function sbSyncTest(): Promise<SyncTest> {
+  const r: SyncTest = { sessie: false, email: null, lezen: false, schrijven: false, melding: "" };
+  try {
+    const { data } = await sb().auth.getSession();
+    r.sessie = !!data.session;
+    r.email = data.session?.user?.email ?? null;
+    if (!r.sessie) {
+      r.melding = "Niet verbonden met de centrale database (geen sessie). Log uit en opnieuw in. Blijft dit? Verwijder in Supabase de team-accounts (Authentication → Users) en log opnieuw in.";
+      return r;
+    }
+    const lees = await sb().from("wire_state").select("key").limit(1);
+    if (lees.error) {
+      r.melding = `Wel ingelogd (${r.email}), maar de database blokkeert toegang: ${lees.error.message}. Draai de SQL uit supabase/schema.sql opnieuw in de SQL Editor.`;
+      return r;
+    }
+    r.lezen = true;
+    const schrijf = await sb().from("wire_state").upsert({ key: "synctest", data: { door: r.email, op: new Date().toISOString() }, updated_at: new Date().toISOString() }, { onConflict: "key" });
+    if (schrijf.error) {
+      r.melding = `Lezen lukt, maar schrijven wordt geblokkeerd: ${schrijf.error.message}. Controleer de RLS-policies (schema.sql).`;
+      return r;
+    }
+    r.schrijven = true;
+    r.melding = `Alles werkt — dit apparaat (${r.email}) leest én schrijft naar de centrale database. Wijzigingen worden gedeeld.`;
+  } catch (e) {
+    r.melding = `Onverwachte fout: ${e instanceof Error ? e.message : String(e)}`;
+  }
+  return r;
+}
+
 export async function sbSessieEmail(): Promise<string | null> {
   try {
     const { data } = await sb().auth.getSession();
