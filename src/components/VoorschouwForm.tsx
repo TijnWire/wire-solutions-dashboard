@@ -79,30 +79,25 @@ function JaNeeKnop({
 // JA/NEE-knop met een toelichtingsveld dat verschijnt zodra je "JA" kiest.
 // De keuze + toelichting worden in één tekstveld bewaard ("NEE" of "JA — <toelichting>"), zodat de PDF gewoon werkt.
 function JaNeeMetTekst({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string }) {
-  const v = (value || "").trim();
-  const isJa = /^ja\b/i.test(v);
-  const isNee = /^nee\b/i.test(v);
-  const tekst = isJa ? v.replace(/^ja\b[\s—:.\-]*/i, "") : "";
-  const setKeuze = (optie: "JA" | "NEE") => {
-    if (optie === "JA") onChange(isJa ? "" : (tekst ? `JA — ${tekst}` : "JA"));
-    else onChange(isNee ? "" : "NEE");
-  };
-  const setTekst = (t: string) => onChange(t.trim() ? `JA — ${t}` : "JA");
+  const v0 = (value || "").trim();
+  // Keuze + toelichting in LOKALE state, zodat typen (spaties, cursor) niet vecht met de afgeleide waarde.
+  const [keuze, setKeuze] = useState<"JA" | "NEE" | "">(/^ja\b/i.test(v0) ? "JA" : /^nee\b/i.test(v0) ? "NEE" : "");
+  const [tekst, setTekst] = useState(/^ja\b/i.test(v0) ? v0.replace(/^ja\b[\s—:.\-]*/i, "") : "");
+  const schrijf = (k: "JA" | "NEE" | "", t: string) => onChange(k === "NEE" ? "NEE" : k === "JA" ? (t.trim() ? `JA — ${t}` : "JA") : "");
+  const kies = (optie: "JA" | "NEE") => { const nieuw = keuze === optie ? "" : optie; setKeuze(nieuw); schrijf(nieuw, tekst); };
+  const typ = (t: string) => { setTekst(t); setKeuze("JA"); schrijf("JA", t); };
   return (
     <div>
       <span className="mb-1.5 block text-sm font-medium text-ink-700">{label}</span>
       <div className="inline-flex overflow-hidden rounded-lg border border-ink-200">
-        {(["JA", "NEE"] as const).map((optie) => {
-          const actief = optie === "JA" ? isJa : isNee;
-          return (
-            <button key={optie} type="button" onClick={() => setKeuze(optie)} className={`px-5 py-2 text-sm font-medium transition-colors ${actief ? (optie === "JA" ? "bg-green-600 text-white" : "bg-ink-700 text-white") : "bg-white text-ink-500 hover:bg-ink-50"}`}>
-              {optie}
-            </button>
-          );
-        })}
+        {(["JA", "NEE"] as const).map((optie) => (
+          <button key={optie} type="button" onClick={() => kies(optie)} className={`px-5 py-2 text-sm font-medium transition-colors ${keuze === optie ? (optie === "JA" ? "bg-green-600 text-white" : "bg-ink-700 text-white") : "bg-white text-ink-500 hover:bg-ink-50"}`}>
+            {optie}
+          </button>
+        ))}
       </div>
-      {isJa && (
-        <textarea value={tekst} onChange={(e) => setTekst(e.target.value)} placeholder={placeholder ?? "Licht toe…"} rows={2} className="mt-2 w-full resize-none rounded-lg border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100" />
+      {keuze === "JA" && (
+        <textarea value={tekst} onChange={(e) => typ(e.target.value)} placeholder={placeholder ?? "Licht toe…"} rows={2} className="mt-2 w-full resize-none rounded-lg border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100" />
       )}
     </div>
   );
