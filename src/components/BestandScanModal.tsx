@@ -181,10 +181,8 @@ export function BestandScanModal({ open, projectId, projectNaam, onSluit }: { op
       setFout("Bestandstype niet ondersteund. Gebruik PDF, Excel (.xlsx/.xls) of CSV.");
       return;
     }
-    if (soort === "pdf" && !heeftSleutel) {
-      setFase("geenSleutel");
-      return;
-    }
+    // PDF's worden eerst lokaal uitgelezen (Stedin-afschakelbrieven, geen sleutel nodig); pas als dat niet
+    // lukt is er een Claude-sleutel nodig — dat handelt verwerkBestand af met een duidelijke melding.
     void scan(file);
   };
 
@@ -229,7 +227,7 @@ export function BestandScanModal({ open, projectId, projectNaam, onSluit }: { op
                 onChange={(e) => { const f = e.target.files?.[0] ?? null; e.target.value = ""; kiesBestand(f); }}
               />
               <p className="mx-auto mt-3 max-w-md text-xs text-ink-400">
-                PDF, Excel (.xlsx/.xls) of CSV. Excel en CSV worden direct lokaal ingelezen; een PDF wordt met AI gescand{heeftSleutel ? "" : " (Claude API-sleutel nodig)"}.
+                PDF, Excel (.xlsx/.xls) of CSV. <span className="font-medium text-ink-600">Stedin-afschakelbrieven (PDF)</span>, Excel en CSV worden direct lokaal en exact ingelezen — geen sleutel nodig.{heeftSleutel ? "" : " Andere PDF-soorten vragen een Claude API-sleutel."}
               </p>
             </div>
             {fout && <div className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{fout}</div>}
@@ -240,7 +238,7 @@ export function BestandScanModal({ open, projectId, projectNaam, onSluit }: { op
           <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
             <Loader2 className="h-8 w-8 animate-spin text-brand-500" />
             <p className="text-sm font-semibold text-ink-800">{bestandsnaam || "Bestand"} wordt gescand…</p>
-            <p className="max-w-xs text-xs text-ink-400">{isPdf ? "De PDF wordt met AI gelezen — dit kan even duren." : "Bezig met inlezen."}</p>
+            <p className="max-w-xs text-xs text-ink-400">{isPdf ? "De adressen worden uit de PDF gelezen…" : "Bezig met inlezen."}</p>
             <button type="button" onClick={() => { abortRef.current?.abort(); setFase("idle"); }} className="mt-2 rounded-lg border border-ink-200 px-4 py-2 text-sm font-medium text-ink-600 hover:bg-ink-50">
               Annuleren
             </button>

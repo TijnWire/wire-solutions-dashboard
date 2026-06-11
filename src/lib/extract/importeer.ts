@@ -2,6 +2,7 @@ import type { Adres, Afspraak, Brievenronde, Klant } from "../types";
 import type { ImportDoel, ScanRij } from "./types";
 import { leesExcel } from "./excel";
 import { leesPdfViaClaude } from "./claude";
+import { leesPdfTekst } from "./pdfTekst";
 import { maakAdresId, markeerDuplicaten, normaliseerRij, valideer } from "./normaliseer";
 
 export type Bestandsoort = "excel" | "pdf" | "onbekend";
@@ -41,16 +42,24 @@ export async function verwerkBestand(
     herkend = r.herkend;
     onherkend = r.onherkend;
   } else {
-    if (!apiKey.trim()) return { ok: false, fout: "Voor het scannen van PDF's is een Claude API-sleutel nodig (Instellingen → Integraties)." };
-    const r = await leesPdfViaClaude(file, apiKey, signal);
-    if (!r.ok) return r;
-    genormaliseerd = r.rijen.map((x, i) =>
-      normaliseerRij(
-        { straat: x.straat, huisnummer: x.huisnummer, toevoeging: x.toevoeging, postcode: x.postcode, plaats: x.plaats, naam: x.naam, telefoon: x.telefoon, type: x.type, notitie: x.notitie },
-        i + 1,
-        typeof x.confidence === "number" ? x.confidence : 0.9
-      )
-    );
+    // PDF: probeer eerst de lokale, exacte tekst-uitlezing (Stedin-afschakelbrieven) — geen sleutel nodig,
+    // en bij een tekst-PDF 100% betrouwbaar. Lukt dat niet, val (met sleutel) terug op AI-scan.
+    const tekst = await leesPdfTekst(file);
+    if (tekst.ok) {
+      genormaliseerd = tekst.rijen.map((x, i) => normaliseerRij(x, i + 1, 1));
+    } else if (apiKey.trim()) {
+      const r = await leesPdfViaClaude(file, apiKey, signal);
+      if (!r.ok) return r;
+      genormaliseerd = r.rijen.map((x, i) =>
+        normaliseerRij(
+          { straat: x.straat, huisnummer: x.huisnummer, toevoeging: x.toevoeging, postcode: x.postcode, plaats: x.plaats, naam: x.naam, telefoon: x.telefoon, type: x.type, notitie: x.notitie },
+          i + 1,
+          typeof x.confidence === "number" ? x.confidence : 0.9
+        )
+      );
+    } else {
+      return { ok: false, fout: `${tekst.fout} Is het een andere soort PDF? Vul dan een Claude API-sleutel in (Instellingen → Integraties) om PDF's met AI te scannen.` };
+    }
   }
 
   const rijen = markeerDuplicaten(genormaliseerd, rondes, klanten);
@@ -115,15 +124,18 @@ export function bevestigOpslaan(rijen: ScanRij[], doel: ImportDoel, ctx: Opslaan
 
   for (const rs of groepen.values()) {
     const e = rs[0];
-    const adressen: Adres[] = rs.map((r) => ({
-      id: maakAdresId(),
-      huisnummer: Number(String(r.huisnummer).replace(/\D/g, "")) || 0,
-      toevoeging: r.toevoeging,
-      type: r.type,
-      status: "Te doen",
-      ontbreekt: !String(r.huisnummer).trim(),
-      notitie: r.notitie,
-    }));
+    const adressen: Adres[] = rs
+      .map((r) => ({
+        id: maakAdresId(),
+        huisnummer: Number(String(r.huisnummer).replace(/\D/g, "")) || 0,
+        toevoeging: r.toevoeging,
+        type: r.type,
+        status: "Te doen" as const,
+        ontbreekt: !String(r.huisnummer).trim(),
+        notitie: r.notitie,
+      }))
+      // Op huisnummer (+ toevoeging) sorteren = de looproute door de straat.
+      .sort((a, b) => a.huisnummer - b.huisnummer || a.toevoeging.localeCompare(b.toevoeging, "nl", { numeric: true }));
 
     const bestaande = ctx.rondes.find(
       (rd) => sleutel(rd.straat) === sleutel(e.straat) && sleutel(rd.postcode) === sleutel(e.postcode) && sleutel(rd.plaats) === sleutel(e.plaats)

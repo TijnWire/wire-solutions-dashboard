@@ -22,12 +22,13 @@ import {
   Mail,
   Receipt,
 } from "lucide-react";
-import { Navigation, ExternalLink } from "lucide-react";
+import { Navigation, ExternalLink, FileUp } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { useNav } from "../store/NavContext";
 import { Keuze } from "../components/Keuze";
 import { Card, Badge, Bevestig } from "../components/ui";
 import { WerknemerKiezer } from "../components/WerknemerKiezer";
+import { BestandScanModal } from "../components/BestandScanModal";
 import { DatumKiezer } from "../components/DatumKiezer";
 import { afleidRegio } from "../lib/regio";
 import { bevestigingsMail, maakConceptFactuurVanRonde } from "../lib/brievenFlow";
@@ -824,6 +825,7 @@ export function Brieven({ initieelRonde }: { initieelRonde?: string }) {
   const { rondes, currentUser } = useApp();
   const [openId, setOpenId] = useState<string | null>(initieelRonde ?? null);
   const [nieuw, setNieuw] = useState(false);
+  const [scanOpen, setScanOpen] = useState(false);
 
   if (!currentUser) return null;
   const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer";
@@ -861,21 +863,33 @@ export function Brieven({ initieelRonde }: { initieelRonde?: string }) {
           <h2 className="text-xl font-bold text-ink-900">Brieven & Routes</h2>
           <p className="text-sm text-ink-500">Looproutes, ontbrekende huisnummers en bedrijfspanden.</p>
         </div>
-        <button
-          type="button"
-          onClick={() => setNieuw(true)}
-          className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700"
-        >
-          <Plus className="h-4 w-4" />
-          Nieuwe ronde
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setScanOpen(true)}
+            className="inline-flex items-center gap-2 rounded-lg border border-ink-200 bg-white px-4 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50"
+          >
+            <FileUp className="h-4 w-4" />
+            Brieven-PDF importeren
+          </button>
+          <button
+            type="button"
+            onClick={() => setNieuw(true)}
+            className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700"
+          >
+            <Plus className="h-4 w-4" />
+            Nieuwe ronde
+          </button>
+        </div>
       </div>
+      <BestandScanModal open={scanOpen} projectId="" projectNaam="Brieven & Routes" onSluit={() => setScanOpen(false)} />
+
 
       {zichtbaar.length === 0 ? (
         <Card className="p-10 text-center">
           <Mailbox className="mx-auto h-10 w-10 text-ink-300" />
           <p className="mt-3 text-sm text-ink-500">
-            Nog geen brievenrondes. Klik op <span className="font-medium">Nieuwe ronde</span> om te beginnen.
+            Nog geen brievenrondes. Klik op <span className="font-medium">Brieven-PDF importeren</span> om de Stedin-afschakelbrieven in te lezen, of op <span className="font-medium">Nieuwe ronde</span> om handmatig te beginnen.
           </p>
         </Card>
       ) : (
