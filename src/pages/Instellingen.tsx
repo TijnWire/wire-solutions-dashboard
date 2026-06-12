@@ -98,7 +98,10 @@ function BedrijfTab({ isLeiding }: { isLeiding: boolean }) {
 }
 
 function IntegratiesTab({ isLeiding }: { isLeiding: boolean }) {
-  const { instellingen, updateInstellingen, synced, buurtaanpak, voorschouwen, saneringen, rondes, afspraken, facturen, projects, taken } = useApp();
+  const { instellingen, updateInstellingen, synced, backupInfo, herstelBackup, buurtaanpak, voorschouwen, saneringen, rondes, afspraken, facturen, projects, taken } = useApp();
+  const [herstelVraag, setHerstelVraag] = useState(false);
+  const [herstelKlaar, setHerstelKlaar] = useState(false);
+  const doeHerstel = async () => { await herstelBackup(); setHerstelVraag(false); setHerstelKlaar(true); };
   const [bewerkId, setBewerkId] = useState<string | null>(null); // welke koppeling staat open om te wijzigen
   const [test, setTest] = useState<SyncTest | null>(null);
   const [centraal, setCentraal] = useState<Record<string, number> | null>(null);
@@ -186,6 +189,35 @@ function IntegratiesTab({ isLeiding }: { isLeiding: boolean }) {
           </div>
         )}
       </Card>
+      {/* Automatische veiligheidskopie — lokaal, met herstel */}
+      <Card className="flex flex-wrap items-center gap-3 p-4">
+        <div className="rounded-lg bg-ink-100 p-2 text-ink-600"><Database className="h-5 w-5" /></div>
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-bold text-ink-900">Automatische veiligheidskopie</div>
+          <div className="text-xs text-ink-500">
+            {backupInfo
+              ? `Laatste back-up: ${new Date(backupInfo.tijd).toLocaleString("nl-NL", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })} · ${backupInfo.totaal} items, veilig op dit apparaat. Een lege staat overschrijft de back-up nooit.`
+              : "Nog geen back-up — wordt automatisch gemaakt zodra er gegevens zijn."}
+          </div>
+        </div>
+        {backupInfo && (
+          <button type="button" onClick={() => setHerstelVraag(true)} className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-50">
+            <RotateCcw className="h-4 w-4" /> Herstellen
+          </button>
+        )}
+      </Card>
+      <Bevestig open={herstelVraag} titel="Gegevens herstellen?" tekst={backupInfo ? `Alle gegevens worden teruggezet naar de veiligheidskopie van ${new Date(backupInfo.tijd).toLocaleString("nl-NL")} (${backupInfo.totaal} items). Recentere wijzigingen die niet in de kopie staan, worden overschreven.` : ""} bevestigLabel="Ja, herstellen" bevestigTone="brand" onBevestig={() => void doeHerstel()} onAnnuleer={() => setHerstelVraag(false)} />
+      {herstelKlaar && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setHerstelKlaar(false)} />
+          <div className="relative w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-2xl">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-green-100"><CheckCircle2 className="h-7 w-7 text-green-600" /></div>
+            <h3 className="mt-3 text-base font-bold text-ink-900">Gegevens hersteld ✓</h3>
+            <p className="mt-1 text-sm text-ink-500">De veiligheidskopie is teruggezet. Dit wordt nu ook met je andere apparaten gesynchroniseerd.</p>
+            <button type="button" onClick={() => setHerstelKlaar(false)} className="mt-4 rounded-lg bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-brand-700">Klaar</button>
+          </div>
+        </div>
+      )}
       <p className="text-sm text-ink-500">Overzicht van alle koppelingen en hun status. Sleutels invullen kan straks voor de cloud-versie.</p>
       {integraties.map((i) => {
         const si = statusInfo[i.status];

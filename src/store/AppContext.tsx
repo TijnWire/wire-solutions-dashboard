@@ -110,6 +110,8 @@ async function laadSlice<T>(key: string, lsKey: string, seed: T): Promise<T> {
 type AppState = {
   hydrated: boolean;
   synced: boolean; // true zodra dit apparaat een Supabase-sessie heeft (= cross-device sync actief)
+  backupInfo: { tijd: string; totaal: number } | null; // laatste lokale veiligheidskopie
+  herstelBackup: () => Promise<boolean>; // zet de gegevens terug vanuit de lokale veiligheidskopie
   users: User[];
   projects: Project[];
   taken: Taak[];
@@ -545,6 +547,43 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return Array.isArray(remoteVal) && remoteVal.length === 0 && Array.isArray(lokaal) && lokaal.length > 0;
   };
 
+  // ── Automatische veiligheidskopie (lokaal, IndexedDB) ──
+  // Bewaart periodiek én vóór elke synchronisatie een back-up van alle gegevens. Een lege/kleinere staat
+  // overschrijft nooit een vollere back-up, zodat data nooit verloren gaat — ook niet bij een onbekende fout.
+  const [backupInfo, setBackupInfo] = useState<{ tijd: string; totaal: number } | null>(null);
+  const totaalRecords = (d: Record<string, unknown>) => Object.values(d).reduce<number>((s, v) => s + (Array.isArray(v) ? v.length : 0), 0);
+  const maakSnapshot = async () => {
+    try {
+      const data: Record<string, unknown> = { ...waardenRef.current };
+      const totaal = totaalRecords(data);
+      if (totaal === 0) return; // niets zinnigs om te bewaren
+      const bestaand = await idbGet<{ totaal: number }>("backup");
+      if (bestaand && bestaand.totaal > totaal) return; // bestaande back-up is voller → niet overschrijven
+      const snap = { tijd: new Date().toISOString(), totaal, data };
+      await idbSet("backup", snap);
+      setBackupInfo({ tijd: snap.tijd, totaal });
+    } catch { /* back-up is niet kritisch voor de werking */ }
+  };
+  const herstelBackup = async (): Promise<boolean> => {
+    try {
+      const snap = await idbGet<{ tijd: string; data: Record<string, unknown> }>("backup");
+      if (!snap?.data) return false;
+      for (const [key, val] of Object.entries(snap.data)) setters[key]?.(val);
+      return true;
+    } catch { return false; }
+  };
+  const maakSnapshotRef = useRef(maakSnapshot);
+  maakSnapshotRef.current = maakSnapshot;
+
+  // Periodieke back-up: bij opstart + elke 10 minuten. Laadt ook de bestaande back-up-info voor de UI.
+  useEffect(() => {
+    if (!hydrated) return;
+    void idbGet<{ tijd: string; totaal: number }>("backup").then((s) => { if (s) setBackupInfo({ tijd: s.tijd, totaal: s.totaal }); });
+    const t = setTimeout(() => void maakSnapshotRef.current(), 4000); // even na het laden
+    const iv = setInterval(() => void maakSnapshotRef.current(), 10 * 60 * 1000);
+    return () => { clearTimeout(t); clearInterval(iv); };
+  }, [hydrated]);
+
   // 1) Houd bij of er een Supabase-sessie is — en herstel die bij opstart automatisch met de lokaal
   //    bewaarde inloggegevens, zodat dit apparaat na heropenen vanzelf weer gekoppeld is.
   useEffect(() => {
@@ -577,6 +616,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     };
     const onthoudVersie = (key: string) => (ua: string) => { sync.current.versies[key] = ua; };
+    void maakSnapshotRef.current(); // veiligheidskopie vóór we remote data toepassen
     (async () => {
       try {
         const remote = await sbLeesAlles();
@@ -1030,6 +1070,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       value={{
         hydrated,
         synced: supabaseAan && sbSessie,
+        backupInfo,
+        herstelBackup,
         users,
         projects,
         taken,
