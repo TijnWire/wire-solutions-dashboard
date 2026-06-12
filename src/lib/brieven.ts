@@ -78,10 +78,17 @@ export function netjesPlaats(plaats: string): string {
 }
 
 // ── Google Maps ──
-// Volledige adres-tekst, bruikbaar in Google Maps: "Heemraadsweg 4 TO, 2935 AW Ouderkerk aan den IJssel".
+// Adres-tekst voor Google Maps: "Heemraadsweg 4, 2935 AW Ouderkerk aan den IJssel".
+// Bewust ZONDER toevoeging: markers als "TO" (tegenover), "BIJ", "NABIJ" zijn geen geldig adres en
+// laten Maps falen; en huisletters (131 A/B/…) wijzen toch naar hetzelfde pand. Postcode + nummer is
+// genoeg om Maps het juiste punt te laten vinden.
 function adresTekst(straat: string, postcode: string, plaats: string, a: Adres): string {
-  const nr = `${a.huisnummer}${a.toevoeging ? " " + a.toevoeging : ""}`;
-  return `${straat} ${nr}, ${postcode} ${netjesPlaats(plaats)}`.replace(/\s+/g, " ").replace(/\s+,/g, ",").trim();
+  return `${straat} ${a.huisnummer}, ${postcode} ${netjesPlaats(plaats)}`.replace(/\s+/g, " ").replace(/\s+,/g, ",").trim();
+}
+
+// Verwijdert opeenvolgende dubbele stops (bv. 131 A t/m J → één keer "Kerkweg 131").
+function ontdubbel(stops: string[]): string[] {
+  return stops.filter((s, i) => i === 0 || s !== stops[i - 1]);
 }
 
 // Bouwt een Google Maps wandelroute met de adressen in volgorde.
@@ -93,7 +100,7 @@ export function googleMapsRouteUrl(
   adressen: Adres[],
   maxStops = 10
 ): { url: string; afgekapt: boolean; aantal: number } {
-  const stops = adressen.map((a) => adresTekst(straat, postcode, plaats, a));
+  const stops = ontdubbel(adressen.map((a) => adresTekst(straat, postcode, plaats, a)));
   const afgekapt = stops.length > maxStops;
   const gebruikt = stops.slice(0, maxStops);
   const params = new URLSearchParams();
@@ -135,9 +142,10 @@ export function adresVolledig(straat: string, postcode: string, plaats: string, 
 // Bouwt Google Maps wandelroutes uit volledige adres-teksten (meerdere straten mogelijk), in delen
 // van max. `maxStops`. Voor een hele map: alle adressen in looproute-volgorde, deel voor deel.
 export function googleMapsRouteVanTeksten(stops: string[], maxStops = 10): { url: string; van: number; tot: number }[] {
+  const uniek = ontdubbel(stops);
   const delen: { url: string; van: number; tot: number }[] = [];
-  for (let i = 0; i < stops.length; i += maxStops) {
-    const groep = stops.slice(i, i + maxStops);
+  for (let i = 0; i < uniek.length; i += maxStops) {
+    const groep = uniek.slice(i, i + maxStops);
     if (groep.length === 0) continue;
     const params = new URLSearchParams();
     params.set("api", "1");
