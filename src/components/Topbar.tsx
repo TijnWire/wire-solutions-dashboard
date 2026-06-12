@@ -1,5 +1,5 @@
 import { memo, useState } from "react";
-import { Search, Bell, Menu, Info, AlertTriangle, ChevronRight, X, FolderKanban, SearchX } from "lucide-react";
+import { Search, Bell, Menu, Info, AlertTriangle, ChevronRight, X, FolderKanban, SearchX, Cloud, CloudOff } from "lucide-react";
 import type { Melding } from "../lib/meldingen";
 import type { ZoekGroep, ZoekItem } from "../lib/zoeken";
 
@@ -159,9 +159,12 @@ export const Topbar = memo(function Topbar({
           type="button"
           onClick={onSync}
           title={synced ? "Alles wordt gesynchroniseerd — tik voor details" : "Niet gesynchroniseerd — tik om te controleren"}
-          className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-1.5 text-xs font-semibold transition-colors sm:px-2.5 ${synced ? "border-green-200 bg-green-50 text-green-700 hover:bg-green-100" : "border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100"}`}
+          aria-label={synced ? "Gesynchroniseerd" : "Niet gesynchroniseerd"}
+          className={`inline-flex h-9 items-center gap-1.5 rounded-full border px-2 text-[13px] font-semibold transition-colors sm:pr-3 ${synced ? "border-green-200 bg-green-50 text-green-700 hover:bg-green-100" : "border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100"}`}
         >
-          <span className={`h-2 w-2 shrink-0 rounded-full ${synced ? "bg-green-500" : "bg-amber-500 animate-pulse"}`} />
+          <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${synced ? "bg-green-500/15 text-green-600" : "bg-amber-500/20 text-amber-600"}`}>
+            {synced ? <Cloud className="h-3.5 w-3.5" /> : <CloudOff className="h-3.5 w-3.5 animate-pulse" />}
+          </span>
           <span className="hidden sm:inline">{synced ? "Gesynchroniseerd" : "Niet gesynct"}</span>
         </button>
 
