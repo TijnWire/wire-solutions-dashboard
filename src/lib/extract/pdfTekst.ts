@@ -5,6 +5,7 @@
 //   <postcode> <PLAATS>
 // We lezen de tekst van álle pagina's uit en halen elk adres-blok eruit.
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+import { netjesPlaats } from "../brieven";
 import type { RuweRij } from "./types";
 
 let pdfjsKlaar: Promise<typeof import("pdfjs-dist")> | null = null;
@@ -57,7 +58,7 @@ export async function leesPdfTekst(file: File): Promise<PdfTekstResultaat> {
     for (const m of plat.matchAll(BLOK)) {
       const { straat, huisnummer, toevoeging } = parseStraat(m[1]);
       const postcode = m[2].replace(/(\d{4})\s*([A-Za-z]{2})/, "$1 $2").toUpperCase();
-      const plaats = m[3].trim();
+      const plaats = netjesPlaats(m[3].trim());
       if (!straat || !huisnummer) continue;
       const sleutel = `${straat}|${huisnummer}|${toevoeging}|${postcode}`.toLowerCase();
       if (gezien.has(sleutel)) continue; // zelfde adres niet dubbel (bv. brief over 2 pagina's)

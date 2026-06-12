@@ -37,6 +37,7 @@ import type {
 } from "../lib/types";
 import { legeDag, legeSlots, PLANNING_TIJDEN } from "../lib/types";
 import { verifieerWachtwoord } from "../lib/auth";
+import { netjesPlaats } from "../lib/brieven";
 import {
   SEED_USERS,
   SEED_PROJECTS,
@@ -379,6 +380,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setRondes(
         r.map((o) => ({
           ...o,
+          plaats: netjesPlaats(o.plaats), // nette plaatsnaam i.p.v. HOOFDLETTERS (bruikbaar in Google Maps)
           status: o.status ?? (
             o.mailVerstuurdOp || o.factuurId || o.fase === "gefactureerd" ? "verstuurd"
               : o.fase === "bevestigd" || o.fase === "gecontroleerd" ? "gecontroleerd"
@@ -515,7 +517,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     voorschouwen: (v) => setVoorschouwen(v as Voorschouw[]),
     voorschouwMappen: (v) => setVoorschouwMappen(v as VoorschouwMap[]),
     mededelingen: (v) => setMededelingen(v as Mededeling[]),
-    rondes: (v) => setRondes(v as Brievenronde[]),
+    rondes: (v) => setRondes((v as Brievenronde[]).map((o) => ({ ...o, plaats: netjesPlaats(o.plaats) }))),
     afspraken: (v) => setAfspraken(v as Afspraak[]),
     facturen: (v) => setFacturen(v as Factuur[]),
     opdrachtgevers: (v) => setOpdrachtgevers(v as Opdrachtgever[]),

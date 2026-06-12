@@ -62,10 +62,26 @@ export function maakReeks(
   return adressen;
 }
 
+// ── Adres-opmaak ──
+// Nette Nederlandse plaatsnaam: "OUDERKERK AAN DEN IJSSEL" → "Ouderkerk aan den IJssel"
+// (tussenvoegsels klein, IJ-digraaf hoofdletter). Idempotent.
+const TUSSENVOEGSELS = new Set(["aan", "de", "den", "der", "des", "het", "in", "op", "te", "ten", "ter", "tot", "van", "bij", "over", "'t", "'s"]);
+export function netjesPlaats(plaats: string): string {
+  const woorden = plaats.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  return woorden
+    .map((w, i) => {
+      if (i > 0 && TUSSENVOEGSELS.has(w)) return w;
+      if (w.startsWith("ij")) return "IJ" + w.slice(2); // IJssel, IJmuiden
+      return w.charAt(0).toUpperCase() + w.slice(1);
+    })
+    .join(" ");
+}
+
 // ── Google Maps ──
+// Volledige adres-tekst, bruikbaar in Google Maps: "Heemraadsweg 4 TO, 2935 AW Ouderkerk aan den IJssel".
 function adresTekst(straat: string, postcode: string, plaats: string, a: Adres): string {
-  const nr = `${a.huisnummer}${a.toevoeging ? "-" + a.toevoeging : ""}`;
-  return `${straat} ${nr}, ${postcode} ${plaats}`.replace(/\s+/g, " ").trim();
+  const nr = `${a.huisnummer}${a.toevoeging ? " " + a.toevoeging : ""}`;
+  return `${straat} ${nr}, ${postcode} ${netjesPlaats(plaats)}`.replace(/\s+/g, " ").replace(/\s+,/g, ",").trim();
 }
 
 // Bouwt een Google Maps wandelroute met de adressen in volgorde.
