@@ -60,7 +60,7 @@ import {
   SEED_BUURTAANPAK,
 } from "../lib/seed";
 import { idbGet, idbSet } from "./db";
-import { supabaseAan, sb, sbLeesAlles, sbSchrijf, sbVersies, sbLeesKeys, sbLogin, sbRegistreer, sbLogout, sbSessieEmail } from "../lib/supabase";
+import { supabaseAan, sb, sbLeesAlles, sbSchrijf, sbVersies, sbLeesKeys, sbLogin, sbRegistreer, sbLogout, sbSessieEmail, bewaarSyncCred, wisSyncCred, sbHerstelSessie } from "../lib/supabase";
 
 // Oude browseropslag-sleutels — alleen nog om eenmalig naar IndexedDB te migreren.
 const LS = {
@@ -545,13 +545,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return Array.isArray(remoteVal) && remoteVal.length === 0 && Array.isArray(lokaal) && lokaal.length > 0;
   };
 
-  // 1) Houd bij of er een Supabase-sessie is.
+  // 1) Houd bij of er een Supabase-sessie is — en herstel die bij opstart automatisch met de lokaal
+  //    bewaarde inloggegevens, zodat dit apparaat na heropenen vanzelf weer gekoppeld is.
   useEffect(() => {
     if (!supabaseAan) return;
     let actief = true;
-    void sb().auth.getSession().then(({ data }) => { if (actief) setSbSessie(!!data.session); });
+    void sbHerstelSessie().then((ok) => { if (actief) setSbSessie(ok); });
     const { data: sub } = sb().auth.onAuthStateChange((_e, session) => { if (actief) setSbSessie(!!session); });
-    return () => { actief = false; sub.subscription.unsubscribe(); };
+    // Probeer het ook opnieuw zodra het apparaat weer online komt of het tabblad weer zichtbaar wordt.
+    const opnieuw = () => { if (actief) void sbHerstelSessie().then((ok) => { if (actief && ok) setSbSessie(true); }); };
+    window.addEventListener("online", opnieuw);
+    document.addEventListener("visibilitychange", opnieuw);
+    return () => { actief = false; sub.subscription.unsubscribe(); window.removeEventListener("online", opnieuw); document.removeEventListener("visibilitychange", opnieuw); };
   }, []);
 
   // 2) Bij een actieve sessie: haal de gedeelde data op, zet ontbrekende onderdelen klaar,
@@ -684,6 +689,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (await sbLogin(e, wachtwoord)) {
           const u = users.find((x) => x.email.toLowerCase() === e);
           if (u) setCurrentUserId(u.id);
+          bewaarSyncCred(e, wachtwoord); // lokaal bewaren → blijft vanzelf gekoppeld na heropenen
           return true;
         }
       } catch { /* val terug op de lokale controle */ }
@@ -697,12 +703,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // wachtwoord), dan blijft de app gewoon lokaal werken.
     if (supabaseAan) {
       try { await sbRegistreer(e, wachtwoord); await sbLogin(e, wachtwoord); } catch { /* lokaal blijven werken */ }
+      bewaarSyncCred(e, wachtwoord); // ook nu lokaal bewaren → automatisch herstellen bij volgende start
     }
     setCurrentUserId(u.id);
     return true;
   };
 
-  const logout = () => { if (supabaseAan) void sbLogout(); setCurrentUserId(null); };
+  const logout = () => { if (supabaseAan) { void sbLogout(); wisSyncCred(); } setCurrentUserId(null); };
   // Demo-switcher: direct als een ander account verdergaan (alle data is gedeeld in dezelfde store).
   const wisselGebruiker: AppState["wisselGebruiker"] = (id) => { if (users.some((u) => u.id === id)) setCurrentUserId(id); };
 

@@ -75,6 +75,39 @@ export async function sbLogout(): Promise<void> {
   try { await sb().auth.signOut(); } catch { /* netwerk weg — lokaal toch uitloggen */ }
 }
 
+// ── Automatisch verbonden blijven ──
+// De inloggegevens worden ALLEEN lokaal op dit apparaat bewaard (niet in de cloud, niet in de code),
+// zodat de app de Supabase-sessie na heropenen vanzelf kan herstellen en het apparaat gekoppeld blijft.
+const SC_KEY = "wire.sc";
+const codeer = (s: string) => { try { return btoa(unescape(encodeURIComponent(s))); } catch { return ""; } };
+const decodeer = (s: string) => { try { return decodeURIComponent(escape(atob(s))); } catch { return ""; } };
+
+export function bewaarSyncCred(email: string, wachtwoord: string): void {
+  try { localStorage.setItem(SC_KEY, codeer(JSON.stringify({ e: email.trim().toLowerCase(), w: wachtwoord }))); } catch { /* opslag niet beschikbaar */ }
+}
+export function wisSyncCred(): void {
+  try { localStorage.removeItem(SC_KEY); } catch { /* niets */ }
+}
+function leesSyncCred(): { e: string; w: string } | null {
+  try { const v = localStorage.getItem(SC_KEY); if (!v) return null; const o = JSON.parse(decodeer(v)); return o?.e && o?.w ? o : null; } catch { return null; }
+}
+
+// Zorgt dat er een Supabase-sessie is: bestaat er al een (Supabase bewaart die zelf), dan klaar; anders
+// meldt de app stil opnieuw aan met de lokaal bewaarde gegevens (self-healing). Geeft true bij een sessie.
+export async function sbHerstelSessie(): Promise<boolean> {
+  try {
+    const { data } = await sb().auth.getSession();
+    if (data.session) return true;
+    const cred = leesSyncCred();
+    if (!cred) return false;
+    if (await sbLogin(cred.e, cred.w)) return true;
+    await sbRegistreer(cred.e, cred.w); // account nog niet in Auth → aanmaken en opnieuw proberen
+    return await sbLogin(cred.e, cred.w);
+  } catch {
+    return false;
+  }
+}
+
 // Diagnose: test stap voor stap of dit apparaat met de centrale database kan praten.
 export type SyncTest = { sessie: boolean; email: string | null; lezen: boolean; schrijven: boolean; melding: string };
 export async function sbSyncTest(): Promise<SyncTest> {
