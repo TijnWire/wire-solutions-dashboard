@@ -44,7 +44,7 @@ function Splash() {
 }
 
 export default function App() {
-  const { currentUser, hydrated, bedrijf, instellingen, verlof, taken, rondes, afspraken, voorschouwen, klanten, facturen, users, kennis, projects, projectPosts, tauwOpdrachten, saneringen, buurtaanpak, logout } = useApp();
+  const { currentUser, hydrated, bedrijf, instellingen, verlof, taken, rondes, afspraken, voorschouwen, klanten, facturen, users, kennis, projects, projectPosts, tauwOpdrachten, saneringen, buurtaanpak, logout, synced } = useApp();
   const [active, setActive] = useState("overzicht");
   const [target, setTarget] = useState<NavTarget>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -59,6 +59,7 @@ export default function App() {
   const navigeer = useCallback((key: string, t: NavTarget = null) => { setActive(key); setTarget(t); setMenuOpen(false); }, []);
   const ga = useCallback((key: string) => navigeer(key), [navigeer]);
   const onMenu = useCallback(() => setMenuOpen(true), []);
+  const onSync = useCallback(() => navigeer("instellingen"), [navigeer]);
   const logoutRef = useRef(logout); logoutRef.current = logout;
   const onLogout = useCallback(() => logoutRef.current(), []);
   const onMelding = useCallback((m: Melding) => { if (m.navKey) navigeer(m.navKey, m.target ?? null); }, [navigeer]);
@@ -168,6 +169,8 @@ export default function App() {
           onMelding={onMelding}
           onZoek={onZoek}
           onResultaat={onResultaat}
+          synced={synced}
+          onSync={onSync}
         />
         <main className="scrollbar-thin flex-1 overflow-y-auto overflow-x-hidden overscroll-contain p-4 pb-[calc(5rem+env(safe-area-inset-bottom))] md:p-6 md:pb-6">{render()}</main>
       </div>

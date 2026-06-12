@@ -74,6 +74,8 @@ export const Topbar = memo(function Topbar({
   onMelding,
   onZoek,
   onResultaat,
+  synced,
+  onSync,
 }: {
   title: string;
   onMenu?: () => void;
@@ -81,6 +83,8 @@ export const Topbar = memo(function Topbar({
   onMelding?: (m: Melding) => void;
   onZoek?: (q: string) => ZoekGroep[];
   onResultaat?: (item: ZoekItem) => void;
+  synced?: boolean;
+  onSync?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [mobielZoek, setMobielZoek] = useState(false);
@@ -148,8 +152,19 @@ export const Topbar = memo(function Topbar({
         )}
       </div>
 
-      {/* Rechts: mobiele zoekknop + meldingen */}
+      {/* Rechts: sync-status + mobiele zoekknop + meldingen */}
       <div className="ml-auto flex items-center gap-2 md:ml-0">
+        {/* Sync-status — altijd zichtbaar: groen = alles wordt gesynchroniseerd, oranje = niet verbonden */}
+        <button
+          type="button"
+          onClick={onSync}
+          title={synced ? "Alles wordt gesynchroniseerd — tik voor details" : "Niet gesynchroniseerd — tik om te controleren"}
+          className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-1.5 text-xs font-semibold transition-colors sm:px-2.5 ${synced ? "border-green-200 bg-green-50 text-green-700 hover:bg-green-100" : "border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100"}`}
+        >
+          <span className={`h-2 w-2 shrink-0 rounded-full ${synced ? "bg-green-500" : "bg-amber-500 animate-pulse"}`} />
+          <span className="hidden sm:inline">{synced ? "Gesynchroniseerd" : "Niet gesynct"}</span>
+        </button>
+
         {/* Mobiele zoekknop — opent een schermvullend venster */}
         <button
           type="button"
