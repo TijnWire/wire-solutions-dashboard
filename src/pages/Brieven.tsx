@@ -15,6 +15,8 @@ import {
   Mailbox,
   Database,
   Check,
+  CheckSquare,
+  Square,
   RotateCcw,
   UserPlus,
   CalendarClock,
@@ -832,6 +834,8 @@ function BrievenMap({ naam, rondes, isLeiding, onOpenRonde }: { naam: string; ro
   const [naamBewerk, setNaamBewerk] = useState<string | null>(null);
   const [routeOpen, setRouteOpen] = useState(false);
   const [vraagBoek, setVraagBoek] = useState(false);
+  const [boekKlaar, setBoekKlaar] = useState(0); // >0 → succes-popup met aantal verzonden adressen
+  const [sel, setSel] = useState<Set<string>>(new Set()); // geselecteerde adres-id's voor bulk-acties
   const nu = () => new Date().toISOString();
 
   const straten = [...rondes].sort((a, b) => a.straat.localeCompare(b.straat, "nl") || a.postcode.localeCompare(b.postcode));
@@ -851,8 +855,22 @@ function BrievenMap({ naam, rondes, isLeiding, onOpenRonde }: { naam: string; ro
   const zetPd = (v: string) => rondes.forEach((r) => updateRonde(r.id, { pdNummer: v.trim() || undefined }));
   const zetDeadline = (d: string) => rondes.forEach((r) => updateRonde(r.id, { deadline: d || undefined }));
   const zetToegewezen = (id: string) => rondes.forEach((r) => updateRonde(r.id, id && r.status === "nieuw" ? { toegewezenAan: id || undefined, status: "toegewezen", toegewezenOp: nu() } : { toegewezenAan: id || undefined }));
-  const naarBoekhouding = () => { rondes.forEach((r) => updateRonde(r.id, { status: "verstuurd", verstuurdOp: nu(), boekhouding: "te_factureren", doorgestuurdOp: nu() })); setVraagBoek(false); };
-  const zetAdres = (rid: string, aid: string, status: BriefStatus) => { const r = rondes.find((x) => x.id === rid); if (!r) return; updateRonde(rid, { adressen: r.adressen.map((a) => (a.id === aid ? { ...a, status } : a)) }); };
+  const naarBoekhouding = () => { const n = teBezorgen.length; rondes.forEach((r) => updateRonde(r.id, { status: "verstuurd", verstuurdOp: nu(), boekhouding: "te_factureren", doorgestuurdOp: nu() })); setVraagBoek(false); setBoekKlaar(n); };
+
+  // ── Adressen selecteren (per stuk / hele straat / alles) en in bulk markeren ──
+  const alleIds = straten.flatMap((r) => r.adressen.filter((a) => !a.ontbreekt).map((a) => a.id));
+  const allesGesel = alleIds.length > 0 && alleIds.every((id) => sel.has(id));
+  const toggleSel = (id: string) => setSel((p) => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const selecteerAlles = () => setSel(allesGesel ? new Set() : new Set(alleIds));
+  const selecteerStraat = (r: Brievenronde) => {
+    const ids = r.adressen.filter((a) => !a.ontbreekt).map((a) => a.id);
+    const vol = ids.length > 0 && ids.every((id) => sel.has(id));
+    setSel((p) => { const n = new Set(p); ids.forEach((id) => (vol ? n.delete(id) : n.add(id))); return n; });
+  };
+  const markeer = (status: BriefStatus) => {
+    rondes.forEach((r) => { if (r.adressen.some((a) => sel.has(a.id))) updateRonde(r.id, { adressen: r.adressen.map((a) => (sel.has(a.id) ? { ...a, status } : a)) }); });
+    setSel(new Set());
+  };
 
   return (
     <div className="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-card">
@@ -902,26 +920,70 @@ function BrievenMap({ naam, rondes, isLeiding, onOpenRonde }: { naam: string; ro
             </div>
           )}
 
-          <div className="space-y-3">
-            {straten.map((r) => (
-              <div key={r.id}>
-                <button type="button" onClick={() => onOpenRonde(r.id)} className="mb-1.5 truncate text-sm font-semibold text-ink-800 hover:text-brand-700">{r.straat} <span className="font-normal text-ink-400">· {r.plaats} · {r.adressen.filter((a) => !a.ontbreekt).length}</span></button>
-                <div className="flex flex-wrap gap-1.5">
-                  {sorteerAdr(r.adressen).map((a) => {
-                    const gegooidA = a.status === "Gegooid";
-                    return (
-                      <button key={a.id} type="button" onClick={() => zetAdres(r.id, a.id, gegooidA ? "Te doen" : "Gegooid")} title={a.ontbreekt ? "Ontbrekend huisnummer" : gegooidA ? "Gegooid — klik = te doen" : "Klik = gegooid"} className={`rounded-md px-2 py-1 text-xs font-medium transition-colors ${a.ontbreekt ? "bg-amber-100 text-amber-700" : gegooidA ? "bg-green-500 text-white" : "bg-ink-100 text-ink-700 hover:bg-ink-200"}`}>
-                        {a.huisnummer}{a.toevoeging ? ` ${a.toevoeging}` : ""}
-                      </button>
-                    );
-                  })}
+          {/* Selectie-balk: alles selecteren + geselecteerde adressen in bulk markeren */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl bg-ink-50 px-3 py-2">
+            <button type="button" onClick={selecteerAlles} className="inline-flex items-center gap-1.5 text-xs font-semibold text-ink-700">
+              {allesGesel ? <CheckSquare className="h-4 w-4 text-brand-600" /> : <Square className="h-4 w-4 text-ink-400" />}
+              {allesGesel ? "Alles deselecteren" : "Alles selecteren"}
+            </button>
+            {sel.size > 0 ? (
+              <>
+                <span className="text-xs font-medium text-ink-500">{sel.size} geselecteerd</span>
+                <div className="ml-auto flex flex-wrap items-center gap-2">
+                  <button type="button" onClick={() => markeer("Gegooid")} className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-green-700"><Check className="h-3.5 w-3.5" /> Afgegooid ({sel.size})</button>
+                  <button type="button" onClick={() => markeer("Te doen")} className="rounded-lg border border-ink-200 bg-white px-3 py-1.5 text-xs font-semibold text-ink-600 hover:bg-ink-50">Terug naar te doen</button>
+                  <button type="button" onClick={() => setSel(new Set())} className="rounded-lg px-2 py-1.5 text-xs font-medium text-ink-400 hover:text-ink-700">Wis</button>
                 </div>
-              </div>
-            ))}
+              </>
+            ) : (
+              <span className="ml-auto text-xs text-ink-400">Tik op adressen om te selecteren, of op een straatnaam voor de hele straat.</span>
+            )}
+          </div>
+
+          <div className="space-y-3">
+            {straten.map((r) => {
+              const straatIds = r.adressen.filter((a) => !a.ontbreekt).map((a) => a.id);
+              const straatVol = straatIds.length > 0 && straatIds.every((id) => sel.has(id));
+              return (
+                <div key={r.id}>
+                  <div className="mb-1.5 flex items-center gap-2">
+                    <button type="button" onClick={() => selecteerStraat(r)} className="inline-flex min-w-0 items-center gap-1.5 text-left text-sm font-semibold text-ink-800 hover:text-brand-700" title="Hele straat selecteren">
+                      {straatVol ? <CheckSquare className="h-4 w-4 shrink-0 text-brand-600" /> : <Square className="h-4 w-4 shrink-0 text-ink-300" />}
+                      <span className="truncate">{r.straat} <span className="font-normal text-ink-400">· {r.plaats} · {straatIds.length}</span></span>
+                    </button>
+                    <button type="button" onClick={() => onOpenRonde(r.id)} title="Open ronde" className="shrink-0 rounded p-1 text-ink-300 hover:bg-ink-100 hover:text-ink-600"><ChevronRight className="h-4 w-4" /></button>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {sorteerAdr(r.adressen).map((a) => {
+                      const gegooidA = a.status === "Gegooid";
+                      const geseld = sel.has(a.id);
+                      return (
+                        <button key={a.id} type="button" onClick={() => toggleSel(a.id)} title={a.ontbreekt ? "Ontbrekend huisnummer" : gegooidA ? "Afgegooid" : "Te doen"} className={`rounded-md px-2 py-1 text-xs font-medium transition-colors ${a.ontbreekt ? "bg-amber-100 text-amber-700" : gegooidA ? "bg-green-500 text-white" : "bg-ink-100 text-ink-700 hover:bg-ink-200"} ${geseld ? "ring-2 ring-brand-500 ring-offset-1" : ""}`}>
+                          {a.huisnummer}{a.toevoeging ? ` ${a.toevoeging}` : ""}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
       <Bevestig open={vraagBoek} titel="Hele map naar de boekhouding?" tekst={`Alle ${rondes.length} rondes (${teBezorgen.length} adressen) van "${naam}" worden afgerond en doorgestuurd naar de boekhouding.`} bevestigLabel="Naar boekhouding" bevestigTone="brand" onBevestig={naarBoekhouding} onAnnuleer={() => setVraagBoek(false)} />
+
+      {/* Succes-melding ná het doorsturen */}
+      {boekKlaar > 0 && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setBoekKlaar(0)} />
+          <div className="relative w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-2xl">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-green-100"><Check className="h-7 w-7 text-green-600" /></div>
+            <h3 className="mt-3 text-base font-bold text-ink-900">Naar de boekhouding gestuurd ✓</h3>
+            <p className="mt-1 text-sm text-ink-500">De map “{naam}” ({rondes.length} {rondes.length === 1 ? "ronde" : "rondes"} · {boekKlaar} adressen) is afgerond en doorgestuurd. Het verschijnt nu bij Facturen en als melding.</p>
+            <button type="button" onClick={() => setBoekKlaar(0)} className="mt-4 rounded-lg bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-brand-700">Klaar</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
