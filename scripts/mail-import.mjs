@@ -19,14 +19,22 @@ import { createClient } from "@supabase/supabase-js";
 const SUPABASE_URL = "https://buauptxdaiuvqazhlrhk.supabase.co";
 const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ1YXVwdHhkYWl1dnFhemhscmhrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5MTQ0ODAsImV4cCI6MjA5NjQ5MDQ4MH0.OeQlHefazX6XLdAoOQtJEWs9lUqctjP3rC4_L7byn_4";
 
-const need = (k, def) => { const v = process.env[k] ?? def; if (!v) { console.error("Ontbrekende secret:", k); process.exit(1); } return v; };
 const IMAP_HOST = process.env.IMAP_HOST || "imap.hostnet.nl";
 const IMAP_PORT = Number(process.env.IMAP_PORT || 993);
-const IMAP_USER = need("IMAP_USER");
-const IMAP_PASS = need("IMAP_PASS");
-const BOT_EMAIL = need("BOT_EMAIL");
-const BOT_PASS = need("BOT_PASS");
+const IMAP_USER = process.env.IMAP_USER;
+const IMAP_PASS = process.env.IMAP_PASS;
+const BOT_EMAIL = process.env.BOT_EMAIL;
+const BOT_PASS = process.env.BOT_PASS;
 const AFZENDERS = (process.env.MAIL_AFZENDERS || "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+
+// Nog niet ingesteld? Dan netjes stoppen (geen fout → geen "Run failed"-mails). Zodra de secrets zijn
+// toegevoegd, gaat de import vanzelf draaien.
+const ontbreekt = Object.entries({ IMAP_USER, IMAP_PASS, BOT_EMAIL, BOT_PASS }).filter(([, v]) => !v).map(([k]) => k);
+if (ontbreekt.length) {
+  console.log("Mail-import overgeslagen — nog niet ingesteld. Ontbrekende secrets:", ontbreekt.join(", "));
+  console.log("Voeg ze toe via repo Settings -> Secrets and variables -> Actions om de automatische import aan te zetten.");
+  process.exit(0);
+}
 
 // ── Klantafspraaklijst → BuurtAdres[] (zelfde logica als src/lib/buurtaanpak.ts) ──
 function parseAdresDeel(raw, postcode, soort, gedeeld, id) {
