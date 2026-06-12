@@ -183,16 +183,18 @@ function MapKiezer({ mappen, value, onChange, onNieuw }: {
 
 export function VoorschouwForm({
   bestaande,
+  voorinvul,
   onKlaar,
 }: {
   bestaande?: Voorschouw;
+  voorinvul?: Partial<Voorschouw>; // vooraf ingevulde velden (bijv. uit een gescand formulier)
   onKlaar: () => void;
 }) {
   const { currentUser, addVoorschouw, updateVoorschouw, voorschouwMappen, addVoorschouwMap } = useApp();
   const [data, setData] = useState(() =>
     bestaande
       ? { ...bestaande }
-      : { ...legeVoorschouw(), fotos: [] as string[] }
+      : { ...legeVoorschouw(), fotos: [] as string[], ...voorinvul }
   );
   const [bezig, setBezig] = useState(false);
   // In welke map komt dit document — vooraf te kiezen (en later nog te wijzigen).
