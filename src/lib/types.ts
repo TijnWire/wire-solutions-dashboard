@@ -123,6 +123,8 @@ export type VoorschouwStatus = "Concept" | "Ingediend";
 export type VoorschouwMap = {
   id: string;
   naam: string;
+  volgorde?: number; // handmatige positie in de actieve lijst (lager = hoger); ontbreekt → achteraan
+  aangemaakt?: string; // ISO — voor "nieuwste eerst"-sortering
   gearchiveerd?: boolean; // naar de database verstuurd → uit de actieve lijst, bewaard onder "Voorschouwen"
   gearchiveerdOp?: string; // ISO
 };

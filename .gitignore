@@ -28,6 +28,12 @@ pnpm-debug.log*
 # Losse referentie-templates (voorbeeld-PDF's, niet door de app gebruikt)
 *(template).pdf
 
+# Werkbestanden / klantgegevens in public/ — NOOIT naar de openbare repo
+/public/Klantafspraaklijst*.xls*
+/public/Afschakelbrieven.pdf
+/public/Blanco Brief.pdf
+/public/Factuur template .pdf
+
 # Privé: lokale inloggegevens-overzichten — NOOIT publiceren
 prive/
 

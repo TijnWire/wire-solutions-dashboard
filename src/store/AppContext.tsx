@@ -1036,7 +1036,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
   const addVoorschouwMap: AppState["addVoorschouwMap"] = (naam) => {
     const id = nextId("vmap");
-    setVoorschouwMappen((prev) => [...prev, { id, naam: naam.trim() || "Nieuwe map" }]);
+    setVoorschouwMappen((prev) => {
+      const maxVolgorde = prev.reduce((m, x) => Math.max(m, x.volgorde ?? -1), -1);
+      return [...prev, { id, naam: naam.trim() || "Nieuwe map", volgorde: maxVolgorde + 1, aangemaakt: new Date().toISOString() }];
+    });
     return id;
   };
   const updateVoorschouwMap: AppState["updateVoorschouwMap"] = (id, patch) =>

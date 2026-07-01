@@ -19,6 +19,8 @@ import {
   ChevronDown,
   Database,
   ScanLine,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { Card, Badge, Bevestig } from "../components/ui";
@@ -29,7 +31,7 @@ import {
   downloadVoorschouwenZip,
   mailVoorschouwenNaarStedin,
 } from "../lib/voorschouwPdf";
-import type { Voorschouw } from "../lib/types";
+import type { Voorschouw, VoorschouwMap } from "../lib/types";
 
 // Grote pop-up: map een naam geven en in één keer adressen aanvinken (met zoekbalk) om 'm te vullen.
 function NieuweMapModal({ voorschouwen, naamVan, voorinvulIds, onAnnuleer, onMaak }: {
@@ -206,6 +208,16 @@ export function Voorschouwen() {
   const [bewerkMapId, setBewerkMapId] = useState<string | null>(null);
   const [mapNaamConcept, setMapNaamConcept] = useState("");
   const [bevestigMap, setBevestigMap] = useState<{ id: string; naam: string; open: number } | null>(null);
+  // Mappen zoeken/filteren + sorteren (sorteervoorkeur lokaal per apparaat, NIET in de gesyncte store).
+  const [mapZoek, setMapZoek] = useState("");
+  const [sorteerModus, setSorteerModus] = useState<"eigen" | "naam" | "naamOmgekeerd" | "aantal" | "nieuw">(() => {
+    try {
+      const v = localStorage.getItem("vs-mapSort");
+      return v === "eigen" || v === "naam" || v === "naamOmgekeerd" || v === "aantal" || v === "nieuw" ? v : "naam";
+    } catch { return "naam"; }
+  });
+  const [teVerwijderenMap, setTeVerwijderenMap] = useState<{ id: string; naam: string; aantal: number } | null>(null);
+  useEffect(() => { try { localStorage.setItem("vs-mapSort", sorteerModus); } catch { /* opslag niet beschikbaar */ } }, [sorteerModus]);
 
   if (!currentUser) return null;
   const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer";
@@ -290,8 +302,33 @@ export function Voorschouwen() {
     if (bewerkMapId && mapNaamConcept.trim()) updateVoorschouwMap(bewerkMapId, { naam: mapNaamConcept.trim() });
     setBewerkMapId(null);
   };
-  const verwijderMap = (id: string, naam: string) => {
-    if (confirm(`Map “${naam}” verwijderen? De adressen blijven bestaan en komen onder “Zonder map”.`)) deleteVoorschouwMap(id);
+  const verwijderMap = (id: string, naam: string, aantal: number) => setTeVerwijderenMap({ id, naam, aantal });
+  const bevestigVerwijderMap = () => {
+    if (teVerwijderenMap) deleteVoorschouwMap(teVerwijderenMap.id);
+    setTeVerwijderenMap(null);
+  };
+  // Handmatige volgorde, met de mapnaam en tenslotte het id als stabiele tie-breaks (zo is de volgorde
+  // altijd deterministisch — ook als twee mappen tijdelijk hetzelfde volgnummer hebben).
+  const opEigenVolgorde = (a: VoorschouwMap, b: VoorschouwMap) =>
+    ((a.volgorde ?? Infinity) - (b.volgorde ?? Infinity)) || a.naam.localeCompare(b.naam, "nl") || a.id.localeCompare(b.id);
+  // Map omhoog/omlaag verplaatsen. Zodra alle mappen een volgnummer hebben wisselen we alléén de twee buren
+  // (2 schrijfacties) — zo raakt een pijl-klik geen mappen die de gebruiker niet verplaatst. Alleen als er
+  // nog oude mappen zonder volgnummer zijn, nummeren we eenmalig de hele lijst netjes 0..n-1.
+  const verplaatsMap = (id: string, richting: "omhoog" | "omlaag") => {
+    const rij = [...actieveMappen].sort(opEigenVolgorde);
+    const i = rij.findIndex((m) => m.id === id);
+    if (i === -1) return;
+    const doel = richting === "omhoog" ? i - 1 : i + 1;
+    if (doel < 0 || doel >= rij.length) return;
+    if (rij.every((m) => typeof m.volgorde === "number") && rij[i].volgorde !== rij[doel].volgorde) {
+      // Alle volgnummers aanwezig en verschillend → alleen de twee buren van volgnummer wisselen.
+      updateVoorschouwMap(rij[i].id, { volgorde: rij[doel].volgorde });
+      updateVoorschouwMap(rij[doel].id, { volgorde: rij[i].volgorde });
+    } else {
+      // Eenmalige nette nummering (met de gevraagde wissel meteen verwerkt).
+      [rij[i], rij[doel]] = [rij[doel], rij[i]];
+      rij.forEach((m, n) => { if (m.volgorde !== n) updateVoorschouwMap(m.id, { volgorde: n }); });
+    }
   };
   // Map naar de database versturen: bevestigingspopup → daarna verdwijnt hij uit de lijst en wordt bewaard onder "Voorschouwen".
   const naarDatabase = (id: string, naam: string, items: Voorschouw[]) => {
@@ -324,11 +361,37 @@ export function Voorschouwen() {
   // Groepeer de zichtbare voorschouwen per eigen map; losse adressen onder "Zonder map".
   const actieveMappen = voorschouwMappen.filter((m) => !m.gearchiveerd);
   const geldigeMapIds = new Set(actieveMappen.map((m) => m.id));
-  const gesorteerdeMappen = [...actieveMappen].sort((a, b) => a.naam.localeCompare(b.naam, "nl"));
-  const groepen: { map: { id: string; naam: string } | null; items: Voorschouw[] }[] =
-    gesorteerdeMappen.map((m) => ({ map: m, items: zichtbaar.filter((v) => v.mapId === m.id) }));
+  const gesorteerdeMappen = [...actieveMappen].sort((a, b) => a.naam.localeCompare(b.naam, "nl")); // voor het map-menu (voorspelbaar A–Z)
+  // Handmatige volgorde (voor de omhoog/omlaag-knoppen): bepaalt of een map boven- of onderaan staat.
+  const eigenVolgordeIds = [...actieveMappen].sort(opEigenVolgorde).map((m) => m.id);
+  // Mapgroepen in de gekozen sorteervolgorde; "Zonder map" komt altijd als laatste.
+  const opNaam = (a: VoorschouwMap, b: VoorschouwMap) => a.naam.localeCompare(b.naam, "nl");
+  const mapGroepen = actieveMappen.map((m) => ({ map: m, items: zichtbaar.filter((v) => v.mapId === m.id) }));
+  mapGroepen.sort((ga, gb) => {
+    switch (sorteerModus) {
+      case "naamOmgekeerd": return opNaam(gb.map, ga.map) || ga.map.id.localeCompare(gb.map.id);
+      case "aantal": return gb.items.length - ga.items.length || opNaam(ga.map, gb.map) || ga.map.id.localeCompare(gb.map.id);
+      case "nieuw": return (gb.map.aangemaakt ?? "").localeCompare(ga.map.aangemaakt ?? "") || opNaam(ga.map, gb.map) || ga.map.id.localeCompare(gb.map.id);
+      case "eigen": return opEigenVolgorde(ga.map, gb.map);
+      default: return opNaam(ga.map, gb.map) || ga.map.id.localeCompare(gb.map.id); // "naam" (A–Z)
+    }
+  });
+  const groepen: { map: { id: string; naam: string } | null; items: Voorschouw[] }[] = mapGroepen;
   const zonderMap = zichtbaar.filter((v) => !v.mapId || !geldigeMapIds.has(v.mapId));
   if (zonderMap.length) groepen.push({ map: null, items: zonderMap });
+
+  // Tekstfilter over de mappen-weergave: een map is zichtbaar als de naam matcht (dan alle adressen) of
+  // een adres matcht (dan alleen die adressen in de body). Puur cosmetisch — raakt de bulk-selectie niet.
+  const q = mapZoek.trim().toLowerCase();
+  const itemMatch = (v: Voorschouw) => `${v.straatnaam} ${v.postcode} ${v.plaats}`.toLowerCase().includes(q);
+  const weergave = groepen
+    .map((g) => {
+      const naamMatch = q === "" || (g.map?.naam ?? "zonder map").toLowerCase().includes(q);
+      const body = naamMatch ? g.items : g.items.filter(itemMatch);
+      return { map: g.map, items: g.items, body, toon: q === "" || naamMatch || body.length > 0 };
+    })
+    .filter((g) => g.toon);
+  const eigenModus = sorteerModus === "eigen" && q === ""; // alleen dan mag je met de pijlen herordenen
 
   // Eén adres-rij (in de lijst, binnen een map-groep).
   const rij = (v: Voorschouw) => {
@@ -503,18 +566,49 @@ export function Voorschouwen() {
             </button>
           </div>
 
-          {groepen.map((g) => {
+          {/* Mappen zoeken/filteren + sorteren — zichtbaar voor iedereen */}
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="relative min-w-0 flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" />
+              <input value={mapZoek} onChange={(e) => setMapZoek(e.target.value)} placeholder="Zoek map, straat of postcode…" aria-label="Mappen zoeken" className="w-full rounded-lg border border-ink-200 bg-white py-2 pl-9 pr-9 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100" />
+              {mapZoek && <button type="button" onClick={() => setMapZoek("")} aria-label="Zoekopdracht wissen" className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-ink-400 hover:bg-ink-100"><X className="h-4 w-4" /></button>}
+            </div>
+            {actieveMappen.length > 1 && (
+              <label className="flex shrink-0 items-center gap-1.5 sm:ml-auto">
+                <span className="text-xs text-ink-400">Sorteer</span>
+                <select value={sorteerModus} onChange={(e) => setSorteerModus(e.target.value as typeof sorteerModus)} aria-label="Mappen sorteren" className="rounded-lg border border-ink-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-ink-700 outline-none focus:border-brand-400">
+                  <option value="eigen">Eigen volgorde</option>
+                  <option value="naam">Naam (A–Z)</option>
+                  <option value="naamOmgekeerd">Naam (Z–A)</option>
+                  <option value="aantal">Meeste adressen</option>
+                  <option value="nieuw">Nieuwste eerst</option>
+                </select>
+              </label>
+            )}
+          </div>
+          {eigenModus && actieveMappen.length > 1 && isLeiding && (
+            <p className="-mt-2 text-xs text-ink-400">Gebruik de pijltjes ▲▼ om mappen te verslepen naar de gewenste volgorde.</p>
+          )}
+
+          {weergave.length === 0 ? (
+            <Card className="p-8 text-center">
+              <Search className="mx-auto h-8 w-8 text-ink-300" />
+              <p className="mt-2 text-sm text-ink-500">Geen mappen of adressen gevonden voor “{mapZoek.trim()}”.</p>
+              <button type="button" onClick={() => setMapZoek("")} className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-ink-200 bg-white px-3 py-1.5 text-xs font-semibold text-ink-700 hover:bg-ink-50"><X className="h-3.5 w-3.5" /> Zoekopdracht wissen</button>
+            </Card>
+          ) : weergave.map((g) => {
             const key = g.map?.id ?? "zonder";
-            const uitgeklapt = openMappen.has(key);
+            const uitgeklapt = q !== "" ? true : openMappen.has(key);
+            const idx = g.map ? eigenVolgordeIds.indexOf(g.map.id) : -1;
             return (
               <div key={key} className="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-card">
                 <div className="flex flex-wrap items-center gap-3 px-4 py-4">
                   <input
                     type="checkbox"
-                    checked={mapGeselecteerd(g.items)}
-                    ref={(el) => { if (el) el.indeterminate = mapDeels(g.items); }}
-                    onChange={() => toggleMapSelectie(g.items)}
-                    disabled={g.items.length === 0}
+                    checked={mapGeselecteerd(g.body)}
+                    ref={(el) => { if (el) el.indeterminate = mapDeels(g.body); }}
+                    onChange={() => toggleMapSelectie(g.body)}
+                    disabled={g.body.length === 0}
                     aria-label={`Map ${g.map ? g.map.naam : "zonder map"} selecteren`}
                     className="h-5 w-5 shrink-0 accent-brand-600 disabled:opacity-40"
                   />
@@ -542,17 +636,23 @@ export function Voorschouwen() {
                         <ChevronDown className={`h-5 w-5 shrink-0 text-ink-400 transition-transform ${uitgeklapt ? "" : "-rotate-90"}`} />
                         <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${g.map ? "bg-brand-50 text-brand-600" : "bg-ink-100 text-ink-400"}`}><Folder className="h-5 w-5" /></span>
                         <span className="truncate text-base font-bold text-ink-900">{g.map ? g.map.naam : "Zonder map"}</span>
-                        <span className="shrink-0 rounded-full bg-ink-100 px-2.5 py-0.5 text-xs font-medium text-ink-500">{g.items.length}</span>
+                        <span className="shrink-0 rounded-full bg-ink-100 px-2.5 py-0.5 text-xs font-medium text-ink-500">{q !== "" && g.body.length !== g.items.length ? `${g.body.length} van ${g.items.length}` : g.items.length}</span>
                       </button>
                       <div className="flex w-full items-center gap-2 sm:w-auto">
                         {isLeiding && g.map && (
                           <>
+                            {eigenModus && (
+                              <>
+                                <button type="button" onClick={() => verplaatsMap(g.map!.id, "omhoog")} disabled={idx <= 0} title="Map omhoog" aria-label="Map omhoog verplaatsen" className="shrink-0 rounded-lg p-2 text-ink-400 hover:bg-ink-100 hover:text-ink-700 disabled:cursor-not-allowed disabled:opacity-30"><ArrowUp className="h-4 w-4" /></button>
+                                <button type="button" onClick={() => verplaatsMap(g.map!.id, "omlaag")} disabled={idx < 0 || idx >= eigenVolgordeIds.length - 1} title="Map omlaag" aria-label="Map omlaag verplaatsen" className="shrink-0 rounded-lg p-2 text-ink-400 hover:bg-ink-100 hover:text-ink-700 disabled:cursor-not-allowed disabled:opacity-30"><ArrowDown className="h-4 w-4" /></button>
+                              </>
+                            )}
                             <button type="button" onClick={() => startBewerkMap(g.map!.id, g.map!.naam)} title="Naam wijzigen" aria-label="Map hernoemen" className="shrink-0 rounded-lg p-2 text-ink-400 hover:bg-ink-100 hover:text-brand-600"><Pencil className="h-4 w-4" /></button>
-                            <button type="button" onClick={() => verwijderMap(g.map!.id, g.map!.naam)} title="Map verwijderen" aria-label="Map verwijderen" className="shrink-0 rounded-lg p-2 text-red-400 hover:bg-red-50 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
+                            <button type="button" onClick={() => verwijderMap(g.map!.id, g.map!.naam, g.items.length)} title="Map verwijderen" aria-label="Map verwijderen" className="shrink-0 rounded-lg p-2 text-red-400 hover:bg-red-50 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
                             <button type="button" onClick={() => naarDatabase(g.map!.id, g.map!.naam, g.items)} disabled={g.items.length === 0} title="Map naar de database versturen" className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-3 py-2.5 text-sm font-semibold text-green-700 hover:bg-green-100 disabled:cursor-not-allowed disabled:opacity-40 sm:flex-none sm:py-2"><Database className="h-4 w-4 shrink-0" /> Naar database</button>
                           </>
                         )}
-                        <button type="button" onClick={() => void downloadMap(g.items)} disabled={g.items.length === 0 || bezig} title="Download deze map (ZIP)" className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-ink-200 px-3 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50 disabled:cursor-not-allowed disabled:opacity-40 sm:flex-none sm:py-2">
+                        <button type="button" onClick={() => void downloadMap(g.body)} disabled={g.body.length === 0 || bezig} title="Download deze map (ZIP)" className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-ink-200 px-3 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50 disabled:cursor-not-allowed disabled:opacity-40 sm:flex-none sm:py-2">
                           {bezig ? <Loader2 className="h-4 w-4 animate-spin" /> : <FolderArchive className="h-4 w-4 shrink-0" />}
                           Download
                         </button>
@@ -562,10 +662,10 @@ export function Voorschouwen() {
                 </div>
                 {uitgeklapt && (
                   <div className="border-t border-ink-100 bg-ink-50/30 p-3">
-                    {g.items.length === 0 ? (
+                    {g.body.length === 0 ? (
                       <p className="rounded-lg bg-white px-3 py-2 text-xs text-ink-400">Nog geen adressen in deze map. Kies bij een adres “{g.map?.naam}” in het map-menu.</p>
                     ) : (
-                      <div className="space-y-3">{g.items.map(rij)}</div>
+                      <div className="space-y-3">{g.body.map(rij)}</div>
                     )}
                   </div>
                 )}
@@ -599,6 +699,20 @@ export function Voorschouwen() {
         bevestigTone="brand"
         onBevestig={bevestigNaarDatabase}
         onAnnuleer={() => setBevestigMap(null)}
+      />
+
+      <Bevestig
+        open={!!teVerwijderenMap}
+        titel="Map verwijderen"
+        tekst={
+          teVerwijderenMap
+            ? `Map “${teVerwijderenMap.naam}” verwijderen? De ${teVerwijderenMap.aantal} adres${teVerwijderenMap.aantal === 1 ? "" : "sen"} ${teVerwijderenMap.aantal === 1 ? "blijft" : "blijven"} bestaan en ${teVerwijderenMap.aantal === 1 ? "komt" : "komen"} onder “Zonder map”.`
+            : ""
+        }
+        bevestigLabel="Verwijderen"
+        bevestigTone="rood"
+        onBevestig={bevestigVerwijderMap}
+        onAnnuleer={() => setTeVerwijderenMap(null)}
       />
     </div>
   );

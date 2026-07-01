@@ -275,7 +275,12 @@ export function Klanten({ initieelKey }: { initieelKey?: string }) {
           subtitel: `${items.length} voorschouw${items.length === 1 ? "" : "en"}`,
           datum: m.gearchiveerdOp,
           regels: items.map((v) => `${v.straatnaam || "Onbekende straat"}${v.plaats ? `, ${v.plaats}` : ""} — ${v.status}`),
-          herstel: () => updateVoorschouwMap(m.id, { gearchiveerd: false, gearchiveerdOp: undefined }),
+          herstel: () => {
+            // Zet de teruggehaalde map achteraan de handmatige volgorde (vers volgnummer), zodat het
+            // niet botst met de 0..n-1-nummering van de actieve mappen.
+            const maxActief = voorschouwMappen.filter((x) => !x.gearchiveerd).reduce((mx, x) => Math.max(mx, x.volgorde ?? -1), -1);
+            updateVoorschouwMap(m.id, { gearchiveerd: false, gearchiveerdOp: undefined, volgorde: maxActief + 1 });
+          },
         };
       }),
     },
