@@ -60,6 +60,7 @@ import {
   SEED_BUURTAANPAK,
 } from "../lib/seed";
 import { idbGet, idbSet } from "./db";
+import { mergeCollection, mergeTombstones, type Tombstones } from "../lib/merge";
 import { supabaseAan, sb, sbLeesAlles, sbSchrijf, sbVersies, sbLeesKeys, sbLogin, sbRegistreer, sbLogout, sbSessieEmail, bewaarSyncCred, wisSyncCred, sbHerstelSessie } from "../lib/supabase";
 
 // Oude browseropslag-sleutels — alleen nog om eenmalig naar IndexedDB te migreren.
@@ -264,6 +265,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [kennis, setKennis] = useState<KennisArtikel[]>(SEED_KENNIS);
   const [instellingen, setInstellingen] = useState<Instellingen>(SEED_INSTELLINGEN);
   const [klanten, setKlanten] = useState<Klant[]>(SEED_KLANTEN);
+  // Tombstones: welke records verwijderd zijn (per onderdeel). Zo brengt een samenvoeging een
+  // verwijderd record niet terug, maar blijft alle overige data behouden.
+  const [deletes, setDeletes] = useState<Tombstones>({});
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   // Supabase: actieve sessie + bijhouden wat we al gesynct hebben (tegen terugkaats-lussen).
   const [sbSessie, setSbSessie] = useState(false);
@@ -275,7 +279,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let actief = true;
     (async () => {
-      let [u, p, t, pp, pl, san, tw, v, r, af, fac, bed, loon, boe, communicatie, verl, kn, inst, kl, s, vm, med, og, ba] = await Promise.all([
+      let [u, p, t, pp, pl, san, tw, v, r, af, fac, bed, loon, boe, communicatie, verl, kn, inst, kl, s, vm, med, og, ba, del] = await Promise.all([
         laadSlice<User[]>("users", LS.users, SEED_USERS),
         laadSlice<Project[]>("projects", LS.projects, SEED_PROJECTS),
         laadSlice<Taak[]>("taken", LS.taken, SEED_TAKEN),
@@ -300,6 +304,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         laadSlice<Mededeling[]>("mededelingen", LS.mededelingen, []),
         laadSlice<Opdrachtgever[]>("opdrachtgevers", LS.opdrachtgevers, SEED_OPDRACHTGEVERS),
         laadSlice<Buurtaanpak[]>("buurtaanpak", LS.buurtaanpak, SEED_BUURTAANPAK),
+        laadSlice<Tombstones>("deletes", "wire.deletes", {}),
       ]);
       if (!actief) return;
       // Eenmalige schoonmaak: verwijder de voorbeeld-/demoprojecten en bijbehorende data, zodat het
@@ -423,6 +428,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setKennis(kn);
       setInstellingen({ ...SEED_INSTELLINGEN, ...inst });
       setKlanten(kl);
+      setDeletes(del ?? {});
       setCurrentUserId(s);
       setHydrated(true);
     })();
@@ -504,6 +510,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (hydrated) void idbSet("session", currentUserId);
   }, [currentUserId, hydrated]);
+  useEffect(() => {
+    if (hydrated) void idbSet("deletes", deletes);
+  }, [deletes, hydrated]);
 
   // ── Centrale database (Supabase) — alle onderdelen synchroniseren tussen apparaten ──
   // Per onderdeel: een setter (om binnenkomende data toe te passen) en de huidige waarde (om te pushen).
@@ -531,21 +540,78 @@ export function AppProvider({ children }: { children: ReactNode }) {
     kennis: (v) => setKennis(v as KennisArtikel[]),
     instellingen: (v) => setInstellingen(v as Instellingen),
     klanten: (v) => setKlanten(v as Klant[]),
+    deletes: (v) => setDeletes((prev) => mergeTombstones(prev, v as Tombstones)),
   };
   const waarden: Record<string, unknown> = {
     users, projects, taken, projectPosts, planningen, saneringen, tauw: tauwOpdrachten,
     voorschouwen, voorschouwMappen, mededelingen, rondes, afspraken, facturen, bedrijf,
     loonstroken, boetes, comm, verlof, kennis, instellingen, klanten, opdrachtgevers, buurtaanpak,
+    deletes,
   };
   // Altijd de NIEUWSTE lokale waarden beschikbaar in de sync-effecten (die niet bij elke data-wijziging
   // opnieuw opgebouwd worden). Nodig voor de wipe-bescherming hieronder.
   const waardenRef = useRef(waarden);
   waardenRef.current = waarden;
-  // Een gevulde lokale lijst mag NIET door een lege remote-lijst overschreven worden (en omgekeerd).
-  const wipeRisico = (key: string, remoteVal: unknown) => {
-    const lokaal = waardenRef.current[key];
-    return Array.isArray(remoteVal) && remoteVal.length === 0 && Array.isArray(lokaal) && lokaal.length > 0;
+  const deletesRef = useRef(deletes);
+  deletesRef.current = deletes;
+
+  // Onderdelen die een lijst van records met een `id` zijn — deze voegen we per record samen (nooit iets kwijt).
+  // De overige onderdelen (bedrijf, comm, instellingen) zijn losse objecten: daar wint de laatste versie.
+  const COLLECTIONS = new Set([
+    "users", "projects", "taken", "projectPosts", "planningen", "saneringen", "buurtaanpak", "tauw",
+    "voorschouwen", "voorschouwMappen", "mededelingen", "rondes", "afspraken", "facturen",
+    "opdrachtgevers", "loonstroken", "boetes", "verlof", "kennis", "klanten",
+  ]);
+
+  // Past binnenkomende centrale data toe: lijsten worden per record samengevoegd met wat er lokaal staat
+  // (zo verdwijnt een record nooit), verwijderde records blijven verwijderd. Losse objecten: laatste wint.
+  const applyRemote = (key: string, val: unknown) => {
+    if (key === "deletes") {
+      // Ref meteen (synchroon) bijwerken zodat lijst-samenvoegingen verderop in dezelfde ronde de
+      // nieuwe tombstones al meenemen — anders zou een net-verwijderd record heel even terugkomen.
+      deletesRef.current = mergeTombstones(deletesRef.current, val as Tombstones);
+      setDeletes(deletesRef.current);
+      return;
+    }
+    if (!(key in setters)) return;
+    if (COLLECTIONS.has(key)) {
+      const merged = mergeCollection(
+        waardenRef.current[key] as { id: string }[] | undefined,
+        val as { id: string }[] | undefined,
+        deletesRef.current[key]
+      );
+      setters[key](merged);
+    } else {
+      setters[key](val);
+    }
   };
+
+  // Onthoud dat records verwijderd zijn, zodat een samenvoeging (van dit of een ander apparaat) ze niet terugbrengt.
+  const tomb = (slice: string, ...ids: string[]) => {
+    if (!ids.length) return;
+    const nu = new Date().toISOString();
+    // Ref meteen bijwerken (synchroon) zodat de opschoon-effecten en samenvoegingen de verwijdering direct kennen.
+    const volgend: Tombstones = { ...deletesRef.current, [slice]: { ...(deletesRef.current[slice] ?? {}) } };
+    for (const id of ids) volgend[slice][id] = nu;
+    deletesRef.current = volgend;
+    setDeletes(volgend);
+  };
+
+  // Houd verwijderde records altijd uit de lijsten — ook als de verwijdering (tombstone) via een ander
+  // apparaat binnenkomt vóór of ná de bijbehorende lijst-update. Idempotent: draait alleen als er iets weg moet.
+  useEffect(() => {
+    if (!hydrated) return;
+    for (const key of COLLECTIONS) {
+      const tombs = deletes[key];
+      const setter = setters[key];
+      if (!tombs || !setter) continue;
+      const arr = waardenRef.current[key] as { id: string }[] | undefined;
+      if (Array.isArray(arr) && arr.some((it) => it && tombs[it.id])) {
+        setter(arr.filter((it) => !(it && tombs[it.id])));
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deletes, hydrated]);
 
   // ── Automatische veiligheidskopie (lokaal, IndexedDB) ──
   // Bewaart periodiek én vóór elke synchronisatie een back-up van alle gegevens. Een lege/kleinere staat
@@ -568,7 +634,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const snap = await idbGet<{ tijd: string; data: Record<string, unknown> }>("backup");
       if (!snap?.data) return false;
-      for (const [key, val] of Object.entries(snap.data)) setters[key]?.(val);
+      // Tombstones uit de kopie terugzetten (vervangen, niet samenvoegen) — anders zou de opschoning een
+      // teruggezet record meteen weer als "verwijderd" weghalen.
+      const snapDel = (snap.data.deletes as Tombstones) ?? {};
+      deletesRef.current = snapDel;
+      setDeletes(snapDel);
+      for (const [key, val] of Object.entries(snap.data)) {
+        if (key === "deletes") continue;
+        setters[key]?.(val);
+      }
       return true;
     } catch { return false; }
   };
@@ -606,13 +680,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Past binnenkomende remote-data toe — alleen écht gewijzigde slices, en niet terwijl we die zelf
     // aan het wegschrijven zijn (anders zou een net-gemaakte wijziging worden teruggedraaid).
     const pasToe = (remote: Record<string, unknown>) => {
+      // Tombstones eerst toepassen, zodat verwijderde records niet heel even terugkomen.
+      if ("deletes" in remote) {
+        const j = JSON.stringify(remote.deletes);
+        if (sync.current.gezien.deletes !== j) { sync.current.gezien.deletes = j; applyRemote("deletes", remote.deletes); }
+      }
       for (const [key, val] of Object.entries(remote)) {
-        if (!(key in setters) || sync.current.bezig.has(key)) continue;
-        if (wipeRisico(key, val)) continue; // lege remote mag onze gevulde lijst niet wissen
+        if (key === "deletes" || !(key in setters) || sync.current.bezig.has(key)) continue;
         const j = JSON.stringify(val);
         if (sync.current.gezien[key] === j) continue;
         sync.current.gezien[key] = j;
-        setters[key]?.(val);
+        applyRemote(key, val); // lijsten worden samengevoegd → een gevulde lokale lijst raakt nooit records kwijt
       }
     };
     const onthoudVersie = (key: string) => (ua: string) => { sync.current.versies[key] = ua; };
@@ -621,16 +699,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         const remote = await sbLeesAlles();
         if (!actief) return;
+        // Tombstones eerst, zodat verwijderde records niet via de samenvoeging terugkomen.
+        if ("deletes" in remote) { sync.current.gezien.deletes = JSON.stringify(remote.deletes); applyRemote("deletes", remote.deletes); }
         for (const [key, val] of Object.entries(remote)) {
-          if (wipeRisico(key, val)) {
-            // Remote is leeg maar lokaal gevuld → houd lokaal en zet remote terug goed (geen dataverlies).
-            sync.current.gezien[key] = JSON.stringify(waardenRef.current[key]);
-            sync.current.bezig.add(key);
-            void sbSchrijf(key, waardenRef.current[key]).then(onthoudVersie(key)).catch((e) => { sync.current.laatsteFout = String((e as Error)?.message ?? e); }).finally(() => sync.current.bezig.delete(key));
-            continue;
-          }
+          if (key === "deletes" || !(key in setters)) continue;
+          // Lokaal + centraal per record samenvoegen: een gevulde lokale lijst raakt nooit records kwijt,
+          // en records die alleen centraal staan komen erbij. Push (stap 3) stuurt de samenvoeging terug.
           sync.current.gezien[key] = JSON.stringify(val);
-          setters[key]?.(val);
+          applyRemote(key, val);
         }
         for (const key of Object.keys(setters)) {
           if (!(key in remote)) {
@@ -657,11 +733,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (!row?.key || !(row.key in setters)) return;
         if (row.updated_at) sync.current.versies[row.key] = row.updated_at; // bijgewerkt → 5s-poll haalt 'm niet nogmaals op
         if (sync.current.bezig.has(row.key)) return; // eigen push onderweg
-        if (wipeRisico(row.key, row.data)) return; // lege remote mag onze gevulde lijst niet wissen
         const j = JSON.stringify(row.data);
         if (sync.current.gezien[row.key] === j) return; // eigen wijziging — overslaan
         sync.current.gezien[row.key] = j;
-        setters[row.key](row.data);
+        applyRemote(row.key, row.data); // lijsten samenvoegen → nooit een record kwijt
       })
       .subscribe();
     // Automatische sync elke 5 seconden: eerst een piepkleine check op tijdstempels, en alléén de
@@ -717,7 +792,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       void sbSchrijf(key, waarden[key]).then((ua) => { sync.current.versies[key] = ua; }).catch((e) => { sync.current.laatsteFout = String((e as Error)?.message ?? e); }).finally(() => sync.current.bezig.delete(key));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supabaseAan, sbSessie, hydrated, users, projects, taken, projectPosts, planningen, saneringen, tauwOpdrachten, voorschouwen, voorschouwMappen, mededelingen, rondes, afspraken, facturen, bedrijf, loonstroken, boetes, comm, verlof, kennis, instellingen, klanten, opdrachtgevers, buurtaanpak]);
+  }, [supabaseAan, sbSessie, hydrated, users, projects, taken, projectPosts, planningen, saneringen, tauwOpdrachten, voorschouwen, voorschouwMappen, mededelingen, rondes, afspraken, facturen, bedrijf, loonstroken, boetes, comm, verlof, kennis, instellingen, klanten, opdrachtgevers, buurtaanpak, deletes]);
 
   const currentUser = users.find((u) => u.id === currentUserId) ?? null;
 
@@ -764,6 +839,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const deleteUser: AppState["deleteUser"] = (id) => {
     setUsers((prev) => prev.filter((u) => u.id !== id));
+    tomb("users", id);
     // Verwijder de medewerker ook uit alle projecttoewijzingen
     setProjects((prev) =>
       prev.map((p) => ({
@@ -778,9 +854,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Project verwijderen + de bijbehorende taken en projectberichten opruimen (geen wezen).
   const deleteProject: AppState["deleteProject"] = (id) => {
+    const takenWeg = taken.filter((t) => t.projectId === id).map((t) => t.id);
+    const postsWeg = projectPosts.filter((p) => p.projectId === id).map((p) => p.id);
+    const planningWeg = planningen.filter((pl) => pl.projectId === id).map((pl) => pl.id);
     setProjects((prev) => prev.filter((p) => p.id !== id));
     setTaken((prev) => prev.filter((t) => t.projectId !== id));
     setProjectPosts((prev) => prev.filter((p) => p.projectId !== id));
+    setPlanningen((prev) => prev.filter((pl) => pl.projectId !== id));
+    tomb("projects", id);
+    if (takenWeg.length) tomb("taken", ...takenWeg);
+    if (postsWeg.length) tomb("projectPosts", ...postsWeg);
+    if (planningWeg.length) tomb("planningen", ...planningWeg);
   };
 
   const updateTaak: AppState["updateTaak"] = (id, patch) =>
@@ -789,8 +873,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const addTaak: AppState["addTaak"] = (t) =>
     setTaken((prev) => [...prev, { ...t, id: nextId("t") }]);
 
-  const deleteTaak: AppState["deleteTaak"] = (id) =>
+  const deleteTaak: AppState["deleteTaak"] = (id) => {
     setTaken((prev) => prev.filter((t) => t.id !== id));
+    tomb("taken", id);
+  };
 
   const addProject: AppState["addProject"] = (p) => {
     const id = nextId("p");
@@ -805,8 +891,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return id;
   };
 
-  const deleteProjectPost: AppState["deleteProjectPost"] = (id) =>
+  const deleteProjectPost: AppState["deleteProjectPost"] = (id) => {
     setProjectPosts((prev) => prev.filter((p) => p.id !== id));
+    tomb("projectPosts", id);
+  };
 
   const addProjectReactie: AppState["addProjectReactie"] = (postId, r) =>
     setProjectPosts((prev) =>
@@ -847,8 +935,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const updatePlanning: AppState["updatePlanning"] = (projectId, patch) =>
     muteerPlanning(projectId, (pl) => ({ ...pl, ...patch }));
 
-  const deletePlanning: AppState["deletePlanning"] = (projectId) =>
+  const deletePlanning: AppState["deletePlanning"] = (projectId) => {
+    const weg = planningen.filter((p) => p.projectId === projectId).map((p) => p.id);
     setPlanningen((prev) => prev.filter((p) => p.projectId !== projectId));
+    if (weg.length) tomb("planningen", ...weg);
+  };
 
   const addPlanningDag: AppState["addPlanningDag"] = (projectId, datum) =>
     muteerPlanning(projectId, (pl) =>
@@ -889,8 +980,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
   const updateSanering: AppState["updateSanering"] = (id, patch) =>
     setSaneringen((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
-  const deleteSanering: AppState["deleteSanering"] = (id) =>
+  const deleteSanering: AppState["deleteSanering"] = (id) => {
     setSaneringen((prev) => prev.filter((s) => s.id !== id));
+    tomb("saneringen", id);
+  };
 
   const addBuurtaanpak: AppState["addBuurtaanpak"] = (b) => {
     const id = nextId("ba");
@@ -899,8 +992,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
   const updateBuurtaanpak: AppState["updateBuurtaanpak"] = (id, patch) =>
     setBuurtaanpak((prev) => prev.map((b) => (b.id === id ? { ...b, ...patch } : b)));
-  const deleteBuurtaanpak: AppState["deleteBuurtaanpak"] = (id) =>
+  const deleteBuurtaanpak: AppState["deleteBuurtaanpak"] = (id) => {
     setBuurtaanpak((prev) => prev.filter((b) => b.id !== id));
+    tomb("buurtaanpak", id);
+  };
   const addTauw: AppState["addTauw"] = (t) => {
     const id = nextId("tauw");
     setTauwOpdrachten((prev) => [{ ...t, id }, ...prev]);
@@ -908,8 +1003,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
   const updateTauw: AppState["updateTauw"] = (id, patch) =>
     setTauwOpdrachten((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
-  const deleteTauw: AppState["deleteTauw"] = (id) =>
+  const deleteTauw: AppState["deleteTauw"] = (id) => {
     setTauwOpdrachten((prev) => prev.filter((t) => t.id !== id));
+    tomb("tauw", id);
+  };
   const updateTauwStap: AppState["updateTauwStap"] = (id, key, patch) =>
     setTauwOpdrachten((prev) =>
       prev.map((t) => {
@@ -933,8 +1030,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const updateVoorschouw: AppState["updateVoorschouw"] = (id, patch) =>
     setVoorschouwen((prev) => prev.map((v) => (v.id === id ? { ...v, ...patch } : v)));
 
-  const deleteVoorschouw: AppState["deleteVoorschouw"] = (id) =>
+  const deleteVoorschouw: AppState["deleteVoorschouw"] = (id) => {
     setVoorschouwen((prev) => prev.filter((v) => v.id !== id));
+    tomb("voorschouwen", id);
+  };
   const addVoorschouwMap: AppState["addVoorschouwMap"] = (naam) => {
     const id = nextId("vmap");
     setVoorschouwMappen((prev) => [...prev, { id, naam: naam.trim() || "Nieuwe map" }]);
@@ -944,6 +1043,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setVoorschouwMappen((prev) => prev.map((m) => (m.id === id ? { ...m, ...patch, naam: (patch.naam ?? m.naam).trim() || m.naam } : m)));
   const deleteVoorschouwMap: AppState["deleteVoorschouwMap"] = (id) => {
     setVoorschouwMappen((prev) => prev.filter((m) => m.id !== id));
+    tomb("voorschouwMappen", id);
     // Adressen in deze map losmaken (de voorschouwen zelf blijven bestaan).
     setVoorschouwen((prev) => prev.map((v) => (v.mapId === id ? { ...v, mapId: undefined } : v)));
   };
@@ -953,8 +1053,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setMededelingen((prev) => [{ ...m, id, aangemaakt: new Date().toISOString(), gezienDoor: [] }, ...prev]);
     return id;
   };
-  const deleteMededeling: AppState["deleteMededeling"] = (id) =>
+  const deleteMededeling: AppState["deleteMededeling"] = (id) => {
     setMededelingen((prev) => prev.filter((m) => m.id !== id));
+    tomb("mededelingen", id);
+  };
   const toggleMededelingGezien: AppState["toggleMededelingGezien"] = (id, userId) =>
     setMededelingen((prev) => prev.map((m) => (m.id === id ? { ...m, gezienDoor: m.gezienDoor.includes(userId) ? m.gezienDoor.filter((u) => u !== userId) : [...m.gezienDoor, userId] } : m)));
   const toggleMededelingPin: AppState["toggleMededelingPin"] = (id) =>
@@ -969,8 +1071,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const updateRonde: AppState["updateRonde"] = (id, patch) =>
     setRondes((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
 
-  const deleteRonde: AppState["deleteRonde"] = (id) =>
+  const deleteRonde: AppState["deleteRonde"] = (id) => {
     setRondes((prev) => prev.filter((r) => r.id !== id));
+    tomb("rondes", id);
+  };
 
   const addAfspraak: AppState["addAfspraak"] = (a) => {
     const id = nextId("af");
@@ -981,8 +1085,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const updateAfspraak: AppState["updateAfspraak"] = (id, patch) =>
     setAfspraken((prev) => prev.map((a) => (a.id === id ? { ...a, ...patch } : a)));
 
-  const deleteAfspraak: AppState["deleteAfspraak"] = (id) =>
+  const deleteAfspraak: AppState["deleteAfspraak"] = (id) => {
     setAfspraken((prev) => prev.filter((a) => a.id !== id));
+    tomb("afspraken", id);
+  };
 
   const addFactuur: AppState["addFactuur"] = (f) => {
     const id = nextId("f");
@@ -993,8 +1099,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const updateFactuur: AppState["updateFactuur"] = (id, patch) =>
     setFacturen((prev) => prev.map((f) => (f.id === id ? { ...f, ...patch } : f)));
 
-  const deleteFactuur: AppState["deleteFactuur"] = (id) =>
+  const deleteFactuur: AppState["deleteFactuur"] = (id) => {
     setFacturen((prev) => prev.filter((f) => f.id !== id));
+    tomb("facturen", id);
+  };
 
   const addOpdrachtgever: AppState["addOpdrachtgever"] = (o) => {
     const id = nextId("og");
@@ -1003,8 +1111,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
   const updateOpdrachtgever: AppState["updateOpdrachtgever"] = (id, patch) =>
     setOpdrachtgevers((prev) => prev.map((o) => (o.id === id ? { ...o, ...patch } : o)));
-  const deleteOpdrachtgever: AppState["deleteOpdrachtgever"] = (id) =>
+  const deleteOpdrachtgever: AppState["deleteOpdrachtgever"] = (id) => {
     setOpdrachtgevers((prev) => prev.filter((o) => o.id !== id));
+    tomb("opdrachtgevers", id);
+  };
 
   const updateBedrijf: AppState["updateBedrijf"] = (patch) =>
     setBedrijf((prev) => ({ ...prev, ...patch }));
@@ -1016,8 +1126,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
   const updateLoonstrook: AppState["updateLoonstrook"] = (id, patch) =>
     setLoonstroken((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
-  const deleteLoonstrook: AppState["deleteLoonstrook"] = (id) =>
+  const deleteLoonstrook: AppState["deleteLoonstrook"] = (id) => {
     setLoonstroken((prev) => prev.filter((l) => l.id !== id));
+    tomb("loonstroken", id);
+  };
 
   const addBoete: AppState["addBoete"] = (b) => {
     const id = nextId("bo");
@@ -1026,8 +1138,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
   const updateBoete: AppState["updateBoete"] = (id, patch) =>
     setBoetes((prev) => prev.map((b) => (b.id === id ? { ...b, ...patch } : b)));
-  const deleteBoete: AppState["deleteBoete"] = (id) =>
+  const deleteBoete: AppState["deleteBoete"] = (id) => {
     setBoetes((prev) => prev.filter((b) => b.id !== id));
+    tomb("boetes", id);
+  };
 
   const updateComm: AppState["updateComm"] = (patch) =>
     setComm((prev) => ({ ...prev, ...patch }));
@@ -1039,8 +1153,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
   const updateVerlof: AppState["updateVerlof"] = (id, patch) =>
     setVerlof((prev) => prev.map((x) => (x.id === id ? { ...x, ...patch } : x)));
-  const deleteVerlof: AppState["deleteVerlof"] = (id) =>
+  const deleteVerlof: AppState["deleteVerlof"] = (id) => {
     setVerlof((prev) => prev.filter((x) => x.id !== id));
+    tomb("verlof", id);
+  };
 
   const addKennis: AppState["addKennis"] = (k) => {
     const id = nextId("kb");
@@ -1049,8 +1165,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
   const updateKennis: AppState["updateKennis"] = (id, patch) =>
     setKennis((prev) => prev.map((x) => (x.id === id ? { ...x, ...patch } : x)));
-  const deleteKennis: AppState["deleteKennis"] = (id) =>
+  const deleteKennis: AppState["deleteKennis"] = (id) => {
     setKennis((prev) => prev.filter((x) => x.id !== id));
+    tomb("kennis", id);
+  };
 
   const updateInstellingen: AppState["updateInstellingen"] = (patch) =>
     setInstellingen((prev) => ({ ...prev, ...patch }));
@@ -1062,8 +1180,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
   const updateKlant: AppState["updateKlant"] = (id, patch) =>
     setKlanten((prev) => prev.map((x) => (x.id === id ? { ...x, ...patch } : x)));
-  const deleteKlant: AppState["deleteKlant"] = (id) =>
+  const deleteKlant: AppState["deleteKlant"] = (id) => {
     setKlanten((prev) => prev.filter((x) => x.id !== id));
+    tomb("klanten", id);
+  };
 
   return (
     <AppCtx.Provider
