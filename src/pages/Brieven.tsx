@@ -13,7 +13,6 @@ import {
   ChevronRight,
   X,
   Mailbox,
-  Database,
   Check,
   CheckSquare,
   Square,
@@ -207,7 +206,6 @@ function RondeDetail({ ronde, onTerug }: { ronde: Brievenronde; onTerug: () => v
   const [losNr, setLosNr] = useState("");
   const [losToev, setLosToev] = useState("");
   const [verwijder, setVerwijder] = useState(false);
-  const [naarDb, setNaarDb] = useState(false);
   const [bevestigGereed, setBevestigGereed] = useState(false);
   const [selectie, setSelectie] = useState<Set<string>>(new Set());
 
@@ -237,7 +235,6 @@ function RondeDetail({ ronde, onTerug }: { ronde: Brievenronde; onTerug: () => v
   const goedkeuren = () => updateRonde(ronde.id, { status: "gecontroleerd", gecontroleerdDoor: currentUser?.id, gecontroleerdOp: nu() });
   // Afronden = klaar → meteen door naar de boekhouding (verschijnt bij Facturen + als melding).
   const afronden = () => updateRonde(ronde.id, { status: "verstuurd", verstuurdOp: nu(), boekhouding: "te_factureren", doorgestuurdOp: nu() });
-  const naarDatabase = () => { updateRonde(ronde.id, { gearchiveerd: true, gearchiveerdOp: nu() }); setNaarDb(false); onTerug(); };
 
   // Concept-factuur aanmaken op basis van het aantal gegooide brieven (behoud van de oude werkstroom-stap).
   const maakFactuur = () => {
@@ -385,7 +382,6 @@ function RondeDetail({ ronde, onTerug }: { ronde: Brievenronde; onTerug: () => v
           {status === "verstuurd" && (
             <div className="flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-1.5 text-sm font-medium text-green-700"><Check className="h-4 w-4" /> Afgerond{ronde.verstuurdOp ? ` op ${datumKort(ronde.verstuurdOp)}` : ""}.</span>
-              {isLeiding && <button type="button" onClick={() => setNaarDb(true)} className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm font-semibold text-green-700 hover:bg-green-100"><Database className="h-4 w-4" /> Naar database</button>}
               {isLeiding && <button type="button" onClick={terugNaarWerknemer} className={knopKlein}><RotateCcw className="h-3.5 w-3.5" /> Heropenen</button>}
             </div>
           )}
@@ -706,15 +702,6 @@ function RondeDetail({ ronde, onTerug }: { ronde: Brievenronde; onTerug: () => v
         tekst={`Weet je het zeker dat je de ronde "${ronde.straat}" wilt verwijderen? Alle ${adressen.length} adressen gaan verloren.`}
         onBevestig={() => { deleteRonde(ronde.id); setVerwijder(false); onTerug(); }}
         onAnnuleer={() => setVerwijder(false)}
-      />
-      <Bevestig
-        open={naarDb}
-        titel="Naar de database versturen"
-        tekst={`Ronde "${ronde.straat}" naar de database versturen? Hij verdwijnt uit deze lijst en wordt bewaard in de database.`}
-        bevestigLabel="Naar database"
-        bevestigTone="brand"
-        onBevestig={naarDatabase}
-        onAnnuleer={() => setNaarDb(false)}
       />
     </div>
   );

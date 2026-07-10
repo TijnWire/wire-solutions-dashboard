@@ -13,6 +13,9 @@ export type User = {
   functie: string;
   werknemer?: boolean; // beheerder die óók veldwerk doet
   beheerRechten?: string[]; // welke onderdelen een beheerder mag beheren (nav-keys); undefined = alles
+  // Door de beheerder afgedwongen wachtwoordwissel: bij de eerstvolgende login moet de medewerker een
+  // nieuw eigen wachtwoord kiezen (na een admin-reset). Wordt daarna weer op false gezet.
+  moetWachtwoordWijzigen?: boolean;
   // Vast contract / standaardloon — wordt automatisch in een nieuwe loonstrook ingevuld.
   contract?: { periodeType?: PeriodeType; bruto?: number; bijtelling?: number; netto?: number; uren?: number };
 };
@@ -234,6 +237,30 @@ export type Afspraak = {
   toegewezenAan?: string; // monteur (user id)
   status: AfspraakStatus;
   notitie: string;
+  email?: string; // e-mail van de klant (o.a. om te informeren bij annulering)
+  annuleringGemeld?: boolean; // true zodra de betrokkenen zijn geïnformeerd over het vervallen
+};
+
+// ── Agenda-items (snelle losse agenda-notities met tijd) ──
+export type AgendaItem = {
+  id: string;
+  titel: string;
+  datum: string; // ISO
+  tijd: string;  // "HH:MM" ("" = hele dag)
+  toegewezenAan?: string; // user id
+  notitie?: string;
+  klaar?: boolean;
+  aangemaakt: string; // ISO
+};
+
+// ── Persoonlijke to-do's (afvinkbare checklist) ──
+export type Todo = {
+  id: string;
+  tekst: string;
+  klaar: boolean;
+  userId: string;   // eigenaar van de to-do
+  datum?: string;   // optioneel gekoppeld aan een agenda-dag (ISO)
+  aangemaakt: string; // ISO
 };
 
 // ── Documenten / Facturen ──
@@ -346,6 +373,26 @@ export type Verlof = {
   tot: string; // ISO datum
   status: VerlofStatus;
   notitie: string;
+};
+
+// ── Schouwafspraken (planning van voorschouw-/schouwbezoeken) ──
+export type SchouwStatus = "In te plannen" | "Ingepland" | "Uitgevoerd" | "Geannuleerd";
+export const SCHOUW_STATUSSEN: SchouwStatus[] = ["In te plannen", "Ingepland", "Uitgevoerd", "Geannuleerd"];
+
+export type Schouwafspraak = {
+  id: string;
+  straat: string;
+  huisnummer: string;
+  postcode: string;
+  plaats: string;
+  contactNaam: string;
+  telefoon: string;
+  datum: string; // ISO datum ("" = nog niet ingepland)
+  tijd: string;  // "HH:MM" ("" = geen tijd)
+  toegewezenAan?: string; // user id van de schouwer
+  status: SchouwStatus;
+  notitie: string;
+  aangemaakt: string; // ISO
 };
 
 // ── Klanten & Database ──

@@ -1,8 +1,9 @@
 import { Fragment, useRef, useState } from "react";
-import { ArrowLeft, Plus, FlaskConical, Trash2, MessageCircle, Phone, Navigation, FileDown, FileUp, Mail, Check, Wand2, ChevronRight, ChevronDown, X, UserPlus, RotateCcw, Footprints, Loader2, Search, CalendarClock, Pencil, Database } from "lucide-react";
+import { ArrowLeft, Plus, FlaskConical, Trash2, MessageCircle, Phone, Navigation, FileDown, FileUp, Mail, Check, Wand2, ChevronRight, ChevronDown, X, UserPlus, RotateCcw, Footprints, Loader2, Search, CalendarClock, Pencil } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { WerknemerKiezer } from "../components/WerknemerKiezer";
 import { DatumKiezer } from "../components/DatumKiezer";
+import { TijdKiezer } from "../components/TijdKiezer";
 import { Card, Badge, Bevestig } from "../components/ui";
 import { afleidRegio } from "../lib/regio";
 import { waUrl } from "../lib/communicatie";
@@ -180,7 +181,7 @@ function TauwAdresKaart({ adres, nr, type, vergrendeld, magVerwijderen, geselect
         </label>
         <label className="block">
           <span className={adresLabel}>Tijd</span>
-          <input type="time" disabled={vergrendeld} value={isTijd(adres.tijd) ? adres.tijd : ""} onChange={(e) => onChange({ tijd: e.target.value })} className={veld} title="Afspraaktijd" />
+          <TijdKiezer value={isTijd(adres.tijd) ? adres.tijd : ""} onChange={(tijd) => onChange({ tijd })} disabled={vergrendeld} size="sm" />
         </label>
       </div>
 
@@ -587,7 +588,6 @@ function TauwDetail({ opdracht, onTerug }: { opdracht: TauwOpdracht; onTerug: ()
           {status === "verstuurd" && (
             <div className="flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-1.5 text-sm font-medium text-green-700"><Check className="h-4 w-4" /> Verstuurd{opdracht.verstuurdOp ? ` op ${datumKort(opdracht.verstuurdOp)}` : ""}.</span>
-              {isLeiding && <button type="button" onClick={() => { updateTauw(opdracht.id, { gearchiveerd: true, gearchiveerdOp: nu() }); onTerug(); }} className={knopPrimair}><Database className="h-4 w-4" /> Verstuur naar database</button>}
               {isLeiding && <button type="button" onClick={terugNaarWerknemer} className={knopKlein}><RotateCcw className="h-3.5 w-3.5" /> Heropenen</button>}
             </div>
           )}

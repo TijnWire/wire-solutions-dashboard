@@ -235,11 +235,11 @@ export function Klanten({ initieelKey }: { initieelKey?: string }) {
   const zichtbaar = q ? alle.filter((a) => `${a.naam} ${a.straat} ${a.huisnummer} ${a.postcode} ${a.plaats}`.toLowerCase().includes(q)) : alle;
 
   // ── Projectarchief: 4 mappen met afgeronde projecten die naar de database zijn verstuurd ──
-  type ArchiefRij = { id: string; titel: string; subtitel: string; datum?: string; regels: string[]; herstel: () => void };
+  type ArchiefRij = { id: string; titel: string; subtitel: string; datum?: string; regels: string[]; gearchiveerd: boolean; herstel: () => void };
   const projectMappen: { key: string; label: string; Icon: typeof Mailbox; rijen: ArchiefRij[] }[] = [
     {
       key: "brieven", label: "Brieven & Routes", Icon: Mailbox,
-      rijen: rondes.filter((r) => r.gearchiveerd).map((r) => {
+      rijen: rondes.map((r) => {
         const te = r.adressen.filter((a) => !a.ontbreekt);
         return {
           id: r.id,
@@ -247,13 +247,14 @@ export function Klanten({ initieelKey }: { initieelKey?: string }) {
           subtitel: [[r.postcode, r.plaats].filter(Boolean).join(" "), `${te.length} adres${te.length === 1 ? "" : "sen"}`].filter(Boolean).join(" · "),
           datum: r.gearchiveerdOp,
           regels: te.map((a) => `${r.straat} ${a.huisnummer}${a.toevoeging || ""} — ${a.status}`),
+          gearchiveerd: !!r.gearchiveerd,
           herstel: () => updateRonde(r.id, { gearchiveerd: false, gearchiveerdOp: undefined }),
         };
       }),
     },
     {
       key: "saneren", label: "Saneren", Icon: Recycle,
-      rijen: saneringen.filter((s) => s.gearchiveerd).map((s) => {
+      rijen: saneringen.map((s) => {
         const adr = s.adressen ?? [];
         return {
           id: s.id,
@@ -261,13 +262,14 @@ export function Klanten({ initieelKey }: { initieelKey?: string }) {
           subtitel: [s.regio, `${adr.length} adres${adr.length === 1 ? "" : "sen"}`].filter(Boolean).join(" · "),
           datum: s.gearchiveerdOp,
           regels: adr.map((a) => `${a.straat} ${a.huisnummer}`.trim() + (a.naam ? ` — ${a.naam}` : "") + (a.bevestigd ? " ✓" : "")),
+          gearchiveerd: !!s.gearchiveerd,
           herstel: () => updateSanering(s.id, { gearchiveerd: false, gearchiveerdOp: undefined }),
         };
       }),
     },
     {
       key: "voorschouwen", label: "Voorschouwen", Icon: ClipboardCheck,
-      rijen: voorschouwMappen.filter((m) => m.gearchiveerd).map((m) => {
+      rijen: voorschouwMappen.map((m) => {
         const items = voorschouwen.filter((v) => v.mapId === m.id);
         return {
           id: m.id,
@@ -275,6 +277,7 @@ export function Klanten({ initieelKey }: { initieelKey?: string }) {
           subtitel: `${items.length} voorschouw${items.length === 1 ? "" : "en"}`,
           datum: m.gearchiveerdOp,
           regels: items.map((v) => `${v.straatnaam || "Onbekende straat"}${v.plaats ? `, ${v.plaats}` : ""} — ${v.status}`),
+          gearchiveerd: !!m.gearchiveerd,
           herstel: () => {
             // Zet de teruggehaalde map achteraan de handmatige volgorde (vers volgnummer), zodat het
             // niet botst met de 0..n-1-nummering van de actieve mappen.
@@ -286,12 +289,13 @@ export function Klanten({ initieelKey }: { initieelKey?: string }) {
     },
     {
       key: "tauw", label: "TAUW", Icon: FlaskConical,
-      rijen: tauwOpdrachten.filter((o) => o.gearchiveerd).map((o) => ({
+      rijen: tauwOpdrachten.map((o) => ({
         id: o.id,
         titel: o.referentie || o.regio || "TAUW-opdracht",
         subtitel: [TAUW_TYPE_LABEL[o.type], o.regio, `${o.adressen.length} adres${o.adressen.length === 1 ? "" : "sen"}`].filter(Boolean).join(" · "),
         datum: o.gearchiveerdOp,
         regels: o.adressen.map((a) => `${a.straat} ${a.huisnummer}${a.plaats ? `, ${a.plaats}` : ""}`),
+        gearchiveerd: !!o.gearchiveerd,
         herstel: () => updateTauw(o.id, { gearchiveerd: false, gearchiveerdOp: undefined }),
       })),
     },
@@ -323,8 +327,8 @@ export function Klanten({ initieelKey }: { initieelKey?: string }) {
       {tab === "projecten" && (
       <div className="space-y-4">
         <div className="flex flex-wrap items-center gap-3">
-          <span className="text-xs text-ink-400">{totaalGearchiveerd} bewaard · gegroepeerd per projectsoort</span>
-          <span className="ml-auto hidden text-xs text-ink-400 sm:block">Afgeronde projecten verstuur je vanuit de projectpagina naar de database.</span>
+          <span className="text-xs text-ink-400">{totaalGearchiveerd} {totaalGearchiveerd === 1 ? "project" : "projecten"} · gegroepeerd per projectsoort</span>
+          <span className="ml-auto hidden text-xs text-ink-400 sm:block">Alle projecten komen hier automatisch te staan.</span>
         </div>
         {projectMappen.map((cat) => {
           const openCat = geopendCat.has(cat.key);
@@ -335,7 +339,7 @@ export function Klanten({ initieelKey }: { initieelKey?: string }) {
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600"><Icon className="h-5 w-5" /></span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-base font-bold text-ink-900">{cat.label}</span>
-                  <span className="block text-xs text-ink-500">{cat.rijen.length} {cat.rijen.length === 1 ? "project" : "projecten"} bewaard</span>
+                  <span className="block text-xs text-ink-500">{cat.rijen.length} {cat.rijen.length === 1 ? "project" : "projecten"}</span>
                 </span>
                 <span className="rounded-full bg-ink-100 px-2.5 py-0.5 text-xs font-medium text-ink-500">{cat.rijen.length}</span>
                 <ChevronDown className={`h-5 w-5 shrink-0 text-ink-400 transition-transform ${openCat ? "" : "-rotate-90"}`} />
@@ -343,7 +347,7 @@ export function Klanten({ initieelKey }: { initieelKey?: string }) {
               {openCat && (
                 <div className="space-y-2 border-t border-ink-100 bg-ink-50/30 p-3">
                     {cat.rijen.length === 0 ? (
-                      <p className="rounded-lg bg-white px-3 py-2.5 text-xs text-ink-400">Nog niets gearchiveerd. Klik bij een afgerond {cat.label}-project op “Naar database”.</p>
+                      <p className="rounded-lg bg-white px-3 py-2.5 text-xs text-ink-400">Nog geen {cat.label}-projecten.</p>
                     ) : (
                       cat.rijen.map((rij) => {
                         const rijOpen = geopendArchief.has(rij.id);
@@ -357,7 +361,7 @@ export function Klanten({ initieelKey }: { initieelKey?: string }) {
                                   <span className="block truncate text-xs text-ink-500">{rij.subtitel}{rij.datum ? ` · gearchiveerd ${new Date(rij.datum).toLocaleDateString("nl-NL")}` : ""}</span>
                                 </span>
                               </button>
-                              {isLeiding && (
+                              {isLeiding && rij.gearchiveerd && (
                                 <button type="button" onClick={() => rij.herstel()} title="Terugzetten naar het project" className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-2.5 py-1.5 text-xs font-semibold text-ink-700 hover:bg-ink-50">
                                   <RotateCcw className="h-3.5 w-3.5" /> Terugzetten
                                 </button>

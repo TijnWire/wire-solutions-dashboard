@@ -17,7 +17,6 @@ import {
   Search,
   Check,
   ChevronDown,
-  Database,
   ScanLine,
   ArrowUp,
   ArrowDown,
@@ -207,7 +206,6 @@ export function Voorschouwen() {
   const [openMappen, setOpenMappen] = useState<Set<string>>(new Set()); // standaard alle mappen dicht
   const [bewerkMapId, setBewerkMapId] = useState<string | null>(null);
   const [mapNaamConcept, setMapNaamConcept] = useState("");
-  const [bevestigMap, setBevestigMap] = useState<{ id: string; naam: string; open: number } | null>(null);
   // Mappen zoeken/filteren + sorteren (sorteervoorkeur lokaal per apparaat, NIET in de gesyncte store).
   const [mapZoek, setMapZoek] = useState("");
   const [sorteerModus, setSorteerModus] = useState<"eigen" | "naam" | "naamOmgekeerd" | "aantal" | "nieuw">(() => {
@@ -329,14 +327,6 @@ export function Voorschouwen() {
       [rij[i], rij[doel]] = [rij[doel], rij[i]];
       rij.forEach((m, n) => { if (m.volgorde !== n) updateVoorschouwMap(m.id, { volgorde: n }); });
     }
-  };
-  // Map naar de database versturen: bevestigingspopup → daarna verdwijnt hij uit de lijst en wordt bewaard onder "Voorschouwen".
-  const naarDatabase = (id: string, naam: string, items: Voorschouw[]) => {
-    setBevestigMap({ id, naam, open: items.filter((v) => v.status !== "Ingediend").length });
-  };
-  const bevestigNaarDatabase = () => {
-    if (bevestigMap) updateVoorschouwMap(bevestigMap.id, { gearchiveerd: true, gearchiveerdOp: new Date().toISOString() });
-    setBevestigMap(null);
   };
   const kiesMap = (v: Voorschouw, waarde: string) => {
     if (waarde === "__nieuw__") { setVoorinvulIds([v.id]); setNieuweMapOpen(true); return; }
@@ -649,7 +639,6 @@ export function Voorschouwen() {
                             )}
                             <button type="button" onClick={() => startBewerkMap(g.map!.id, g.map!.naam)} title="Naam wijzigen" aria-label="Map hernoemen" className="shrink-0 rounded-lg p-2 text-ink-400 hover:bg-ink-100 hover:text-brand-600"><Pencil className="h-4 w-4" /></button>
                             <button type="button" onClick={() => verwijderMap(g.map!.id, g.map!.naam, g.items.length)} title="Map verwijderen" aria-label="Map verwijderen" className="shrink-0 rounded-lg p-2 text-red-400 hover:bg-red-50 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
-                            <button type="button" onClick={() => naarDatabase(g.map!.id, g.map!.naam, g.items)} disabled={g.items.length === 0} title="Map naar de database versturen" className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-3 py-2.5 text-sm font-semibold text-green-700 hover:bg-green-100 disabled:cursor-not-allowed disabled:opacity-40 sm:flex-none sm:py-2"><Database className="h-4 w-4 shrink-0" /> Naar database</button>
                           </>
                         )}
                         <button type="button" onClick={() => void downloadMap(g.body)} disabled={g.body.length === 0 || bezig} title="Download deze map (ZIP)" className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-ink-200 px-3 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50 disabled:cursor-not-allowed disabled:opacity-40 sm:flex-none sm:py-2">
@@ -685,21 +674,6 @@ export function Voorschouwen() {
         />
       )}
 
-      <Bevestig
-        open={!!bevestigMap}
-        titel="Naar de database versturen"
-        tekst={
-          bevestigMap
-            ? bevestigMap.open > 0
-              ? `Weet je het zeker dat map “${bevestigMap.naam}” naar de database moet? Let op: er ${bevestigMap.open === 1 ? "is" : "zijn"} nog ${bevestigMap.open} adres${bevestigMap.open === 1 ? "" : "sen"} niet ingediend. De map verdwijnt uit deze lijst en wordt in de database bewaard.`
-              : `Weet je het zeker dat map “${bevestigMap.naam}” naar de database moet? De map verdwijnt uit deze lijst en wordt in de database bewaard.`
-            : ""
-        }
-        bevestigLabel="Naar database"
-        bevestigTone="brand"
-        onBevestig={bevestigNaarDatabase}
-        onAnnuleer={() => setBevestigMap(null)}
-      />
 
       <Bevestig
         open={!!teVerwijderenMap}

@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { Plus, ArrowLeft, Download, Pencil, Trash2, Receipt, X, FileSpreadsheet, Check, Users } from "lucide-react";
+import { Plus, ArrowLeft, Download, Pencil, Trash2, Receipt, X, FileSpreadsheet, Check, Users, Search } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { DatumKiezer } from "../components/DatumKiezer";
 import { Keuze } from "../components/Keuze";
 import { Card, Badge, Bevestig } from "../components/ui";
 import { downloadFactuurPdf, factuurTotalen, euro } from "../lib/factuurPdf";
 import { exporteerExcel } from "../lib/excel";
+import { weekStartISO, weekLabel, isISODatum } from "../lib/week";
 import type { Factuur, FactuurRegel, FactuurStatus, Project, Opdrachtgever, Buurtaanpak, Brievenronde } from "../lib/types";
 
 const statusTone: Record<FactuurStatus, string> = {
@@ -291,6 +292,11 @@ export function Facturen({ initieelFactuur }: { initieelFactuur?: string }) {
   const [bewerk, setBewerk] = useState<Factuur | undefined>(undefined);
   const [nieuwVan, setNieuwVan] = useState<Omit<Factuur, "id"> | undefined>(undefined);
   const [verwijder, setVerwijder] = useState<Factuur | null>(null);
+  // Filters (klant/naam/factuurnummer via zoektekst; datum via van/tot). Standaard gesorteerd per week.
+  const [zoek, setZoek] = useState("");
+  const [dVan, setDVan] = useState("");
+  const [dTot, setDTot] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"" | FactuurStatus>("");
 
   // Maakt automatisch een concept-factuur op basis van een doorgeschakeld project:
   // klantgegevens van de Stedin-opdrachtgever + PD-nummer + wijk als regel. Aantal/tarief vul je nog in.
@@ -350,6 +356,29 @@ export function Facturen({ initieelFactuur }: { initieelFactuur?: string }) {
   if (modus === "opdrachtgevers") {
     return <OpdrachtgeverBeheer onKlaar={() => setModus("lijst")} />;
   }
+
+  // ── Filteren (klant/naam/factuurnummer + datumbereik + status) en groeperen per week ──
+  const q = zoek.trim().toLowerCase();
+  const gefilterd = facturen.filter((f) => {
+    if (statusFilter && f.status !== statusFilter) return false;
+    if (dVan && (!isISODatum(f.datum) || f.datum < dVan)) return false;
+    if (dTot && (!isISODatum(f.datum) || f.datum > dTot)) return false;
+    if (q) {
+      const hooi = `${f.nummer} ${f.klantNaam} ${f.tav ?? ""} ${f.relatienummer ?? ""} ${f.email ?? ""}`.toLowerCase();
+      if (!hooi.includes(q)) return false;
+    }
+    return true;
+  });
+  // Nieuwste eerst op datum, daarna gegroepeerd per week (nieuwste week bovenaan).
+  const gesorteerd = [...gefilterd].sort((a, b) => (b.datum || "").localeCompare(a.datum || "") || b.nummer.localeCompare(a.nummer, "nl", { numeric: true }));
+  const weken: { key: string; label: string; facturen: Factuur[] }[] = [];
+  for (const f of gesorteerd) {
+    const wk = weekStartISO(f.datum) || "zonder";
+    let w = weken.find((x) => x.key === wk);
+    if (!w) { w = { key: wk, label: wk === "zonder" ? "Zonder datum" : weekLabel(wk), facturen: [] }; weken.push(w); }
+    w.facturen.push(f);
+  }
+  const filterActief = !!(q || dVan || dTot || statusFilter);
 
   return (
     <div className="space-y-6">
@@ -442,41 +471,71 @@ export function Facturen({ initieelFactuur }: { initieelFactuur?: string }) {
           <p className="mt-3 text-sm text-ink-500">Nog geen facturen. Klik op <span className="font-semibold">Nieuwe factuur</span>.</p>
         </Card>
       ) : (
-        <div className="space-y-3">
-          {facturen.map((f) => {
-            const t = factuurTotalen(f);
-            return (
-              <Card key={f.id} className="flex flex-wrap items-center gap-4 p-4">
-                <div className="rounded-lg bg-brand-50 p-2.5 text-brand-600">
-                  <Receipt className="h-5 w-5" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-ink-900">{f.nummer}</span>
-                    <Badge tone={statusTone[f.status]}>{f.status}</Badge>
+        <div className="space-y-4">
+          {/* Filterbalk — klant/naam/factuurnummer + datumbereik + status */}
+          <Card className="flex flex-wrap items-end gap-3 p-3">
+            <div className="relative min-w-0 flex-1">
+              <label className={labelCls}>Zoeken</label>
+              <Search className="pointer-events-none absolute left-3 top-[34px] h-4 w-4 text-ink-400" />
+              <input value={zoek} onChange={(e) => setZoek(e.target.value)} placeholder="Klant, naam of factuurnummer…" className={veld + " pl-9"} />
+              {zoek && <button type="button" onClick={() => setZoek("")} className="absolute right-2 top-[30px] rounded p-1 text-ink-400 hover:bg-ink-100" title="Wissen"><X className="h-4 w-4" /></button>}
+            </div>
+            <div className="w-36"><label className={labelCls}>Van datum</label><DatumKiezer value={dVan} onChange={setDVan} placeholder="begin" /></div>
+            <div className="w-36"><label className={labelCls}>Tot datum</label><DatumKiezer value={dTot} onChange={setDTot} placeholder="eind" /></div>
+            <div className="w-36"><label className={labelCls}>Status</label><Keuze value={statusFilter} onChange={(w) => setStatusFilter(w as "" | FactuurStatus)} opties={[{ waarde: "", label: "Alle" }, ...FACTUUR_STATUSSEN.map((s) => ({ waarde: s, label: s }))]} title="Status" /></div>
+            {filterActief && <button type="button" onClick={() => { setZoek(""); setDVan(""); setDTot(""); setStatusFilter(""); }} className="rounded-lg border border-ink-200 px-3 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-50">Wis filters</button>}
+          </Card>
+
+          {gesorteerd.length === 0 ? (
+            <Card className="p-8 text-center text-sm text-ink-500">Geen facturen gevonden met deze filters.</Card>
+          ) : (
+            <div className="space-y-5">
+              {weken.map((wg) => (
+                <div key={wg.key}>
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <h3 className="text-sm font-bold text-ink-700">{wg.label}</h3>
+                    <span className="text-xs font-medium text-ink-500">{wg.facturen.length} {wg.facturen.length === 1 ? "factuur" : "facturen"}</span>
                   </div>
-                  <div className="truncate text-xs text-ink-500">
-                    {f.klantNaam} · {new Date(f.datum + "T00:00:00").toLocaleDateString("nl-NL")}
+                  <div className="space-y-3">
+                    {wg.facturen.map((f) => {
+                      const t = factuurTotalen(f);
+                      return (
+                        <Card key={f.id} className="flex flex-wrap items-center gap-4 p-4">
+                          <div className="rounded-lg bg-brand-50 p-2.5 text-brand-600">
+                            <Receipt className="h-5 w-5" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-ink-900">{f.nummer}</span>
+                              <Badge tone={statusTone[f.status]}>{f.status}</Badge>
+                            </div>
+                            <div className="truncate text-xs text-ink-500">
+                              {f.klantNaam}{f.tav ? ` · t.a.v. ${f.tav}` : ""} · {new Date(f.datum + "T00:00:00").toLocaleDateString("nl-NL")}
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="font-bold text-ink-900">{euro(t.totaal)}</div>
+                            <div className="text-xs text-ink-400">incl. btw</div>
+                          </div>
+                          <div className="flex w-full items-center justify-end gap-1 sm:w-auto">
+                            <button type="button" onClick={() => void downloadFactuurPdf(f, bedrijf)} className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-3 py-2 text-xs font-medium text-ink-700 hover:bg-ink-50 sm:py-1.5">
+                              <Download className="h-3.5 w-3.5" /> PDF
+                            </button>
+                            <button type="button" onClick={() => { setBewerk(f); setModus("formulier"); }} className="rounded-lg p-2.5 text-ink-400 hover:bg-ink-100 hover:text-ink-700 sm:p-2" title="Bewerken">
+                              <Pencil className="h-4 w-4" />
+                            </button>
+                            <button type="button" onClick={() => setVerwijder(f)} className="rounded-lg p-2.5 text-red-400 hover:bg-red-50 hover:text-red-600 sm:p-2" title="Verwijderen">
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </Card>
+                      );
+                    })}
                   </div>
                 </div>
-                <div className="text-right">
-                  <div className="font-bold text-ink-900">{euro(t.totaal)}</div>
-                  <div className="text-xs text-ink-400">incl. btw</div>
-                </div>
-                <div className="flex w-full items-center justify-end gap-1 sm:w-auto">
-                  <button type="button" onClick={() => void downloadFactuurPdf(f, bedrijf)} className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-3 py-2 text-xs font-medium text-ink-700 hover:bg-ink-50 sm:py-1.5">
-                    <Download className="h-3.5 w-3.5" /> PDF
-                  </button>
-                  <button type="button" onClick={() => { setBewerk(f); setModus("formulier"); }} className="rounded-lg p-2.5 text-ink-400 hover:bg-ink-100 hover:text-ink-700 sm:p-2" title="Bewerken">
-                    <Pencil className="h-4 w-4" />
-                  </button>
-                  <button type="button" onClick={() => setVerwijder(f)} className="rounded-lg p-2.5 text-red-400 hover:bg-red-50 hover:text-red-600 sm:p-2" title="Verwijderen">
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-              </Card>
-            );
-          })}
+              ))}
+            </div>
+          )}
         </div>
       )}
 

@@ -30,6 +30,9 @@ import type {
   Boete,
   Communicatie,
   Verlof,
+  Schouwafspraak,
+  AgendaItem,
+  Todo,
   KennisArtikel,
   Instellingen,
   Klant,
@@ -53,6 +56,9 @@ import {
   SEED_BOETES,
   SEED_COMM,
   SEED_VERLOF,
+  SEED_SCHOUW,
+  SEED_AGENDA_ITEMS,
+  SEED_TODOS,
   SEED_KENNIS,
   SEED_INSTELLINGEN,
   SEED_KLANTEN,
@@ -85,6 +91,9 @@ const LS = {
   boetes: "wire.boetes",
   comm: "wire.comm",
   verlof: "wire.verlof",
+  schouwafspraken: "wire.schouwafspraken",
+  agendaItems: "wire.agendaItems",
+  todos: "wire.todos",
   kennis: "wire.kennis",
   instellingen: "wire.instellingen",
   klanten: "wire.klanten",
@@ -133,6 +142,9 @@ type AppState = {
   boetes: Boete[];
   comm: Communicatie;
   verlof: Verlof[];
+  schouwafspraken: Schouwafspraak[];
+  agendaItems: AgendaItem[];
+  todos: Todo[];
   kennis: KennisArtikel[];
   instellingen: Instellingen;
   klanten: Klant[];
@@ -224,6 +236,18 @@ type AppState = {
   updateVerlof: (id: string, patch: Partial<Verlof>) => void;
   deleteVerlof: (id: string) => void;
 
+  addSchouw: (s: Omit<Schouwafspraak, "id" | "aangemaakt">) => string;
+  updateSchouw: (id: string, patch: Partial<Schouwafspraak>) => void;
+  deleteSchouw: (id: string) => void;
+
+  addAgendaItem: (a: Omit<AgendaItem, "id" | "aangemaakt">) => string;
+  updateAgendaItem: (id: string, patch: Partial<AgendaItem>) => void;
+  deleteAgendaItem: (id: string) => void;
+
+  addTodo: (t: Omit<Todo, "id" | "aangemaakt">) => string;
+  updateTodo: (id: string, patch: Partial<Todo>) => void;
+  deleteTodo: (id: string) => void;
+
   addKennis: (k: Omit<KennisArtikel, "id">) => string;
   updateKennis: (id: string, patch: Partial<KennisArtikel>) => void;
   deleteKennis: (id: string) => void;
@@ -262,6 +286,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [boetes, setBoetes] = useState<Boete[]>(SEED_BOETES);
   const [comm, setComm] = useState<Communicatie>(SEED_COMM);
   const [verlof, setVerlof] = useState<Verlof[]>(SEED_VERLOF);
+  const [schouwafspraken, setSchouwafspraken] = useState<Schouwafspraak[]>(SEED_SCHOUW);
+  const [agendaItems, setAgendaItems] = useState<AgendaItem[]>(SEED_AGENDA_ITEMS);
+  const [todos, setTodos] = useState<Todo[]>(SEED_TODOS);
   const [kennis, setKennis] = useState<KennisArtikel[]>(SEED_KENNIS);
   const [instellingen, setInstellingen] = useState<Instellingen>(SEED_INSTELLINGEN);
   const [klanten, setKlanten] = useState<Klant[]>(SEED_KLANTEN);
@@ -279,7 +306,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let actief = true;
     (async () => {
-      let [u, p, t, pp, pl, san, tw, v, r, af, fac, bed, loon, boe, communicatie, verl, kn, inst, kl, s, vm, med, og, ba, del] = await Promise.all([
+      let [u, p, t, pp, pl, san, tw, v, r, af, fac, bed, loon, boe, communicatie, verl, kn, inst, kl, s, vm, med, og, ba, del, sch, ai, td] = await Promise.all([
         laadSlice<User[]>("users", LS.users, SEED_USERS),
         laadSlice<Project[]>("projects", LS.projects, SEED_PROJECTS),
         laadSlice<Taak[]>("taken", LS.taken, SEED_TAKEN),
@@ -305,6 +332,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         laadSlice<Opdrachtgever[]>("opdrachtgevers", LS.opdrachtgevers, SEED_OPDRACHTGEVERS),
         laadSlice<Buurtaanpak[]>("buurtaanpak", LS.buurtaanpak, SEED_BUURTAANPAK),
         laadSlice<Tombstones>("deletes", "wire.deletes", {}),
+        laadSlice<Schouwafspraak[]>("schouwafspraken", LS.schouwafspraken, SEED_SCHOUW),
+        laadSlice<AgendaItem[]>("agendaItems", LS.agendaItems, SEED_AGENDA_ITEMS),
+        laadSlice<Todo[]>("todos", LS.todos, SEED_TODOS),
       ]);
       if (!actief) return;
       // Eenmalige schoonmaak: verwijder de voorbeeld-/demoprojecten en bijbehorende data, zodat het
@@ -425,6 +455,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setBoetes(boe);
       setComm({ ...SEED_COMM, ...communicatie });
       setVerlof(verl);
+      setSchouwafspraken(sch ?? []);
+      setAgendaItems(ai ?? []);
+      setTodos(td ?? []);
       setKennis(kn);
       setInstellingen({ ...SEED_INSTELLINGEN, ...inst });
       setKlanten(kl);
@@ -499,6 +532,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (hydrated) void idbSet("verlof", verlof);
   }, [verlof, hydrated]);
   useEffect(() => {
+    if (hydrated) void idbSet("schouwafspraken", schouwafspraken);
+  }, [schouwafspraken, hydrated]);
+  useEffect(() => {
+    if (hydrated) void idbSet("agendaItems", agendaItems);
+  }, [agendaItems, hydrated]);
+  useEffect(() => {
+    if (hydrated) void idbSet("todos", todos);
+  }, [todos, hydrated]);
+  useEffect(() => {
     if (hydrated) void idbSet("kennis", kennis);
   }, [kennis, hydrated]);
   useEffect(() => {
@@ -537,6 +579,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     boetes: (v) => setBoetes(v as Boete[]),
     comm: (v) => setComm(v as Communicatie),
     verlof: (v) => setVerlof(v as Verlof[]),
+    schouwafspraken: (v) => setSchouwafspraken(v as Schouwafspraak[]),
+    agendaItems: (v) => setAgendaItems(v as AgendaItem[]),
+    todos: (v) => setTodos(v as Todo[]),
     kennis: (v) => setKennis(v as KennisArtikel[]),
     instellingen: (v) => setInstellingen(v as Instellingen),
     klanten: (v) => setKlanten(v as Klant[]),
@@ -545,7 +590,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const waarden: Record<string, unknown> = {
     users, projects, taken, projectPosts, planningen, saneringen, tauw: tauwOpdrachten,
     voorschouwen, voorschouwMappen, mededelingen, rondes, afspraken, facturen, bedrijf,
-    loonstroken, boetes, comm, verlof, kennis, instellingen, klanten, opdrachtgevers, buurtaanpak,
+    loonstroken, boetes, comm, verlof, schouwafspraken, agendaItems, todos, kennis, instellingen, klanten, opdrachtgevers, buurtaanpak,
     deletes,
   };
   // Altijd de NIEUWSTE lokale waarden beschikbaar in de sync-effecten (die niet bij elke data-wijziging
@@ -560,7 +605,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const COLLECTIONS = new Set([
     "users", "projects", "taken", "projectPosts", "planningen", "saneringen", "buurtaanpak", "tauw",
     "voorschouwen", "voorschouwMappen", "mededelingen", "rondes", "afspraken", "facturen",
-    "opdrachtgevers", "loonstroken", "boetes", "verlof", "kennis", "klanten",
+    "opdrachtgevers", "loonstroken", "boetes", "verlof", "schouwafspraken", "agendaItems", "todos", "kennis", "klanten",
   ]);
 
   // Past binnenkomende centrale data toe: lijsten worden per record samengevoegd met wat er lokaal staat
@@ -739,9 +784,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         applyRemote(row.key, row.data); // lijsten samenvoegen → nooit een record kwijt
       })
       .subscribe();
-    // Automatische sync elke 5 seconden: eerst een piepkleine check op tijdstempels, en alléén de
-    // daadwerkelijk gewijzigde onderdelen ophalen. Zo blijft elk apparaat snel actueel (wijzigingen van
-    // collega's en van je andere apparaat verschijnen binnen ~5s) zónder telkens alle data te downloaden.
+    // Vangnet-poll elke 2 seconden: eerst een piepkleine check op tijdstempels, en alléén de
+    // daadwerkelijk gewijzigde onderdelen ophalen. De realtime-subscription hierboven (postgres_changes)
+    // levert wijzigingen doorgaans binnen ~1s; deze poll is de terugval als de websocket even wegvalt,
+    // zodat wijzigingen van collega's óók dan snel (≤2s) verschijnen — zónder telkens alle data te downloaden.
     const interval = setInterval(() => {
       if (!actief || !sync.current.klaar) return;
       void (async () => {
@@ -768,7 +814,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           sync.current.laatsteFout = "";
         } catch (e) { sync.current.laatsteFout = String((e as Error)?.message ?? e); }
       })();
-    }, 5000);
+    }, 2000);
     return () => { actief = false; sync.current.klaar = false; clearInterval(interval); void sb().removeChannel(kanaal); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supabaseAan, sbSessie, hydrated]);
@@ -792,7 +838,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       void sbSchrijf(key, waarden[key]).then((ua) => { sync.current.versies[key] = ua; }).catch((e) => { sync.current.laatsteFout = String((e as Error)?.message ?? e); }).finally(() => sync.current.bezig.delete(key));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supabaseAan, sbSessie, hydrated, users, projects, taken, projectPosts, planningen, saneringen, tauwOpdrachten, voorschouwen, voorschouwMappen, mededelingen, rondes, afspraken, facturen, bedrijf, loonstroken, boetes, comm, verlof, kennis, instellingen, klanten, opdrachtgevers, buurtaanpak, deletes]);
+  }, [supabaseAan, sbSessie, hydrated, users, projects, taken, projectPosts, planningen, saneringen, tauwOpdrachten, voorschouwen, voorschouwMappen, mededelingen, rondes, afspraken, facturen, bedrijf, loonstroken, boetes, comm, verlof, schouwafspraken, agendaItems, todos, kennis, instellingen, klanten, opdrachtgevers, buurtaanpak, deletes]);
 
   const currentUser = users.find((u) => u.id === currentUserId) ?? null;
 
@@ -1161,6 +1207,42 @@ export function AppProvider({ children }: { children: ReactNode }) {
     tomb("verlof", id);
   };
 
+  const addSchouw: AppState["addSchouw"] = (s) => {
+    const id = nextId("sa");
+    setSchouwafspraken((prev) => [{ ...s, id, aangemaakt: new Date().toISOString() }, ...prev]);
+    return id;
+  };
+  const updateSchouw: AppState["updateSchouw"] = (id, patch) =>
+    setSchouwafspraken((prev) => prev.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+  const deleteSchouw: AppState["deleteSchouw"] = (id) => {
+    setSchouwafspraken((prev) => prev.filter((x) => x.id !== id));
+    tomb("schouwafspraken", id);
+  };
+
+  const addAgendaItem: AppState["addAgendaItem"] = (a) => {
+    const id = nextId("ag");
+    setAgendaItems((prev) => [{ ...a, id, aangemaakt: new Date().toISOString() }, ...prev]);
+    return id;
+  };
+  const updateAgendaItem: AppState["updateAgendaItem"] = (id, patch) =>
+    setAgendaItems((prev) => prev.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+  const deleteAgendaItem: AppState["deleteAgendaItem"] = (id) => {
+    setAgendaItems((prev) => prev.filter((x) => x.id !== id));
+    tomb("agendaItems", id);
+  };
+
+  const addTodo: AppState["addTodo"] = (t) => {
+    const id = nextId("todo");
+    setTodos((prev) => [{ ...t, id, aangemaakt: new Date().toISOString() }, ...prev]);
+    return id;
+  };
+  const updateTodo: AppState["updateTodo"] = (id, patch) =>
+    setTodos((prev) => prev.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+  const deleteTodo: AppState["deleteTodo"] = (id) => {
+    setTodos((prev) => prev.filter((x) => x.id !== id));
+    tomb("todos", id);
+  };
+
   const addKennis: AppState["addKennis"] = (k) => {
     const id = nextId("kb");
     setKennis((prev) => [{ ...k, id }, ...prev]);
@@ -1215,6 +1297,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         boetes,
         comm,
         verlof,
+        schouwafspraken,
+        agendaItems,
+        todos,
         kennis,
         instellingen,
         klanten,
@@ -1286,6 +1371,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addVerlof,
         updateVerlof,
         deleteVerlof,
+        addSchouw,
+        updateSchouw,
+        deleteSchouw,
+        addAgendaItem,
+        updateAgendaItem,
+        deleteAgendaItem,
+        addTodo,
+        updateTodo,
+        deleteTodo,
         addKennis,
         updateKennis,
         deleteKennis,

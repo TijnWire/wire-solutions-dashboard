@@ -5,6 +5,7 @@ import { BottomNav } from "./components/BottomNav";
 import { Topbar } from "./components/Topbar";
 import { DevSwitcher } from "./components/DevSwitcher";
 import { Login } from "./pages/Login";
+import { WachtwoordWijzigen } from "./pages/WachtwoordWijzigen";
 import { Overzicht } from "./pages/Overzicht";
 import { MijnWerk } from "./pages/MijnWerk";
 import { Team } from "./pages/Team";
@@ -23,6 +24,9 @@ import { Loonstroken } from "./pages/Loonstroken";
 import { Boetes } from "./pages/Boetes";
 import { Medewerkers } from "./pages/Medewerkers";
 import { Agenda } from "./pages/Agenda";
+import { Mededelingen } from "./pages/Mededelingen";
+import { Schouwafspraken } from "./pages/Schouwafspraken";
+import { Verlof } from "./pages/Verlof";
 import { Kennisbank } from "./pages/Kennisbank";
 import { Instellingen } from "./pages/Instellingen";
 import { Klanten } from "./pages/Klanten";
@@ -30,6 +34,7 @@ import { meldingenVoor, type Melding } from "./lib/meldingen";
 import { zoekResultaten, type ZoekItem } from "./lib/zoeken";
 import { Gebruikersbeheer } from "./pages/Gebruikersbeheer";
 import { Module } from "./pages/Module";
+import { AiAssistent } from "./components/AiAssistent";
 import { NAV } from "./lib/nav";
 import { useApp } from "./store/AppContext";
 import { NavContext, type NavTarget } from "./store/NavContext";
@@ -78,6 +83,8 @@ export default function App() {
 
   if (!hydrated) return <Splash />;
   if (!currentUser) return <><Login /><DevSwitcher /></>;
+  // Door de beheerder afgedwongen wachtwoordwissel: eerst zelf een nieuw wachtwoord kiezen.
+  if (currentUser.moetWachtwoordWijzigen) return <WachtwoordWijzigen />;
 
   const item = NAV.find((n) => n.key === active);
   const titel = active === "overzicht" ? "Dashboard" : active === "planning" ? "Weekplanning" : item?.label ?? "Dashboard";
@@ -105,7 +112,11 @@ export default function App() {
       case "agenda":
         return <Agenda />;
       case "verlof":
-        return <Agenda startForm />;
+        return <Verlof />;
+      case "mededelingen":
+        return <Mededelingen />;
+      case "schouwafspraken":
+        return <Schouwafspraken />;
       case "brieven":
         return <Brieven key={target?.ronde ?? "lijst"} initieelRonde={target?.ronde} />;
       case "afspraken":
@@ -178,6 +189,7 @@ export default function App() {
       {/* App-achtige onderbalk op mobiel */}
       <BottomNav active={active} onSelect={ga} onMeer={onMenu} currentUser={currentUser} />
 
+      <AiAssistent />
       <DevSwitcher />
     </div>
     </NavContext.Provider>

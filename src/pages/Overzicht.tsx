@@ -1,4 +1,5 @@
-import { CalendarCheck, Mailbox, Receipt, HardHat, MessageCircle, CheckCircle2, MapPin, Recycle, ClipboardList, CheckSquare, ArrowRight, Bell, Banknote, Plane, Send } from "lucide-react";
+import { useState } from "react";
+import { CalendarCheck, Mailbox, Receipt, HardHat, MessageCircle, CheckCircle2, MapPin, Recycle, ClipboardList, CheckSquare, ArrowRight, Bell, Banknote, Plane, Send, Sparkles, Loader2 } from "lucide-react";
 import {
   ResponsiveContainer,
   BarChart,
@@ -17,6 +18,7 @@ import { Card, CardHeader, Badge } from "../components/ui";
 import { StatCard } from "../components/StatCard";
 import { useApp } from "../store/AppContext";
 import { useNav } from "../store/NavContext";
+import { analyseerDashboard, aiResterend } from "../lib/ai";
 import type { Factuur, AfspraakStatus } from "../lib/types";
 
 const euro = (n: number) =>
@@ -68,8 +70,11 @@ function OperatieKaart({ icon: Icon, label, waarde, sub, onClick }: { icon: Comp
 }
 
 export function Overzicht() {
-  const { afspraken, rondes, voorschouwen, facturen, taken, users, saneringen, tauwOpdrachten, verlof, projects, projectPosts, buurtaanpak } = useApp();
+  const { afspraken, rondes, voorschouwen, facturen, taken, users, saneringen, tauwOpdrachten, verlof, projects, projectPosts, buurtaanpak, currentUser, instellingen } = useApp();
   const { navigeer } = useNav();
+  const [aiTekst, setAiTekst] = useState("");
+  const [aiBezig, setAiBezig] = useState(false);
+  const [aiFout, setAiFout] = useState("");
   const naamVan = (id?: string) => users.find((u) => u.id === id)?.naam ?? "—";
   const projectNaam = (id: string) => projects.find((p) => p.id === id)?.naam ?? "Project";
 
@@ -159,8 +164,50 @@ export function Overzicht() {
     .map((s) => ({ naam: s, waarde: afspraken.filter((a) => a.status === s).length, kleur: AFSPRAAK_KLEUR[s] }))
     .filter((x) => x.waarde > 0);
 
+  // ── Omzet per project — gekoppeld via PD-nummer of via de gekoppelde brievenronde → factuur ──
+  const factuurById = new Map(facturen.map((f) => [f.id, f]));
+  const omzetVanProject = (p: (typeof projects)[number]): number => {
+    let som = 0; const gezien = new Set<string>();
+    if (p.pdNummer) for (const f of facturen) if (f.pdNummer && f.pdNummer === p.pdNummer && !gezien.has(f.id)) { som += factuurTotaal(f); gezien.add(f.id); }
+    const rid = p.koppelingen?.brievenronde;
+    if (rid) { const r = rondes.find((x) => x.id === rid); const fid = r?.factuurId; if (fid) { const f = factuurById.get(fid); if (f && !gezien.has(f.id)) { som += factuurTotaal(f); gezien.add(f.id); } } }
+    return som;
+  };
+  const omzetPerProject = projects.map((p) => ({ naam: p.naam || "Project", omzet: Math.round(omzetVanProject(p)) })).filter((x) => x.omzet > 0).sort((a, b) => b.omzet - a.omzet).slice(0, 8);
+
+  // ── Omzet per maand (laatste 6) ──
+  const NL_MAAND = ["jan", "feb", "mrt", "apr", "mei", "jun", "jul", "aug", "sep", "okt", "nov", "dec"];
+  const maandMap = new Map<string, number>();
+  for (const f of facturen) { if (!isISO(f.datum)) continue; const k = f.datum.slice(0, 7); maandMap.set(k, (maandMap.get(k) ?? 0) + factuurTotaal(f)); }
+  const omzetPerMaand = [...maandMap.entries()].sort(([a], [b]) => a.localeCompare(b)).slice(-6).map(([k, v]) => { const [j, m] = k.split("-"); return { maand: `${NL_MAAND[Number(m) - 1]} '${j.slice(2)}`, omzet: Math.round(v) }; });
+
+  // ── Factuurbedragen per status ──
+  const bedragBetaald = facturen.filter((f) => f.status === "Betaald").reduce((s, f) => s + factuurTotaal(f), 0);
+  const bedragConcept = facturen.filter((f) => f.status === "Concept").reduce((s, f) => s + factuurTotaal(f), 0);
+  const totaalOmzet = bedragBetaald + openBedrag + bedragConcept;
+
   // ── Recente activiteit ──
   const recente = [...projectPosts].sort((a, b) => (a.aangemaakt < b.aangemaakt ? 1 : -1)).slice(0, 6);
+
+  // ── Optionele AI-analyse (kostenbewust: goedkoop model + dag-cap) ──
+  const samenvatting = [
+    `Afspraken deze week: ${afsprakenWeek}; open/te bevestigen: ${afsprakenOpen}; vandaag: ${afsprakenVandaag}.`,
+    `Brieven: ${gegooid} gegooid van ${teBezorgen.length}; nog te gooien: ${brievenTeGooien}.`,
+    `Voorschouwen: ${vsConcept} concept, ${vsIngediend} ingediend.`,
+    `TAUW: ${tauwOpen} open, ${tauwControle} ter controle.`,
+    `Openstaande taken: ${openTaken.length}. Openstaande verlofaanvragen: ${verlofOpen}. Klaar voor facturatie: ${teFactureren}.`,
+    `Facturen: ${openFacturen.length} openstaand (${euro(openBedrag)}); totaal gefactureerd ${euro(totaalOmzet)}, betaald ${euro(bedragBetaald)}, concept ${euro(bedragConcept)}.`,
+    `Werknemers actief vandaag: ${actief}/${werknemers.length}.`,
+    omzetPerProject.length ? `Omzet per project (top): ${omzetPerProject.slice(0, 5).map((p) => `${p.naam}: ${euro(p.omzet)}`).join(", ")}.` : "Nog geen omzet aan projecten gekoppeld.",
+  ].join("\n");
+
+  const doeAnalyse = async () => {
+    if (!currentUser || aiBezig) return;
+    setAiBezig(true); setAiFout("");
+    const res = await analyseerDashboard(instellingen.claudeKey ?? "", samenvatting, currentUser.id);
+    setAiBezig(false);
+    if (res.ok) setAiTekst(res.tekst); else setAiFout(res.fout);
+  };
 
   return (
     <div className="space-y-6">
@@ -259,6 +306,65 @@ export function Overzicht() {
         </Card>
       </div>
 
+      {/* Omzet & projecten */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <Card className="lg:col-span-2">
+          <CardHeader title="Omzet per project" subtitle="Op basis van gekoppelde facturen (PD-nummer / brievenronde)" />
+          <div className="h-72 px-3 py-4">
+            {omzetPerProject.length === 0 ? (
+              <div className="flex h-full items-center justify-center text-center text-sm text-ink-400">Nog geen omzet gekoppeld aan projecten. Koppel een factuur via het PD-nummer of een brievenronde.</div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={omzetPerProject} layout="vertical" margin={{ left: 8, right: 16 }}>
+                  <CartesianGrid horizontal={false} stroke="#e2e8f0" />
+                  <XAxis type="number" tickLine={false} axisLine={false} fontSize={12} stroke="#94a3b8" tickFormatter={(v) => euro(Number(v))} />
+                  <YAxis type="category" dataKey="naam" tickLine={false} axisLine={false} fontSize={12} stroke="#94a3b8" width={110} />
+                  <Tooltip cursor={{ fill: "#f1f5f9" }} formatter={(v) => euro(Number(v))} contentStyle={{ borderRadius: 12, border: "1px solid #e2e8f0", fontSize: 12, boxShadow: "0 10px 30px -12px rgb(15 23 42 / 0.18)" }} />
+                  <Bar dataKey="omzet" name="Omzet" fill="#ea580c" radius={[0, 6, 6, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </Card>
+
+        <Card>
+          <CardHeader title="Omzet totaal" subtitle="Alle facturen" />
+          <div className="space-y-3 p-5">
+            <div>
+              <div className="text-3xl font-bold tracking-tight text-ink-900">{euro(totaalOmzet)}</div>
+              <div className="text-sm text-ink-500">gefactureerd (incl. btw)</div>
+            </div>
+            <div className="space-y-2 border-t border-ink-100 pt-3">
+              {([["Betaald", bedragBetaald, "#22c55e"], ["Openstaand", openBedrag, "#6366f1"], ["Concept", bedragConcept, "#fdba74"]] as const).map(([label, bedrag, kleur]) => (
+                <div key={label} className="flex items-center gap-2 text-sm">
+                  <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: kleur }} />
+                  <span className="flex-1 text-ink-600">{label}</span>
+                  <span className="font-semibold text-ink-900">{euro(bedrag)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* Omzet per maand */}
+      {omzetPerMaand.length > 0 && (
+        <Card>
+          <CardHeader title="Omzet per maand" subtitle="Laatste 6 maanden" />
+          <div className="h-64 px-3 py-4">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={omzetPerMaand} barSize={38}>
+                <CartesianGrid vertical={false} stroke="#e2e8f0" />
+                <XAxis dataKey="maand" tickLine={false} axisLine={false} fontSize={12} stroke="#94a3b8" />
+                <YAxis tickLine={false} axisLine={false} fontSize={12} stroke="#94a3b8" width={48} tickFormatter={(v) => euro(Number(v))} />
+                <Tooltip cursor={{ fill: "#f1f5f9" }} formatter={(v) => euro(Number(v))} contentStyle={{ borderRadius: 12, border: "1px solid #e2e8f0", fontSize: 12, boxShadow: "0 10px 30px -12px rgb(15 23 42 / 0.18)" }} />
+                <Bar dataKey="omzet" name="Omzet" fill="#22c55e" radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+      )}
+
       {/* Activiteit + taken */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">
@@ -309,6 +415,27 @@ export function Overzicht() {
           )}
         </Card>
       </div>
+
+      {/* AI-analyse — optioneel, kostenbewust (goedkoop model + dag-cap) */}
+      <Card>
+        <CardHeader
+          title="AI-analyse"
+          subtitle="Korte analyse van wat beter kan"
+          action={
+            <button type="button" onClick={() => void doeAnalyse()} disabled={aiBezig} className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">
+              {aiBezig ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} {aiBezig ? "Bezig…" : "Wat kan beter?"}
+            </button>
+          }
+        />
+        <div className="px-5 pb-5">
+          {aiFout && <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{aiFout}</div>}
+          {aiTekst ? (
+            <div className="whitespace-pre-wrap rounded-xl bg-ink-50 p-4 text-sm text-ink-700">{aiTekst}</div>
+          ) : !aiFout && !aiBezig ? (
+            <p className="text-sm text-ink-400">Klik op “Wat kan beter?” voor een korte AI-analyse — kostenbewust (goedkoop model{currentUser ? `, nog ${aiResterend(currentUser.id)} berichten vandaag` : ""}).</p>
+          ) : null}
+        </div>
+      </Card>
     </div>
   );
 }

@@ -14,13 +14,18 @@ import {
   ShieldCheck,
   Lock,
   Wand2,
+  KeyRound,
+  Copy,
+  Check,
 } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { Card, Badge } from "../components/ui";
 import { hashWachtwoord, genereerWachtwoord } from "../lib/auth";
 import { ROL_LABEL, BEHEER_GEBIEDEN, type Role, type User } from "../lib/types";
+import { magBoekhouding } from "../lib/rechten";
+import { supabaseAan } from "../lib/supabase";
+import { logAudit, syncAppRole, verwijderAppRole, resetAuthWachtwoord, wijzigAuthEmail } from "../lib/adminAccount";
 
-const MAX_GEBRUIKERS = 20;
 const ROLLEN: Role[] = ["eigenaar", "beheer", "monteur"];
 const rolTone: Record<Role, string> = { eigenaar: "green", beheer: "amber", monteur: "slate" };
 
@@ -127,15 +132,29 @@ function GebruikerEditor({
 
     setBezig(true);
     try {
+      const actor = { email: currentUser?.email ?? "onbekend", naam: currentUser?.naam ?? "onbekend" };
+      const boekhouding = magBoekhouding({ rol, beheerRechten });
       if (gebruiker) {
+        const emailGewijzigd = basis.email.toLowerCase() !== gebruiker.email.toLowerCase();
+        // E-mail (inlog) wijzigen in ECHTE Supabase Auth via de beveiligde Edge Function.
+        if (emailGewijzigd && supabaseAan) {
+          const r = await wijzigAuthEmail(gebruiker.email, basis.email);
+          if (!r.ok) { setFout(`E-mail wijzigen in de inlog is niet gelukt: ${r.error}. Wijziging niet opgeslagen.`); setBezig(false); return; }
+        }
         // Wachtwoord alleen bijwerken als er een nieuw is ingevuld; anders blijft het bestaande hash staan.
         const cred = wachtwoord.trim() ? await hashWachtwoord(wachtwoord.trim()) : {};
         updateUser(gebruiker.id, { ...basis, ...cred });
         pasProjectenToe(gebruiker.id);
+        void syncAppRole(basis.email, rol, boekhouding);
+        if (emailGewijzigd) void logAudit("email_gewijzigd", actor, { userId: gebruiker.id, email: basis.email, naam: basis.naam }, { oud: gebruiker.email, nieuw: basis.email });
+        if (gebruiker.rol !== rol) void logAudit("rol_gewijzigd", actor, { userId: gebruiker.id, email: basis.email, naam: basis.naam }, { oud: gebruiker.rol, nieuw: rol });
+        void logAudit("account_bewerkt", actor, { userId: gebruiker.id, email: basis.email, naam: basis.naam });
       } else {
         const cred = await hashWachtwoord(wachtwoord.trim());
         const id = addUser({ ...basis, ...cred });
         pasProjectenToe(id);
+        void syncAppRole(basis.email, rol, boekhouding);
+        void logAudit("account_aangemaakt", actor, { userId: id, email: basis.email, naam: basis.naam });
       }
     } finally {
       setBezig(false);
@@ -151,6 +170,8 @@ function GebruikerEditor({
       return setFout("Er moet minimaal één eigenaar blijven.");
     if (confirm(`${gebruiker.naam} verwijderen?`)) {
       deleteUser(gebruiker.id);
+      void verwijderAppRole(gebruiker.email);
+      void logAudit("account_verwijderd", { email: currentUser?.email ?? "onbekend", naam: currentUser?.naam ?? "onbekend" }, { userId: gebruiker.id, email: gebruiker.email, naam: gebruiker.naam });
       onSluit();
     }
   };
@@ -330,9 +351,82 @@ function GebruikerEditor({
   );
 }
 
+// Admin-gestuurde wachtwoordreset. Zet in Supabase Auth een nieuw (tijdelijk) wachtwoord, dwingt een
+// eigen wachtwoordwissel af bij de volgende login, en toont het tijdelijke wachtwoord ÉÉNMALIG aan de
+// beheerder (kopieerveld dat daarna verdwijnt). Nergens wordt een leesbaar wachtwoord bewaard.
+function WachtwoordResetModal({ gebruiker, onSluit }: { gebruiker: User; onSluit: () => void }) {
+  const { updateUser, currentUser } = useApp();
+  const [fase, setFase] = useState<"bevestig" | "klaar">("bevestig");
+  const [bezig, setBezig] = useState(false);
+  const [temp, setTemp] = useState("");
+  const [waarschuwing, setWaarschuwing] = useState("");
+  const [gekopieerd, setGekopieerd] = useState(false);
+
+  const doeReset = async () => {
+    setBezig(true);
+    try {
+      const nieuw = genereerWachtwoord();
+      let authOk = true, authErr = "";
+      if (supabaseAan) {
+        const r = await resetAuthWachtwoord(gebruiker.email, nieuw);
+        authOk = r.ok; authErr = r.error ?? "";
+      }
+      // Lokale hash bijwerken (voor het lokale inlogmodel) + force-change aanzetten.
+      const cred = await hashWachtwoord(nieuw);
+      updateUser(gebruiker.id, { ...cred, moetWachtwoordWijzigen: true });
+      void logAudit("wachtwoord_reset", { email: currentUser?.email ?? "onbekend", naam: currentUser?.naam ?? "onbekend" }, { userId: gebruiker.id, email: gebruiker.email, naam: gebruiker.naam }, { echteAuth: authOk });
+      setTemp(nieuw);
+      setWaarschuwing(authOk || !supabaseAan ? "" : `Let op: het inlog-wachtwoord in Supabase Auth is niet bijgewerkt (${authErr}). De medewerker kan wél inloggen; deploy de Edge Function 'admin-account' voor volledige werking.`);
+      setFase("klaar");
+    } finally { setBezig(false); }
+  };
+
+  const kopieer = async () => {
+    try { await navigator.clipboard.writeText(temp); setGekopieerd(true); setTimeout(() => setGekopieerd(false), 2000); } catch { /* clipboard geblokkeerd — handmatig overtypen */ }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onSluit}>
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-cardhover" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-4 flex items-center gap-3">
+          <div className="rounded-xl bg-brand-50 p-2.5 text-brand-600"><KeyRound className="h-6 w-6" /></div>
+          <div>
+            <h3 className="text-base font-bold text-ink-900">Wachtwoord resetten</h3>
+            <p className="text-sm text-ink-500">{gebruiker.naam} · {gebruiker.email}</p>
+          </div>
+        </div>
+
+        {fase === "bevestig" ? (
+          <div className="space-y-4">
+            <p className="text-sm text-ink-600">Er wordt een nieuw tijdelijk wachtwoord ingesteld. De medewerker moet bij de eerstvolgende login zelf een nieuw wachtwoord kiezen. Het tijdelijke wachtwoord zie je hierna éénmalig.</p>
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={doeReset} disabled={bezig} className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-brand-700 disabled:opacity-60"><KeyRound className="h-4 w-4" /> {bezig ? "Bezig…" : "Nieuw wachtwoord instellen"}</button>
+              <button type="button" onClick={onSluit} className="rounded-lg border border-ink-200 bg-white px-5 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50">Annuleren</button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div>
+              <span className="mb-1.5 block text-sm font-medium text-ink-700">Tijdelijk wachtwoord — geef dit door aan de medewerker</span>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 select-all rounded-lg border border-ink-200 bg-ink-50 px-3 py-2.5 font-mono text-sm text-ink-900">{temp}</code>
+                <button type="button" onClick={kopieer} className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-3 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50">{gekopieerd ? <><Check className="h-4 w-4 text-green-600" /> Gekopieerd</> : <><Copy className="h-4 w-4" /> Kopieer</>}</button>
+              </div>
+              <p className="mt-1.5 text-xs text-ink-400">Dit wachtwoord is hierna niet meer op te vragen. Bij de eerstvolgende login kiest de medewerker zelf een nieuw wachtwoord.</p>
+            </div>
+            {waarschuwing && <div className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">{waarschuwing}</div>}
+            <button type="button" onClick={onSluit} className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-brand-700">Klaar</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function Gebruikersbeheer() {
   const { users, projects, currentUser } = useApp();
   const [open, setOpen] = useState<string | null>(null); // user id, "nieuw", of null
+  const [reset, setReset] = useState<User | null>(null);
 
   if (!currentUser) return null;
   const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer";
@@ -358,13 +452,12 @@ export function Gebruikersbeheer() {
         <div className="flex items-center gap-3">
           <span className="inline-flex items-center gap-1.5 text-sm text-ink-500">
             <Users className="h-4 w-4" />
-            {users.length} / {MAX_GEBRUIKERS}
+            {users.length} {users.length === 1 ? "account" : "accounts"}
           </span>
           <button
             type="button"
-            disabled={users.length >= MAX_GEBRUIKERS}
             onClick={() => setOpen("nieuw")}
-            className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700"
           >
             <Plus className="h-4 w-4" />
             Nieuwe medewerker
@@ -410,6 +503,15 @@ export function Gebruikersbeheer() {
 
                 <button
                   type="button"
+                  onClick={() => setReset(u)}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-3 py-1.5 text-sm font-medium text-ink-700 hover:bg-ink-50"
+                  title="Wachtwoord resetten"
+                >
+                  <KeyRound className="h-3.5 w-3.5" />
+                  Wachtwoord
+                </button>
+                <button
+                  type="button"
                   onClick={() => setOpen(u.id)}
                   className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-3 py-1.5 text-sm font-medium text-ink-700 hover:bg-ink-50"
                 >
@@ -438,6 +540,8 @@ export function Gebruikersbeheer() {
           );
         })}
       </div>
+
+      {reset && <WachtwoordResetModal gebruiker={reset} onSluit={() => setReset(null)} />}
     </div>
   );
 }

@@ -68,6 +68,11 @@ export function meldingenVoor(user: User, data: MeldingData): Melding[] {
   }
   for (const [loc, n] of groepen) m.push({ id: "afspr-" + loc, ernst: "info", titel: `Afspraken: ${loc}`, tekst: `${n} afspraak${n === 1 ? "" : "en"} te doen.`, navKey: "afspraken", target: { locatie: loc } });
 
+  // Afspraak gaat niet door — waarschuw zolang de betrokkenen nog niet geïnformeerd zijn.
+  for (const a of afspraken.filter((a) => a.status === "Geannuleerd" && !a.annuleringGemeld && (isLeiding || a.toegewezenAan === user.id))) {
+    m.push({ id: "afspr-annul-" + a.id, ernst: "waarschuwing", titel: `Afspraak vervalt: ${`${a.straat} ${a.huisnummer}`.trim() || a.locatie}`, tekst: `Informeer ${a.klantNaam || "de klant"} (${a.locatie}) dat de afspraak niet doorgaat.`, navKey: "afspraken", target: { locatie: a.locatie } });
+  }
+
   // Saneren: bevestigings-sms 24u vóór de afspraak. Pas zodra bij élk adres een afspraak is gemaakt,
   // en alleen voor afspraken die vandaag of morgen plaatsvinden en nog geen bevestiging hebben gehad.
   const vandaag = dezeISO(0), morgen = dezeISO(1);

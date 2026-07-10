@@ -1,4 +1,4 @@
-import type { User, Project, Taak, ProjectPost, Sanering, TauwOpdracht, Brievenronde, Afspraak, Factuur, Bedrijf, Loonstrook, Boete, Communicatie, Verlof, KennisArtikel, Instellingen, Klant, Opdrachtgever, Buurtaanpak } from "./types";
+import type { User, Project, Taak, ProjectPost, Sanering, TauwOpdracht, Brievenronde, Afspraak, Factuur, Bedrijf, Loonstrook, Boete, Communicatie, Verlof, KennisArtikel, Instellingen, Klant, Opdrachtgever, Buurtaanpak, Schouwafspraak, AgendaItem, Todo } from "./types";
 
 // Saneren-dossiers en TAUW-opdrachten starten leeg; aanmaken via de bijbehorende pagina.
 export const SEED_SANERINGEN: Sanering[] = [];
@@ -39,6 +39,12 @@ export const SEED_KENNIS: KennisArtikel[] = [
 ];
 
 export const SEED_VERLOF: Verlof[] = [];
+
+export const SEED_SCHOUW: Schouwafspraak[] = [];
+
+export const SEED_AGENDA_ITEMS: AgendaItem[] = [];
+
+export const SEED_TODOS: Todo[] = [];
 
 export const SEED_COMM: Communicatie = {
   herinneringAan: true,

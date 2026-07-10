@@ -1,12 +1,13 @@
 import { Fragment, useRef, useState } from "react";
 import {
   ArrowLeft, Plus, Recycle, Trash2, MessageCircle, Phone, ChevronRight, ChevronDown,
-  X, Check, FileUp, Search, Loader2, Database, Wand2, MapPin, UserPlus, RotateCcw, CalendarClock, Pencil, Send,
+  X, Check, FileUp, Search, Loader2, Wand2, MapPin, UserPlus, RotateCcw, CalendarClock, Pencil, Send,
 } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { Card, Badge, Bevestig } from "../components/ui";
 import { WerknemerKiezer } from "../components/WerknemerKiezer";
 import { DatumKiezer } from "../components/DatumKiezer";
+import { TijdKiezer } from "../components/TijdKiezer";
 import { afleidRegio } from "../lib/regio";
 import { waUrl, smsUrl } from "../lib/communicatie";
 import { leesStedinPlanning } from "../lib/tauwImport";
@@ -162,7 +163,7 @@ function SaneerAdresKaart({ adres, nr, bewerkbaar, magVerwijderen, onChange, onV
         </label>
         <label className="block">
           <span className={adresLabel}>Tijd</span>
-          <input type="time" disabled={!bewerkbaar} value={isTijd(adres.tijd) ? adres.tijd : ""} onChange={(e) => onChange({ tijd: e.target.value })} className={veld} title="Afspraaktijd" />
+          <TijdKiezer value={isTijd(adres.tijd) ? adres.tijd : ""} onChange={(tijd) => onChange({ tijd })} disabled={!bewerkbaar} size="sm" />
         </label>
       </div>
 
@@ -250,7 +251,6 @@ function SaneerStappenplan({ sanering, users, onUpdate }: { sanering: Sanering; 
 function SaneringDetail({ sanering, onTerug }: { sanering: Sanering; onTerug: () => void }) {
   const { users, currentUser, updateSanering, deleteSanering } = useApp();
   const [verwijder, setVerwijder] = useState(false);
-  const [naarDb, setNaarDb] = useState(false);
   const [bevestigGereed, setBevestigGereed] = useState(false);
   const [naamBewerken, setNaamBewerken] = useState(false);
   const [naamConcept, setNaamConcept] = useState("");
@@ -291,11 +291,6 @@ function SaneringDetail({ sanering, onTerug }: { sanering: Sanering; onTerug: ()
   const afronden = () => updateSanering(sanering.id, { status: "verstuurd", verstuurdOp: nu() });
 
   const slaNaamOp = () => { updateSanering(sanering.id, { naam: naamConcept.trim() || sanering.naam }); setNaamBewerken(false); };
-  const naarDatabase = () => {
-    updateSanering(sanering.id, { gearchiveerd: true, gearchiveerdOp: nu() });
-    setNaarDb(false);
-    onTerug();
-  };
 
   const zichtbareAdressen = sanering.adressen.filter((a) => matchtZoek(a, zoek.trim().toLowerCase()));
 
@@ -395,7 +390,6 @@ function SaneringDetail({ sanering, onTerug }: { sanering: Sanering; onTerug: ()
           {status === "verstuurd" && (
             <div className="flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-1.5 text-sm font-medium text-green-700"><Check className="h-4 w-4" /> Afgerond{sanering.verstuurdOp ? ` op ${datumKort(sanering.verstuurdOp)}` : ""}.</span>
-              {isLeiding && <button type="button" onClick={() => setNaarDb(true)} className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm font-semibold text-green-700 hover:bg-green-100"><Database className="h-4 w-4" /> Naar database</button>}
               {isLeiding && <button type="button" onClick={terugNaarWerknemer} className={knopKlein}><RotateCcw className="h-3.5 w-3.5" /> Heropenen</button>}
             </div>
           )}
@@ -539,15 +533,6 @@ function SaneringDetail({ sanering, onTerug }: { sanering: Sanering; onTerug: ()
         tekst={`Weet je het zeker dat je "${sanering.naam}" wilt verwijderen? Alle ${totaal} adressen gaan verloren.`}
         onBevestig={() => { deleteSanering(sanering.id); setVerwijder(false); onTerug(); }}
         onAnnuleer={() => setVerwijder(false)}
-      />
-      <Bevestig
-        open={naarDb}
-        titel="Naar de database versturen"
-        tekst={`Project "${sanering.naam}" naar de database versturen? Het verdwijnt uit deze lijst en wordt bewaard in de database.`}
-        bevestigLabel="Naar database"
-        bevestigTone="brand"
-        onBevestig={naarDatabase}
-        onAnnuleer={() => setNaarDb(false)}
       />
       {scan.fase && <ScanOverlay fase={scan.fase} aantal={scan.aantal} />}
     </div>

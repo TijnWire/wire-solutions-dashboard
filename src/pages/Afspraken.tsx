@@ -13,6 +13,10 @@ import {
   ChevronRight,
   CalendarClock,
   X,
+  Mail,
+  Phone,
+  AlertTriangle,
+  Check,
 } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { Card, Badge, Bevestig } from "../components/ui";
@@ -20,7 +24,7 @@ import { WerknemerKiezer } from "../components/WerknemerKiezer";
 import { DatumKiezer } from "../components/DatumKiezer";
 import { TijdKiezer } from "../components/TijdKiezer";
 import { Keuze } from "../components/Keuze";
-import { whatsappBevestiging, googleMapsAfspraak, datumLabel, googleMapsRoute, adresVanGroep, adresVanAfspraak, MAX_ROUTE_STOPS } from "../lib/afspraak";
+import { whatsappBevestiging, whatsappAnnulering, mailtoAnnulering, googleMapsAfspraak, datumLabel, googleMapsRoute, adresVanGroep, adresVanAfspraak, MAX_ROUTE_STOPS } from "../lib/afspraak";
 import {
   AFSPRAAK_STATUSSEN,
   type Afspraak,
@@ -68,15 +72,17 @@ type RegelData = {
   huisnummer: string;
   klantNaam: string;
   telefoon: string;
+  email?: string;
   type: AdresType;
   datum: string;
   tijd: string;
   status: AfspraakStatus;
   notitie: string;
+  annuleringGemeld?: boolean;
 };
 
 function legeRegel(straat = "", datum = "", tijd = "", huisnummer = ""): RegelData {
-  return { straat, huisnummer, klantNaam: "", telefoon: "", type: "woning", datum, tijd, status: "Open", notitie: "" };
+  return { straat, huisnummer, klantNaam: "", telefoon: "", email: "", type: "woning", datum, tijd, status: "Open", notitie: "" };
 }
 
 function genReeks(van: number, tot: number, kant: "alle" | "oneven" | "even"): string[] {
@@ -175,6 +181,10 @@ function RegelEditor({
             <div>
               <label className={labelCls}>Telefoon</label>
               <input value={regel.telefoon} onChange={(e) => onChange({ telefoon: e.target.value })} placeholder="06 12345678" className={veld} />
+            </div>
+            <div className="sm:col-span-2">
+              <label className={labelCls}>E-mail (optioneel)</label>
+              <input value={regel.email ?? ""} onChange={(e) => onChange({ email: e.target.value })} placeholder="klant@voorbeeld.nl" className={veld} />
             </div>
           </div>
           <div>
@@ -352,6 +362,7 @@ function NieuweGroep({ onKlaar }: { onKlaar: () => void }) {
         toegewezenAan: toegewezenAan || undefined,
         status: r.status,
         notitie: r.notitie,
+        email: r.email || undefined,
       });
     }
     onKlaar();
@@ -585,6 +596,10 @@ export function Afspraken({ initieelLocatie }: { initieelLocatie?: string }) {
   const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer";
 
   const zichtbaar = isLeiding ? afspraken : afspraken.filter((a) => a.toegewezenAan === currentUser.id);
+  // Vervallen afspraken waarvan de betrokkenen nog niet geïnformeerd zijn.
+  const vervallen = zichtbaar.filter((a) => a.status === "Geannuleerd" && !a.annuleringGemeld);
+  const naamVanUser = (id?: string) => users.find((u) => u.id === id)?.naam ?? "";
+  const emailVanUser = (id?: string) => users.find((u) => u.id === id)?.email ?? "";
 
   if (modus === "nieuw") return <NieuweGroep onKlaar={() => setModus("lijst")} />;
   if (openLocatie) return <GroepDetail locatie={openLocatie} onTerug={() => setOpenLocatie(null)} />;
@@ -638,6 +653,46 @@ export function Afspraken({ initieelLocatie }: { initieelLocatie?: string }) {
           <Plus className="h-4 w-4" /> Nieuwe afspraakgroep
         </button>
       </div>
+
+      {/* Vervallen afspraken — waarschuwing + contactgegevens om de betrokkenen te informeren */}
+      {vervallen.length > 0 && (
+        <Card className="border-2 border-red-200 bg-red-50/60 p-4">
+          <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-red-800">
+            <AlertTriangle className="h-4 w-4 text-red-600" /> {vervallen.length} afspraak{vervallen.length === 1 ? "" : "en"} gaat niet door — informeer de betrokkenen
+          </h3>
+          <div className="space-y-2">
+            {vervallen.map((a) => (
+              <div key={a.id} className="rounded-xl border border-red-200 bg-white p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button type="button" onClick={() => setOpenLocatie(a.locatie)} className="min-w-0 flex-1 text-left" title="Open deze afspraakgroep">
+                    <div className="truncate text-sm font-semibold text-ink-900">{`${a.straat} ${a.huisnummer}`.trim() || a.locatie}{a.klantNaam ? ` · ${a.klantNaam}` : ""}</div>
+                    <div className="truncate text-xs text-ink-500">{a.locatie}{a.datum ? ` · was ${datumLabel(a.datum)}${a.tijd ? ` ${a.tijd}` : ""}` : ""}</div>
+                  </button>
+                  <button type="button" onClick={() => updateAfspraak(a.id, { annuleringGemeld: true })} className="inline-flex items-center gap-1.5 rounded-lg bg-ink-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-ink-900" title="Verberg deze waarschuwing zodra iedereen op de hoogte is">
+                    <Check className="h-3.5 w-3.5" /> Betrokkenen geïnformeerd
+                  </button>
+                </div>
+                {/* Contactknoppen: klant (telefoon/WhatsApp/e-mail) + de toegewezen medewerker */}
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  {a.telefoon ? (
+                    <>
+                      <a href={`tel:${a.telefoon}`} className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 bg-white px-2.5 py-1 text-xs font-medium text-ink-700 hover:bg-ink-50"><Phone className="h-3.5 w-3.5" /> {a.telefoon}</a>
+                      <a href={whatsappAnnulering(a)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-green-700"><MessageCircle className="h-3.5 w-3.5" /> WhatsApp</a>
+                    </>
+                  ) : <span className="text-xs text-ink-400">Geen telefoonnummer bekend</span>}
+                  {a.email && <a href={mailtoAnnulering(a)} className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 bg-white px-2.5 py-1 text-xs font-medium text-ink-700 hover:bg-ink-50"><Mail className="h-3.5 w-3.5" /> {a.email}</a>}
+                  {a.toegewezenAan && (
+                    <span className="inline-flex items-center gap-1.5 rounded-lg bg-ink-100 px-2.5 py-1 text-xs text-ink-600">
+                      Medewerker: {naamVanUser(a.toegewezenAan)}
+                      {emailVanUser(a.toegewezenAan) && <a href={`mailto:${emailVanUser(a.toegewezenAan)}`} className="inline-flex items-center gap-1 font-medium text-brand-600"><Mail className="h-3 w-3" /> mail</a>}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {/* Routebalk — verschijnt zodra je locaties aanvinkt */}
       {routeSel.size > 0 && (

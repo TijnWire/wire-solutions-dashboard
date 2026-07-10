@@ -39,6 +39,29 @@ export function whatsappBevestiging(a: Afspraak): string {
   return `https://wa.me/${nummer}?text=${encodeURIComponent(tekst)}`;
 }
 
+// ── Afspraak gaat niet door: kant-en-klare annuleringsberichten ──
+export function annuleringTekst(a: Afspraak): string {
+  const datum = a.datum
+    ? new Date(a.datum + "T00:00:00").toLocaleDateString("nl-NL", { weekday: "long", day: "numeric", month: "long" })
+    : "de geplande datum";
+  return (
+    `Beste ${a.klantNaam || "klant"},\n\n` +
+    `Helaas moeten wij uw afspraak met Wire Solutions${a.datum ? ` op ${datum}${a.tijd ? ` om ${a.tijd}` : ""}` : ""} annuleren.\n` +
+    `Adres: ${adresVanAfspraak(a)}.\n\n` +
+    `Wij nemen contact met u op om een nieuwe afspraak te plannen. Onze excuses voor het ongemak.\n\n` +
+    `Met vriendelijke groet,\nWire Solutions`
+  );
+}
+
+export function whatsappAnnulering(a: Afspraak): string {
+  return `https://wa.me/${normaliseerTelefoon(a.telefoon)}?text=${encodeURIComponent(annuleringTekst(a))}`;
+}
+
+export function mailtoAnnulering(a: Afspraak): string {
+  const onderwerp = "Afspraak Wire Solutions geannuleerd";
+  return `mailto:${a.email ?? ""}?subject=${encodeURIComponent(onderwerp)}&body=${encodeURIComponent(annuleringTekst(a))}`;
+}
+
 export function googleMapsAfspraak(a: Afspraak): string {
   const params = new URLSearchParams();
   params.set("api", "1");
