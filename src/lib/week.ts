@@ -35,6 +35,19 @@ export function verschuifWeek(maandagISO: string, delta: number): string {
   return toISO(d);
 }
 
+// ISO-weeknummer (1–53) van een ISO-datum.
+export function weekNummer(iso: string): number {
+  if (!isISODatum(iso)) return 0;
+  const [j, m, d] = iso.split("-").map(Number);
+  const t = new Date(Date.UTC(j, m - 1, d));
+  const dag = (t.getUTCDay() + 6) % 7; // maandag = 0
+  t.setUTCDate(t.getUTCDate() - dag + 3); // donderdag van deze week
+  const eersteDonderdag = new Date(Date.UTC(t.getUTCFullYear(), 0, 4));
+  const ed = (eersteDonderdag.getUTCDay() + 6) % 7;
+  eersteDonderdag.setUTCDate(eersteDonderdag.getUTCDate() - ed + 3);
+  return 1 + Math.round((t.getTime() - eersteDonderdag.getTime()) / (7 * 24 * 3600 * 1000));
+}
+
 export function weekLabel(maandagISO: string): string {
   const [j, mnd, d] = maandagISO.split("-").map(Number);
   if (!j) return "Zonder datum";

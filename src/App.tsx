@@ -6,6 +6,7 @@ import { Topbar } from "./components/Topbar";
 import { DevSwitcher } from "./components/DevSwitcher";
 import { Login } from "./pages/Login";
 import { WachtwoordWijzigen } from "./pages/WachtwoordWijzigen";
+import { Home } from "./pages/Home";
 import { Overzicht } from "./pages/Overzicht";
 import { MijnWerk } from "./pages/MijnWerk";
 import { Team } from "./pages/Team";
@@ -50,13 +51,13 @@ function Splash() {
 
 export default function App() {
   const { currentUser, hydrated, bedrijf, instellingen, verlof, taken, rondes, afspraken, voorschouwen, klanten, facturen, users, kennis, projects, projectPosts, tauwOpdrachten, saneringen, buurtaanpak, logout, synced } = useApp();
-  const [active, setActive] = useState("overzicht");
+  const [active, setActive] = useState("home");
   const [target, setTarget] = useState<NavTarget>(null);
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // Bij (her)inloggen naar de juiste startpagina
+  // Bij (her)inloggen naar het tegel-startscherm
   useEffect(() => {
-    setActive(currentUser?.rol === "monteur" ? "mijnwerk" : "overzicht");
+    setActive("home");
   }, [currentUser?.id]);
 
   // Stabiele callbacks + gememoiseerde afgeleiden, zodat de app-shell (Sidebar/BottomNav/Topbar)
@@ -87,10 +88,12 @@ export default function App() {
   if (currentUser.moetWachtwoordWijzigen) return <WachtwoordWijzigen />;
 
   const item = NAV.find((n) => n.key === active);
-  const titel = active === "overzicht" ? "Dashboard" : active === "planning" ? "Weekplanning" : item?.label ?? "Dashboard";
+  const titel = active === "home" ? "Start" : active === "overzicht" ? "Dashboard" : active === "planning" ? "Weekplanning" : item?.label ?? "Dashboard";
 
   const render = () => {
     switch (active) {
+      case "home":
+        return <Home />;
       case "overzicht":
         return <Overzicht />;
       case "mijnwerk":

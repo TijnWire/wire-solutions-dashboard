@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ListTodo, Loader2, CheckCircle2, Plus, FolderKanban, Mailbox, CalendarCheck, ChevronRight, FileScan, FlaskConical, CalendarDays, CalendarClock, Mail, AlertTriangle, Cable, Phone, Check } from "lucide-react";
+import { ListTodo, Loader2, CheckCircle2, Plus, FolderKanban, Mailbox, CalendarCheck, ChevronRight, ChevronDown, FileScan, FlaskConical, CalendarDays, CalendarClock, Mail, AlertTriangle, Cable, Phone, Check } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { useNav } from "../store/NavContext";
 import { TAUW_TYPE_LABEL } from "../lib/types";
@@ -42,7 +42,9 @@ export function MijnWerk({ initieelProject }: { initieelProject?: string }) {
   const [nieuweTitel, setNieuweTitel] = useState("");
   const [scan, setScan] = useState<{ id: string; naam: string } | null>(null);
   const [netVerstuurd, setNetVerstuurd] = useState<Set<string>>(new Set());
+  const [openMappen, setOpenMappen] = useState<Set<string>>(new Set());
   const doelRef = useRef<HTMLDivElement | null>(null);
+  const toggleMap = (k: string) => setOpenMappen((p) => { const n = new Set(p); n.has(k) ? n.delete(k) : n.add(k); return n; });
 
   // Scroll naar het project waar een melding naartoe linkt.
   useEffect(() => {
@@ -102,8 +104,10 @@ export function MijnWerk({ initieelProject }: { initieelProject?: string }) {
   ];
 
   // Werkbonnen: door de manager toegewezen rondes en afspraken
+  type WerkArea = "brieven" | "afspraken" | "tauw" | "buurtaanpak";
   type Werkbon = {
     key: string;
+    area: WerkArea; // onder welk mapje het valt
     icon: LucideIcon;
     type: string;
     titel: string;
@@ -120,6 +124,7 @@ export function MijnWerk({ initieelProject }: { initieelProject?: string }) {
     const gegooid = teBezorgen.filter((a) => a.status === "Gegooid").length;
     werkbonnen.push({
       key: "r-" + r.id,
+      area: "brieven",
       icon: Mailbox,
       type: "Brieven & route",
       titel: r.straat,
@@ -137,6 +142,7 @@ export function MijnWerk({ initieelProject }: { initieelProject?: string }) {
     const bevestigd = rijen.filter((a) => a.status === "Bevestigd" || a.status === "Afgerond").length;
     werkbonnen.push({
       key: "a-" + locatie,
+      area: "afspraken",
       icon: CalendarCheck,
       type: "Afspraken",
       titel: locatie,
@@ -154,6 +160,7 @@ export function MijnWerk({ initieelProject }: { initieelProject?: string }) {
     const teLaat = !!o.deadline && o.deadline < vandaag;
     werkbonnen.push({
       key: "tauw-" + o.id,
+      area: "tauw",
       icon: FlaskConical,
       type: `TAUW · ${TAUW_TYPE_LABEL[o.type]}`,
       titel: o.referentie || o.regio || "TAUW-opdracht",
@@ -175,6 +182,7 @@ export function MijnWerk({ initieelProject }: { initieelProject?: string }) {
     const uitgevoerd = b.adressen.filter((a) => a.uitgevoerd).length;
     werkbonnen.push({
       key: "ba-" + b.id,
+      area: "buurtaanpak",
       icon: Cable,
       type: "Buurtaanpak",
       titel: b.naam,
@@ -184,6 +192,26 @@ export function MijnWerk({ initieelProject }: { initieelProject?: string }) {
       open: () => navigeer("buurtaanpak", { buurtaanpakId: b.id }),
     });
   }
+
+  // ── Mappen: werkbonnen gegroepeerd per onderdeel; klik op een item → naar die pagina ──
+  const mapMeta: { area: WerkArea; label: string; icon: LucideIcon; navKey: string }[] = [
+    { area: "brieven", label: "Brieven & routes", icon: Mailbox, navKey: "brieven" },
+    { area: "afspraken", label: "Afspraken", icon: CalendarCheck, navKey: "afspraken" },
+    { area: "tauw", label: "TAUW", icon: FlaskConical, navKey: "tauw" },
+    { area: "buurtaanpak", label: "Buurtaanpak", icon: Cable, navKey: "buurtaanpak" },
+  ];
+  const mappen = mapMeta
+    .map((m) => ({ ...m, items: werkbonnen.filter((w) => w.area === m.area) }))
+    .filter((m) => m.items.length > 0);
+
+  // Overige meldingen = de mailbox minus de items die nu al als werkmapje getoond worden.
+  const isWerkMelding = (id: string) =>
+    (id.startsWith("ronde-") && !id.startsWith("ronde-fact-")) ||
+    id.startsWith("afspr-") ||
+    (id.startsWith("tauw-") && !id.startsWith("tauw-ctrl-")) ||
+    id.startsWith("buurt-sms-") || id.startsWith("san-sms-") ||
+    id === "taken";
+  const overigeMeldingen = mailbox.filter((m) => !isWerkMelding(m.id));
 
   return (
     <div className="space-y-6">
@@ -262,88 +290,75 @@ export function MijnWerk({ initieelProject }: { initieelProject?: string }) {
       {/* Mededelingen van de beheerder */}
       <MededelingenBord />
 
-      {/* Mailbox — persoonlijke berichten & meldingen */}
-      <div>
-        <h3 className="mb-2.5 flex items-center gap-2 text-sm font-bold text-ink-700">
-          <Mailbox className="h-4 w-4 text-ink-500" /> Mailbox
-          {mailbox.length > 0 && <span className="rounded-full bg-brand-100 px-2 py-0.5 text-xs font-semibold text-brand-700">{mailbox.length}</span>}
-        </h3>
-        <Card className="overflow-hidden">
-          {mailbox.length === 0 ? (
-            <p className="p-6 text-center text-sm text-ink-400">Geen nieuwe berichten.</p>
-          ) : (
-            <div className="divide-y divide-ink-100">
-              {mailbox.map((m) => {
-                const waarschuwing = m.ernst === "waarschuwing";
-                return (
-                  <button
-                    key={m.id}
-                    type="button"
-                    onClick={() => m.navKey && navigeer(m.navKey, m.target ?? null)}
-                    disabled={!m.navKey}
-                    className="flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-ink-50 disabled:cursor-default disabled:hover:bg-transparent"
-                  >
-                    <span className={`mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${waarschuwing ? "bg-amber-50 text-amber-600" : "bg-brand-50 text-brand-600"}`}>
-                      {waarschuwing ? <AlertTriangle className="h-4 w-4" /> : <Mail className="h-4 w-4" />}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-sm font-semibold text-ink-900">{m.titel}</div>
-                      <div className="text-xs text-ink-500">{m.tekst}</div>
-                    </div>
-                    {m.navKey && <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-ink-300" />}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </Card>
-      </div>
+      {/* Waar ik mee bezig ben — netjes in mapjes per onderdeel; klik door naar de pagina */}
+      {(mappen.length > 0 || overigeMeldingen.length > 0) ? (
+        <div className="space-y-3">
+          <h3 className="flex items-center gap-2 text-sm font-bold text-ink-700"><FolderKanban className="h-4 w-4 text-ink-500" /> Waar ik mee bezig ben</h3>
 
-      {/* Werkbonnen van de manager */}
-      <div>
-        <h3 className="mb-2.5 text-sm font-bold text-ink-700">Werkbonnen van je manager</h3>
-        {werkbonnen.length === 0 ? (
-          <Card className="p-6 text-center text-sm text-ink-500">
-            Je hebt nog geen werkbonnen toegewezen. Je manager wijst ze toe via Brieven, Afspraken, TAUW en Buurtaanpak.
-          </Card>
-        ) : (
-          <div className="grid gap-3 sm:grid-cols-2">
-            {werkbonnen.map((w) => {
-              const Icon = w.icon;
-              return (
-                <button
-                  key={w.key}
-                  type="button"
-                  onClick={w.open}
-                  className="rounded-2xl border border-ink-200 bg-white p-4 text-left shadow-card transition-all hover:border-brand-300 hover:shadow-cardhover"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="rounded-lg bg-brand-50 p-2.5 text-brand-600">
-                      <Icon className="h-5 w-5" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate font-semibold text-ink-900">{w.titel}</div>
-                      <div className="truncate text-xs text-ink-500">{w.type} · {w.sub}</div>
-                    </div>
-                    <ChevronRight className="h-5 w-5 shrink-0 text-ink-300" />
-                  </div>
-                  {w.meta && <div className="mt-2.5 text-xs text-ink-500">{w.meta}</div>}
-                  <div className="mt-3 flex items-center justify-between text-xs text-ink-500">
-                    <span>{w.voortgang}</span>
-                    <span>{w.pct}%</span>
-                  </div>
-                  <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-ink-100">
-                    <div className="h-full rounded-full bg-green-500" style={{ width: `${w.pct}%` }} />
-                  </div>
-                  <div className="mt-2.5 flex items-center justify-end gap-1 border-t border-ink-100 pt-2.5 text-xs font-semibold text-brand-600">
-                    Openen en invullen <ChevronRight className="h-3.5 w-3.5" />
-                  </div>
+          {mappen.map((m) => {
+            const Icon = m.icon;
+            const uit = openMappen.has(m.area);
+            const pct = Math.round(m.items.reduce((s, w) => s + w.pct, 0) / m.items.length);
+            return (
+              <Card key={m.area} className="overflow-hidden">
+                <button type="button" onClick={() => (m.items.length === 1 ? m.items[0].open() : toggleMap(m.area))} className="flex w-full items-center gap-3 px-4 py-3.5 text-left hover:bg-ink-50/70" aria-expanded={uit ? "true" : "false"}>
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600"><Icon className="h-5 w-5" /></span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-semibold text-ink-900">{m.label}</span>
+                    <span className="block text-xs text-ink-500">{m.items.length} {m.items.length === 1 ? "onderdeel" : "onderdelen"} · {pct}% klaar</span>
+                  </span>
+                  <span className="rounded-full bg-ink-100 px-2 py-0.5 text-xs font-semibold text-ink-600">{m.items.length}</span>
+                  {m.items.length === 1 ? <ChevronRight className="h-5 w-5 shrink-0 text-ink-300" /> : <ChevronDown className={`h-5 w-5 shrink-0 text-ink-400 transition-transform ${uit ? "" : "-rotate-90"}`} />}
                 </button>
-              );
-            })}
-          </div>
-        )}
-      </div>
+                {uit && m.items.length > 1 && (
+                  <div className="divide-y divide-ink-100 border-t border-ink-100">
+                    {m.items.map((w) => {
+                      const ItemIcon = w.icon;
+                      return (
+                        <button key={w.key} type="button" onClick={w.open} className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-brand-50/50">
+                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600"><ItemIcon className="h-4 w-4" /></span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-semibold text-ink-900">{w.titel}</span>
+                            <span className="block truncate text-xs text-ink-500">{w.sub} · {w.voortgang}</span>
+                          </span>
+                          <span className="text-xs font-semibold text-ink-400">{w.pct}%</span>
+                          <ChevronRight className="h-4 w-4 shrink-0 text-ink-300" />
+                        </button>
+                      );
+                    })}
+                    <button type="button" onClick={() => navigeer(m.navKey)} className="flex w-full items-center justify-end gap-1 px-4 py-2.5 text-xs font-semibold text-brand-600 hover:bg-ink-50">Alles in {m.label} openen <ChevronRight className="h-3.5 w-3.5" /></button>
+                  </div>
+                )}
+              </Card>
+            );
+          })}
+
+          {/* Meldingen-mapje — de rest van de berichten */}
+          {overigeMeldingen.length > 0 && (
+            <Card className="overflow-hidden">
+              <button type="button" onClick={() => toggleMap("_meld")} className="flex w-full items-center gap-3 px-4 py-3.5 text-left hover:bg-ink-50/70" aria-expanded={openMappen.has("_meld") ? "true" : "false"}>
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600"><Mailbox className="h-5 w-5" /></span>
+                <span className="min-w-0 flex-1"><span className="block font-semibold text-ink-900">Meldingen</span><span className="block text-xs text-ink-500">Berichten en aandachtspunten</span></span>
+                <span className="rounded-full bg-ink-100 px-2 py-0.5 text-xs font-semibold text-ink-600">{overigeMeldingen.length}</span>
+                <ChevronDown className={`h-5 w-5 shrink-0 text-ink-400 transition-transform ${openMappen.has("_meld") ? "" : "-rotate-90"}`} />
+              </button>
+              {openMappen.has("_meld") && (
+                <div className="divide-y divide-ink-100 border-t border-ink-100">
+                  {overigeMeldingen.map((m) => (
+                    <button key={m.id} type="button" onClick={() => m.navKey && navigeer(m.navKey, m.target ?? null)} disabled={!m.navKey} className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-ink-50 disabled:cursor-default disabled:hover:bg-transparent">
+                      <span className={`mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${m.ernst === "waarschuwing" ? "bg-amber-50 text-amber-600" : "bg-brand-50 text-brand-600"}`}>{m.ernst === "waarschuwing" ? <AlertTriangle className="h-4 w-4" /> : <Mail className="h-4 w-4" />}</span>
+                      <span className="min-w-0 flex-1"><span className="block text-sm font-semibold text-ink-900">{m.titel}</span><span className="block text-xs text-ink-500">{m.tekst}</span></span>
+                      {m.navKey && <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-ink-300" />}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </Card>
+          )}
+        </div>
+      ) : (
+        <Card className="p-6 text-center text-sm text-ink-500">Je hebt nog geen werk toegewezen. Je manager wijst het toe via Brieven, Afspraken, TAUW en Buurtaanpak.</Card>
+      )}
 
       {/* Eigen taken per project */}
       {mijnProjecten.length > 0 && (

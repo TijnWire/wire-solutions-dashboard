@@ -11,6 +11,7 @@ import { fileNaarDataUrl } from "../lib/image";
 import { downloadVoorschouwPdf } from "../lib/voorschouwPdf";
 import { datumLabel } from "../lib/afspraak";
 import { TAUW_TYPE_LABEL } from "../lib/types";
+import { weekStartISO, weekEindISO, verschuifWeek, weekBereik, weekNummer } from "../lib/week";
 
 const veld = "w-full rounded-xl border border-ink-200 px-3.5 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100";
 const labelCls = "mb-1 block text-xs font-semibold text-ink-600";
@@ -80,6 +81,8 @@ export function Klanten({ initieelKey }: { initieelKey?: string }) {
   const [geopendCat, setGeopendCat] = useState<Set<string>>(new Set()); // projectmappen — standaard dicht
   const [geopendArchief, setGeopendArchief] = useState<Set<string>>(new Set()); // los gearchiveerd project
   const [tab, setTab] = useState<"adressen" | "projecten">("projecten");
+  const [periode, setPeriode] = useState<"week" | "maand" | "kwartaal" | "alles">("maand");
+  const [anker, setAnker] = useState(() => new Date().toISOString().slice(0, 10));
 
   if (!currentUser) return null;
   const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer";
@@ -235,7 +238,8 @@ export function Klanten({ initieelKey }: { initieelKey?: string }) {
   const zichtbaar = q ? alle.filter((a) => `${a.naam} ${a.straat} ${a.huisnummer} ${a.postcode} ${a.plaats}`.toLowerCase().includes(q)) : alle;
 
   // ── Projectarchief: 4 mappen met afgeronde projecten die naar de database zijn verstuurd ──
-  type ArchiefRij = { id: string; titel: string; subtitel: string; datum?: string; regels: string[]; gearchiveerd: boolean; herstel: () => void };
+  type ArchiefRij = { id: string; titel: string; subtitel: string; datum?: string; peil: string; regels: string[]; gearchiveerd: boolean; herstel: () => void };
+  const peilVan = (...kandidaten: (string | undefined)[]) => (kandidaten.find((d) => d) ?? "").slice(0, 10);
   const projectMappen: { key: string; label: string; Icon: typeof Mailbox; rijen: ArchiefRij[] }[] = [
     {
       key: "brieven", label: "Brieven & Routes", Icon: Mailbox,
@@ -246,6 +250,7 @@ export function Klanten({ initieelKey }: { initieelKey?: string }) {
           titel: r.straat || "Ronde",
           subtitel: [[r.postcode, r.plaats].filter(Boolean).join(" "), `${te.length} adres${te.length === 1 ? "" : "sen"}`].filter(Boolean).join(" · "),
           datum: r.gearchiveerdOp,
+          peil: peilVan(r.gearchiveerdOp, r.verstuurdOp, r.aangemaakt),
           regels: te.map((a) => `${r.straat} ${a.huisnummer}${a.toevoeging || ""} — ${a.status}`),
           gearchiveerd: !!r.gearchiveerd,
           herstel: () => updateRonde(r.id, { gearchiveerd: false, gearchiveerdOp: undefined }),
@@ -261,6 +266,7 @@ export function Klanten({ initieelKey }: { initieelKey?: string }) {
           titel: s.naam || "Sanering",
           subtitel: [s.regio, `${adr.length} adres${adr.length === 1 ? "" : "sen"}`].filter(Boolean).join(" · "),
           datum: s.gearchiveerdOp,
+          peil: peilVan(s.gearchiveerdOp, s.verstuurdOp, s.afgerondOp, s.aangemaakt),
           regels: adr.map((a) => `${a.straat} ${a.huisnummer}`.trim() + (a.naam ? ` — ${a.naam}` : "") + (a.bevestigd ? " ✓" : "")),
           gearchiveerd: !!s.gearchiveerd,
           herstel: () => updateSanering(s.id, { gearchiveerd: false, gearchiveerdOp: undefined }),
@@ -276,6 +282,7 @@ export function Klanten({ initieelKey }: { initieelKey?: string }) {
           titel: m.naam,
           subtitel: `${items.length} voorschouw${items.length === 1 ? "" : "en"}`,
           datum: m.gearchiveerdOp,
+          peil: peilVan(m.gearchiveerdOp, m.aangemaakt),
           regels: items.map((v) => `${v.straatnaam || "Onbekende straat"}${v.plaats ? `, ${v.plaats}` : ""} — ${v.status}`),
           gearchiveerd: !!m.gearchiveerd,
           herstel: () => {
@@ -294,6 +301,7 @@ export function Klanten({ initieelKey }: { initieelKey?: string }) {
         titel: o.referentie || o.regio || "TAUW-opdracht",
         subtitel: [TAUW_TYPE_LABEL[o.type], o.regio, `${o.adressen.length} adres${o.adressen.length === 1 ? "" : "sen"}`].filter(Boolean).join(" · "),
         datum: o.gearchiveerdOp,
+        peil: peilVan(o.gearchiveerdOp, o.verstuurdOp, o.aangemaakt),
         regels: o.adressen.map((a) => `${a.straat} ${a.huisnummer}${a.plaats ? `, ${a.plaats}` : ""}`),
         gearchiveerd: !!o.gearchiveerd,
         herstel: () => updateTauw(o.id, { gearchiveerd: false, gearchiveerdOp: undefined }),
@@ -301,6 +309,36 @@ export function Klanten({ initieelKey }: { initieelKey?: string }) {
     },
   ];
   const totaalGearchiveerd = projectMappen.reduce((s, c) => s + c.rijen.length, 0);
+
+  // ── Periodefilter (week/maand/kwartaal) — houdt de database opgeruimd ──
+  const MAAND_NL = ["januari", "februari", "maart", "april", "mei", "juni", "juli", "augustus", "september", "oktober", "november", "december"];
+  const isoVan = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const ank = new Date(anker + "T00:00:00");
+  let range: { start: string; eind: string } | null = null;
+  let periodeLabel = "Alle periodes";
+  let periodeSub = "";
+  if (periode === "week") {
+    const ma = weekStartISO(anker) || anker;
+    range = { start: ma, eind: weekEindISO(ma) };
+    periodeLabel = `Week ${weekNummer(ma)}`;
+    periodeSub = weekBereik(ma);
+  } else if (periode === "maand") {
+    range = { start: isoVan(new Date(ank.getFullYear(), ank.getMonth(), 1)), eind: isoVan(new Date(ank.getFullYear(), ank.getMonth() + 1, 0)) };
+    periodeLabel = `${MAAND_NL[ank.getMonth()]} ${ank.getFullYear()}`;
+  } else if (periode === "kwartaal") {
+    const q = Math.floor(ank.getMonth() / 3);
+    range = { start: isoVan(new Date(ank.getFullYear(), q * 3, 1)), eind: isoVan(new Date(ank.getFullYear(), q * 3 + 3, 0)) };
+    periodeLabel = `Kwartaal ${q + 1} · ${ank.getFullYear()}`;
+    periodeSub = `${MAAND_NL[q * 3].slice(0, 3)}–${MAAND_NL[q * 3 + 2].slice(0, 3)}`;
+  }
+  const inPeriode = (peil: string) => !range || (!!peil && peil >= range.start && peil <= range.eind);
+  const gefilterdeCats = projectMappen.map((c) => ({ ...c, rijen: c.rijen.filter((r) => inPeriode(r.peil)) }));
+  const totaalPeriode = gefilterdeCats.reduce((s, c) => s + c.rijen.length, 0);
+  const verschuif = (delta: number) => {
+    if (periode === "week") setAnker(verschuifWeek(anker, delta));
+    else if (periode === "maand") setAnker(isoVan(new Date(ank.getFullYear(), ank.getMonth() + delta, 1)));
+    else if (periode === "kwartaal") setAnker(isoVan(new Date(ank.getFullYear(), ank.getMonth() + delta * 3, 1)));
+  };
 
   return (
     <div className="space-y-5">
@@ -326,11 +364,30 @@ export function Klanten({ initieelKey }: { initieelKey?: string }) {
 
       {tab === "projecten" && (
       <div className="space-y-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="text-xs text-ink-400">{totaalGearchiveerd} {totaalGearchiveerd === 1 ? "project" : "projecten"} · gegroepeerd per projectsoort</span>
-          <span className="ml-auto hidden text-xs text-ink-400 sm:block">Alle projecten komen hier automatisch te staan.</span>
+        {/* Periode-schakelaar + navigator — houdt het overzicht opgeruimd */}
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex rounded-xl border border-ink-200 bg-white p-0.5">
+              {(["week", "maand", "kwartaal", "alles"] as const).map((p) => (
+                <button key={p} type="button" onClick={() => setPeriode(p)} className={`rounded-lg px-3 py-1.5 text-sm font-semibold capitalize transition-colors ${periode === p ? "bg-brand-600 text-white" : "text-ink-600 hover:bg-ink-50"}`}>{p}</button>
+              ))}
+            </div>
+            <span className="ml-auto text-xs text-ink-400">{totaalPeriode} van {totaalGearchiveerd} {totaalGearchiveerd === 1 ? "project" : "projecten"}</span>
+          </div>
+          {periode !== "alles" && (
+            <div className="flex items-center justify-between gap-2 rounded-xl border border-ink-200 bg-white p-2">
+              <button type="button" onClick={() => verschuif(-1)} className="inline-flex items-center gap-1 rounded-lg border border-ink-200 px-3 py-1.5 text-sm font-semibold text-ink-600 hover:bg-ink-50"><ChevronRight className="h-4 w-4 rotate-180" /> Vorige</button>
+              <button type="button" onClick={() => setAnker(new Date().toISOString().slice(0, 10))} title="Naar nu" className="min-w-0 rounded-lg px-3 py-1 text-center hover:bg-ink-50">
+                <span className="block truncate text-sm font-bold text-ink-900">{periodeLabel}</span>
+                {periodeSub && <span className="block truncate text-xs text-ink-400">{periodeSub}</span>}
+              </button>
+              <button type="button" onClick={() => verschuif(1)} className="inline-flex items-center gap-1 rounded-lg border border-ink-200 px-3 py-1.5 text-sm font-semibold text-ink-600 hover:bg-ink-50">Volgende <ChevronRight className="h-4 w-4" /></button>
+            </div>
+          )}
         </div>
-        {projectMappen.map((cat) => {
+        {totaalPeriode === 0 ? (
+          <Card className="p-8 text-center text-sm text-ink-500">Geen projecten in {periode === "alles" ? "het archief" : periodeLabel.toLowerCase()}.</Card>
+        ) : gefilterdeCats.filter((c) => c.rijen.length > 0).map((cat) => {
           const openCat = geopendCat.has(cat.key);
           const Icon = cat.Icon;
           return (
