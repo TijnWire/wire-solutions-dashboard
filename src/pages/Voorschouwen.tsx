@@ -355,9 +355,14 @@ export function Voorschouwen() {
   const gesorteerdeMappen = [...actieveMappen].sort((a, b) => a.naam.localeCompare(b.naam, "nl")); // voor het map-menu (voorspelbaar A–Z)
   // Handmatige volgorde (voor de omhoog/omlaag-knoppen): bepaalt of een map boven- of onderaan staat.
   const eigenVolgordeIds = [...actieveMappen].sort(opEigenVolgorde).map((m) => m.id);
+  // Binnen een map staan de adressen altijd op postcode (dan straatnaam + huisnummer) — zo loop je
+  // netjes de route af én zit de download in dezelfde volgorde. Adressen zónder postcode komen onderaan.
+  const opPostcode = (a: Voorschouw, b: Voorschouw) =>
+    (a.postcode?.trim() || "￿").localeCompare(b.postcode?.trim() || "￿", "nl", { numeric: true, sensitivity: "base" })
+    || (a.straatnaam || "").localeCompare(b.straatnaam || "", "nl", { numeric: true, sensitivity: "base" });
   // Mapgroepen in de gekozen sorteervolgorde; "Zonder map" komt altijd als laatste.
   const opNaam = (a: VoorschouwMap, b: VoorschouwMap) => a.naam.localeCompare(b.naam, "nl");
-  const mapGroepen = actieveMappen.map((m) => ({ map: m, items: zichtbaar.filter((v) => v.mapId === m.id) }));
+  const mapGroepen = actieveMappen.map((m) => ({ map: m, items: zichtbaar.filter((v) => v.mapId === m.id).sort(opPostcode) }));
   mapGroepen.sort((ga, gb) => {
     switch (sorteerModus) {
       case "naamOmgekeerd": return opNaam(gb.map, ga.map) || ga.map.id.localeCompare(gb.map.id);
@@ -368,7 +373,7 @@ export function Voorschouwen() {
     }
   });
   const groepen: { map: { id: string; naam: string } | null; items: Voorschouw[] }[] = mapGroepen;
-  const zonderMap = zichtbaar.filter((v) => !v.mapId || !geldigeMapIds.has(v.mapId));
+  const zonderMap = zichtbaar.filter((v) => !v.mapId || !geldigeMapIds.has(v.mapId)).sort(opPostcode);
   if (zonderMap.length) groepen.push({ map: null, items: zonderMap });
 
   // Tekstfilter over de mappen-weergave: een map is zichtbaar als de naam matcht (dan alle adressen) of
