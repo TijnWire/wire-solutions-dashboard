@@ -824,6 +824,7 @@ function BrievenMap({ naam, rondes, isLeiding, onOpenRonde }: { naam: string; ro
   const [vraagBoek, setVraagBoek] = useState(false);
   const [boekKlaar, setBoekKlaar] = useState(0); // >0 → succes-popup met aantal verzonden adressen
   const [sel, setSel] = useState<Set<string>>(new Set()); // geselecteerde adres-id's voor bulk-acties
+  const [tikModus, setTikModus] = useState<BriefStatus | null>(null); // null = selecteren; anders zet één tik direct deze status
   const [voegToe, setVoegToe] = useState(false); // handmatig adres-formulier open
   const [nieuw, setNieuw] = useState({ straat: "", huisnummer: "", toevoeging: "", postcode: "", plaats: "" });
   const nu = () => new Date().toISOString();
@@ -861,6 +862,23 @@ function BrievenMap({ naam, rondes, isLeiding, onOpenRonde }: { naam: string; ro
   const markeer = (status: BriefStatus) => {
     rondes.forEach((r) => { if (r.adressen.some((a) => sel.has(a.id))) updateRonde(r.id, { adressen: r.adressen.map((a) => (sel.has(a.id) ? { ...a, status } : a)) }); });
     setSel(new Set());
+  };
+
+  // Tik-modus: één tik zet direct de gekozen status (nog een keer tikken = terug naar Te doen). Zo vink je
+  // tijdens het lopen snel af wat je hebt gedaan — zonder eerst te selecteren — en gooi je nooit dubbel.
+  const kiesTikModus = (m: BriefStatus | null) => { setTikModus(m); setSel(new Set()); };
+  const tikModusLabel = tikModus === "Gegooid" ? "afgegooid" : tikModus === "Blanco" ? "blanco" : "";
+  const tikModusDot = tikModus === "Gegooid" ? "bg-green-500" : "bg-sky-500";
+  const zetAdresStatus = (adresId: string, status: BriefStatus) => {
+    rondes.forEach((r) => { if (r.adressen.some((a) => a.id === adresId)) updateRonde(r.id, { adressen: r.adressen.map((a) => (a.id === adresId ? { ...a, status } : a)) }); });
+  };
+  const tikAdres = (a: { id: string; status: BriefStatus }) => { if (!tikModus) { toggleSel(a.id); return; } zetAdresStatus(a.id, a.status === tikModus ? "Te doen" : tikModus); };
+  const tikStraat = (r: Brievenronde) => {
+    if (!tikModus) { selecteerStraat(r); return; }
+    const status = tikModus;
+    const echte = r.adressen.filter((a) => !a.ontbreekt);
+    const alleAl = echte.length > 0 && echte.every((a) => a.status === status);
+    updateRonde(r.id, { adressen: r.adressen.map((a) => (a.ontbreekt ? a : { ...a, status: alleAl ? "Te doen" : status })) });
   };
 
   // Handmatig een adres toevoegen aan de map (aan de bestaande straat of een nieuwe straat in deze map).
@@ -941,24 +959,39 @@ function BrievenMap({ naam, rondes, isLeiding, onOpenRonde }: { naam: string; ro
             </div>
           )}
 
-          {/* Selectie-balk: alles selecteren + geselecteerde adressen in bulk markeren */}
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl bg-ink-50 px-3 py-2">
-            <button type="button" onClick={selecteerAlles} className="inline-flex items-center gap-1.5 text-xs font-semibold text-ink-700">
-              {allesGesel ? <CheckSquare className="h-4 w-4 text-brand-600" /> : <Square className="h-4 w-4 text-ink-400" />}
-              {allesGesel ? "Alles deselecteren" : "Alles selecteren"}
-            </button>
-            {sel.size > 0 ? (
-              <>
-                <span className="text-xs font-medium text-ink-500">{sel.size} geselecteerd</span>
-                <div className="ml-auto flex flex-wrap items-center gap-2">
-                  <button type="button" onClick={() => markeer("Gegooid")} className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-green-700"><Check className="h-3.5 w-3.5" /> Afgegooid ({sel.size})</button>
-                  <button type="button" onClick={() => markeer("Blanco")} className="rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-sky-700" title="Bezorgd, maar een blanco papiertje gegeven">Blanco ({sel.size})</button>
-                  <button type="button" onClick={() => markeer("Te doen")} className="rounded-lg border border-ink-200 bg-white px-3 py-1.5 text-xs font-semibold text-ink-600 hover:bg-ink-50">Terug naar te doen</button>
-                  <button type="button" onClick={() => setSel(new Set())} className="rounded-lg px-2 py-1.5 text-xs font-medium text-ink-400 hover:text-ink-700">Wis</button>
-                </div>
-              </>
+          {/* Tik-modus: kies een actie en tik dan adressen (of een straatnaam) aan om ze meteen te markeren.
+              Zo loop je de wijk en vink je per bus af — zonder eerst te selecteren, dus nooit dubbel gooien. */}
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center gap-2 rounded-xl bg-ink-50 px-3 py-2">
+              <span className="text-xs font-semibold text-ink-600">Tik-modus:</span>
+              <button type="button" onClick={() => kiesTikModus(null)} className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-colors ${tikModus === null ? "bg-brand-600 text-white" : "border border-ink-200 bg-white text-ink-600 hover:bg-ink-50"}`}>Selecteren</button>
+              <button type="button" onClick={() => kiesTikModus("Gegooid")} className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition-colors ${tikModus === "Gegooid" ? "bg-green-600 text-white" : "border border-ink-200 bg-white text-green-700 hover:bg-green-50"}`}><span className={`h-2 w-2 rounded-full ${tikModus === "Gegooid" ? "bg-white" : "bg-green-500"}`} /> Afgooien</button>
+              <button type="button" onClick={() => kiesTikModus("Blanco")} className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition-colors ${tikModus === "Blanco" ? "bg-sky-600 text-white" : "border border-ink-200 bg-white text-sky-700 hover:bg-sky-50"}`}><span className={`h-2 w-2 rounded-full ${tikModus === "Blanco" ? "bg-white" : "bg-sky-500"}`} /> Blanco</button>
+              {tikModus && <button type="button" onClick={() => kiesTikModus(null)} className="ml-auto rounded-lg px-2.5 py-1.5 text-xs font-semibold text-ink-500 hover:bg-ink-100 hover:text-ink-800">Klaar</button>}
+            </div>
+
+            {tikModus ? (
+              <p className="px-1 text-xs text-ink-500">Tik een adres aan om het op <b className="text-ink-700">{tikModusLabel}</b> te zetten (of tik een straatnaam voor de hele straat). Nog een keer tikken zet het terug op te doen.</p>
             ) : (
-              <span className="ml-auto text-xs text-ink-400">Tik op adressen om te selecteren, of op een straatnaam voor de hele straat.</span>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl bg-ink-50 px-3 py-2">
+                <button type="button" onClick={selecteerAlles} className="inline-flex items-center gap-1.5 text-xs font-semibold text-ink-700">
+                  {allesGesel ? <CheckSquare className="h-4 w-4 text-brand-600" /> : <Square className="h-4 w-4 text-ink-400" />}
+                  {allesGesel ? "Alles deselecteren" : "Alles selecteren"}
+                </button>
+                {sel.size > 0 ? (
+                  <>
+                    <span className="text-xs font-medium text-ink-500">{sel.size} geselecteerd</span>
+                    <div className="ml-auto flex flex-wrap items-center gap-2">
+                      <button type="button" onClick={() => markeer("Gegooid")} className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-green-700"><Check className="h-3.5 w-3.5" /> Afgegooid ({sel.size})</button>
+                      <button type="button" onClick={() => markeer("Blanco")} className="rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-sky-700" title="Bezorgd, maar een blanco papiertje gegeven">Blanco ({sel.size})</button>
+                      <button type="button" onClick={() => markeer("Te doen")} className="rounded-lg border border-ink-200 bg-white px-3 py-1.5 text-xs font-semibold text-ink-600 hover:bg-ink-50">Terug naar te doen</button>
+                      <button type="button" onClick={() => setSel(new Set())} className="rounded-lg px-2 py-1.5 text-xs font-medium text-ink-400 hover:text-ink-700">Wis</button>
+                    </div>
+                  </>
+                ) : (
+                  <span className="ml-auto text-xs text-ink-400">Of kies hierboven een tik-modus en tik de adressen aan die je hebt gedaan.</span>
+                )}
+              </div>
             )}
           </div>
 
@@ -969,8 +1002,10 @@ function BrievenMap({ naam, rondes, isLeiding, onOpenRonde }: { naam: string; ro
               return (
                 <div key={r.id}>
                   <div className="mb-1.5 flex items-center gap-2">
-                    <button type="button" onClick={() => selecteerStraat(r)} className="inline-flex min-w-0 items-center gap-1.5 text-left text-sm font-semibold text-ink-800 hover:text-brand-700" title="Hele straat selecteren">
-                      {straatVol ? <CheckSquare className="h-4 w-4 shrink-0 text-brand-600" /> : <Square className="h-4 w-4 shrink-0 text-ink-300" />}
+                    <button type="button" onClick={() => tikStraat(r)} className="inline-flex min-w-0 items-center gap-1.5 text-left text-sm font-semibold text-ink-800 hover:text-brand-700" title={tikModus ? `Hele straat op ${tikModusLabel}` : "Hele straat selecteren"}>
+                      {tikModus
+                        ? <span className={`h-4 w-4 shrink-0 rounded ${tikModusDot}`} />
+                        : straatVol ? <CheckSquare className="h-4 w-4 shrink-0 text-brand-600" /> : <Square className="h-4 w-4 shrink-0 text-ink-300" />}
                       <span className="truncate">{r.straat} <span className="font-normal text-ink-400">· {r.plaats} · {straatIds.length}</span></span>
                     </button>
                     <button type="button" onClick={() => onOpenRonde(r.id)} title="Open ronde" className="shrink-0 rounded p-1 text-ink-300 hover:bg-ink-100 hover:text-ink-600"><ChevronRight className="h-4 w-4" /></button>
@@ -985,7 +1020,7 @@ function BrievenMap({ naam, rondes, isLeiding, onOpenRonde }: { naam: string; ro
                         : "bg-ink-100 text-ink-700 hover:bg-ink-200";
                       const titel = a.ontbreekt ? "Ontbrekend huisnummer" : a.status === "Blanco" ? "Blanco bezorgd" : a.status === "Gegooid" ? "Afgegooid" : "Te doen";
                       return (
-                        <button key={a.id} type="button" onClick={() => toggleSel(a.id)} title={titel} className={`rounded-md px-2 py-1 text-xs font-medium transition-colors ${kleur} ${geseld ? "ring-2 ring-brand-500 ring-offset-1" : ""}`}>
+                        <button key={a.id} type="button" onClick={() => tikAdres(a)} title={titel} className={`rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${kleur} ${geseld ? "ring-2 ring-brand-500 ring-offset-1" : ""}`}>
                           {a.huisnummer}{a.toevoeging ? ` ${a.toevoeging}` : ""}
                         </button>
                       );
