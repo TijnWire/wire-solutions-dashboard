@@ -4,6 +4,7 @@ import { useApp } from "../store/AppContext";
 import { Card, Bevestig } from "../components/ui";
 import { berekenMeldingen } from "../lib/meldingen";
 import { sbSyncTest, sbAantallen, type SyncTest } from "../lib/supabase";
+import { APP_VERSIE } from "../lib/versie";
 import type { Instellingen as InstellingenT } from "../lib/types";
 
 const veld = "w-full rounded-xl border border-ink-200 px-3.5 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100";
@@ -329,7 +330,7 @@ function SysteemTab({ isLeiding }: { isLeiding: boolean }) {
       <Card className="p-5">
         <h3 className="mb-3 text-sm font-bold text-ink-900">App</h3>
         <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-ink-600">
-          <span>Wire Solutions dashboard · versie 0.1.0 (lokale demo)</span>
+          <span>Wire Solutions dashboard · V{APP_VERSIE} · live</span>
           {isLeiding && (
             <button type="button" onClick={() => setReset(true)} className="inline-flex items-center gap-2 rounded-lg border border-ink-200 px-3 py-2 text-sm font-medium text-ink-700 hover:bg-ink-50">
               <RotateCcw className="h-4 w-4" /> Voorbeelddata opnieuw instellen

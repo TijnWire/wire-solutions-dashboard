@@ -1,0 +1,3 @@
+// Zichtbare app-versie (Instellingen → App). Verhoog dit bij elke GROTE update: V1.0 → V1.1 → V1.2 …
+// (Los van de service-worker-cacheversie in public/sw.js, die is puur technisch voor de auto-update.)
+export const APP_VERSIE = "1.0";
