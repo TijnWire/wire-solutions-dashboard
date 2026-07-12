@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, CalendarDays, Wand2, RotateCcw, FolderKanban
 import { useApp } from "../store/AppContext";
 import { Card } from "../components/ui";
 import { Keuze } from "../components/Keuze";
+import { feestdagNaam } from "../lib/feestdagen";
 import type { User } from "../lib/types";
 
 const DAGEN = ["Ma", "Di", "Wo", "Do", "Vr", "Za", "Zo"];
@@ -57,7 +58,8 @@ export function Urenstaat() {
   const contractUren = (u: User) => (u.contract?.uren != null ? u.contract.uren : STANDAARD_CONTRACT);
   const contractDag = (u: User) => contractUren(u) / 5;
   const verlofOp = (userId: string, iso: string) => verlof.find((v) => v.medewerkerId === userId && v.status === "Goedgekeurd" && v.van <= iso && v.tot >= iso);
-  const autoUren = (u: User) => weekISOs.map((iso, i) => (i >= 5 || verlofOp(u.id, iso) ? 0 : contractDag(u)));
+  // Automatisch voorstel: contracturen op ma–vr, behalve op weekenden, verlof/vakantie/ziek én feestdagen.
+  const autoUren = (u: User) => weekISOs.map((iso, i) => (i >= 5 || verlofOp(u.id, iso) || feestdagNaam(iso) ? 0 : contractDag(u)));
 
   // ── Records per (medewerker, week, project) ──
   const regelVan = (userId: string) => urenstaat.find((x) => x.medewerkerId === userId && x.week === weekISO && (x.projectId ?? "") === projSel);
@@ -166,6 +168,7 @@ export function Urenstaat() {
                       {DAGEN.map((d, i) => {
                         const v = verlofOp(u.id, weekISOs[i]);
                         const weekend = i >= 5;
+                        const fd = !v && !weekend ? feestdagNaam(weekISOs[i]) : undefined;
                         return (
                           <td key={d} className={`px-1 py-2 text-center ${weekend ? "bg-ink-50/40" : ""}`}>
                             <div className="relative inline-block">
@@ -174,11 +177,11 @@ export function Urenstaat() {
                                 value={uren[i] ? uurTekst(uren[i]) : ""}
                                 onChange={(e) => { const n = parseFloat(e.target.value.replace(",", ".")); zetUur(u, i, Number.isFinite(n) && n >= 0 ? n : 0); }}
                                 placeholder="0"
-                                title={v ? `${v.type}${v.notitie ? ` · ${v.notitie}` : ""}` : `${u.naam} ${d}`}
+                                title={v ? `${v.type}${v.notitie ? ` · ${v.notitie}` : ""}` : fd ? fd : `${u.naam} ${d}`}
                                 aria-label={`${u.naam} ${d}`}
-                                className={`w-12 rounded-lg border px-1.5 py-1.5 text-center text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100 ${v ? `border-transparent ${VERLOF_TINT[v.type]}` : "border-ink-200 bg-white text-ink-800"} ${algemeen && !bevestigd ? "italic text-ink-400" : ""}`}
+                                className={`w-12 rounded-lg border px-1.5 py-1.5 text-center text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100 ${v ? `border-transparent ${VERLOF_TINT[v.type]}` : fd ? "border-transparent bg-amber-50 text-amber-700" : "border-ink-200 bg-white text-ink-800"} ${algemeen && !bevestigd ? "italic text-ink-400" : ""}`}
                               />
-                              {v && <span className={`absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full ${VERLOF_STIP[v.type]} ring-2 ring-white`} title={v.type} />}
+                              {(v || fd) && <span className={`absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full ${v ? VERLOF_STIP[v.type] : "bg-amber-500"} ring-2 ring-white`} title={v ? v.type : fd} />}
                             </div>
                           </td>
                         );
@@ -208,6 +211,7 @@ export function Urenstaat() {
           <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-green-500" /> Vakantie</span>
           <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-indigo-500" /> Verlof</span>
           <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-red-500" /> Ziek</span>
+          <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-amber-500" /> Feestdag</span>
           {algemeen && <span className="italic text-ink-400">Schuine grijze cijfers = automatisch voorstel (contract − verlof), nog niet bevestigd.</span>}
         </div>
       </Card>

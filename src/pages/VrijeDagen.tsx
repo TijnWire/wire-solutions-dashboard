@@ -1,18 +1,13 @@
 import { useApp } from "../store/AppContext";
 import { Card } from "../components/ui";
 import type { User } from "../lib/types";
+import { werkdagenExclFeestdagen } from "../lib/feestdagen";
 
 const STANDAARD_VRIJE_DAGEN = 25;
 const STANDAARD_CONTRACT = 40;
 
-// Werkdagen (ma–vr) tussen twee ISO-datums, beide inclusief.
-const werkdagenTussen = (vanISO: string, totISO: string) => {
-  const d = new Date(vanISO + "T00:00:00");
-  const eind = new Date(totISO + "T00:00:00");
-  let n = 0;
-  while (d <= eind) { const dow = d.getDay(); if (dow >= 1 && dow <= 5) n++; d.setDate(d.getDate() + 1); }
-  return n;
-};
+// Werkdagen (ma–vr) tussen twee ISO-datums, beide inclusief — weekenden én Nederlandse feestdagen tellen niet mee.
+const werkdagenTussen = werkdagenExclFeestdagen;
 const somUren = (uren?: number[]) => (uren ?? []).reduce((a, b) => a + (Number(b) || 0), 0);
 const uurTekst = (n: number) => (Number.isInteger(n) ? String(n) : (Math.round(n * 10) / 10).toString().replace(".", ","));
 
