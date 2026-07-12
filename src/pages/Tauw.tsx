@@ -690,6 +690,8 @@ export function Tauw({ initieelTauw }: { initieelTauw?: string }) {
   // Mappen sorteren op werkweek (peildatum) en groeperen, met open-tellingen voor één-oogopslag-overzicht.
   const vandaag = vandaagISO();
   const gesorteerd = [...zichtbaar].sort((a, b) => {
+    const oa = isOpenMap(a) ? 0 : 1, ob = isOpenMap(b) ? 0 : 1;
+    if (oa !== ob) return oa - ob; // open werk bovenaan
     const pa = peildatum(a), pb = peildatum(b);
     if (pa !== pb) return pa < pb ? -1 : 1;
     return (a.referentie || "").localeCompare(b.referentie || "");

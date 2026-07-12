@@ -815,9 +815,9 @@ const sorteerAdr = (adr: Adres[]) => [...adr].sort((a, b) => a.huisnummer - b.hu
 
 // Eén import-map: alle rondes uit hetzelfde bestand. Map-brede acties (naam, PD-nummer, deadline,
 // toewijzen, route, boekhouding) en de adressen per straat in looproute-volgorde.
-function BrievenMap({ naam, rondes, isLeiding, onOpenRonde }: { naam: string; rondes: Brievenronde[]; isLeiding: boolean; onOpenRonde: (id: string) => void }) {
+function BrievenMap({ naam, rondes, isLeiding, onOpenRonde, startOpen }: { naam: string; rondes: Brievenronde[]; isLeiding: boolean; onOpenRonde: (id: string) => void; startOpen?: boolean }) {
   const { updateRonde, addRonde, users } = useApp();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(startOpen ?? false);
   const [naamBewerk, setNaamBewerk] = useState<string | null>(null);
   const [pdBewerk, setPdBewerk] = useState(false);
   const [routeOpen, setRouteOpen] = useState(false);
@@ -829,7 +829,12 @@ function BrievenMap({ naam, rondes, isLeiding, onOpenRonde }: { naam: string; ro
   const [nieuw, setNieuw] = useState({ straat: "", huisnummer: "", toevoeging: "", postcode: "", plaats: "" });
   const nu = () => new Date().toISOString();
 
-  const straten = [...rondes].sort((a, b) => a.straat.localeCompare(b.straat, "nl") || a.postcode.localeCompare(b.postcode));
+  // Straten met nog te gooien adressen bovenaan (open werk eerst), daarna op naam/postcode.
+  const straten = [...rondes].sort((a, b) => {
+    const oa = teGooien(a) > 0 ? 0 : 1, ob = teGooien(b) > 0 ? 0 : 1;
+    if (oa !== ob) return oa - ob;
+    return a.straat.localeCompare(b.straat, "nl") || a.postcode.localeCompare(b.postcode);
+  });
   const teBezorgen = rondes.flatMap((r) => r.adressen.filter((a) => !a.ontbreekt));
   // "Afgegooid" én "Blanco" tellen als afgehandeld (allebei bezorgd; blanco = leeg papiertje gegeven).
   const afgehandeld = teBezorgen.filter((a) => a.status === "Gegooid" || a.status === "Blanco").length;
@@ -1123,7 +1128,16 @@ export function Brieven({ initieelRonde }: { initieelRonde?: string }) {
     weekVoor(weekStartISO(peil) || "zonder").mappen.push(m);
   }
   for (const r of losse) weekVoor(weekStartISO(peildatum(r)) || "zonder").rondes.push(r);
-  weken.sort((a, b) => (a.key === "zonder" ? 1 : b.key === "zonder" ? -1 : a.key.localeCompare(b.key)));
+  // Weken met open werk komen bovenaan (dan chronologisch); "zonder datum" altijd als laatste.
+  const weekHeeftOpen = (w: Week) => w.rondes.some(isOpenRonde) || w.mappen.some((m) => m.items.some(isOpenRonde));
+  weken.sort((a, b) => {
+    const oa = weekHeeftOpen(a) ? 0 : 1, ob = weekHeeftOpen(b) ? 0 : 1;
+    if (oa !== ob) return oa - ob;
+    return a.key === "zonder" ? 1 : b.key === "zonder" ? -1 : a.key.localeCompare(b.key);
+  });
+  // De eerste map met open werk (in weergavevolgorde) klapt automatisch open zodat je meteen bij het werk zit.
+  let eersteOpenMap = "";
+  for (const w of weken) { const m = w.mappen.find((x) => x.items.some(isOpenRonde)); if (m) { eersteOpenMap = m.naam; break; } }
 
   // Eén ronde-kaart (hergebruikt in de import-mappen én in de week-groepen).
   const rondeKaart = (r: Brievenronde) => {
@@ -1216,7 +1230,7 @@ export function Brieven({ initieelRonde }: { initieelRonde?: string }) {
                 </div>
                 <div className="space-y-3">
                   {g.mappen.map((m) => (
-                    <BrievenMap key={`map-${m.naam}`} naam={m.naam} rondes={m.items} isLeiding={isLeiding} onOpenRonde={setOpenId} />
+                    <BrievenMap key={`map-${m.naam}`} naam={m.naam} rondes={m.items} isLeiding={isLeiding} onOpenRonde={setOpenId} startOpen={m.naam === eersteOpenMap} />
                   ))}
                   {g.rondes.length > 0 && (
                     <div className="grid gap-3 sm:grid-cols-2">

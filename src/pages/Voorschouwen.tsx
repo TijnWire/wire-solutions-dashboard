@@ -211,11 +211,11 @@ export function Voorschouwen() {
   const [mapNaamConcept, setMapNaamConcept] = useState("");
   // Mappen zoeken/filteren + sorteren (sorteervoorkeur lokaal per apparaat, NIET in de gesyncte store).
   const [mapZoek, setMapZoek] = useState("");
-  const [sorteerModus, setSorteerModus] = useState<"eigen" | "naam" | "naamOmgekeerd" | "aantal" | "nieuw">(() => {
+  const [sorteerModus, setSorteerModus] = useState<"eigen" | "naam" | "naamOmgekeerd" | "aantal" | "nieuw" | "open">(() => {
     try {
       const v = localStorage.getItem("vs-mapSort");
-      return v === "eigen" || v === "naam" || v === "naamOmgekeerd" || v === "aantal" || v === "nieuw" ? v : "naam";
-    } catch { return "naam"; }
+      return v === "eigen" || v === "naam" || v === "naamOmgekeerd" || v === "aantal" || v === "nieuw" || v === "open" ? v : "open";
+    } catch { return "open"; }
   });
   const [teVerwijderenMap, setTeVerwijderenMap] = useState<{ id: string; naam: string; aantal: number } | null>(null);
   useEffect(() => { try { localStorage.setItem("vs-mapSort", sorteerModus); } catch { /* opslag niet beschikbaar */ } }, [sorteerModus]);
@@ -365,8 +365,11 @@ export function Voorschouwen() {
   // Mapgroepen in de gekozen sorteervolgorde; "Zonder map" komt altijd als laatste.
   const opNaam = (a: VoorschouwMap, b: VoorschouwMap) => a.naam.localeCompare(b.naam, "nl");
   const mapGroepen = actieveMappen.map((m) => ({ map: m, items: zichtbaar.filter((v) => v.mapId === m.id).sort(opPostcode) }));
+  // Open = nog niet ingediend (concept) óf zonder foto — deze mappen vragen nog aandacht.
+  const nOpen = (items: Voorschouw[]) => items.filter((v) => v.status !== "Ingediend" || !v.fotos || v.fotos.length === 0).length;
   mapGroepen.sort((ga, gb) => {
     switch (sorteerModus) {
+      case "open": return nOpen(gb.items) - nOpen(ga.items) || opNaam(ga.map, gb.map) || ga.map.id.localeCompare(gb.map.id);
       case "naamOmgekeerd": return opNaam(gb.map, ga.map) || ga.map.id.localeCompare(gb.map.id);
       case "aantal": return gb.items.length - ga.items.length || opNaam(ga.map, gb.map) || ga.map.id.localeCompare(gb.map.id);
       case "nieuw": return (gb.map.aangemaakt ?? "").localeCompare(ga.map.aangemaakt ?? "") || opNaam(ga.map, gb.map) || ga.map.id.localeCompare(gb.map.id);
@@ -587,6 +590,7 @@ export function Voorschouwen() {
                   title="Mappen sorteren"
                   className="w-40 font-semibold"
                   opties={[
+                    { waarde: "open", label: "Open eerst" },
                     { waarde: "eigen", label: "Eigen volgorde" },
                     { waarde: "naam", label: "Naam (A–Z)" },
                     { waarde: "naamOmgekeerd", label: "Naam (Z–A)" },

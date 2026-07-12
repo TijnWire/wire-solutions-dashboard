@@ -223,7 +223,10 @@ export function Projecten({ initieelProject }: { initieelProject?: string }) {
   const [scan, setScan] = useState<{ id: string; naam: string } | null>(null);
 
   // Gefactureerde projecten gaan automatisch naar de "Database" (uit de actieve lijst, maar bewaard + gesynct).
-  const actief = projects.filter((p) => p.boekhouding !== "gefactureerd");
+  // Open werk staat bovenaan: nog niet afgerond eerst, daarna afgeronde/klaar-voor-boekhouding projecten.
+  const actief = projects
+    .filter((p) => p.boekhouding !== "gefactureerd")
+    .sort((a, b) => (a.afgerondOp ? 1 : 0) - (b.afgerondOp ? 1 : 0));
   const gearchiveerd = projects.filter((p) => p.boekhouding === "gefactureerd");
   const [dbOpen, setDbOpen] = useState(gearchiveerd.some((p) => p.id === initieelProject));
 
