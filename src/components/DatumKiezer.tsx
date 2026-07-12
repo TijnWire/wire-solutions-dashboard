@@ -17,12 +17,16 @@ export function DatumKiezer({
   placeholder = "Kies datum",
   disabled = false,
   compact = false,
+  weergave,
+  triggerClassName,
 }: {
   value: string;
   onChange: (iso: string) => void;
   placeholder?: string;
   disabled?: boolean;
   compact?: boolean;
+  weergave?: string; // toon deze tekst i.p.v. de datum (bv. "Week 28 · 6–12 jul")
+  triggerClassName?: string; // vervang de standaard knop-styling (bv. voor een plat label)
 }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
@@ -97,9 +101,9 @@ export function DatumKiezer({
         type="button"
         disabled={disabled}
         onClick={() => (open ? setOpen(false) : openen())}
-        className={`flex w-full items-center justify-between gap-1.5 border border-ink-200 text-sm text-ink-800 outline-none hover:border-ink-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 disabled:cursor-not-allowed disabled:bg-ink-50 disabled:text-ink-400 ${compact ? "rounded-lg px-2.5 py-1.5" : "rounded-xl px-3.5 py-2.5"}`}
+        className={triggerClassName ?? `flex w-full items-center justify-between gap-1.5 border border-ink-200 text-sm text-ink-800 outline-none hover:border-ink-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 disabled:cursor-not-allowed disabled:bg-ink-50 disabled:text-ink-400 ${compact ? "rounded-lg px-2.5 py-1.5" : "rounded-xl px-3.5 py-2.5"}`}
       >
-        <span className={`truncate ${value ? "" : "text-ink-400"}`}>{label}</span>
+        <span className={`truncate ${weergave || value ? "" : "text-ink-400"}`}>{weergave ?? label}</span>
         <Calendar className="h-4 w-4 shrink-0 text-ink-400" />
       </button>
 

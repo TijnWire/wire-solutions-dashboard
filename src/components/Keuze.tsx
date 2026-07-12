@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, Check, Search } from "lucide-react";
 
-export type KeuzeOptie = { waarde: string; label: string };
+export type KeuzeOptie = { waarde: string; label: string; kleur?: string };
 
 // Afgeronde keuzelijst die de native <select> vervangt. Het menu wordt via een portal getoond
 // (position: fixed) zodat het nooit wordt afgeknipt door een overflow-hidden kaart, en het is
@@ -69,7 +69,10 @@ export function Keuze({ value, onChange, opties, placeholder = "Kies…", disabl
   return (
     <>
       <button ref={btnRef} type="button" disabled={disabled} title={title} aria-haspopup="listbox" aria-expanded={open} onClick={() => (open ? setOpen(false) : openen())} className={`${basis} ${className}`}>
-        <span className={`truncate ${huidig ? "" : "text-ink-400"}`}>{huidig ? huidig.label : placeholder}</span>
+        <span className={`flex min-w-0 flex-1 items-center gap-2 truncate ${huidig ? "" : "text-ink-400"}`}>
+          {huidig?.kleur && <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${huidig.kleur}`} />}
+          <span className="truncate">{huidig ? huidig.label : placeholder}</span>
+        </span>
         <ChevronDown className={`h-4 w-4 shrink-0 text-ink-400 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
       {open && pos && createPortal(
@@ -100,6 +103,7 @@ export function Keuze({ value, onChange, opties, placeholder = "Kies…", disabl
                     onClick={() => kies(o.waarde)}
                     className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm outline-none focus-visible:bg-ink-50 ${actief ? "bg-brand-50 font-semibold text-brand-700" : "text-ink-700 hover:bg-ink-50"}`}
                   >
+                    {o.kleur && <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${o.kleur}`} />}
                     <span className="flex-1 truncate">{o.label}</span>
                     {actief && <Check className="h-4 w-4 shrink-0 text-brand-600" />}
                   </button>

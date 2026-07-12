@@ -106,6 +106,8 @@ const toneMap: Record<string, string> = {
   amber: "bg-amber-50 text-amber-700 ring-amber-200",
   red: "bg-red-50 text-red-700 ring-red-200",
   indigo: "bg-indigo-50 text-indigo-700 ring-indigo-200",
+  blue: "bg-blue-50 text-blue-700 ring-blue-200",
+  emerald: "bg-emerald-50 text-emerald-700 ring-emerald-200",
   slate: "bg-ink-100 text-ink-600 ring-ink-200",
 };
 

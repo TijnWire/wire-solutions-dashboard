@@ -7,12 +7,19 @@ import { Card, Badge, Bevestig } from "../components/ui";
 import { downloadFactuurPdf, factuurTotalen, euro } from "../lib/factuurPdf";
 import { exporteerExcel } from "../lib/excel";
 import { weekStartISO, weekLabel, isISODatum } from "../lib/week";
+import { PeriodeNavigator, periodeRange, type Periode } from "../components/PeriodeNavigator";
 import type { Factuur, FactuurRegel, FactuurStatus, Project, Opdrachtgever, Buurtaanpak, Brievenronde } from "../lib/types";
 
+// Concept = blauw, Verstuurd = oranje/geel, Betaald = groen — zo zie je de status in één oogopslag.
 const statusTone: Record<FactuurStatus, string> = {
-  Concept: "amber",
-  Verstuurd: "indigo",
-  Betaald: "green",
+  Concept: "blue",
+  Verstuurd: "amber",
+  Betaald: "emerald",
+};
+const statusKleur: Record<FactuurStatus, string> = {
+  Concept: "bg-blue-500",
+  Verstuurd: "bg-amber-500",
+  Betaald: "bg-emerald-500",
 };
 const datumKort = (iso: string) => { const d = iso.slice(0, 10).split("-"); return d.length === 3 ? `${d[2]}-${d[1]}-${d[0]}` : iso; };
 
@@ -86,7 +93,7 @@ function FactuurForm({ bestaande, initieel, onKlaar }: { bestaande?: Factuur; in
           </div>
           <div>
             <label className={labelCls}>Status</label>
-            <Keuze value={f.status} onChange={(w) => set({ status: w as FactuurStatus })} opties={FACTUUR_STATUSSEN.map((s) => ({ waarde: s, label: s }))} title="Status" />
+            <Keuze value={f.status} onChange={(w) => set({ status: w as FactuurStatus })} opties={FACTUUR_STATUSSEN.map((s) => ({ waarde: s, label: s, kleur: statusKleur[s] }))} title="Status" />
           </div>
         </div>
         <div className="grid gap-3 sm:grid-cols-3">
@@ -292,10 +299,10 @@ export function Facturen({ initieelFactuur }: { initieelFactuur?: string }) {
   const [bewerk, setBewerk] = useState<Factuur | undefined>(undefined);
   const [nieuwVan, setNieuwVan] = useState<Omit<Factuur, "id"> | undefined>(undefined);
   const [verwijder, setVerwijder] = useState<Factuur | null>(null);
-  // Filters (klant/naam/factuurnummer via zoektekst; datum via van/tot). Standaard gesorteerd per week.
+  // Filters: zoektekst (klant/naam/factuurnummer) + periode (week/maand/kwartaal) + status.
   const [zoek, setZoek] = useState("");
-  const [dVan, setDVan] = useState("");
-  const [dTot, setDTot] = useState("");
+  const [periode, setPeriode] = useState<Periode>("week");
+  const [anker, setAnker] = useState(() => new Date().toISOString().slice(0, 10));
   const [statusFilter, setStatusFilter] = useState<"" | FactuurStatus>("");
 
   // Maakt automatisch een concept-factuur op basis van een doorgeschakeld project:
@@ -357,12 +364,13 @@ export function Facturen({ initieelFactuur }: { initieelFactuur?: string }) {
     return <OpdrachtgeverBeheer onKlaar={() => setModus("lijst")} />;
   }
 
-  // ── Filteren (klant/naam/factuurnummer + datumbereik + status) en groeperen per week ──
+  // ── Filteren (zoektekst + periode + status) en groeperen per week ──
+  const range = periodeRange(periode, anker);
+  const inPeriode = (d: string) => !range || (isISODatum(d) && d >= range.start && d <= range.eind);
   const q = zoek.trim().toLowerCase();
   const gefilterd = facturen.filter((f) => {
     if (statusFilter && f.status !== statusFilter) return false;
-    if (dVan && (!isISODatum(f.datum) || f.datum < dVan)) return false;
-    if (dTot && (!isISODatum(f.datum) || f.datum > dTot)) return false;
+    if (!inPeriode(f.datum)) return false;
     if (q) {
       const hooi = `${f.nummer} ${f.klantNaam} ${f.tav ?? ""} ${f.relatienummer ?? ""} ${f.email ?? ""}`.toLowerCase();
       if (!hooi.includes(q)) return false;
@@ -378,7 +386,7 @@ export function Facturen({ initieelFactuur }: { initieelFactuur?: string }) {
     if (!w) { w = { key: wk, label: wk === "zonder" ? "Zonder datum" : weekLabel(wk), facturen: [] }; weken.push(w); }
     w.facturen.push(f);
   }
-  const filterActief = !!(q || dVan || dTot || statusFilter);
+  const totaalPeriode = gefilterd.reduce((s, f) => s + factuurTotalen(f).totaal, 0);
 
   return (
     <div className="space-y-6">
@@ -472,19 +480,25 @@ export function Facturen({ initieelFactuur }: { initieelFactuur?: string }) {
         </Card>
       ) : (
         <div className="space-y-4">
-          {/* Filterbalk — klant/naam/factuurnummer + datumbereik + status */}
-          <Card className="flex flex-wrap items-end gap-3 p-3">
-            <div className="relative min-w-0 flex-1">
-              <label className={labelCls}>Zoeken</label>
-              <Search className="pointer-events-none absolute left-3 top-[34px] h-4 w-4 text-ink-400" />
-              <input value={zoek} onChange={(e) => setZoek(e.target.value)} placeholder="Klant, naam of factuurnummer…" className={veld + " pl-9"} />
-              {zoek && <button type="button" onClick={() => setZoek("")} className="absolute right-2 top-[30px] rounded p-1 text-ink-400 hover:bg-ink-100" title="Wissen"><X className="h-4 w-4" /></button>}
-            </div>
-            <div className="w-36"><label className={labelCls}>Van datum</label><DatumKiezer value={dVan} onChange={setDVan} placeholder="begin" /></div>
-            <div className="w-36"><label className={labelCls}>Tot datum</label><DatumKiezer value={dTot} onChange={setDTot} placeholder="eind" /></div>
-            <div className="w-36"><label className={labelCls}>Status</label><Keuze value={statusFilter} onChange={(w) => setStatusFilter(w as "" | FactuurStatus)} opties={[{ waarde: "", label: "Alle" }, ...FACTUUR_STATUSSEN.map((s) => ({ waarde: s, label: s }))]} title="Status" /></div>
-            {filterActief && <button type="button" onClick={() => { setZoek(""); setDVan(""); setDTot(""); setStatusFilter(""); }} className="rounded-lg border border-ink-200 px-3 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-50">Wis filters</button>}
-          </Card>
+          {/* Periode-navigator (week/maand/kwartaal) + zoeken + gekleurde status */}
+          <div className="space-y-3">
+            <PeriodeNavigator
+              periode={periode}
+              setPeriode={setPeriode}
+              anker={anker}
+              setAnker={setAnker}
+              rechts={<span className="text-sm font-bold text-ink-900">{euro(totaalPeriode)} <span className="font-medium text-ink-400">gefactureerd · {gefilterd.length} {gefilterd.length === 1 ? "factuur" : "facturen"}</span></span>}
+            />
+            <Card className="flex flex-wrap items-end gap-3 p-3">
+              <div className="relative min-w-0 flex-1">
+                <label className={labelCls}>Zoeken</label>
+                <Search className="pointer-events-none absolute left-3 top-[34px] h-4 w-4 text-ink-400" />
+                <input value={zoek} onChange={(e) => setZoek(e.target.value)} placeholder="Klant, naam of factuurnummer…" className={veld + " pl-9"} />
+                {zoek && <button type="button" onClick={() => setZoek("")} className="absolute right-2 top-[30px] rounded p-1 text-ink-400 hover:bg-ink-100" title="Wissen"><X className="h-4 w-4" /></button>}
+              </div>
+              <div className="w-40"><label className={labelCls}>Status</label><Keuze value={statusFilter} onChange={(w) => setStatusFilter(w as "" | FactuurStatus)} opties={[{ waarde: "", label: "Alle" }, ...FACTUUR_STATUSSEN.map((s) => ({ waarde: s, label: s, kleur: statusKleur[s] }))]} title="Status" /></div>
+            </Card>
+          </div>
 
           {gesorteerd.length === 0 ? (
             <Card className="p-8 text-center text-sm text-ink-500">Geen facturen gevonden met deze filters.</Card>
