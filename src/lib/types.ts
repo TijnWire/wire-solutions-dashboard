@@ -21,6 +21,8 @@ export type User = {
   toegang?: string[];
   // Vast contract / standaardloon — wordt automatisch in een nieuwe loonstrook ingevuld.
   contract?: { periodeType?: PeriodeType; bruto?: number; bijtelling?: number; netto?: number; uren?: number };
+  // Aantal vrije dagen per jaar (voor het vrije-dagen-overzicht in de Urenstaat). undefined = standaard 25.
+  verlofDagenPerJaar?: number;
 };
 
 // Onderdelen die een beheerder van de eigenaar mag beheren
@@ -376,6 +378,15 @@ export type Verlof = {
   tot: string; // ISO datum
   status: VerlofStatus;
   notitie: string;
+};
+
+// ── Urenstaat (per medewerker, per week de gewerkte uren) ──
+export type Urenregel = {
+  id: string;
+  medewerkerId: string;
+  week: string;     // ISO-datum van de maandag van die week (yyyy-mm-dd)
+  uren: number[];   // 7 waarden: maandag t/m zondag
+  notitie?: string;
 };
 
 // ── Blanco brieven (buurt/wijk lopen; tik aan welk huisnummer je hebt gehad) ──

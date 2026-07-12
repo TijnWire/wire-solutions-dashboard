@@ -16,6 +16,7 @@ import {
   FolderKanban,
   Receipt,
   Wallet,
+  Clock,
   AlertTriangle,
   CalendarDays,
   CalendarClock,
@@ -77,6 +78,7 @@ export const NAV: NavItem[] = [
   { key: "documenten", label: "Documenten", icon: FileText, group: "Operatie", roles: LEIDING },
 
   { key: "facturen", label: "Facturen", icon: Receipt, group: "Boekhouding", roles: LEIDING },
+  { key: "urenstaat", label: "Urenstaat", icon: Clock, group: "Boekhouding", roles: LEIDING },
   { key: "loonstroken", label: "Loonstroken", icon: Wallet, group: "Boekhouding", roles: ALLE },
   { key: "boetes", label: "Boetes", icon: AlertTriangle, group: "Boekhouding", roles: ALLE },
   { key: "verlof", label: "Verlof", icon: Plane, group: "Boekhouding", roles: ALLE },
