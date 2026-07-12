@@ -23,14 +23,26 @@ if ("serviceWorker" in navigator && import.meta.env.PROD) {
     herladen = true;
     window.location.reload();
   });
+
+  let registratie: ServiceWorkerRegistration | null = null;
+  const checkUpdate = () => { void registratie?.update().catch(() => {}); };
+
   window.addEventListener("load", () => {
     navigator.serviceWorker
       .register("/sw.js")
       .then((reg) => {
+        registratie = reg;
         reg.update();
         // Blijf periodiek checken op nieuwe versies terwijl de app open is.
-        setInterval(() => reg.update(), 60 * 60 * 1000);
+        setInterval(checkUpdate, 30 * 60 * 1000);
       })
       .catch(() => {});
   });
+
+  // Extra check zodra de app weer op de voorgrond komt / online is / focus krijgt. Cruciaal voor de
+  // PWA op het beginscherm: die "wekt" vaak op zonder opnieuw te laden, waardoor updates anders
+  // blijven hangen. Zo pakt hij een nieuwe versie alsnog op bij het heropenen.
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkUpdate(); });
+  window.addEventListener("online", checkUpdate);
+  window.addEventListener("focus", checkUpdate);
 }
