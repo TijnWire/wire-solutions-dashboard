@@ -1,7 +1,45 @@
 import { memo, useState } from "react";
-import { Search, Bell, Menu, Info, AlertTriangle, ChevronRight, X, FolderKanban, SearchX, Cloud, CloudOff } from "lucide-react";
+import { Search, Bell, Menu, Info, AlertTriangle, ChevronRight, X, FolderKanban, SearchX, Cloud, CloudOff, Mailbox, CalendarCheck, ClipboardCheck, Recycle, Cable, FlaskConical, Receipt, Plane, Settings, type LucideIcon } from "lucide-react";
 import type { Melding } from "../lib/meldingen";
 import type { ZoekGroep, ZoekItem } from "../lib/zoeken";
+
+// Meldingen worden per categorie gegroepeerd (afgeleid van waar de melding heen linkt), zodat je
+// niet één lange platte lijst krijgt maar overzichtelijke blokjes per onderwerp.
+const MELDING_CAT: Record<string, { label: string; Icon: LucideIcon; prio: number }> = {
+  brieven: { label: "Brieven & Routes", Icon: Mailbox, prio: 5 },
+  afspraken: { label: "Afspraken", Icon: CalendarCheck, prio: 4 },
+  saneren: { label: "Saneren", Icon: Recycle, prio: 4 },
+  buurtaanpak: { label: "Buurtaanpak", Icon: Cable, prio: 4 },
+  voorschouwen: { label: "Voorschouwen", Icon: ClipboardCheck, prio: 4 },
+  tauw: { label: "TAUW", Icon: FlaskConical, prio: 4 },
+  projecten: { label: "Projecten", Icon: FolderKanban, prio: 6 },
+  mijnwerk: { label: "Mijn werk", Icon: FolderKanban, prio: 6 },
+  facturen: { label: "Boekhouding", Icon: Receipt, prio: 3 },
+  agenda: { label: "Verlof & Agenda", Icon: Plane, prio: 3 },
+  instellingen: { label: "Systeem", Icon: Settings, prio: 1 },
+};
+const OVERIG_CAT = { label: "Overig", Icon: Info, prio: 0 };
+const catVoor = (navKey?: string) => (navKey && MELDING_CAT[navKey]) || OVERIG_CAT;
+
+type MeldingGroep = { label: string; Icon: LucideIcon; prio: number; items: Melding[] };
+
+// Groepeer + sorteer: groepen met een waarschuwing bovenaan, daarbinnen waarschuwingen eerst.
+function groepeerMeldingen(meldingen: Melding[]): MeldingGroep[] {
+  const map = new Map<string, MeldingGroep>();
+  for (const m of meldingen) {
+    const c = catVoor(m.navKey);
+    const g = map.get(c.label) ?? { label: c.label, Icon: c.Icon, prio: c.prio, items: [] };
+    g.items.push(m);
+    map.set(c.label, g);
+  }
+  const arr = [...map.values()];
+  const heeftW = (g: MeldingGroep) => g.items.some((x) => x.ernst === "waarschuwing");
+  for (const g of arr) {
+    g.items.sort((a, b) => (a.ernst === "waarschuwing" ? 0 : 1) - (b.ernst === "waarschuwing" ? 0 : 1));
+  }
+  arr.sort((a, b) => (heeftW(b) ? 1 : 0) - (heeftW(a) ? 1 : 0) || b.prio - a.prio || b.items.length - a.items.length || a.label.localeCompare(b.label, "nl"));
+  return arr;
+}
 
 // Kleur per resultaattype, zodat je binnen een project meteen ziet wat het is.
 const CHIP_KLEUR: Record<string, string> = {
@@ -90,6 +128,8 @@ export const Topbar = memo(function Topbar({
   const [mobielZoek, setMobielZoek] = useState(false);
   const [q, setQ] = useState("");
   const aantal = meldingen.length;
+  const aantalBelangrijk = meldingen.filter((m) => m.ernst === "waarschuwing").length;
+  const meldingGroepen = groepeerMeldingen(meldingen);
 
   const groepen = q.trim().length >= 2 && onZoek ? onZoek(q) : [];
   const totaalResultaten = groepen.reduce((s, g) => s + g.items.length, 0);
@@ -197,29 +237,43 @@ export const Topbar = memo(function Topbar({
           {open && (
             <>
               <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-              <div className="absolute right-0 z-50 mt-2 w-[19rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-2xl">
-                <div className="flex items-center justify-between border-b border-ink-100 px-4 py-3">
-                  <span className="text-sm font-bold text-ink-900">Meldingen</span>
-                  {aantal > 0 && <span className="rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold text-white">{aantal}</span>}
+              <div className="absolute right-0 z-50 mt-2 w-[23rem] max-w-[calc(100vw-1rem)] overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-2xl">
+                <div className="flex items-center justify-between gap-2 border-b border-ink-100 px-4 py-3">
+                  <div className="min-w-0">
+                    <span className="text-sm font-bold text-ink-900">Meldingen</span>
+                    {aantalBelangrijk > 0 && <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700 ring-1 ring-amber-200"><AlertTriangle className="h-3 w-3" /> {aantalBelangrijk} belangrijk</span>}
+                  </div>
+                  {aantal > 0 && <span className="shrink-0 rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold text-white">{aantal}</span>}
                 </div>
-                <div className="scrollbar-thin max-h-96 overflow-y-auto">
+                <div className="scrollbar-thin max-h-[min(34rem,72vh)] overflow-y-auto overscroll-contain">
                   {aantal === 0 ? (
-                    <div className="p-8 text-center text-sm text-ink-400">Geen meldingen — alles bij! 🎉</div>
+                    <div className="p-10 text-center text-sm text-ink-400">Geen meldingen — alles bij! 🎉</div>
                   ) : (
-                    meldingen.map((m) => (
-                      <button
-                        key={m.id}
-                        type="button"
-                        onClick={() => { onMelding?.(m); setOpen(false); }}
-                        className="flex w-full items-start gap-3 border-b border-ink-50 px-4 py-3 text-left transition-colors hover:bg-ink-50 last:border-0"
-                      >
-                        {m.ernst === "waarschuwing" ? <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" /> : <Info className="mt-0.5 h-4 w-4 shrink-0 text-brand-500" />}
-                        <div className="min-w-0 flex-1">
-                          <div className="text-sm font-semibold text-ink-900">{m.titel}</div>
-                          <div className="text-xs text-ink-500">{m.tekst}</div>
+                    meldingGroepen.map((g) => (
+                      <section key={g.label} className="border-b border-ink-100 last:border-0">
+                        <div className="sticky top-0 z-10 flex items-center gap-2.5 bg-ink-50/95 px-4 py-2 backdrop-blur">
+                          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-white text-ink-500 ring-1 ring-ink-200"><g.Icon className="h-3.5 w-3.5" /></span>
+                          <span className="flex-1 truncate text-[11px] font-bold uppercase tracking-wide text-ink-500">{g.label}</span>
+                          <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-ink-500 ring-1 ring-ink-200">{g.items.length}</span>
                         </div>
-                        {m.navKey && <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-ink-300" />}
-                      </button>
+                        {g.items.map((m) => (
+                          <button
+                            key={m.id}
+                            type="button"
+                            onClick={() => { onMelding?.(m); setOpen(false); }}
+                            className={`flex w-full items-start gap-3 border-t border-ink-50 px-4 py-2.5 text-left transition-colors hover:bg-ink-50 ${m.ernst === "waarschuwing" ? "bg-amber-50/40" : ""}`}
+                          >
+                            {m.ernst === "waarschuwing"
+                              ? <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-amber-100 text-amber-600"><AlertTriangle className="h-3.5 w-3.5" /></span>
+                              : <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-brand-50 text-brand-500"><Info className="h-3.5 w-3.5" /></span>}
+                            <div className="min-w-0 flex-1">
+                              <div className="truncate text-sm font-semibold text-ink-900">{m.titel}</div>
+                              <div className="truncate text-xs text-ink-500">{m.tekst}</div>
+                            </div>
+                            {m.navKey && <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-ink-300" />}
+                          </button>
+                        ))}
+                      </section>
                     ))
                   )}
                 </div>

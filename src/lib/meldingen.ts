@@ -93,6 +93,11 @@ export function meldingenVoor(user: User, data: MeldingData): Melding[] {
   const concepten = voorschouwen.filter((v) => v.ingevuldDoor === user.id && v.status === "Concept");
   if (concepten.length) m.push({ id: "vs", ernst: "waarschuwing", titel: `${concepten.length} voorschouw${concepten.length === 1 ? "" : "en"} niet ingediend`, tekst: "Dien je concept-voorschouwen in.", navKey: "voorschouwen" });
 
+  // Ingediende voorschouwen zonder foto — foto's zijn verplicht, dus deze moeten aangevuld worden.
+  const eigenOfAlleVs = isLeiding ? voorschouwen : voorschouwen.filter((v) => v.ingevuldDoor === user.id);
+  const zonderFoto = eigenOfAlleVs.filter((v) => v.status === "Ingediend" && (!v.fotos || v.fotos.length === 0)).length;
+  if (zonderFoto > 0) m.push({ id: "vs-foto", ernst: "waarschuwing", titel: `${zonderFoto} voorschouw${zonderFoto === 1 ? "" : "en"} zonder foto`, tekst: "Foto's zijn verplicht — open Voorschouwen en vul de ontbrekende foto's aan.", navKey: "voorschouwen" });
+
   // Eigen verlof afgewezen
   const afgewezen = verlof.filter((v) => v.medewerkerId === user.id && v.status === "Afgewezen");
   if (afgewezen.length) m.push({ id: "verlof-afg", ernst: "waarschuwing", titel: "Verlofaanvraag afgewezen", tekst: "Bekijk je verlof in de Agenda.", navKey: "agenda" });

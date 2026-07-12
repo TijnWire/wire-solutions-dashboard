@@ -20,6 +20,8 @@ import {
   ScanLine,
   ArrowUp,
   ArrowDown,
+  AlertTriangle,
+  ImageOff,
 } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { Card, Badge, Bevestig } from "../components/ui";
@@ -409,6 +411,12 @@ export function Voorschouwen() {
 
         <MapSelect value={v.mapId && geldigeMapIds.has(v.mapId) ? v.mapId : ""} mappen={gesorteerdeMappen} onKies={(w) => kiesMap(v, w)} />
 
+        {(!v.fotos || v.fotos.length === 0) && (
+          <span title="Er is geen foto toegevoegd bij deze voorschouw" className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700 ring-1 ring-amber-200">
+            <ImageOff className="h-3.5 w-3.5" /> Geen foto
+          </span>
+        )}
+
         <Badge tone={v.status === "Ingediend" ? "green" : "amber"}>{v.status}</Badge>
 
         <div className="flex items-center gap-1">
@@ -603,6 +611,7 @@ export function Voorschouwen() {
             const key = g.map?.id ?? "zonder";
             const uitgeklapt = q !== "" ? true : openMappen.has(key);
             const idx = g.map ? eigenVolgordeIds.indexOf(g.map.id) : -1;
+            const zonderFoto = g.items.filter((v) => !v.fotos || v.fotos.length === 0).length;
             return (
               <div key={key} className="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-card">
                 <div className="flex flex-wrap items-center gap-3 px-4 py-4">
@@ -640,6 +649,9 @@ export function Voorschouwen() {
                         <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${g.map ? "bg-brand-50 text-brand-600" : "bg-ink-100 text-ink-400"}`}><Folder className="h-5 w-5" /></span>
                         <span className="truncate text-base font-bold text-ink-900">{g.map ? g.map.naam : "Zonder map"}</span>
                         <span className="shrink-0 rounded-full bg-ink-100 px-2.5 py-0.5 text-xs font-medium text-ink-500">{q !== "" && g.body.length !== g.items.length ? `${g.body.length} van ${g.items.length}` : g.items.length}</span>
+                        {zonderFoto > 0 && (
+                          <span title={`${zonderFoto} ${zonderFoto === 1 ? "adres" : "adressen"} zonder foto`} className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700 ring-1 ring-amber-200"><AlertTriangle className="h-3 w-3" /> {zonderFoto} zonder foto</span>
+                        )}
                       </button>
                       <div className="flex w-full items-center gap-2 sm:w-auto">
                         {isLeiding && g.map && (
