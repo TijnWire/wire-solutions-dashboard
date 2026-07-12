@@ -1,7 +1,4 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
-import { X } from "lucide-react";
-import { Sidebar } from "./components/Sidebar";
-import { BottomNav } from "./components/BottomNav";
 import { Topbar } from "./components/Topbar";
 import { DevSwitcher } from "./components/DevSwitcher";
 import { Login } from "./pages/Login";
@@ -36,7 +33,7 @@ import { zoekResultaten, type ZoekItem } from "./lib/zoeken";
 import { Gebruikersbeheer } from "./pages/Gebruikersbeheer";
 import { Module } from "./pages/Module";
 import { AiAssistent } from "./components/AiAssistent";
-import { NAV } from "./lib/nav";
+import { NAV, type NavGroup } from "./lib/nav";
 import { useApp } from "./store/AppContext";
 import { NavContext, type NavTarget } from "./store/NavContext";
 
@@ -53,7 +50,7 @@ export default function App() {
   const { currentUser, hydrated, bedrijf, instellingen, verlof, taken, rondes, afspraken, voorschouwen, klanten, facturen, users, kennis, projects, projectPosts, tauwOpdrachten, saneringen, buurtaanpak, logout, synced } = useApp();
   const [active, setActive] = useState("home");
   const [target, setTarget] = useState<NavTarget>(null);
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [homeGroep, setHomeGroep] = useState<NavGroup | null>(null);
 
   // Bij (her)inloggen naar het tegel-startscherm
   useEffect(() => {
@@ -62,9 +59,7 @@ export default function App() {
 
   // Stabiele callbacks + gememoiseerde afgeleiden, zodat de app-shell (Sidebar/BottomNav/Topbar)
   // en useNav-consumenten NIET hertekenen bij een data-wijziging (bv. een vinkje in Buurtaanpak).
-  const navigeer = useCallback((key: string, t: NavTarget = null) => { setActive(key); setTarget(t); setMenuOpen(false); }, []);
-  const ga = useCallback((key: string) => navigeer(key), [navigeer]);
-  const onMenu = useCallback(() => setMenuOpen(true), []);
+  const navigeer = useCallback((key: string, t: NavTarget = null) => { setActive(key); setTarget(t); }, []);
   const onSync = useCallback(() => navigeer("instellingen"), [navigeer]);
   const logoutRef = useRef(logout); logoutRef.current = logout;
   const onLogout = useCallback(() => logoutRef.current(), []);
@@ -93,7 +88,7 @@ export default function App() {
   const render = () => {
     switch (active) {
       case "home":
-        return <Home />;
+        return <Home initieelGroep={homeGroep} />;
       case "overzicht":
         return <Overzicht />;
       case "mijnwerk":
@@ -151,46 +146,19 @@ export default function App() {
 
   return (
     <NavContext.Provider value={navContextValue}>
-    <div className="flex h-full overflow-hidden bg-ink-100">
-      {/* Vaste zijbalk op desktop */}
-      <div className="hidden md:flex">
-        <Sidebar active={active} onSelect={ga} currentUser={currentUser} onLogout={onLogout} />
-      </div>
-
-      {/* Uitschuifmenu op mobiel */}
-      {menuOpen && (
-        <div className="fixed inset-0 z-40 md:hidden">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setMenuOpen(false)} />
-          <div className="absolute left-0 top-0 h-full shadow-2xl">
-            <button
-              type="button"
-              onClick={() => setMenuOpen(false)}
-              className="absolute right-3 top-4 z-10 rounded-lg p-2 text-ink-400 hover:bg-ink-100"
-              title="Sluiten"
-            >
-              <X className="h-5 w-5" />
-            </button>
-            <Sidebar active={active} onSelect={ga} currentUser={currentUser} onLogout={onLogout} />
-          </div>
-        </div>
-      )}
-
-      <div className="flex min-w-0 flex-1 flex-col">
-        <Topbar
-          title={titel}
-          onMenu={onMenu}
-          meldingen={meldingen}
-          onMelding={onMelding}
-          onZoek={onZoek}
-          onResultaat={onResultaat}
-          synced={synced}
-          onSync={onSync}
-        />
-        <main className="scrollbar-thin flex-1 overflow-y-auto overflow-x-hidden overscroll-contain p-4 pb-[calc(5rem+env(safe-area-inset-bottom))] md:p-6 md:pb-6">{render()}</main>
-      </div>
-
-      {/* App-achtige onderbalk op mobiel */}
-      <BottomNav active={active} onSelect={ga} onMeer={onMenu} currentUser={currentUser} />
+    <div className="flex h-full flex-col overflow-hidden bg-ink-100">
+      <Topbar
+        title={titel}
+        onTerug={active !== "home" ? () => { setHomeGroep(NAV.find((n) => n.key === active)?.group ?? null); setActive("home"); } : undefined}
+        onLogout={onLogout}
+        meldingen={meldingen}
+        onMelding={onMelding}
+        onZoek={onZoek}
+        onResultaat={onResultaat}
+        synced={synced}
+        onSync={onSync}
+      />
+      <main className="scrollbar-thin flex-1 overflow-y-auto overflow-x-hidden overscroll-contain p-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] md:p-6">{render()}</main>
 
       <AiAssistent />
       <DevSwitcher />

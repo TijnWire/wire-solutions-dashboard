@@ -16,11 +16,11 @@ const GROEP_ICON: Record<NavGroup, LucideIcon> = {
 
 // Startscherm ná het inloggen. Eerst grote vakken per kopje (Werk, Projecten, …); klik op een vak
 // en je ziet de pagina's daarbinnen als tegels. Klik op een pagina → je gaat erheen. Icoontjes oranje.
-export function Home() {
+export function Home({ initieelGroep = null }: { initieelGroep?: NavGroup | null }) {
   const app = useApp();
   const { currentUser } = app;
   const { navigeer } = useNav();
-  const [groep, setGroep] = useState<NavGroup | null>(null);
+  const [groep, setGroep] = useState<NavGroup | null>(initieelGroep);
   if (!currentUser) return null;
 
   const items = NAV.filter((n) => magZien(currentUser, n));
