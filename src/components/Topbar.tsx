@@ -1,5 +1,5 @@
 import { memo, useState } from "react";
-import { Search, Bell, ArrowLeft, LogOut, Info, AlertTriangle, ChevronRight, X, FolderKanban, SearchX, Cloud, CloudOff } from "lucide-react";
+import { Search, Bell, Menu, Info, AlertTriangle, ChevronRight, X, FolderKanban, SearchX, Cloud, CloudOff } from "lucide-react";
 import type { Melding } from "../lib/meldingen";
 import type { ZoekGroep, ZoekItem } from "../lib/zoeken";
 
@@ -69,8 +69,7 @@ function ZoekLijst({ groepen, totaal, onKies }: { groepen: ZoekGroep[]; totaal: 
 
 export const Topbar = memo(function Topbar({
   title,
-  onTerug,
-  onLogout,
+  onMenu,
   meldingen = [],
   onMelding,
   onZoek,
@@ -79,8 +78,7 @@ export const Topbar = memo(function Topbar({
   onSync,
 }: {
   title: string;
-  onTerug?: () => void;
-  onLogout?: () => void;
+  onMenu?: () => void;
   meldingen?: Melding[];
   onMelding?: (m: Melding) => void;
   onZoek?: (q: string) => ZoekGroep[];
@@ -111,11 +109,9 @@ export const Topbar = memo(function Topbar({
   return (
     <>
     <header className="sticky top-0 z-30 flex items-center gap-4 border-b border-ink-200 bg-white/80 px-4 pb-3.5 pt-[calc(0.875rem+env(safe-area-inset-top))] backdrop-blur md:px-6 md:py-3.5">
-      {onTerug && (
-        <button type="button" onClick={onTerug} className="-ml-1 inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2 py-2 text-sm font-semibold text-ink-600 hover:bg-ink-100" title="Terug naar het startscherm">
-          <ArrowLeft className="h-5 w-5" /> <span className="hidden sm:inline">Terug</span>
-        </button>
-      )}
+      <button type="button" onClick={onMenu} className="-ml-1 rounded-lg p-2 text-ink-600 hover:bg-ink-100 md:hidden" title="Menu">
+        <Menu className="h-5 w-5" />
+      </button>
       <div className="min-w-0">
         <h1 className="truncate text-lg font-bold text-ink-900">{title}</h1>
         <p className="text-xs text-ink-500">
@@ -231,12 +227,6 @@ export const Topbar = memo(function Topbar({
             </>
           )}
         </div>
-
-        {onLogout && (
-          <button type="button" onClick={onLogout} title="Uitloggen" aria-label="Uitloggen" className="rounded-lg border border-ink-200 bg-white p-2 text-ink-500 hover:bg-ink-50 hover:text-ink-700">
-            <LogOut className="h-[18px] w-[18px]" />
-          </button>
-        )}
       </div>
     </header>
 

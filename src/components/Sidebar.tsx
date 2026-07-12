@@ -20,9 +20,9 @@ export const Sidebar = memo(function Sidebar({
 
   return (
     <aside className="flex h-full w-64 shrink-0 flex-col border-r border-ink-200 bg-white pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] text-ink-600">
-      <button type="button" onClick={() => onSelect("home")} title="Naar het startscherm" className="flex items-center justify-center px-5 py-5 transition-opacity hover:opacity-80">
-        <img src="/wire-logo.png" alt="Wire Solutions — startscherm" className="h-16 w-auto" />
-      </button>
+      <div className="flex items-center justify-center px-5 py-5">
+        <img src="/wire-logo.png" alt="Wire Solutions" className="h-16 w-auto" />
+      </div>
 
       <nav className="scrollbar-thin flex-1 space-y-6 overflow-y-auto px-3 pb-6">
         {groups.map((group) => (
