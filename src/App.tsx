@@ -134,7 +134,7 @@ export default function App() {
       case "boetes":
         return <Boetes />;
       case "medewerkers":
-        return <Medewerkers />;
+        return <Medewerkers initieelMedewerker={target?.medewerker} />;
       case "kennisbank":
         return <Kennisbank />;
       case "instellingen":

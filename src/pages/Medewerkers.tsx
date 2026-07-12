@@ -35,7 +35,7 @@ function ContractKaart({ user }: { user: User }) {
   const [bijtelling, setBijtelling] = useState(c?.bijtelling ?? 0);
   const [uren, setUren] = useState(c?.uren ?? 0);
   const [bewaard, setBewaard] = useState(false);
-  const [open, setOpen] = useState(false); // standaard ingeklapt; open via Invullen/Bewerken
+  const [open, setOpen] = useState(!c); // nog geen contract? meteen open om in te vullen; anders ingeklapt
   const opslaan = () => {
     updateUser(user.id, { contract: { periodeType, bruto, netto, bijtelling, uren } });
     setBewaard(true);
@@ -292,9 +292,9 @@ function MedewerkerDetail({ user, onTerug }: { user: User; onTerug: () => void }
   );
 }
 
-export function Medewerkers() {
+export function Medewerkers({ initieelMedewerker }: { initieelMedewerker?: string }) {
   const { users, taken, rondes, afspraken, boetes, currentUser } = useApp();
-  const [selId, setSelId] = useState<string | null>(null);
+  const [selId, setSelId] = useState<string | null>(initieelMedewerker ?? null);
 
   if (!currentUser) return null;
   const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer";

@@ -19,6 +19,7 @@ import {
   Check,
 } from "lucide-react";
 import { useApp } from "../store/AppContext";
+import { useNav } from "../store/NavContext";
 import { Card, Badge } from "../components/ui";
 import { hashWachtwoord, genereerWachtwoord } from "../lib/auth";
 import { ROL_LABEL, BEHEER_GEBIEDEN, type Role, type User } from "../lib/types";
@@ -44,6 +45,7 @@ function GebruikerEditor({
   onSluit: () => void;
 }) {
   const { projects, addUser, updateUser, deleteUser, updateProject, currentUser, users } = useApp();
+  const { navigeer } = useNav();
 
   const magRol = currentUser?.rol === "eigenaar"; // alleen de eigenaar wijst rollen/rechten toe
 
@@ -131,6 +133,7 @@ function GebruikerEditor({
     };
 
     setBezig(true);
+    let nieuwId: string | undefined;
     try {
       const actor = { email: currentUser?.email ?? "onbekend", naam: currentUser?.naam ?? "onbekend" };
       const boekhouding = magBoekhouding({ rol, beheerRechten });
@@ -155,11 +158,14 @@ function GebruikerEditor({
         pasProjectenToe(id);
         void syncAppRole(basis.email, rol, boekhouding);
         void logAudit("account_aangemaakt", actor, { userId: id, email: basis.email, naam: basis.naam });
+        nieuwId = id;
       }
     } finally {
       setBezig(false);
     }
-    onSluit();
+    // Nieuw account? Meteen door naar de Medewerkers-pagina om contract/uurloon in te vullen.
+    if (nieuwId) navigeer("medewerkers", { medewerker: nieuwId });
+    else onSluit();
   };
 
   const verwijder = () => {
