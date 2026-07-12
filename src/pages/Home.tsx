@@ -26,14 +26,34 @@ export function Home() {
   const items = NAV.filter((n) => magZien(currentUser, n));
   const groups = GROUPS.filter((g) => items.some((i) => i.group === g));
 
-  // Lichte tellingen per pagina — een rood badge-getal alleen als er iets openstaat.
+  // ── Openstaand werk per pagina → rood badge-getal (rechtsboven) als er iets te doen is ──
+  // Rol-bewust: een werknemer ziet zijn eigen toegewezen werk, de leiding ziet alles.
+  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer";
+  const uid = currentUser.id;
+  const vd = new Date();
+  const vandaag = `${vd.getFullYear()}-${String(vd.getMonth() + 1).padStart(2, "0")}-${String(vd.getDate()).padStart(2, "0")}`;
+
+  const brievenOpen = app.rondes.filter((r) => !r.gearchiveerd && (isLeiding || r.toegewezenAan === uid) && r.adressen.some((a) => !a.ontbreekt && a.status !== "Gegooid" && a.status !== "Blanco")).length;
+  const tauwOpen = app.tauwOpdrachten.filter((o) => !o.gearchiveerd && o.status !== "verstuurd" && (isLeiding || o.toegewezenAan === uid)).length;
+  const saneerOpen = app.saneringen.filter((s) => !s.gearchiveerd && (isLeiding || s.toegewezenAan === uid) && (s.adressen ?? []).some((a) => !a.bevestigd)).length;
+  const buurtOpen = app.buurtaanpak.filter((b) => !b.gearchiveerd && (isLeiding || b.toegewezenAan === uid) && b.adressen.some((a) => !a.uitgevoerd)).length;
+  const vsConcept = app.voorschouwen.filter((v) => v.status === "Concept" && (isLeiding || v.ingevuldDoor === uid)).length;
+  const teFactureren = app.rondes.filter((r) => r.boekhouding === "te_factureren").length + app.projects.filter((p) => p.afgerondOp && !p.boekhouding).length;
+
   const tel: Record<string, number> = {
-    mijnwerk: app.taken.filter((t) => (t.toegewezenAan === currentUser.id || t.toegewezenAan === "") && t.status !== "Klaar").length,
+    mijnwerk: app.taken.filter((t) => (t.toegewezenAan === uid || t.toegewezenAan === "") && t.status !== "Klaar").length,
+    projecten: app.projects.filter((p) => p.afgerondOp && !p.boekhouding).length,
+    agenda: app.afspraken.filter((a) => a.datum === vandaag && a.status !== "Geannuleerd" && (isLeiding || a.toegewezenAan === uid)).length,
+    mededelingen: app.mededelingen.filter((m) => !m.gezienDoor.includes(uid) && m.auteurId !== uid && (!m.gerichtAan || m.gerichtAan === uid)).length,
+    brieven: brievenOpen,
+    buurtaanpak: buurtOpen,
+    saneren: saneerOpen,
+    voorschouwen: vsConcept,
+    schouwafspraken: app.schouwafspraken.filter((s) => s.status === "In te plannen" && (isLeiding || s.toegewezenAan === uid)).length,
+    tauw: tauwOpen,
+    afspraken: app.afspraken.filter((a) => a.status === "Open" && (isLeiding || a.toegewezenAan === uid)).length,
+    facturen: teFactureren,
     verlof: app.verlof.filter((v) => v.status === "Aangevraagd").length,
-    facturen: app.facturen.filter((f) => f.status === "Verstuurd").length,
-    afspraken: app.afspraken.filter((a) => a.status === "Open").length,
-    schouwafspraken: app.schouwafspraken.filter((s) => s.status === "In te plannen").length,
-    mededelingen: app.mededelingen.filter((m) => !m.gezienDoor.includes(currentUser.id) && m.auteurId !== currentUser.id && (!m.gerichtAan || m.gerichtAan === currentUser.id)).length,
   };
 
   const paginasVan = (g: NavGroup) => items.filter((n) => n.group === g);
