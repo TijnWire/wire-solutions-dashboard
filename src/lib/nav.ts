@@ -59,8 +59,6 @@ export const WERKNEMER_TOEGANG_KEYS = WERKNEMER_TOEGANG.map((x) => x.key);
 
 export const NAV: NavItem[] = [
   { key: "mijnwerk", label: "Mijn werk", icon: ClipboardList, group: "Werk", roles: ALLE },
-  { key: "overzicht", label: "Dashboard", icon: LayoutDashboard, group: "Werk", roles: LEIDING },
-  { key: "team", label: "Team", icon: Users, group: "Werk", roles: LEIDING },
   { key: "projecten", label: "Projecten", icon: FolderKanban, group: "Werk", roles: LEIDING },
   { key: "agenda", label: "Agenda", icon: CalendarDays, group: "Werk", roles: ALLE },
   { key: "mededelingen", label: "Mededelingen", icon: Megaphone, group: "Werk", roles: ALLE },
@@ -85,6 +83,8 @@ export const NAV: NavItem[] = [
 
   { key: "kennisbank", label: "Kennisbank", icon: BookOpen, group: "Vragen", roles: ALLE },
 
+  { key: "overzicht", label: "Dashboard", icon: LayoutDashboard, group: "Systeem", roles: LEIDING },
+  { key: "team", label: "Team", icon: Users, group: "Systeem", roles: LEIDING },
   { key: "beheer", label: "Gebruikersbeheer", icon: UserCog, group: "Systeem", roles: LEIDING },
   { key: "toegang", label: "Toegang", icon: Lock, group: "Systeem", roles: EIGENAAR },
   { key: "instellingen", label: "Instellingen", icon: Settings, group: "Systeem", roles: LEIDING },
