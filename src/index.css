@@ -31,11 +31,14 @@
     html {
       font-size: 14px;
     }
-    /* Invoervelden tóch op 16px houden, anders zoomt iOS in bij het focussen. */
-    input,
+  }
+  /* Invoervelden op ALLE touch-apparaten minstens 16px, anders zoomt iOS automatisch in bij het
+     focussen (bv. de zoekbalk). !important omdat Tailwind's tekst-utilities (text-sm/…) anders winnen. */
+  @media (pointer: coarse) {
+    input:not([type="checkbox"]):not([type="radio"]),
     textarea,
     select {
-      font-size: 16px;
+      font-size: 16px !important;
     }
   }
 }
