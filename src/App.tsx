@@ -83,12 +83,12 @@ export default function App() {
   if (currentUser.moetWachtwoordWijzigen) return <WachtwoordWijzigen />;
 
   const item = NAV.find((n) => n.key === active);
-  const titel = active === "home" ? "Start" : active === "overzicht" ? "Dashboard" : active === "planning" ? "Weekplanning" : item?.label ?? "Dashboard";
+  const titel = active === "home" ? (homeGroep ?? "Start") : active === "overzicht" ? "Dashboard" : active === "planning" ? "Weekplanning" : item?.label ?? "Dashboard";
 
   const render = () => {
     switch (active) {
       case "home":
-        return <Home initieelGroep={homeGroep} />;
+        return <Home groep={homeGroep} setGroep={setHomeGroep} />;
       case "overzicht":
         return <Overzicht />;
       case "mijnwerk":
@@ -149,7 +149,13 @@ export default function App() {
     <div className="flex h-full flex-col overflow-hidden bg-ink-100">
       <Topbar
         title={titel}
-        onTerug={active !== "home" ? () => { setHomeGroep(NAV.find((n) => n.key === active)?.group ?? null); setActive("home"); } : undefined}
+        onTerug={
+          active !== "home"
+            ? () => { setHomeGroep(NAV.find((n) => n.key === active)?.group ?? null); setActive("home"); }
+            : homeGroep
+              ? () => setHomeGroep(null)
+              : undefined
+        }
         onLogout={onLogout}
         meldingen={meldingen}
         onMelding={onMelding}

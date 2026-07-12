@@ -1,5 +1,4 @@
-import { useState } from "react";
-import { Briefcase, FolderKanban, Wrench, Wallet, HelpCircle, Settings, ArrowLeft, type LucideIcon } from "lucide-react";
+import { Briefcase, FolderKanban, Wrench, Wallet, HelpCircle, Settings, type LucideIcon } from "lucide-react";
 import { NAV, GROUPS, magZien, type NavGroup } from "../lib/nav";
 import { useApp } from "../store/AppContext";
 import { useNav } from "../store/NavContext";
@@ -16,11 +15,10 @@ const GROEP_ICON: Record<NavGroup, LucideIcon> = {
 
 // Startscherm ná het inloggen. Eerst grote vakken per kopje (Werk, Projecten, …); klik op een vak
 // en je ziet de pagina's daarbinnen als tegels. Klik op een pagina → je gaat erheen. Icoontjes oranje.
-export function Home({ initieelGroep = null }: { initieelGroep?: NavGroup | null }) {
+export function Home({ groep, setGroep }: { groep: NavGroup | null; setGroep: (g: NavGroup | null) => void }) {
   const app = useApp();
   const { currentUser } = app;
   const { navigeer } = useNav();
-  const [groep, setGroep] = useState<NavGroup | null>(initieelGroep);
   if (!currentUser) return null;
 
   const items = NAV.filter((n) => magZien(currentUser, n));
@@ -73,16 +71,12 @@ export function Home({ initieelGroep = null }: { initieelGroep?: NavGroup | null
     </button>
   );
 
-  // ── Niveau 2: pagina's binnen het gekozen kopje ──
+  // ── Niveau 2: pagina's binnen het gekozen kopje (Terug zit in de Topbar) ──
   if (groep) {
     const paginas = paginasVan(groep);
     return (
-      <div className="space-y-5">
-        <button type="button" onClick={() => setGroep(null)} className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-500 hover:text-ink-800"><ArrowLeft className="h-4 w-4" /> Terug naar overzicht</button>
-        <h2 className="text-2xl font-bold text-ink-900">{groep}</h2>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
-          {paginas.map((n) => tegel(n.key, n.label, n.icon, tel[n.key] ?? 0, () => navigeer(n.key)))}
-        </div>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
+        {paginas.map((n) => tegel(n.key, n.label, n.icon, tel[n.key] ?? 0, () => navigeer(n.key)))}
       </div>
     );
   }
