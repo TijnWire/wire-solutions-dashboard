@@ -2,7 +2,7 @@ import { useState } from "react";
 import {
   Search, Plus, ArrowLeft, MapPin, Phone, Trash2, X,
   CalendarCheck, Mailbox, ClipboardCheck, Database, Image as ImageIcon, Download,
-  Building2, ChevronDown, ChevronRight, FlaskConical, Recycle, RotateCcw, FolderArchive,
+  Building2, ChevronDown, ChevronRight, FlaskConical, Recycle, FolderArchive,
 } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { Card, Badge, Bevestig } from "../components/ui";
@@ -78,8 +78,8 @@ export function Klanten({ initieelKey }: { initieelKey?: string }) {
   const [sorteer, setSorteer] = useState<"straat" | "postcode">("straat");
   const [geopend, setGeopend] = useState<Set<string>>(new Set());
   const [geopendStraat, setGeopendStraat] = useState<Set<string>>(new Set());
-  const [geopendCat, setGeopendCat] = useState<Set<string>>(new Set()); // projectmappen — standaard dicht
-  const [geopendArchief, setGeopendArchief] = useState<Set<string>>(new Set()); // los gearchiveerd project
+  const [detailCat, setDetailCat] = useState<string | null>(null); // geopende projectsoort-filterpagina
+  const [detailZoek, setDetailZoek] = useState("");
   const [tab, setTab] = useState<"adressen" | "projecten">("projecten");
   const [periode, setPeriode] = useState<Periode>("maand");
   const [anker, setAnker] = useState(() => new Date().toISOString().slice(0, 10));
@@ -316,6 +316,17 @@ export function Klanten({ initieelKey }: { initieelKey?: string }) {
   const gefilterdeCats = projectMappen.map((c) => ({ ...c, rijen: c.rijen.filter((r) => inPeriode(r.peil)) }));
   const totaalPeriode = gefilterdeCats.reduce((s, c) => s + c.rijen.length, 0);
 
+  // Alle adressen binnen een projectsoort (voor de filterpagina): straat/huisnummer/postcode/plaats.
+  type AdresCat = { straat: string; huisnummer: string; postcode: string; plaats: string; extra: string };
+  const adressenVanCat = (key: string): AdresCat[] => {
+    if (key === "brieven") return rondes.flatMap((r) => r.adressen.filter((a) => !a.ontbreekt).map((a) => ({ straat: r.straat, huisnummer: `${a.huisnummer}${a.toevoeging || ""}`, postcode: r.postcode, plaats: r.plaats, extra: a.status })));
+    if (key === "saneren") return saneringen.flatMap((s) => (s.adressen ?? []).map((a) => ({ straat: a.straat, huisnummer: a.huisnummer, postcode: a.postcode, plaats: a.plaats, extra: a.naam || "" })));
+    if (key === "voorschouwen") return voorschouwen.map((v) => ({ straat: v.straatnaam, huisnummer: "", postcode: v.postcode, plaats: v.plaats, extra: v.status }));
+    if (key === "tauw") return tauwOpdrachten.flatMap((o) => o.adressen.map((a) => ({ straat: a.straat, huisnummer: a.huisnummer, postcode: a.postcode, plaats: a.plaats, extra: "" })));
+    return [];
+  };
+  const detailProjectMap = projectMappen.find((c) => c.key === detailCat);
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -338,7 +349,45 @@ export function Klanten({ initieelKey }: { initieelKey?: string }) {
         </button>
       </div>
 
-      {tab === "projecten" && (
+      {/* Filterpagina per projectsoort — zoek direct op straat/huisnummer/postcode/plaats */}
+      {tab === "projecten" && detailCat && detailProjectMap && (() => {
+        const Icon = detailProjectMap.Icon;
+        const dq = detailZoek.trim().toLowerCase();
+        const items = adressenVanCat(detailCat)
+          .filter((a) => !dq || `${a.straat} ${a.huisnummer} ${a.postcode} ${a.plaats} ${a.extra}`.toLowerCase().includes(dq))
+          .sort((a, b) => (a.plaats || "").localeCompare(b.plaats || "", "nl") || a.straat.localeCompare(b.straat, "nl", { numeric: true }) || a.huisnummer.localeCompare(b.huisnummer, "nl", { numeric: true }));
+        return (
+          <div className="space-y-4">
+            <button type="button" onClick={() => { setDetailCat(null); setDetailZoek(""); }} className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-500 hover:text-ink-800"><ArrowLeft className="h-4 w-4" /> Terug naar projecten</button>
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600"><Icon className="h-5 w-5" /></span>
+              <div><h3 className="text-lg font-bold text-ink-900">{detailProjectMap.label}</h3><p className="text-xs text-ink-500">{items.length} adres{items.length === 1 ? "" : "sen"}</p></div>
+            </div>
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-400" />
+              <input autoFocus value={detailZoek} onChange={(e) => setDetailZoek(e.target.value)} placeholder="Zoek op straat, huisnummer, postcode of plaats…" className="w-full rounded-2xl border border-ink-200 bg-white py-3 pl-12 pr-10 text-base outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100" />
+              {detailZoek && <button type="button" onClick={() => setDetailZoek("")} className="absolute right-3 top-1/2 -translate-y-1/2 rounded p-1 text-ink-400 hover:bg-ink-100" title="Wissen"><X className="h-4 w-4" /></button>}
+            </div>
+            {items.length === 0 ? (
+              <Card className="p-8 text-center text-sm text-ink-500">Geen adressen gevonden.</Card>
+            ) : (
+              <Card className="divide-y divide-ink-100 overflow-hidden">
+                {items.map((a, i) => (
+                  <div key={i} className="flex items-center gap-3 px-4 py-2.5">
+                    <span className="flex h-9 w-11 shrink-0 items-center justify-center rounded-lg bg-ink-100 text-sm font-bold text-ink-700">{a.huisnummer || "—"}</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-semibold text-ink-900">{a.straat} {a.huisnummer}</div>
+                      <div className="truncate text-xs text-ink-500">{[a.postcode, a.plaats].filter(Boolean).join(" ")}{a.extra ? ` · ${a.extra}` : ""}</div>
+                    </div>
+                  </div>
+                ))}
+              </Card>
+            )}
+          </div>
+        );
+      })()}
+
+      {tab === "projecten" && !detailCat && (
       <div className="space-y-4">
         {/* Periode-schakelaar + navigator — houdt het overzicht opgeruimd */}
         <PeriodeNavigator
@@ -351,60 +400,19 @@ export function Klanten({ initieelKey }: { initieelKey?: string }) {
         {totaalPeriode === 0 ? (
           <Card className="p-8 text-center text-sm text-ink-500">Geen projecten in deze periode.</Card>
         ) : gefilterdeCats.filter((c) => c.rijen.length > 0).map((cat) => {
-          const openCat = geopendCat.has(cat.key);
           const Icon = cat.Icon;
           return (
-            <div key={cat.key} className="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-card">
-              <button type="button" onClick={() => setGeopendCat((p) => { const n = new Set(p); n.has(cat.key) ? n.delete(cat.key) : n.add(cat.key); return n; })} className="flex w-full items-center gap-3 px-5 py-4 text-left outline-none hover:bg-ink-50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-400" aria-expanded={openCat}>
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600"><Icon className="h-5 w-5" /></span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-base font-bold text-ink-900">{cat.label}</span>
-                  <span className="block text-xs text-ink-500">{cat.rijen.length} {cat.rijen.length === 1 ? "project" : "projecten"}</span>
-                </span>
-                <span className="rounded-full bg-ink-100 px-2.5 py-0.5 text-xs font-medium text-ink-500">{cat.rijen.length}</span>
-                <ChevronDown className={`h-5 w-5 shrink-0 text-ink-400 transition-transform ${openCat ? "" : "-rotate-90"}`} />
-              </button>
-              {openCat && (
-                <div className="space-y-2 border-t border-ink-100 bg-ink-50/30 p-3">
-                    {cat.rijen.length === 0 ? (
-                      <p className="rounded-lg bg-white px-3 py-2.5 text-xs text-ink-400">Nog geen {cat.label}-projecten.</p>
-                    ) : (
-                      cat.rijen.map((rij) => {
-                        const rijOpen = geopendArchief.has(rij.id);
-                        return (
-                          <div key={rij.id} className="overflow-hidden rounded-xl border border-ink-200 bg-white">
-                            <div className="flex flex-wrap items-center gap-2 px-3 py-2.5">
-                              <button type="button" onClick={() => setGeopendArchief((p) => { const n = new Set(p); n.has(rij.id) ? n.delete(rij.id) : n.add(rij.id); return n; })} className="flex min-w-0 flex-1 items-center gap-2 text-left" aria-expanded={rijOpen}>
-                                <ChevronDown className={`h-4 w-4 shrink-0 text-ink-400 transition-transform ${rijOpen ? "" : "-rotate-90"}`} />
-                                <span className="min-w-0">
-                                  <span className="block truncate text-sm font-semibold text-ink-900">{rij.titel}</span>
-                                  <span className="block truncate text-xs text-ink-500">{rij.subtitel}{rij.datum ? ` · gearchiveerd ${new Date(rij.datum).toLocaleDateString("nl-NL")}` : ""}</span>
-                                </span>
-                              </button>
-                              {isLeiding && rij.gearchiveerd && (
-                                <button type="button" onClick={() => rij.herstel()} title="Terugzetten naar het project" className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-2.5 py-1.5 text-xs font-semibold text-ink-700 hover:bg-ink-50">
-                                  <RotateCcw className="h-3.5 w-3.5" /> Terugzetten
-                                </button>
-                              )}
-                            </div>
-                            {rijOpen && (
-                              rij.regels.length > 0 ? (
-                                <ul className="divide-y divide-ink-100 border-t border-ink-100 text-sm">
-                                  {rij.regels.map((r, i) => (<li key={i} className="px-3 py-2 text-ink-700">{r}</li>))}
-                                </ul>
-                              ) : (
-                                <p className="border-t border-ink-100 px-3 py-2 text-xs text-ink-400">Geen details.</p>
-                              )
-                            )}
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+            <button key={cat.key} type="button" onClick={() => { setDetailCat(cat.key); setDetailZoek(""); }} className="flex w-full items-center gap-3 rounded-2xl border border-ink-200 bg-white px-5 py-4 text-left shadow-card outline-none transition-all hover:border-brand-300 hover:shadow-cardhover focus-visible:ring-2 focus-visible:ring-brand-400">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600"><Icon className="h-5 w-5" /></span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-base font-bold text-ink-900">{cat.label}</span>
+                <span className="block text-xs text-ink-500">{cat.rijen.length} {cat.rijen.length === 1 ? "project" : "projecten"} · klik om te filteren</span>
+              </span>
+              <span className="rounded-full bg-ink-100 px-2.5 py-0.5 text-xs font-medium text-ink-500">{cat.rijen.length}</span>
+              <ChevronRight className="h-5 w-5 shrink-0 text-ink-300" />
+            </button>
+          );
+        })}
       </div>
       )}
 
@@ -445,7 +453,7 @@ export function Klanten({ initieelKey }: { initieelKey?: string }) {
           return (
             <div className="space-y-4">
               {gemeenteLijst.map(([gemeente, straatMap]) => {
-                const openG = q.length > 0 || geopend.has(gemeente);
+                const openG = geopend.has(gemeente);
                 const totaal = [...straatMap.values()].reduce((s, a) => s + a.length, 0);
                 const straten = [...straatMap.entries()].sort((a, b) =>
                   sorteer === "postcode"
@@ -467,7 +475,7 @@ export function Klanten({ initieelKey }: { initieelKey?: string }) {
                       <div className="divide-y divide-ink-100 border-t border-ink-100">
                         {straten.map(([straat, items]) => {
                           const sKey = gemeente + "|" + straat;
-                          const openS = q.length > 0 || geopendStraat.has(sKey);
+                          const openS = geopendStraat.has(sKey);
                           const huisnrs = [...items].sort((a, b) => Number(a.huisnummer) - Number(b.huisnummer) || a.huisnummer.localeCompare(b.huisnummer, "nl"));
                           const pc = postcodeVan(items);
                           return (
