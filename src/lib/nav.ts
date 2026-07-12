@@ -2,6 +2,7 @@ import {
   LayoutDashboard,
   CalendarCheck,
   Mailbox,
+  Mail,
   FileText,
   Users,
   Database,
@@ -47,6 +48,7 @@ const EIGENAAR: Role[] = ["eigenaar"];
 // altijd zichtbaar; boekhouding/klanten/beheer zijn sowieso al leiding-only.
 export const WERKNEMER_TOEGANG: { key: string; label: string }[] = [
   { key: "brieven", label: "Brieven & Routes" },
+  { key: "blanco", label: "Blanco brieven" },
   { key: "buurtaanpak", label: "Buurtaanpak" },
   { key: "saneren", label: "Saneren" },
   { key: "voorschouwen", label: "Voorschouwen" },
@@ -64,6 +66,7 @@ export const NAV: NavItem[] = [
   { key: "mededelingen", label: "Mededelingen", icon: Megaphone, group: "Werk", roles: ALLE },
 
   { key: "brieven", label: "Brieven & Routes", icon: Mailbox, group: "Projecten", roles: ALLE },
+  { key: "blanco", label: "Blanco brieven", icon: Mail, group: "Projecten", roles: ALLE },
   { key: "buurtaanpak", label: "Buurtaanpak", icon: Cable, group: "Projecten", roles: ALLE },
   { key: "saneren", label: "Saneren", icon: Recycle, group: "Projecten", roles: ALLE },
   { key: "voorschouwen", label: "Voorschouwen", icon: ClipboardCheck, group: "Projecten", roles: ALLE },

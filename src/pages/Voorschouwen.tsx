@@ -25,6 +25,7 @@ import { useApp } from "../store/AppContext";
 import { Card, Badge, Bevestig } from "../components/ui";
 import { VoorschouwForm } from "../components/VoorschouwForm";
 import { VoorschouwScanModal } from "../components/VoorschouwScanModal";
+import { Keuze } from "../components/Keuze";
 import {
   downloadVoorschouwPdf,
   downloadVoorschouwenZip,
@@ -564,16 +565,23 @@ export function Voorschouwen() {
               {mapZoek && <button type="button" onClick={() => setMapZoek("")} aria-label="Zoekopdracht wissen" className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-ink-400 hover:bg-ink-100"><X className="h-4 w-4" /></button>}
             </div>
             {actieveMappen.length > 1 && (
-              <label className="flex shrink-0 items-center gap-1.5 sm:ml-auto">
+              <div className="flex shrink-0 items-center gap-1.5 sm:ml-auto">
                 <span className="text-xs text-ink-400">Sorteer</span>
-                <select value={sorteerModus} onChange={(e) => setSorteerModus(e.target.value as typeof sorteerModus)} aria-label="Mappen sorteren" className="rounded-lg border border-ink-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-ink-700 outline-none focus:border-brand-400">
-                  <option value="eigen">Eigen volgorde</option>
-                  <option value="naam">Naam (A–Z)</option>
-                  <option value="naamOmgekeerd">Naam (Z–A)</option>
-                  <option value="aantal">Meeste adressen</option>
-                  <option value="nieuw">Nieuwste eerst</option>
-                </select>
-              </label>
+                <Keuze
+                  size="sm"
+                  value={sorteerModus}
+                  onChange={(w) => setSorteerModus(w as typeof sorteerModus)}
+                  title="Mappen sorteren"
+                  className="w-40 font-semibold"
+                  opties={[
+                    { waarde: "eigen", label: "Eigen volgorde" },
+                    { waarde: "naam", label: "Naam (A–Z)" },
+                    { waarde: "naamOmgekeerd", label: "Naam (Z–A)" },
+                    { waarde: "aantal", label: "Meeste adressen" },
+                    { waarde: "nieuw", label: "Nieuwste eerst" },
+                  ]}
+                />
+              </div>
             )}
           </div>
           {eigenModus && actieveMappen.length > 1 && isLeiding && (

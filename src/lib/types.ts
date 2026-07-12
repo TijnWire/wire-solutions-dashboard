@@ -378,6 +378,16 @@ export type Verlof = {
   notitie: string;
 };
 
+// ── Blanco brieven (buurt/wijk lopen; tik aan welk huisnummer je hebt gehad) ──
+export type BlancoBrief = {
+  id: string;
+  straat: string;
+  plaats: string;      // buurt/wijk of gemeente
+  toegewezenAan?: string; // user id
+  nummers: { nr: string; gedaan: boolean }[];
+  aangemaakt: string;  // ISO
+};
+
 // ── Schouwafspraken (planning van voorschouw-/schouwbezoeken) ──
 export type SchouwStatus = "In te plannen" | "Ingepland" | "Uitgevoerd" | "Geannuleerd";
 export const SCHOUW_STATUSSEN: SchouwStatus[] = ["In te plannen", "Ingepland", "Uitgevoerd", "Geannuleerd"];

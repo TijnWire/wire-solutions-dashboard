@@ -31,6 +31,7 @@ import type {
   Communicatie,
   Verlof,
   Schouwafspraak,
+  BlancoBrief,
   AgendaItem,
   Todo,
   KennisArtikel,
@@ -57,6 +58,7 @@ import {
   SEED_COMM,
   SEED_VERLOF,
   SEED_SCHOUW,
+  SEED_BLANCO,
   SEED_AGENDA_ITEMS,
   SEED_TODOS,
   SEED_KENNIS,
@@ -92,6 +94,7 @@ const LS = {
   comm: "wire.comm",
   verlof: "wire.verlof",
   schouwafspraken: "wire.schouwafspraken",
+  blancoBrieven: "wire.blancoBrieven",
   agendaItems: "wire.agendaItems",
   todos: "wire.todos",
   kennis: "wire.kennis",
@@ -143,6 +146,7 @@ type AppState = {
   comm: Communicatie;
   verlof: Verlof[];
   schouwafspraken: Schouwafspraak[];
+  blancoBrieven: BlancoBrief[];
   agendaItems: AgendaItem[];
   todos: Todo[];
   kennis: KennisArtikel[];
@@ -240,6 +244,10 @@ type AppState = {
   updateSchouw: (id: string, patch: Partial<Schouwafspraak>) => void;
   deleteSchouw: (id: string) => void;
 
+  addBlanco: (b: Omit<BlancoBrief, "id" | "aangemaakt">) => string;
+  updateBlanco: (id: string, patch: Partial<BlancoBrief>) => void;
+  deleteBlanco: (id: string) => void;
+
   addAgendaItem: (a: Omit<AgendaItem, "id" | "aangemaakt">) => string;
   updateAgendaItem: (id: string, patch: Partial<AgendaItem>) => void;
   deleteAgendaItem: (id: string) => void;
@@ -287,6 +295,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [comm, setComm] = useState<Communicatie>(SEED_COMM);
   const [verlof, setVerlof] = useState<Verlof[]>(SEED_VERLOF);
   const [schouwafspraken, setSchouwafspraken] = useState<Schouwafspraak[]>(SEED_SCHOUW);
+  const [blancoBrieven, setBlancoBrieven] = useState<BlancoBrief[]>(SEED_BLANCO);
   const [agendaItems, setAgendaItems] = useState<AgendaItem[]>(SEED_AGENDA_ITEMS);
   const [todos, setTodos] = useState<Todo[]>(SEED_TODOS);
   const [kennis, setKennis] = useState<KennisArtikel[]>(SEED_KENNIS);
@@ -306,7 +315,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let actief = true;
     (async () => {
-      let [u, p, t, pp, pl, san, tw, v, r, af, fac, bed, loon, boe, communicatie, verl, kn, inst, kl, s, vm, med, og, ba, del, sch, ai, td] = await Promise.all([
+      let [u, p, t, pp, pl, san, tw, v, r, af, fac, bed, loon, boe, communicatie, verl, kn, inst, kl, s, vm, med, og, ba, del, sch, ai, td, bl] = await Promise.all([
         laadSlice<User[]>("users", LS.users, SEED_USERS),
         laadSlice<Project[]>("projects", LS.projects, SEED_PROJECTS),
         laadSlice<Taak[]>("taken", LS.taken, SEED_TAKEN),
@@ -335,6 +344,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         laadSlice<Schouwafspraak[]>("schouwafspraken", LS.schouwafspraken, SEED_SCHOUW),
         laadSlice<AgendaItem[]>("agendaItems", LS.agendaItems, SEED_AGENDA_ITEMS),
         laadSlice<Todo[]>("todos", LS.todos, SEED_TODOS),
+        laadSlice<BlancoBrief[]>("blancoBrieven", LS.blancoBrieven, SEED_BLANCO),
       ]);
       if (!actief) return;
       // Eenmalige schoonmaak: verwijder de voorbeeld-/demoprojecten en bijbehorende data, zodat het
@@ -456,6 +466,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setComm({ ...SEED_COMM, ...communicatie });
       setVerlof(verl);
       setSchouwafspraken(sch ?? []);
+      setBlancoBrieven(bl ?? []);
       setAgendaItems(ai ?? []);
       setTodos(td ?? []);
       setKennis(kn);
@@ -535,6 +546,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (hydrated) void idbSet("schouwafspraken", schouwafspraken);
   }, [schouwafspraken, hydrated]);
   useEffect(() => {
+    if (hydrated) void idbSet("blancoBrieven", blancoBrieven);
+  }, [blancoBrieven, hydrated]);
+  useEffect(() => {
     if (hydrated) void idbSet("agendaItems", agendaItems);
   }, [agendaItems, hydrated]);
   useEffect(() => {
@@ -580,6 +594,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     comm: (v) => setComm(v as Communicatie),
     verlof: (v) => setVerlof(v as Verlof[]),
     schouwafspraken: (v) => setSchouwafspraken(v as Schouwafspraak[]),
+    blancoBrieven: (v) => setBlancoBrieven(v as BlancoBrief[]),
     agendaItems: (v) => setAgendaItems(v as AgendaItem[]),
     todos: (v) => setTodos(v as Todo[]),
     kennis: (v) => setKennis(v as KennisArtikel[]),
@@ -590,7 +605,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const waarden: Record<string, unknown> = {
     users, projects, taken, projectPosts, planningen, saneringen, tauw: tauwOpdrachten,
     voorschouwen, voorschouwMappen, mededelingen, rondes, afspraken, facturen, bedrijf,
-    loonstroken, boetes, comm, verlof, schouwafspraken, agendaItems, todos, kennis, instellingen, klanten, opdrachtgevers, buurtaanpak,
+    loonstroken, boetes, comm, verlof, schouwafspraken, blancoBrieven, agendaItems, todos, kennis, instellingen, klanten, opdrachtgevers, buurtaanpak,
     deletes,
   };
   // Altijd de NIEUWSTE lokale waarden beschikbaar in de sync-effecten (die niet bij elke data-wijziging
@@ -605,7 +620,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const COLLECTIONS = new Set([
     "users", "projects", "taken", "projectPosts", "planningen", "saneringen", "buurtaanpak", "tauw",
     "voorschouwen", "voorschouwMappen", "mededelingen", "rondes", "afspraken", "facturen",
-    "opdrachtgevers", "loonstroken", "boetes", "verlof", "schouwafspraken", "agendaItems", "todos", "kennis", "klanten",
+    "opdrachtgevers", "loonstroken", "boetes", "verlof", "schouwafspraken", "blancoBrieven", "agendaItems", "todos", "kennis", "klanten",
   ]);
 
   // Past binnenkomende centrale data toe: lijsten worden per record samengevoegd met wat er lokaal staat
@@ -838,7 +853,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       void sbSchrijf(key, waarden[key]).then((ua) => { sync.current.versies[key] = ua; }).catch((e) => { sync.current.laatsteFout = String((e as Error)?.message ?? e); }).finally(() => sync.current.bezig.delete(key));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supabaseAan, sbSessie, hydrated, users, projects, taken, projectPosts, planningen, saneringen, tauwOpdrachten, voorschouwen, voorschouwMappen, mededelingen, rondes, afspraken, facturen, bedrijf, loonstroken, boetes, comm, verlof, schouwafspraken, agendaItems, todos, kennis, instellingen, klanten, opdrachtgevers, buurtaanpak, deletes]);
+  }, [supabaseAan, sbSessie, hydrated, users, projects, taken, projectPosts, planningen, saneringen, tauwOpdrachten, voorschouwen, voorschouwMappen, mededelingen, rondes, afspraken, facturen, bedrijf, loonstroken, boetes, comm, verlof, schouwafspraken, blancoBrieven, agendaItems, todos, kennis, instellingen, klanten, opdrachtgevers, buurtaanpak, deletes]);
 
   const currentUser = users.find((u) => u.id === currentUserId) ?? null;
 
@@ -1219,6 +1234,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     tomb("schouwafspraken", id);
   };
 
+  const addBlanco: AppState["addBlanco"] = (b) => {
+    const id = nextId("bl");
+    setBlancoBrieven((prev) => [{ ...b, id, aangemaakt: new Date().toISOString() }, ...prev]);
+    return id;
+  };
+  const updateBlanco: AppState["updateBlanco"] = (id, patch) =>
+    setBlancoBrieven((prev) => prev.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+  const deleteBlanco: AppState["deleteBlanco"] = (id) => {
+    setBlancoBrieven((prev) => prev.filter((x) => x.id !== id));
+    tomb("blancoBrieven", id);
+  };
+
   const addAgendaItem: AppState["addAgendaItem"] = (a) => {
     const id = nextId("ag");
     setAgendaItems((prev) => [{ ...a, id, aangemaakt: new Date().toISOString() }, ...prev]);
@@ -1298,6 +1325,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         comm,
         verlof,
         schouwafspraken,
+        blancoBrieven,
         agendaItems,
         todos,
         kennis,
@@ -1374,6 +1402,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addSchouw,
         updateSchouw,
         deleteSchouw,
+        addBlanco,
+        updateBlanco,
+        deleteBlanco,
         addAgendaItem,
         updateAgendaItem,
         deleteAgendaItem,
