@@ -316,6 +316,9 @@ export type Opdrachtgever = {
   postcodePlaats: string;
   email: string; // waar de factuur naartoe moet
   tav?: string;
+  // Medewerkers die voor deze opdrachtgever werken, met hun uurtarief — hiermee kun je automatisch
+  // een factuur op basis van de gewerkte uren (Urenstaat) genereren.
+  personen?: { userId: string; uurtarief: number }[];
 };
 
 // ── Loonstroken ──

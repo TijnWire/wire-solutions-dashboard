@@ -158,3 +158,27 @@ export async function downloadFactuurPdf(f: Factuur, _bedrijf: Bedrijf) {
     if (typeof alert !== "undefined") alert("De factuur-PDF kon niet worden gemaakt. Ververs de app en probeer het opnieuw.");
   }
 }
+
+// Mailt de factuur naar het e-mailadres van de klant. Omdat een mailto-link geen bestand kan meesturen,
+// downloaden we eerst de PDF (zodat de gebruiker die als bijlage kan toevoegen) en openen dan de mail met
+// vooringevuld onderwerp + tekst. Retourneert false als er geen e-mailadres is ingevuld.
+export async function mailFactuur(f: Factuur): Promise<boolean> {
+  if (!f.email || !f.email.trim()) return false;
+  try {
+    const bytes = await maakFactuurPdfBytes(f);
+    triggerDownload(new Blob([bytes as BlobPart], { type: "application/pdf" }), `Factuur_${veilig(f.nummer) || "concept"}.pdf`);
+  } catch {
+    if (typeof alert !== "undefined") alert("De factuur-PDF kon niet worden gemaakt. Ververs de app en probeer het opnieuw.");
+    return false;
+  }
+  const t = factuurTotalen(f);
+  const onderwerp = `Factuur ${f.nummer} — Wire Solutions`;
+  const tekst =
+    `Beste ${f.tav || f.klantNaam || "relatie"},\n\n` +
+    `Hierbij ontvangt u factuur ${f.nummer} van ${new Date(f.datum + "T00:00:00").toLocaleDateString("nl-NL")} ` +
+    `voor een bedrag van ${schoonEuro(t.totaal)} (incl. btw).\n` +
+    `De factuur zit als PDF in het zojuist gedownloade bestand "Factuur_${veilig(f.nummer)}.pdf" — voeg dat toe als bijlage bij deze mail.\n\n` +
+    `Met vriendelijke groet,\nWire Solutions`;
+  window.location.href = `mailto:${f.email.trim()}?subject=${encodeURIComponent(onderwerp)}&body=${encodeURIComponent(tekst)}`;
+  return true;
+}

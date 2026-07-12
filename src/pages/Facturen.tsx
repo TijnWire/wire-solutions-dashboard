@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import { Plus, ArrowLeft, Download, Pencil, Trash2, Receipt, X, FileSpreadsheet, Check, Users, Search } from "lucide-react";
+import { Plus, ArrowLeft, Download, Pencil, Trash2, Receipt, X, FileSpreadsheet, Check, Users, Search, CheckSquare, Square, Mail, Clock } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { DatumKiezer } from "../components/DatumKiezer";
 import { Keuze } from "../components/Keuze";
 import { Card, Badge, Bevestig } from "../components/ui";
-import { downloadFactuurPdf, factuurTotalen, euro } from "../lib/factuurPdf";
+import { downloadFactuurPdf, mailFactuur, factuurTotalen, euro } from "../lib/factuurPdf";
 import { exporteerExcel } from "../lib/excel";
 import { weekStartISO, weekLabel, isISODatum } from "../lib/week";
 import { PeriodeNavigator, periodeRange, type Periode } from "../components/PeriodeNavigator";
@@ -218,15 +218,18 @@ function FactuurForm({ bestaande, initieel, onKlaar }: { bestaande?: Factuur; in
 
 // ── Opdrachtgevers beheren (vaste klantgegevens) ──
 function OpdrachtgeverBeheer({ onKlaar }: { onKlaar: () => void }) {
-  const { opdrachtgevers, addOpdrachtgever, updateOpdrachtgever, deleteOpdrachtgever } = useApp();
-  const leeg = { naam: "", relatienummer: "", adres: "", postcodePlaats: "", email: "", tav: "" };
+  const { opdrachtgevers, addOpdrachtgever, updateOpdrachtgever, deleteOpdrachtgever, users } = useApp();
+  const leeg = { naam: "", relatienummer: "", adres: "", postcodePlaats: "", email: "", tav: "", personen: [] as { userId: string; uurtarief: number }[] };
   const [bewerkId, setBewerkId] = useState<string | null>(null); // null = dicht, "nieuw" = nieuw, id = bewerken
   const [d, setD] = useState(leeg);
   const set = (patch: Partial<typeof d>) => setD((x) => ({ ...x, ...patch }));
   const start = (o?: Opdrachtgever) => {
-    if (o) { setBewerkId(o.id); setD({ naam: o.naam, relatienummer: o.relatienummer, adres: o.adres, postcodePlaats: o.postcodePlaats, email: o.email, tav: o.tav ?? "" }); }
+    if (o) { setBewerkId(o.id); setD({ naam: o.naam, relatienummer: o.relatienummer, adres: o.adres, postcodePlaats: o.postcodePlaats, email: o.email, tav: o.tav ?? "", personen: o.personen ?? [] }); }
     else { setBewerkId("nieuw"); setD(leeg); }
   };
+  const persoonAan = (userId: string) => d.personen.some((p) => p.userId === userId);
+  const togglePersoon = (userId: string) => set({ personen: persoonAan(userId) ? d.personen.filter((p) => p.userId !== userId) : [...d.personen, { userId, uurtarief: 0 }] });
+  const zetTarief = (userId: string, tarief: number) => set({ personen: d.personen.map((p) => (p.userId === userId ? { ...p, uurtarief: tarief } : p)) });
   const sluit = () => { setBewerkId(null); setD(leeg); };
   const opslaan = () => {
     if (!d.naam.trim()) return;
@@ -257,6 +260,37 @@ function OpdrachtgeverBeheer({ onKlaar }: { onKlaar: () => void }) {
             <div><label className={labelCls}>Adres</label><input value={d.adres} onChange={(e) => set({ adres: e.target.value })} placeholder="Nijverheidsweg 15" className={veld} /></div>
             <div><label className={labelCls}>Postcode + plaats</label><input value={d.postcodePlaats} onChange={(e) => set({ postcodePlaats: e.target.value })} placeholder="3534 AM Utrecht" className={veld} /></div>
           </div>
+
+          {/* Medewerkers die voor deze opdrachtgever werken + hun uurtarief → basis voor 'Factuur op uren' */}
+          <div>
+            <label className={labelCls}>Medewerkers &amp; uurtarief <span className="font-normal text-ink-400">(voor het automatisch factureren op uren)</span></label>
+            <div className="max-h-72 space-y-1 overflow-y-auto rounded-xl border border-ink-200 p-2">
+              {users.length === 0 ? (
+                <p className="px-2 py-3 text-sm text-ink-400">Nog geen medewerkers.</p>
+              ) : (
+                [...users].sort((a, b) => a.naam.localeCompare(b.naam, "nl")).map((u) => {
+                  const aan = persoonAan(u.id);
+                  const tarief = d.personen.find((p) => p.userId === u.id)?.uurtarief ?? 0;
+                  return (
+                    <div key={u.id} className={`flex items-center gap-2 rounded-lg px-2 py-1.5 ${aan ? "bg-brand-50" : ""}`}>
+                      <button type="button" onClick={() => togglePersoon(u.id)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+                        {aan ? <CheckSquare className="h-4 w-4 shrink-0 text-brand-600" /> : <Square className="h-4 w-4 shrink-0 text-ink-300" />}
+                        <span className="truncate text-sm text-ink-800">{u.naam}</span>
+                      </button>
+                      {aan && (
+                        <div className="flex shrink-0 items-center gap-1">
+                          <span className="text-xs text-ink-400">€</span>
+                          <input inputMode="decimal" value={tarief ? String(tarief).replace(".", ",") : ""} onChange={(e) => { const n = parseFloat(e.target.value.replace(",", ".")); zetTarief(u.id, Number.isFinite(n) && n >= 0 ? n : 0); }} placeholder="0,00" aria-label={`Uurtarief ${u.naam}`} className="w-20 rounded-lg border border-ink-200 px-2 py-1 text-right text-sm outline-none focus:border-brand-400" />
+                          <span className="text-xs text-ink-400">/u</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
           <div className="flex gap-2">
             <button type="button" onClick={opslaan} disabled={!d.naam.trim()} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-40">Opslaan</button>
             <button type="button" onClick={sluit} className="rounded-lg px-3 py-2 text-sm text-ink-500 hover:bg-ink-50">Annuleer</button>
@@ -275,7 +309,7 @@ function OpdrachtgeverBeheer({ onKlaar }: { onKlaar: () => void }) {
                   <span className="font-semibold text-ink-900">{o.naam}</span>
                   {o.relatienummer && <Badge tone="slate">{o.relatienummer}</Badge>}
                 </div>
-                <div className="truncate text-xs text-ink-500">{[o.tav ? `t.a.v. ${o.tav}` : "", o.adres, o.postcodePlaats, o.email].filter(Boolean).join(" · ")}</div>
+                <div className="truncate text-xs text-ink-500">{[o.tav ? `t.a.v. ${o.tav}` : "", o.adres, o.postcodePlaats, o.email, o.personen?.length ? `${o.personen.length} ${o.personen.length === 1 ? "medewerker" : "medewerkers"}` : ""].filter(Boolean).join(" · ")}</div>
               </div>
               <div className="flex items-center gap-1">
                 <button type="button" onClick={() => start(o)} className="rounded-lg p-2 text-ink-400 hover:bg-ink-100 hover:text-brand-600" title="Bewerken"><Pencil className="h-4 w-4" /></button>
@@ -289,13 +323,120 @@ function OpdrachtgeverBeheer({ onKlaar }: { onKlaar: () => void }) {
   );
 }
 
+// ── Automatisch een factuur op basis van de gewerkte uren (Urenstaat) per opdrachtgever ──
+function UrenFactuur({ facturenCount, opdrachtgevers, users, urenstaat, onGenereer, onNaarOpdrachtgevers, onKlaar }: {
+  facturenCount: number;
+  opdrachtgevers: Opdrachtgever[];
+  users: { id: string; naam: string }[];
+  urenstaat: { medewerkerId: string; week: string; uren: number[] }[];
+  onGenereer: (concept: Omit<Factuur, "id">) => void;
+  onNaarOpdrachtgevers: () => void;
+  onKlaar: () => void;
+}) {
+  const nu = new Date();
+  const y = nu.getFullYear(), mth = nu.getMonth();
+  const eersteVanMaand = `${y}-${String(mth + 1).padStart(2, "0")}-01`;
+  const laatsteDagNr = new Date(y, mth + 1, 0).getDate();
+  const laatsteVanMaand = `${y}-${String(mth + 1).padStart(2, "0")}-${String(laatsteDagNr).padStart(2, "0")}`;
+
+  const [ogId, setOgId] = useState(opdrachtgevers[0]?.id ?? "");
+  const [van, setVan] = useState(eersteVanMaand);
+  const [tot, setTot] = useState(laatsteVanMaand);
+
+  const og = opdrachtgevers.find((o) => o.id === ogId);
+  const naamVan = (id: string) => users.find((u) => u.id === id)?.naam ?? "Medewerker";
+  const somUren = (uren?: number[]) => (uren ?? []).reduce((a, b) => a + (Number(b) || 0), 0);
+  const uurNet = (n: number) => (Number.isInteger(n) ? String(n) : (Math.round(n * 10) / 10).toString().replace(".", ","));
+  const urenVanPersoon = (userId: string) => urenstaat.filter((x) => x.medewerkerId === userId && x.week >= van && x.week <= tot).reduce((s, x) => s + somUren(x.uren), 0);
+  const fmt = (iso: string) => new Date(iso + "T00:00:00").toLocaleDateString("nl-NL", { day: "numeric", month: "short" });
+
+  const regels = (og?.personen ?? []).map((p) => ({ naam: naamVan(p.userId), uren: urenVanPersoon(p.userId), tarief: p.uurtarief }));
+  const metUren = regels.filter((r) => r.uren > 0);
+  const subtotaal = metUren.reduce((s, r) => s + r.uren * r.tarief, 0);
+
+  const genereer = () => {
+    if (!og || metUren.length === 0) return;
+    const concept: Omit<Factuur, "id"> = {
+      nummer: `${new Date().getFullYear()}-${String(facturenCount + 1).padStart(4, "0")}`,
+      datum: new Date().toISOString().slice(0, 10),
+      klantNaam: og.naam, tav: og.tav ?? "", klantAdres: og.adres, klantPostcodePlaats: og.postcodePlaats,
+      relatienummer: og.relatienummer, email: og.email, betaaltermijn: 14,
+      regels: metUren.map((r) => ({ omschrijving: `Gewerkte uren ${r.naam} (${fmt(van)} – ${fmt(tot)})`, aantal: Math.round(r.uren * 100) / 100, prijs: r.tarief })),
+      btwPercentage: 21, status: "Concept", notitie: "",
+    };
+    onGenereer(concept);
+  };
+
+  return (
+    <div className="mx-auto max-w-2xl space-y-5">
+      <button type="button" onClick={onKlaar} className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-500 hover:text-ink-800"><ArrowLeft className="h-4 w-4" /> Terug naar facturen</button>
+      <div>
+        <h2 className="text-xl font-bold text-ink-900">Factuur op uren</h2>
+        <p className="text-sm text-ink-500">Kies een opdrachtgever en een periode. De app telt de gewerkte uren per gekoppelde medewerker (uit de Urenstaat) en zet ze automatisch op een concept-factuur die je nog kunt nakijken en mailen.</p>
+      </div>
+
+      <Card className="space-y-4 p-4">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="sm:col-span-2"><label className={labelCls}>Opdrachtgever</label>
+            <Keuze value={ogId} onChange={setOgId} opties={opdrachtgevers.length ? opdrachtgevers.map((o) => ({ waarde: o.id, label: o.naam })) : [{ waarde: "", label: "Nog geen opdrachtgevers" }]} title="Opdrachtgever" />
+          </div>
+          <div><label className={labelCls}>Van</label><DatumKiezer value={van} onChange={setVan} /></div>
+          <div><label className={labelCls}>Tot en met</label><DatumKiezer value={tot} onChange={setTot} /></div>
+        </div>
+
+        {!og ? (
+          <p className="rounded-lg bg-ink-50 px-3 py-2 text-sm text-ink-500">Kies een opdrachtgever om te beginnen.</p>
+        ) : (og.personen ?? []).length === 0 ? (
+          <div className="rounded-lg bg-amber-50 px-3 py-3 text-sm text-amber-700">
+            Er zijn nog geen medewerkers aan {og.naam} gekoppeld. <button type="button" onClick={onNaarOpdrachtgevers} className="font-semibold underline">Koppel medewerkers &amp; uurtarief</button> bij Opdrachtgevers.
+          </div>
+        ) : (
+          <div className="overflow-x-auto rounded-xl border border-ink-200">
+            <table className="w-full min-w-[420px] text-sm">
+              <thead>
+                <tr className="bg-ink-50/60 text-xs text-ink-500">
+                  <th className="px-3 py-2 text-left font-semibold">Medewerker</th>
+                  <th className="px-3 py-2 text-right font-semibold">Uren</th>
+                  <th className="px-3 py-2 text-right font-semibold">Tarief</th>
+                  <th className="px-3 py-2 text-right font-semibold">Bedrag</th>
+                </tr>
+              </thead>
+              <tbody>
+                {regels.map((r, i) => (
+                  <tr key={i} className={`border-t border-ink-100 ${r.uren === 0 ? "text-ink-300" : ""}`}>
+                    <td className="px-3 py-2">{r.naam}</td>
+                    <td className="px-3 py-2 text-right">{r.uren ? `${uurNet(r.uren)} u` : "0 u"}</td>
+                    <td className="px-3 py-2 text-right">{euro(r.tarief)}</td>
+                    <td className="px-3 py-2 text-right font-semibold text-ink-900">{r.uren ? euro(r.uren * r.tarief) : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t border-ink-200 bg-ink-50/60">
+                  <td className="px-3 py-2 font-bold text-ink-900" colSpan={3}>Subtotaal (excl. btw)</td>
+                  <td className="px-3 py-2 text-right font-bold text-ink-900">{euro(subtotaal)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" onClick={genereer} disabled={!og || metUren.length === 0} className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-40"><Receipt className="h-4 w-4" /> Factuur genereren</button>
+          {og && metUren.length === 0 && (og.personen ?? []).length > 0 && <span className="text-xs text-ink-400">Geen uren in deze periode voor de gekoppelde medewerkers.</span>}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
 // ── Hoofdcomponent ──
 export function Facturen({ initieelFactuur }: { initieelFactuur?: string }) {
-  const { facturen, bedrijf, deleteFactuur, projects, updateProject, opdrachtgevers, buurtaanpak, updateBuurtaanpak, rondes, updateRonde } = useApp();
+  const { facturen, bedrijf, deleteFactuur, projects, updateProject, opdrachtgevers, buurtaanpak, updateBuurtaanpak, rondes, updateRonde, users, urenstaat } = useApp();
   const teFactureren = projects.filter((p) => p.boekhouding === "te_factureren");
   const teFacturerenBuurt = buurtaanpak.filter((b) => b.boekhouding === "te_factureren");
   const teFacturerenRondes = rondes.filter((r) => r.boekhouding === "te_factureren");
-  const [modus, setModus] = useState<"lijst" | "formulier" | "opdrachtgevers">("lijst");
+  const [modus, setModus] = useState<"lijst" | "formulier" | "opdrachtgevers" | "uren">("lijst");
   const [bewerk, setBewerk] = useState<Factuur | undefined>(undefined);
   const [nieuwVan, setNieuwVan] = useState<Omit<Factuur, "id"> | undefined>(undefined);
   const [verwijder, setVerwijder] = useState<Factuur | null>(null);
@@ -327,6 +468,7 @@ export function Facturen({ initieelFactuur }: { initieelFactuur?: string }) {
     };
   };
   const nieuweLege = () => { setBewerk(undefined); setNieuwVan(undefined); setModus("formulier"); };
+  const nieuweVanUren = (concept: Omit<Factuur, "id">) => { setBewerk(undefined); setNieuwVan(concept); setModus("formulier"); };
   const nieuweVanProject = (p: Project) => { setBewerk(undefined); setNieuwVan(maakConceptVan(p.pdNummer ?? "", p.wijk)); setModus("formulier"); };
   const nieuweVanBuurt = (b: Buurtaanpak) => { setBewerk(undefined); setNieuwVan(maakConceptVan(b.pdNummer ?? "", b.naam)); setModus("formulier"); };
   const nieuweVanRonde = (r: Brievenronde) => {
@@ -363,6 +505,9 @@ export function Facturen({ initieelFactuur }: { initieelFactuur?: string }) {
   if (modus === "opdrachtgevers") {
     return <OpdrachtgeverBeheer onKlaar={() => setModus("lijst")} />;
   }
+  if (modus === "uren") {
+    return <UrenFactuur facturenCount={facturen.length} opdrachtgevers={opdrachtgevers} users={users} urenstaat={urenstaat} onGenereer={nieuweVanUren} onNaarOpdrachtgevers={() => setModus("opdrachtgevers")} onKlaar={() => setModus("lijst")} />;
+  }
 
   // ── Filteren (zoektekst + periode + status) en groeperen per week ──
   const range = periodeRange(periode, anker);
@@ -398,6 +543,9 @@ export function Facturen({ initieelFactuur }: { initieelFactuur?: string }) {
         <div className="flex flex-wrap items-center gap-2">
           <button type="button" onClick={() => setModus("opdrachtgevers")} className="inline-flex items-center gap-2 rounded-xl border border-ink-200 bg-white px-4 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50">
             <Users className="h-4 w-4 text-ink-500" /> Opdrachtgevers
+          </button>
+          <button type="button" onClick={() => setModus("uren")} className="inline-flex items-center gap-2 rounded-xl border border-ink-200 bg-white px-4 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50">
+            <Clock className="h-4 w-4 text-ink-500" /> Factuur op uren
           </button>
           {facturen.length > 0 && (
             <button type="button" onClick={exporteerNaarExcel} className="inline-flex items-center gap-2 rounded-xl border border-ink-200 bg-white px-4 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50">
@@ -534,6 +682,9 @@ export function Facturen({ initieelFactuur }: { initieelFactuur?: string }) {
                           <div className="flex w-full items-center justify-end gap-1 sm:w-auto">
                             <button type="button" onClick={() => void downloadFactuurPdf(f, bedrijf)} className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-3 py-2 text-xs font-medium text-ink-700 hover:bg-ink-50 sm:py-1.5">
                               <Download className="h-3.5 w-3.5" /> PDF
+                            </button>
+                            <button type="button" onClick={() => void mailFactuur(f)} disabled={!f.email} title={f.email ? `Mailen naar ${f.email}` : "Geen e-mailadres bij deze factuur"} className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-3 py-2 text-xs font-medium text-ink-700 hover:bg-ink-50 disabled:cursor-not-allowed disabled:opacity-40 sm:py-1.5">
+                              <Mail className="h-3.5 w-3.5" /> Mailen
                             </button>
                             <button type="button" onClick={() => { setBewerk(f); setModus("formulier"); }} className="rounded-lg p-2.5 text-ink-400 hover:bg-ink-100 hover:text-ink-700 sm:p-2" title="Bewerken">
                               <Pencil className="h-4 w-4" />
