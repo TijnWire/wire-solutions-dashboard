@@ -16,8 +16,8 @@ import { Saneren } from "./pages/Saneren";
 import { Buurtaanpak } from "./pages/Buurtaanpak";
 import { Tauw } from "./pages/Tauw";
 import { Brieven } from "./pages/Brieven";
-import { Blanco } from "./pages/Blanco";
 import { Urenstaat } from "./pages/Urenstaat";
+import { VrijeDagen } from "./pages/VrijeDagen";
 import { Afspraken } from "./pages/Afspraken";
 import { Communicatie } from "./pages/Communicatie";
 import { Documenten } from "./pages/Documenten";
@@ -127,8 +127,6 @@ export default function App() {
         return <Schouwafspraken />;
       case "brieven":
         return <Brieven key={target?.ronde ?? "lijst"} initieelRonde={target?.ronde} />;
-      case "blanco":
-        return <Blanco />;
       case "afspraken":
         return <Afspraken key={target?.locatie ?? "lijst"} initieelLocatie={target?.locatie} />;
       case "communicatie":
@@ -141,6 +139,8 @@ export default function App() {
         return <Facturen initieelFactuur={target?.factuur} />;
       case "urenstaat":
         return <Urenstaat />;
+      case "vrijedagen":
+        return <VrijeDagen />;
       case "loonstroken":
         return <Loonstroken />;
       case "boetes":

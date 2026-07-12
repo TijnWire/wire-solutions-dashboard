@@ -387,8 +387,9 @@ export type Verlof = {
 export type Urenregel = {
   id: string;
   medewerkerId: string;
-  week: string;     // ISO-datum van de maandag van die week (yyyy-mm-dd)
-  uren: number[];   // 7 waarden: maandag t/m zondag
+  week: string;        // ISO-datum van de maandag van die week (yyyy-mm-dd)
+  projectId?: string;  // aan welk project deze uren besteed zijn; leeg = algemeen (geen specifiek project)
+  uren: number[];      // 7 waarden: maandag t/m zondag
   notitie?: string;
 };
 

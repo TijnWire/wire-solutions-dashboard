@@ -2,7 +2,7 @@ import {
   LayoutDashboard,
   CalendarCheck,
   Mailbox,
-  Mail,
+  Sun,
   FileText,
   Users,
   Database,
@@ -49,7 +49,6 @@ const EIGENAAR: Role[] = ["eigenaar"];
 // altijd zichtbaar; boekhouding/klanten/beheer zijn sowieso al leiding-only.
 export const WERKNEMER_TOEGANG: { key: string; label: string }[] = [
   { key: "brieven", label: "Brieven & Routes" },
-  { key: "blanco", label: "Blanco brieven" },
   { key: "buurtaanpak", label: "Buurtaanpak" },
   { key: "saneren", label: "Saneren" },
   { key: "voorschouwen", label: "Voorschouwen" },
@@ -67,7 +66,6 @@ export const NAV: NavItem[] = [
   { key: "mededelingen", label: "Mededelingen", icon: Megaphone, group: "Werk", roles: ALLE },
 
   { key: "brieven", label: "Brieven & Routes", icon: Mailbox, group: "Projecten", roles: ALLE },
-  { key: "blanco", label: "Blanco brieven", icon: Mail, group: "Projecten", roles: ALLE },
   { key: "buurtaanpak", label: "Buurtaanpak", icon: Cable, group: "Projecten", roles: ALLE },
   { key: "saneren", label: "Saneren", icon: Recycle, group: "Projecten", roles: ALLE },
   { key: "voorschouwen", label: "Voorschouwen", icon: ClipboardCheck, group: "Projecten", roles: ALLE },
@@ -79,6 +77,7 @@ export const NAV: NavItem[] = [
 
   { key: "facturen", label: "Facturen", icon: Receipt, group: "Boekhouding", roles: LEIDING },
   { key: "urenstaat", label: "Urenstaat", icon: Clock, group: "Boekhouding", roles: LEIDING },
+  { key: "vrijedagen", label: "Vrije dagen", icon: Sun, group: "Boekhouding", roles: LEIDING },
   { key: "loonstroken", label: "Loonstroken", icon: Wallet, group: "Boekhouding", roles: ALLE },
   { key: "boetes", label: "Boetes", icon: AlertTriangle, group: "Boekhouding", roles: ALLE },
   { key: "verlof", label: "Verlof", icon: Plane, group: "Boekhouding", roles: ALLE },
