@@ -54,13 +54,13 @@ function Splash() {
 
 export default function App() {
   const { currentUser, hydrated, bedrijf, instellingen, verlof, taken, rondes, afspraken, voorschouwen, klanten, facturen, users, kennis, projects, projectPosts, tauwOpdrachten, saneringen, buurtaanpak, logout, synced } = useApp();
-  const [active, setActive] = useState("overzicht");
+  const [active, setActive] = useState("mijnwerk");
   const [target, setTarget] = useState<NavTarget>(null);
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // Bij (her)inloggen naar de juiste startpagina
+  // Bij openen/verversen en (her)inloggen altijd starten op "Mijn werk" (voor iedereen).
   useEffect(() => {
-    setActive(currentUser?.rol === "monteur" ? "mijnwerk" : "overzicht");
+    setActive("mijnwerk");
   }, [currentUser?.id]);
 
   // Stabiele callbacks + gememoiseerde afgeleiden, zodat de app-shell (Sidebar/BottomNav/Topbar)
