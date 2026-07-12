@@ -9,6 +9,7 @@ import {
   BookOpen,
   UserCog,
   Settings,
+  Lock,
   ClipboardList,
   ClipboardCheck,
   FolderKanban,
@@ -39,6 +40,22 @@ export type NavItem = {
 
 const ALLE: Role[] = ["eigenaar", "beheer", "monteur"];
 const LEIDING: Role[] = ["eigenaar", "beheer"];
+const EIGENAAR: Role[] = ["eigenaar"];
+
+// Werk-onderdelen waarvan de eigenaar de toegang per werknemer kan aan-/uitzetten (Toegang-pagina).
+// Persoonlijke onderdelen (Mijn werk, Verlof, Loonstroken, Boetes, Mededelingen, Kennisbank) blijven
+// altijd zichtbaar; boekhouding/klanten/beheer zijn sowieso al leiding-only.
+export const WERKNEMER_TOEGANG: { key: string; label: string }[] = [
+  { key: "brieven", label: "Brieven & Routes" },
+  { key: "buurtaanpak", label: "Buurtaanpak" },
+  { key: "saneren", label: "Saneren" },
+  { key: "voorschouwen", label: "Voorschouwen" },
+  { key: "schouwafspraken", label: "Schouwafspraken" },
+  { key: "tauw", label: "TAUW" },
+  { key: "agenda", label: "Agenda" },
+  { key: "communicatie", label: "Communicatie" },
+];
+export const WERKNEMER_TOEGANG_KEYS = WERKNEMER_TOEGANG.map((x) => x.key);
 
 export const NAV: NavItem[] = [
   { key: "mijnwerk", label: "Mijn werk", icon: ClipboardList, group: "Werk", roles: ALLE },
@@ -69,6 +86,7 @@ export const NAV: NavItem[] = [
   { key: "kennisbank", label: "Kennisbank", icon: BookOpen, group: "Vragen", roles: ALLE },
 
   { key: "beheer", label: "Gebruikersbeheer", icon: UserCog, group: "Systeem", roles: LEIDING },
+  { key: "toegang", label: "Toegang", icon: Lock, group: "Systeem", roles: EIGENAAR },
   { key: "instellingen", label: "Instellingen", icon: Settings, group: "Systeem", roles: LEIDING },
 ];
 
@@ -76,12 +94,17 @@ export const GROUPS: NavGroup[] = ["Werk", "Projecten", "Operatie", "Boekhouding
 
 // Bepaalt of een gebruiker een menu-item mag zien.
 // Beheerders zien beheer-onderdelen alleen als de eigenaar dat gebied heeft toegewezen.
-export function magZien(user: { rol: Role; beheerRechten?: string[] }, item: NavItem): boolean {
+export function magZien(user: { rol: Role; beheerRechten?: string[]; toegang?: string[] }, item: NavItem): boolean {
   if (!item.roles.includes(user.rol)) return false;
   // Alleen voor beheerders, en alleen beheer-onderdelen (niet de items die ook voor werknemers zijn)
   if (user.rol === "beheer" && !item.roles.includes("monteur")) {
     if (!user.beheerRechten) return true; // geen beperking ingesteld = alles
     return user.beheerRechten.includes(item.key);
+  }
+  // Werknemer: de eigenaar kan de toegang tot werk-onderdelen per persoon beperken.
+  if (user.rol === "monteur" && WERKNEMER_TOEGANG_KEYS.includes(item.key)) {
+    if (!user.toegang) return true; // geen beperking ingesteld = alles
+    return user.toegang.includes(item.key);
   }
   return true;
 }

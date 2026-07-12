@@ -33,9 +33,10 @@ import { Klanten } from "./pages/Klanten";
 import { meldingenVoor, type Melding } from "./lib/meldingen";
 import { zoekResultaten, type ZoekItem } from "./lib/zoeken";
 import { Gebruikersbeheer } from "./pages/Gebruikersbeheer";
+import { Toegang } from "./pages/Toegang";
 import { Module } from "./pages/Module";
 import { AiAssistent } from "./components/AiAssistent";
-import { NAV } from "./lib/nav";
+import { NAV, magZien } from "./lib/nav";
 import { useApp } from "./store/AppContext";
 import { NavContext, type NavTarget } from "./store/NavContext";
 
@@ -90,6 +91,10 @@ export default function App() {
   const titel = active === "overzicht" ? "Dashboard" : active === "planning" ? "Weekplanning" : item?.label ?? "Dashboard";
 
   const render = () => {
+    // Vangnet: onderdelen die deze gebruiker niet mag zien, ook niet via een omweg openen.
+    if (item && !magZien(currentUser, item)) {
+      return <div className="p-8 text-center text-sm text-ink-500">Je hebt geen toegang tot dit onderdeel.</div>;
+    }
     switch (active) {
       case "overzicht":
         return <Overzicht />;
@@ -141,6 +146,8 @@ export default function App() {
         return <Instellingen />;
       case "beheer":
         return <Gebruikersbeheer />;
+      case "toegang":
+        return <Toegang />;
       default:
         return <Module moduleKey={active} />;
     }

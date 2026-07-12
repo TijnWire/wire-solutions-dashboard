@@ -16,6 +16,9 @@ export type User = {
   // Door de beheerder afgedwongen wachtwoordwissel: bij de eerstvolgende login moet de medewerker een
   // nieuw eigen wachtwoord kiezen (na een admin-reset). Wordt daarna weer op false gezet.
   moetWachtwoordWijzigen?: boolean;
+  // Werknemer-toegang: welke werk-onderdelen (nav-keys) deze medewerker mag zien. undefined = alles.
+  // Zie WERKNEMER_TOEGANG in lib/nav.ts en de Toegang-pagina.
+  toegang?: string[];
   // Vast contract / standaardloon — wordt automatisch in een nieuwe loonstrook ingevuld.
   contract?: { periodeType?: PeriodeType; bruto?: number; bijtelling?: number; netto?: number; uren?: number };
 };
