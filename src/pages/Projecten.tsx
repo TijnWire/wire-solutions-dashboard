@@ -33,7 +33,7 @@ function KoppelRij({ label, value, opties, onKies, onOpen }: { label: string; va
 
 // Eén projectkaart — standaard ingeklapt; klik op de kop om uit te klappen.
 function ProjectKaart({ project, initieelProject, onScan }: { project: Project; initieelProject?: string; onScan: (p: { id: string; naam: string }) => void }) {
-  const { users, taken, addTaak, updateProject, deleteProject, rondes, saneringen, voorschouwMappen, tauwOpdrachten } = useApp();
+  const { users, taken, addTaak, updateProject, deleteProject, rondes, saneringen, voorschouwMappen, tauwOpdrachten, opdrachtgevers } = useApp();
   const { navigeer } = useNav();
   const [open, setOpen] = useState(project.id === initieelProject); // deep-link opent meteen
   const [taakOpen, setTaakOpen] = useState(false);
@@ -73,7 +73,7 @@ function ProjectKaart({ project, initieelProject, onScan }: { project: Project; 
           <div className="rounded-lg bg-brand-50 p-2 text-brand-600"><FolderKanban className="h-5 w-5" /></div>
           <div className="min-w-0">
             <h3 className="truncate text-sm font-semibold text-ink-900">{project.naam}</h3>
-            <p className="truncate text-xs text-ink-500">{[project.wijk, project.pdNummer].filter(Boolean).join(" · ")}</p>
+            <p className="truncate text-xs text-ink-500">{[project.wijk, project.pdNummer, opdrachtgevers.find((o) => o.id === project.opdrachtgeverId)?.naam, project.uurtarief ? `€${String(project.uurtarief).replace(".", ",")}/u` : ""].filter(Boolean).join(" · ")}</p>
           </div>
           {stageBadge && <span className="hidden shrink-0 sm:inline">{stageBadge}</span>}
         </button>
@@ -100,8 +100,31 @@ function ProjectKaart({ project, initieelProject, onScan }: { project: Project; 
               value={project.pdNummer ?? ""}
               onChange={(e) => updateProject(project.id, { pdNummer: e.target.value })}
               placeholder="bijv. PD153335"
-              className="w-40 rounded-lg border border-ink-200 px-2.5 py-1.5 text-sm font-medium text-ink-800 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+              className="w-36 rounded-lg border border-ink-200 px-2.5 py-1.5 text-sm font-medium text-ink-800 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
             />
+            <span className="text-xs font-semibold text-ink-500">Tarief</span>
+            <div className="flex items-center gap-1">
+              <span className="text-xs text-ink-400">€</span>
+              <input
+                value={project.uurtarief != null ? String(project.uurtarief).replace(".", ",") : ""}
+                onChange={(e) => { const n = parseFloat(e.target.value.replace(",", ".")); updateProject(project.id, { uurtarief: Number.isFinite(n) && n >= 0 ? n : undefined }); }}
+                placeholder="0"
+                inputMode="decimal"
+                title="Uurtarief (€ excl. btw)"
+                className="w-16 rounded-lg border border-ink-200 px-2 py-1.5 text-sm text-ink-800 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+              />
+              <span className="text-xs text-ink-400">/u</span>
+            </div>
+            <span className="text-xs font-semibold text-ink-500">Klant</span>
+            <div className="w-44">
+              <Keuze
+                value={project.opdrachtgeverId ?? ""}
+                onChange={(w) => updateProject(project.id, { opdrachtgeverId: w || undefined })}
+                opties={[{ waarde: "", label: "Geen klant" }, ...opdrachtgevers.map((o) => ({ waarde: o.id, label: o.naam }))]}
+                title="Klant / opdrachtgever"
+                size="sm"
+              />
+            </div>
             <div className="ml-auto flex flex-wrap items-center gap-2">
               {project.boekhouding === "gefactureerd" ? (
                 <>
@@ -218,7 +241,7 @@ function ProjectKaart({ project, initieelProject, onScan }: { project: Project; 
 }
 
 export function Projecten({ initieelProject }: { initieelProject?: string }) {
-  const { projects, addProject, updateProject } = useApp();
+  const { projects, addProject, updateProject, opdrachtgevers } = useApp();
   const doelRef = useRef<HTMLDivElement | null>(null);
   const [scan, setScan] = useState<{ id: string; naam: string } | null>(null);
 
@@ -246,13 +269,25 @@ export function Projecten({ initieelProject }: { initieelProject?: string }) {
   const [projNaam, setProjNaam] = useState("");
   const [projWijk, setProjWijk] = useState("");
   const [projPd, setProjPd] = useState("");
+  const [projTarief, setProjTarief] = useState("");
+  const [projOpdrachtgever, setProjOpdrachtgever] = useState("");
 
   const voegProjectToe = () => {
     if (!projNaam.trim()) return;
-    addProject({ naam: projNaam.trim(), wijk: projWijk.trim() || "—", toegewezenAan: [], pdNummer: projPd.trim() || undefined });
+    const tarief = parseFloat(projTarief.replace(",", "."));
+    addProject({
+      naam: projNaam.trim(),
+      wijk: projWijk.trim() || "—",
+      toegewezenAan: [],
+      pdNummer: projPd.trim() || undefined,
+      opdrachtgeverId: projOpdrachtgever || undefined,
+      uurtarief: Number.isFinite(tarief) && tarief > 0 ? tarief : undefined,
+    });
     setProjNaam("");
     setProjWijk("");
     setProjPd("");
+    setProjTarief("");
+    setProjOpdrachtgever("");
     setNieuwProject(false);
   };
 
@@ -303,6 +338,28 @@ export function Projecten({ initieelProject }: { initieelProject?: string }) {
                 className="rounded-lg border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
               />
             </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <span className="mb-1 block text-xs font-semibold text-ink-500">Uurtarief (€ excl. btw)</span>
+                <input
+                  value={projTarief}
+                  onChange={(e) => setProjTarief(e.target.value)}
+                  inputMode="decimal"
+                  placeholder="bijv. 45"
+                  className="w-full rounded-lg border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+                />
+              </div>
+              <div>
+                <span className="mb-1 block text-xs font-semibold text-ink-500">Klant / opdrachtgever</span>
+                <Keuze
+                  value={projOpdrachtgever}
+                  onChange={setProjOpdrachtgever}
+                  opties={[{ waarde: "", label: opdrachtgevers.length ? "Kies klant…" : "Nog geen klanten (voeg toe bij Facturen)" }, ...opdrachtgevers.map((o) => ({ waarde: o.id, label: o.naam }))]}
+                  title="Klant / opdrachtgever"
+                />
+              </div>
+            </div>
+            <p className="text-xs text-ink-400">De klantgegevens (adres, e-mailadres) beheer je bij <span className="font-semibold text-ink-500">Facturen → Opdrachtgevers</span>. Uurtarief en klant worden gebruikt om dit project op uren te factureren.</p>
           </div>
           <button
             type="button"

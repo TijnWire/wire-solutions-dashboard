@@ -65,6 +65,8 @@ export type Project = {
   wijk: string;
   toegewezenAan: string[]; // user ids
   pdNummer?: string; // Stedin PD-nummer dat aan dit project hangt
+  opdrachtgeverId?: string; // gekoppelde klant/opdrachtgever (met adres + mailadres voor de factuur)
+  uurtarief?: number; // uurtarief (€) waarmee dit project op uren gefactureerd wordt
   afgerondOp?: string; // ISO — wanneer het project als afgerond is gemarkeerd (klaar voor de boekhouding)
   boekhouding?: BoekhoudStatus; // leeg = nog niet doorgeschakeld naar de boekhouding
   doorgestuurdOp?: string; // ISO — wanneer als afgerond naar de boekhouding gestuurd
