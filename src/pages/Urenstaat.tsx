@@ -1,5 +1,5 @@
 import { useState, Fragment } from "react";
-import { ChevronLeft, ChevronRight, CalendarDays, Wand2, RotateCcw, FolderKanban, Plus, User as UserIcon, Users, Trash2, Check } from "lucide-react";
+import { ChevronLeft, ChevronRight, CalendarDays, Wand2, RotateCcw, FolderKanban, Plus, User as UserIcon, Users, Trash2, Check, Search, X } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { Card } from "../components/ui";
 import { Keuze } from "../components/Keuze";
@@ -174,6 +174,11 @@ function BulkBoeken({ weekISO, weekISOs, weekNr, medewerkers, actieveProjecten, 
   const [patroon, setPatroon] = useState<number[]>([8, 8, 8, 8, 8, 0, 0]);
   const [auto, setAuto] = useState(false);
   const [geboekt, setGeboekt] = useState(0);
+  const [zoek, setZoek] = useState("");
+
+  const gekozenLijst = medewerkers.filter((u) => gekozen.has(u.id));
+  const q = zoek.trim().toLowerCase();
+  const gefilterd = medewerkers.filter((u) => !gekozen.has(u.id) && (q === "" || u.naam.toLowerCase().includes(q)));
 
   const toggle = (id: string) => { setGeboekt(0); setGekozen((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; }); };
   const allesAan = medewerkers.length > 0 && medewerkers.every((u) => gekozen.has(u.id));
@@ -208,21 +213,47 @@ function BulkBoeken({ weekISO, weekISOs, weekNr, medewerkers, actieveProjecten, 
         <span className="ml-auto text-xs font-semibold text-ink-500">{gekozen.size} geselecteerd</span>
       </div>
 
-      {/* Medewerkers kiezen */}
-      <div>
-        <div className="mb-1.5 flex items-center justify-between">
-          <span className="text-xs font-semibold text-ink-500">Medewerkers</span>
-          <button type="button" onClick={toggleAlles} className="text-xs font-semibold text-brand-600 hover:underline">{allesAan ? "Alles deselecteren" : "Alles selecteren"}</button>
+      {/* Medewerkers kiezen: typ een naam om te zoeken, klik/Enter om toe te voegen; gekozen staan bovenaan */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-semibold text-ink-500">Medewerkers ({gekozen.size} geselecteerd)</span>
+          <button type="button" onClick={toggleAlles} className="text-xs font-semibold text-brand-600 hover:underline">{allesAan ? "Alles wissen" : "Alles selecteren"}</button>
         </div>
-        <div className="flex flex-wrap gap-1.5">
-          {medewerkers.map((u) => {
-            const aan = gekozen.has(u.id);
-            return (
-              <button key={u.id} type="button" onClick={() => toggle(u.id)} className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors ${aan ? "bg-brand-600 text-white" : "bg-ink-100 text-ink-600 hover:bg-ink-200"}`}>
-                {aan && <Check className="h-3.5 w-3.5" />}{u.naam}
+
+        {gekozenLijst.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {gekozenLijst.map((u) => (
+              <span key={u.id} className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 py-1.5 pl-2.5 pr-1.5 text-xs font-semibold text-white">
+                {u.naam}
+                <button type="button" onClick={() => toggle(u.id)} className="rounded p-0.5 hover:bg-white/25" aria-label={`${u.naam} verwijderen`}><X className="h-3 w-3" /></button>
+              </span>
+            ))}
+          </div>
+        )}
+
+        <div className="overflow-hidden rounded-xl border border-ink-200">
+          <div className="flex items-center gap-2 border-b border-ink-100 px-3 py-2">
+            <Search className="h-4 w-4 shrink-0 text-ink-400" />
+            <input
+              value={zoek}
+              onChange={(e) => { setGeboekt(0); setZoek(e.target.value); }}
+              onKeyDown={(e) => { if (e.key === "Enter" && gefilterd[0]) { e.preventDefault(); toggle(gefilterd[0].id); } }}
+              placeholder="Typ een naam om toe te voegen…"
+              className="w-full bg-transparent text-sm text-ink-800 outline-none placeholder:text-ink-400"
+            />
+            {zoek && <button type="button" onClick={() => setZoek("")} className="rounded p-0.5 text-ink-400 hover:text-ink-700" aria-label="Zoekterm wissen"><X className="h-4 w-4" /></button>}
+          </div>
+          <div className="max-h-52 overflow-y-auto p-1">
+            {gefilterd.length === 0 ? (
+              <div className="px-3 py-4 text-center text-xs text-ink-400">{q ? "Geen medewerker gevonden." : "Iedereen is al geselecteerd."}</div>
+            ) : gefilterd.map((u) => (
+              <button key={u.id} type="button" onClick={() => toggle(u.id)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm hover:bg-brand-50">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-ink-800 text-[10px] font-semibold text-white">{u.initialen}</span>
+                <span className="flex-1 truncate text-ink-800">{u.naam}</span>
+                <Plus className="h-4 w-4 shrink-0 text-ink-300" />
               </button>
-            );
-          })}
+            ))}
+          </div>
         </div>
       </div>
 
