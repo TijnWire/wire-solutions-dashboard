@@ -889,14 +889,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!u) return false;
     const ok = await verifieerWachtwoord(wachtwoord, u);
     if (!ok) return false;
-    // Lokaal correct, maar (nog) geen Supabase-sessie. Registreer + meld aan zodat OOK dit apparaat met de
-    // centrale database synchroniseert (self-healing). Faalt dit (signup uit, of bestaand account met ander
-    // wachtwoord), dan blijft de app gewoon lokaal werken.
-    if (supabaseAan) {
-      try { await sbRegistreer(e, wachtwoord); await sbLogin(e, wachtwoord); } catch { /* lokaal blijven werken */ }
-      bewaarSyncCred(e, wachtwoord); // ook nu lokaal bewaren → automatisch herstellen bij volgende start
-    }
+    // Lokaal correct → METEEN inloggen. Nooit wachten op Supabase: ligt de database eruit of reageert hij
+    // traag, dan mag dat de login niet blokkeren (de app is local-first).
     setCurrentUserId(u.id);
+    // Self-healing sync op de ACHTERGROND: zorg dat dit apparaat óók bij de centrale database aankoppelt zodra
+    // die er (weer) is, zodat collega's de wijzigingen zien. Faalt dit (storing/signup uit), dan werkt de app
+    // gewoon lokaal door en probeert hij het later opnieuw (bij online/zichtbaar worden).
+    if (supabaseAan) {
+      bewaarSyncCred(e, wachtwoord); // lokaal bewaren → automatisch herstellen bij volgende start/online
+      void (async () => { try { await sbRegistreer(e, wachtwoord); await sbLogin(e, wachtwoord); } catch { /* lokaal blijven werken */ } })();
+    }
     return true;
   };
 

@@ -54,21 +54,41 @@ export async function sbLeesKeys(keys: string[]): Promise<Record<string, unknown
   return out;
 }
 
+// Race een belofte tegen een timeout — zodat een Supabase-storing de login/sync NOOIT laat hangen.
+// Bij een timeout of fout geven we de opgegeven terugvalwaarde terug (meestal false → lokaal doorgaan).
+function metTimeout<T>(p: Promise<T>, ms: number, bijTimeout: T): Promise<T> {
+  return new Promise<T>((resolve) => {
+    let klaar = false;
+    const af = (v: T) => { if (!klaar) { klaar = true; clearTimeout(t); resolve(v); } };
+    const t = setTimeout(() => af(bijTimeout), ms);
+    p.then(af, () => af(bijTimeout));
+  });
+}
+
 // ── Auth ──
 export async function sbLogin(email: string, wachtwoord: string): Promise<boolean> {
-  const { error } = await sb().auth.signInWithPassword({ email: email.trim().toLowerCase(), password: wachtwoord });
-  return !error;
+  return metTimeout(
+    (async () => { const { error } = await sb().auth.signInWithPassword({ email: email.trim().toLowerCase(), password: wachtwoord }); return !error; })(),
+    8000,
+    false,
+  );
 }
 
 // Zorgt dat dit account in Supabase Auth bestaat (zodat de cloud-sync werkt). Bestaat het al, dan is dat prima.
 // Vereist dat "Allow new users to sign up" aan staat in Supabase; staat het uit, dan faalt dit stil.
 export async function sbRegistreer(email: string, wachtwoord: string): Promise<boolean> {
-  try {
-    const { error } = await sb().auth.signUp({ email: email.trim().toLowerCase(), password: wachtwoord });
-    return !error || /already|registered|bestaat/i.test(error.message);
-  } catch {
-    return false;
-  }
+  return metTimeout(
+    (async () => {
+      try {
+        const { error } = await sb().auth.signUp({ email: email.trim().toLowerCase(), password: wachtwoord });
+        return !error || /already|registered|bestaat/i.test(error.message);
+      } catch {
+        return false;
+      }
+    })(),
+    8000,
+    false,
+  );
 }
 
 export async function sbLogout(): Promise<void> {
@@ -95,17 +115,23 @@ function leesSyncCred(): { e: string; w: string } | null {
 // Zorgt dat er een Supabase-sessie is: bestaat er al een (Supabase bewaart die zelf), dan klaar; anders
 // meldt de app stil opnieuw aan met de lokaal bewaarde gegevens (self-healing). Geeft true bij een sessie.
 export async function sbHerstelSessie(): Promise<boolean> {
-  try {
-    const { data } = await sb().auth.getSession();
-    if (data.session) return true;
-    const cred = leesSyncCred();
-    if (!cred) return false;
-    if (await sbLogin(cred.e, cred.w)) return true;
-    await sbRegistreer(cred.e, cred.w); // account nog niet in Auth → aanmaken en opnieuw proberen
-    return await sbLogin(cred.e, cred.w);
-  } catch {
-    return false;
-  }
+  return metTimeout(
+    (async () => {
+      try {
+        const { data } = await sb().auth.getSession();
+        if (data.session) return true;
+        const cred = leesSyncCred();
+        if (!cred) return false;
+        if (await sbLogin(cred.e, cred.w)) return true;
+        await sbRegistreer(cred.e, cred.w); // account nog niet in Auth → aanmaken en opnieuw proberen
+        return await sbLogin(cred.e, cred.w);
+      } catch {
+        return false;
+      }
+    })(),
+    10000,
+    false,
+  );
 }
 
 // Diagnose: test stap voor stap of dit apparaat met de centrale database kan praten.
