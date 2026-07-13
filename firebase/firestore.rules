@@ -1,0 +1,19 @@
+rules_version = '2';
+
+// Wire Solutions — Firestore-beveiliging voor de gedeelde sync.
+// Alléén ingelogde accounts mogen bij de gedeelde data (net als de is_team()-regel bij Supabase, maar
+// dan zonder e-mail-domein-eis). Plak dit in Firebase → Firestore Database → Rules → Publish.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // De gedeelde app-data (één doc per onderdeel + evt. chunk-docs "key::0", "key::1", …).
+    match /wire_state/{document} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Al het overige is dicht.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
