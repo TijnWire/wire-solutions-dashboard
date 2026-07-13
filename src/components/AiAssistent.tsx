@@ -41,9 +41,15 @@ export function AiAssistent() {
     setBezig(false);
     setResterend(aiResterend(currentUser.id));
     if (res.soort === "navigatie") {
-      const label = paginas.find((p) => p.key === res.navKey)?.label ?? res.navKey;
-      setBerichten([...nieuw, { rol: "assistant", tekst: `Ik breng je naar ${label}. ${res.uitleg}` }]);
-      navigeer(res.navKey);
+      // Extra vangnet: alleen navigeren als deze gebruiker de pagina óók echt mag zien. Zit de gekozen
+      // pagina niet in de toegestane lijst (geen toegang of onbekend), dan brengen we je er NIET naartoe.
+      const doel = paginas.find((p) => p.key === res.navKey);
+      if (!doel) {
+        setBerichten([...nieuw, { rol: "assistant", tekst: "Daar heb je (nog) geen toegang toe, dus ik kan je er niet naartoe brengen. Vraag je leidinggevende om toegang, of stel gerust een andere vraag." }]);
+      } else {
+        setBerichten([...nieuw, { rol: "assistant", tekst: `Ik breng je naar ${doel.label}. ${res.uitleg}` }]);
+        navigeer(res.navKey);
+      }
     } else if (res.soort === "vraag") {
       setBerichten([...nieuw, { rol: "assistant", tekst: res.vraag }]);
     } else {
