@@ -4,6 +4,7 @@ import { useApp } from "../store/AppContext";
 import { Card } from "./ui";
 import { DatumKiezer } from "./DatumKiezer";
 import { Keuze } from "./Keuze";
+import { lopendeProjectOpties, werkNaam } from "../lib/lopendWerk";
 
 const datumKort = (iso: string) => { const d = iso.slice(0, 10).split("-"); return d.length === 3 ? `${d[2]}-${d[1]}-${d[0]}` : iso; };
 function vandaagISO(): string { const t = new Date(); return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`; }
@@ -23,7 +24,7 @@ function tijdGeleden(iso: string): string {
 // Prikbord: de beheerder plaatst mededelingen (met optioneel project + "let op"-notitie),
 // de werknemers lezen ze en tikken "gezien". Met `compose` verschijnt de invoer (alleen leiding).
 export function MededelingenBord({ compose = false }: { compose?: boolean }) {
-  const { mededelingen, users, projects, currentUser, addMededeling, deleteMededeling, toggleMededelingGezien, toggleMededelingPin } = useApp();
+  const { mededelingen, users, projects, rondes, voorschouwMappen, tauwOpdrachten, currentUser, addMededeling, deleteMededeling, toggleMededelingGezien, toggleMededelingPin } = useApp();
   const [tekst, setTekst] = useState("");
   const [projectId, setProjectId] = useState("");
   const [gerichtAan, setGerichtAan] = useState("");
@@ -35,7 +36,7 @@ export function MededelingenBord({ compose = false }: { compose?: boolean }) {
 
   const naamVan = (id?: string) => users.find((u) => u.id === id)?.naam ?? "Onbekend";
   const initialenVan = (id?: string) => users.find((u) => u.id === id)?.initialen ?? "?";
-  const projectVan = (id?: string) => projects.find((p) => p.id === id)?.naam;
+  const projectVan = (id?: string) => werkNaam(id, { projects, voorschouwMappen, tauwOpdrachten });
 
   // Werknemers zien team-brede + aan hen gerichte mededelingen; leiding ziet alles. Vastgezet bovenaan, daarna nieuwste eerst.
   const zichtbaar = mededelingen
@@ -79,10 +80,7 @@ export function MededelingenBord({ compose = false }: { compose?: boolean }) {
                 altijdZoeken
                 opties={[
                   { waarde: "", label: "Geen project" },
-                  ...projects
-                    .filter((p) => p.boekhouding !== "gefactureerd") // alleen lopende projecten
-                    .sort((a, b) => a.naam.localeCompare(b.naam, "nl"))
-                    .map((p) => ({ waarde: p.id, label: p.pdNummer ? `${p.naam} · ${p.pdNummer}` : p.naam })),
+                  ...lopendeProjectOpties(projects, rondes, voorschouwMappen, tauwOpdrachten).map((o) => ({ waarde: o.id, label: o.naam })),
                 ]}
               />
             </label>

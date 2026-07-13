@@ -4,6 +4,7 @@ import { useApp } from "../store/AppContext";
 import { Card } from "../components/ui";
 import { Keuze } from "../components/Keuze";
 import { feestdagNaam } from "../lib/feestdagen";
+import { lopendeProjectOpties, werkNaam } from "../lib/lopendWerk";
 import type { User, Urenregel } from "../lib/types";
 
 const DAGEN = ["Ma", "Di", "Wo", "Do", "Vr", "Za", "Zo"];
@@ -55,7 +56,7 @@ function UurCel({ waarde, onChange, verlofType, feestdag, notitie, voorstel, ari
 }
 
 export function Urenstaat() {
-  const { users, projects, urenstaat, verlof, currentUser, addUren, updateUren, deleteUren } = useApp();
+  const { users, projects, rondes, voorschouwMappen, tauwOpdrachten, urenstaat, verlof, currentUser, addUren, updateUren, deleteUren } = useApp();
   const [weekISO, setWeekISO] = useState(() => toISO(maandagVan(new Date())));
   const [weergave, setWeergave] = useState<"persoon" | "project" | "bulk">("persoon");
   const [projSel, setProjSel] = useState(""); // "" = algemeen (geen project)
@@ -76,9 +77,10 @@ export function Urenstaat() {
   const jaar = weekDate.getFullYear();
 
   const medewerkers = [...users].sort((a, b) => a.naam.localeCompare(b.naam, "nl"));
-  const actieveProjecten = projects.filter((p) => p.boekhouding !== "gefactureerd").sort((a, b) => a.naam.localeCompare(b.naam, "nl"));
-  const projectLabel = (pid?: string) => (pid ? (projects.find((p) => p.id === pid)?.naam ?? "Onbekend project") : "Algemeen");
-  const projectSub = (pid?: string) => { const p = pid ? projects.find((x) => x.id === pid) : undefined; return p?.wijk ?? ""; };
+  const werkCtx = { projects, voorschouwMappen, tauwOpdrachten };
+  const actieveProjecten = lopendeProjectOpties(projects, rondes, voorschouwMappen, tauwOpdrachten);
+  const projectLabel = (pid?: string) => werkNaam(pid, werkCtx) ?? "Algemeen";
+  const projectSub = (pid?: string) => { const p = pid && !pid.includes(":") ? projects.find((x) => x.id === pid) : undefined; return p?.wijk ?? ""; };
 
   const contractUren = (u: User) => (u.contract?.uren != null ? u.contract.uren : STANDAARD_CONTRACT);
   const contractDag = (u: User) => contractUren(u) / 5;
@@ -121,7 +123,7 @@ export function Urenstaat() {
             <>
               <FolderKanban className="h-4 w-4 shrink-0 text-brand-600" />
               <span className="shrink-0 text-sm font-semibold text-ink-600">Project:</span>
-              <div className="min-w-0 flex-1 sm:max-w-md"><Keuze value={projSel} onChange={(w) => { setProjSel(w); setVoegToe(""); }} altijdZoeken opties={[{ waarde: "", label: "Algemeen (geen project)" }, ...actieveProjecten.map((p) => ({ waarde: p.id, label: p.wijk ? `${p.naam} · ${p.wijk}` : p.naam }))]} title="Project kiezen" /></div>
+              <div className="min-w-0 flex-1 sm:max-w-md"><Keuze value={projSel} onChange={(w) => { setProjSel(w); setVoegToe(""); }} altijdZoeken opties={[{ waarde: "", label: "Algemeen (geen project)" }, ...actieveProjecten.map((p) => ({ waarde: p.id, label: p.naam }))]} title="Project kiezen" /></div>
             </>
           )}
         </div>
@@ -149,7 +151,7 @@ export function Urenstaat() {
         <PerProject
           weekISO={weekISO} weekISOs={weekISOs} weekNr={weekNr(weekDate)}
           projSel={projSel} projects={projects} medewerkers={medewerkers} urenstaat={urenstaat}
-          contractUren={contractUren} verlofOp={verlofOp} autoUren={autoUren}
+          contractUren={contractUren} verlofOp={verlofOp} autoUren={autoUren} projectLabel={projectLabel}
           voegToe={voegToe} setVoegToe={setVoegToe}
           addUren={addUren} updateUren={updateUren}
         />
@@ -162,7 +164,7 @@ export function Urenstaat() {
 function BulkBoeken({ weekISO, weekISOs, weekNr, medewerkers, actieveProjecten, urenstaat, verlofOp, autoUren, addUren, updateUren }: {
   weekISO: string; weekISOs: string[]; weekNr: number;
   medewerkers: User[];
-  actieveProjecten: { id: string; naam: string; wijk: string }[];
+  actieveProjecten: { id: string; naam: string }[];
   urenstaat: Urenregel[];
   verlofOp: (userId: string, iso: string) => { type: string; notitie?: string } | undefined;
   autoUren: (u: User) => number[];
@@ -261,7 +263,7 @@ function BulkBoeken({ weekISO, weekISOs, weekNr, medewerkers, actieveProjecten, 
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
           <span className="mb-1 block text-xs font-semibold text-ink-500">Project</span>
-          <Keuze value={projectId} onChange={(w) => { setGeboekt(0); setProjectId(w); }} altijdZoeken opties={[{ waarde: "", label: "Algemeen (geen project)" }, ...actieveProjecten.map((p) => ({ waarde: p.id, label: p.wijk ? `${p.naam} · ${p.wijk}` : p.naam }))]} title="Project" />
+          <Keuze value={projectId} onChange={(w) => { setGeboekt(0); setProjectId(w); }} altijdZoeken opties={[{ waarde: "", label: "Algemeen (geen project)" }, ...actieveProjecten.map((p) => ({ waarde: p.id, label: p.naam }))]} title="Project" />
         </div>
         <label className="flex items-end gap-2 pb-1.5">
           <input type="checkbox" checked={auto} onChange={(e) => { setGeboekt(0); setAuto(e.target.checked); }} className="h-4 w-4 accent-brand-600" />
@@ -304,7 +306,7 @@ function PerMedewerker({ persoon, weekISO, weekISOs, weekNr, records, actievePro
   persoon?: User;
   weekISO: string; weekISOs: string[]; weekNr: number;
   records: Urenregel[];
-  actieveProjecten: { id: string; naam: string; wijk: string }[];
+  actieveProjecten: { id: string; naam: string }[];
   projectLabel: (pid?: string) => string;
   projectSub: (pid?: string) => string;
   verlofOp: (userId: string, iso: string) => { type: string; notitie?: string } | undefined;
@@ -327,7 +329,7 @@ function PerMedewerker({ persoon, weekISO, weekISOs, weekNr, records, actievePro
   const gebruikt = new Set(records.map((r) => r.projectId ?? "__alg"));
   const toevoegOpties: { waarde: string; label: string }[] = [{ waarde: "", label: "Project toevoegen…" }];
   if (!gebruikt.has("__alg")) toevoegOpties.push({ waarde: "__alg", label: "Algemeen (geen project)" });
-  toevoegOpties.push(...actieveProjecten.filter((p) => !gebruikt.has(p.id)).map((p) => ({ waarde: p.id, label: p.wijk ? `${p.naam} · ${p.wijk}` : p.naam })));
+  toevoegOpties.push(...actieveProjecten.filter((p) => !gebruikt.has(p.id)).map((p) => ({ waarde: p.id, label: p.naam })));
 
   const voegRijToe = (val: string) => {
     if (!val) return;
@@ -434,10 +436,11 @@ function PerMedewerker({ persoon, weekISO, weekISOs, weekNr, records, actievePro
 }
 
 // ── Weergave PER PROJECT: iedereen op één project ineens invullen (Ma–Zo). Handig voor bulk. ──
-function PerProject({ weekISO, weekISOs, weekNr, projSel, projects, medewerkers, urenstaat, contractUren, verlofOp, autoUren, voegToe, setVoegToe, addUren, updateUren }: {
+function PerProject({ weekISO, weekISOs, weekNr, projSel, projects, medewerkers, urenstaat, contractUren, verlofOp, autoUren, projectLabel, voegToe, setVoegToe, addUren, updateUren }: {
   weekISO: string; weekISOs: string[]; weekNr: number;
   projSel: string;
   projects: { id: string; naam: string; toegewezenAan: string[]; boekhouding?: string }[];
+  projectLabel: (pid?: string) => string;
   medewerkers: User[];
   urenstaat: Urenregel[];
   contractUren: (u: User) => number;
@@ -481,7 +484,7 @@ function PerProject({ weekISO, weekISOs, weekNr, projSel, projects, medewerkers,
     <Card className="overflow-hidden p-0">
       <div className="flex flex-wrap items-center gap-2 border-b border-ink-100 px-4 py-3">
         <CalendarDays className="h-4 w-4 text-brand-600" />
-        <span className="text-sm font-bold text-ink-900">{algemeen ? "Algemeen" : huidigProject?.naam ?? "Project"} · week {weekNr}</span>
+        <span className="text-sm font-bold text-ink-900">{algemeen ? "Algemeen" : projectLabel(projSel)} · week {weekNr}</span>
         {nogNietIngevuld > 0 && (
           <button type="button" onClick={vulAllesAuto} className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-brand-700">
             <Wand2 className="h-3.5 w-3.5" /> {algemeen ? `Automatisch invullen (${nogNietIngevuld})` : `Alles tonen (${nogNietIngevuld})`}
