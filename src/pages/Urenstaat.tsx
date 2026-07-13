@@ -1,5 +1,5 @@
 import { useState, Fragment } from "react";
-import { ChevronLeft, ChevronRight, CalendarDays, Wand2, RotateCcw, FolderKanban, Plus, User as UserIcon, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, CalendarDays, Wand2, RotateCcw, FolderKanban, Plus, User as UserIcon, Users, Trash2, Check } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { Card } from "../components/ui";
 import { Keuze } from "../components/Keuze";
@@ -57,7 +57,7 @@ function UurCel({ waarde, onChange, verlofType, feestdag, notitie, voorstel, ari
 export function Urenstaat() {
   const { users, projects, urenstaat, verlof, currentUser, addUren, updateUren, deleteUren } = useApp();
   const [weekISO, setWeekISO] = useState(() => toISO(maandagVan(new Date())));
-  const [weergave, setWeergave] = useState<"persoon" | "project">("persoon");
+  const [weergave, setWeergave] = useState<"persoon" | "project" | "bulk">("persoon");
   const [projSel, setProjSel] = useState(""); // "" = algemeen (geen project)
   const [persSel, setPersSel] = useState("");
   const [voegToe, setVoegToe] = useState("");        // medewerker toevoegen (project-weergave)
@@ -106,9 +106,12 @@ export function Urenstaat() {
         <div className="flex flex-wrap items-center gap-2 border-t border-ink-100 pt-3">
           <div className="flex shrink-0 overflow-hidden rounded-lg border border-ink-200">
             <button type="button" onClick={() => setWeergave("persoon")} className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold transition-colors ${weergave === "persoon" ? "bg-brand-600 text-white" : "bg-white text-ink-600 hover:bg-ink-50"}`}><UserIcon className="h-3.5 w-3.5" /> Per medewerker</button>
-            <button type="button" onClick={() => setWeergave("project")} className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold transition-colors ${weergave === "project" ? "bg-brand-600 text-white" : "bg-white text-ink-600 hover:bg-ink-50"}`}><FolderKanban className="h-3.5 w-3.5" /> Per project</button>
+            <button type="button" onClick={() => setWeergave("project")} className={`inline-flex items-center gap-1.5 border-l border-ink-200 px-3 py-2 text-xs font-bold transition-colors ${weergave === "project" ? "bg-brand-600 text-white" : "bg-white text-ink-600 hover:bg-ink-50"}`}><FolderKanban className="h-3.5 w-3.5" /> Per project</button>
+            <button type="button" onClick={() => setWeergave("bulk")} className={`inline-flex items-center gap-1.5 border-l border-ink-200 px-3 py-2 text-xs font-bold transition-colors ${weergave === "bulk" ? "bg-brand-600 text-white" : "bg-white text-ink-600 hover:bg-ink-50"}`}><Users className="h-3.5 w-3.5" /> Meerdere tegelijk</button>
           </div>
-          {weergave === "persoon" ? (
+          {weergave === "bulk" ? (
+            <span className="text-xs text-ink-400">Selecteer hieronder meerdere medewerkers en boek ze in één keer op een project.</span>
+          ) : weergave === "persoon" ? (
             <>
               <UserIcon className="h-4 w-4 shrink-0 text-brand-600" />
               <span className="shrink-0 text-sm font-semibold text-ink-600">Medewerker:</span>
@@ -124,26 +127,144 @@ export function Urenstaat() {
         </div>
       </Card>
 
-      {weergave === "persoon"
-        ? <PerMedewerker
-            key={persSel || medewerkers[0]?.id}
-            persoon={medewerkers.find((u) => u.id === (persSel || medewerkers[0]?.id))}
-            weekISO={weekISO} weekISOs={weekISOs} weekNr={weekNr(weekDate)}
-            records={urenstaat.filter((x) => x.medewerkerId === (persSel || medewerkers[0]?.id) && x.week === weekISO)}
-            actieveProjecten={actieveProjecten} projectLabel={projectLabel} projectSub={projectSub}
-            verlofOp={verlofOp} autoUren={autoUren}
-            voegProject={voegProject} setVoegProject={setVoegProject}
-            addUren={addUren} updateUren={updateUren} deleteUren={deleteUren}
-          />
-        : <PerProject
-            weekISO={weekISO} weekISOs={weekISOs} weekNr={weekNr(weekDate)}
-            projSel={projSel} projects={projects} medewerkers={medewerkers} urenstaat={urenstaat}
-            contractUren={contractUren} verlofOp={verlofOp} autoUren={autoUren}
-            voegToe={voegToe} setVoegToe={setVoegToe}
-            addUren={addUren} updateUren={updateUren}
-          />
-      }
+      {weergave === "bulk" ? (
+        <BulkBoeken
+          weekISO={weekISO} weekISOs={weekISOs} weekNr={weekNr(weekDate)}
+          medewerkers={medewerkers} actieveProjecten={actieveProjecten} urenstaat={urenstaat}
+          verlofOp={verlofOp} autoUren={autoUren}
+          addUren={addUren} updateUren={updateUren}
+        />
+      ) : weergave === "persoon" ? (
+        <PerMedewerker
+          key={persSel || medewerkers[0]?.id}
+          persoon={medewerkers.find((u) => u.id === (persSel || medewerkers[0]?.id))}
+          weekISO={weekISO} weekISOs={weekISOs} weekNr={weekNr(weekDate)}
+          records={urenstaat.filter((x) => x.medewerkerId === (persSel || medewerkers[0]?.id) && x.week === weekISO)}
+          actieveProjecten={actieveProjecten} projectLabel={projectLabel} projectSub={projectSub}
+          verlofOp={verlofOp} autoUren={autoUren}
+          voegProject={voegProject} setVoegProject={setVoegProject}
+          addUren={addUren} updateUren={updateUren} deleteUren={deleteUren}
+        />
+      ) : (
+        <PerProject
+          weekISO={weekISO} weekISOs={weekISOs} weekNr={weekNr(weekDate)}
+          projSel={projSel} projects={projects} medewerkers={medewerkers} urenstaat={urenstaat}
+          contractUren={contractUren} verlofOp={verlofOp} autoUren={autoUren}
+          voegToe={voegToe} setVoegToe={setVoegToe}
+          addUren={addUren} updateUren={updateUren}
+        />
+      )}
     </div>
+  );
+}
+
+// ── BULK: selecteer meerdere medewerkers en boek ze in één keer op een project (verlof/feestdag → 0) ──
+function BulkBoeken({ weekISO, weekISOs, weekNr, medewerkers, actieveProjecten, urenstaat, verlofOp, autoUren, addUren, updateUren }: {
+  weekISO: string; weekISOs: string[]; weekNr: number;
+  medewerkers: User[];
+  actieveProjecten: { id: string; naam: string; wijk: string }[];
+  urenstaat: Urenregel[];
+  verlofOp: (userId: string, iso: string) => { type: string; notitie?: string } | undefined;
+  autoUren: (u: User) => number[];
+  addUren: (u: Omit<Urenregel, "id">) => string;
+  updateUren: (id: string, patch: Partial<Urenregel>) => void;
+}) {
+  const [gekozen, setGekozen] = useState<Set<string>>(new Set());
+  const [projectId, setProjectId] = useState(""); // "" = Algemeen
+  const [patroon, setPatroon] = useState<number[]>([8, 8, 8, 8, 8, 0, 0]);
+  const [auto, setAuto] = useState(false);
+  const [geboekt, setGeboekt] = useState(0);
+
+  const toggle = (id: string) => { setGeboekt(0); setGekozen((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; }); };
+  const allesAan = medewerkers.length > 0 && medewerkers.every((u) => gekozen.has(u.id));
+  const toggleAlles = () => { setGeboekt(0); setGekozen(allesAan ? new Set() : new Set(medewerkers.map((u) => u.id))); };
+  const zetPatroon = (i: number, waarde: number) => { setGeboekt(0); setPatroon((p) => p.map((x, j) => (j === i ? waarde : x))); };
+  const patroonTotaal = patroon.reduce((a, b) => a + b, 0);
+
+  const projectNaam = projectId ? (actieveProjecten.find((p) => p.id === projectId)?.naam ?? "project") : "Algemeen";
+
+  const boek = () => {
+    const ids = [...gekozen];
+    if (ids.length === 0) return;
+    for (const id of ids) {
+      const u = medewerkers.find((x) => x.id === id);
+      if (!u) continue;
+      // Verlof/vakantie/ziek en feestdagen worden per persoon op 0 gezet, ook bij een vast patroon.
+      const uren = auto ? autoUren(u) : patroon.map((h, i) => (verlofOp(u.id, weekISOs[i]) || feestdagNaam(weekISOs[i]) ? 0 : h));
+      const bestaand = urenstaat.find((x) => x.medewerkerId === id && x.week === weekISO && (x.projectId ?? "") === projectId);
+      if (bestaand) updateUren(bestaand.id, { uren });
+      else addUren({ medewerkerId: id, week: weekISO, projectId: projectId || undefined, uren });
+    }
+    setGeboekt(ids.length);
+  };
+
+  const veldCls = "w-14 rounded-lg border border-ink-200 bg-white px-1.5 py-1.5 text-center text-sm text-ink-800 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100";
+
+  return (
+    <Card className="space-y-4 p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <Users className="h-4 w-4 text-brand-600" />
+        <span className="text-sm font-bold text-ink-900">Meerdere tegelijk boeken · week {weekNr}</span>
+        <span className="ml-auto text-xs font-semibold text-ink-500">{gekozen.size} geselecteerd</span>
+      </div>
+
+      {/* Medewerkers kiezen */}
+      <div>
+        <div className="mb-1.5 flex items-center justify-between">
+          <span className="text-xs font-semibold text-ink-500">Medewerkers</span>
+          <button type="button" onClick={toggleAlles} className="text-xs font-semibold text-brand-600 hover:underline">{allesAan ? "Alles deselecteren" : "Alles selecteren"}</button>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {medewerkers.map((u) => {
+            const aan = gekozen.has(u.id);
+            return (
+              <button key={u.id} type="button" onClick={() => toggle(u.id)} className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors ${aan ? "bg-brand-600 text-white" : "bg-ink-100 text-ink-600 hover:bg-ink-200"}`}>
+                {aan && <Check className="h-3.5 w-3.5" />}{u.naam}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Project + uren */}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <span className="mb-1 block text-xs font-semibold text-ink-500">Project</span>
+          <Keuze value={projectId} onChange={(w) => { setGeboekt(0); setProjectId(w); }} opties={[{ waarde: "", label: "Algemeen (geen project)" }, ...actieveProjecten.map((p) => ({ waarde: p.id, label: p.wijk ? `${p.naam} · ${p.wijk}` : p.naam }))]} title="Project" />
+        </div>
+        <label className="flex items-end gap-2 pb-1.5">
+          <input type="checkbox" checked={auto} onChange={(e) => { setGeboekt(0); setAuto(e.target.checked); }} className="h-4 w-4 accent-brand-600" />
+          <span className="text-sm text-ink-700">Ieders eigen contract gebruiken (contract − verlof/feestdag)</span>
+        </label>
+      </div>
+
+      {!auto && (
+        <div>
+          <span className="mb-1.5 block text-xs font-semibold text-ink-500">Uren per dag <span className="font-normal text-ink-400">(verlof/feestdag wordt per persoon vanzelf 0)</span></span>
+          <div className="flex flex-wrap items-end gap-3">
+            {DAGEN.map((d, i) => (
+              <label key={d} className="text-center">
+                <span className={`mb-1 block text-[11px] font-semibold ${i >= 5 ? "text-ink-400" : "text-ink-500"}`}>{d}</span>
+                <input inputMode="decimal" value={patroon[i] ? uurTekst(patroon[i]) : ""} onChange={(e) => { const n = parseFloat(e.target.value.replace(",", ".")); zetPatroon(i, Number.isFinite(n) && n >= 0 ? n : 0); }} placeholder="0" aria-label={`Uren ${d}`} className={veldCls} />
+              </label>
+            ))}
+            <div className="flex flex-wrap gap-1.5 pb-1">
+              <button type="button" onClick={() => { setGeboekt(0); setPatroon([8, 8, 8, 8, 8, 0, 0]); }} className="rounded-lg border border-ink-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-ink-600 hover:bg-ink-50">8 u ma–vr</button>
+              <button type="button" onClick={() => { setGeboekt(0); setPatroon([0, 0, 0, 0, 0, 0, 0]); }} className="rounded-lg border border-ink-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-ink-600 hover:bg-ink-50">Leeg</button>
+            </div>
+            <span className="pb-2 text-xs text-ink-400">{uurTekst(patroonTotaal)} u/week</span>
+          </div>
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center gap-3 border-t border-ink-100 pt-3">
+        <button type="button" onClick={boek} disabled={gekozen.size === 0} className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-40">
+          <Check className="h-4 w-4" /> Boek voor {gekozen.size} {gekozen.size === 1 ? "medewerker" : "medewerkers"}
+        </button>
+        {geboekt > 0 && <span className="text-sm font-semibold text-emerald-600">✓ Geboekt voor {geboekt} {geboekt === 1 ? "medewerker" : "medewerkers"} op “{projectNaam}”.</span>}
+      </div>
+      <p className="text-xs text-ink-400">Dit vervangt de uren van de geselecteerde medewerkers voor deze week op het gekozen project. In "Per medewerker" of "Per project" kun je daarna nog per persoon bijstellen.</p>
+    </Card>
   );
 }
 
