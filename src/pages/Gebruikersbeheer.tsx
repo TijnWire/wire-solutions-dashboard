@@ -24,7 +24,7 @@ import { Card, Badge } from "../components/ui";
 import { hashWachtwoord, genereerWachtwoord } from "../lib/auth";
 import { ROL_LABEL, BEHEER_GEBIEDEN, type Role, type User } from "../lib/types";
 import { magBoekhouding } from "../lib/rechten";
-import { supabaseAan } from "../lib/supabase";
+import { supabaseAan } from "../lib/firebase";
 import { logAudit, syncAppRole, verwijderAppRole, resetAuthWachtwoord, wijzigAuthEmail } from "../lib/adminAccount";
 
 const ROLLEN: Role[] = ["eigenaar", "beheer", "monteur"];

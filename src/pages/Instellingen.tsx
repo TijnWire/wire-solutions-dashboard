@@ -3,7 +3,7 @@ import { Building2, Plug, Activity, CheckCircle2, Info, AlertTriangle, RotateCcw
 import { useApp } from "../store/AppContext";
 import { Card, Bevestig } from "../components/ui";
 import { berekenMeldingen } from "../lib/meldingen";
-import { sbSyncTest, sbAantallen, type SyncTest } from "../lib/supabase";
+import { sbSyncTest, sbAantallen, type SyncTest } from "../lib/firebase";
 import { APP_VERSIE } from "../lib/versie";
 import type { Instellingen as InstellingenT } from "../lib/types";
 

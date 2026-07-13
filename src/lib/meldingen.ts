@@ -1,5 +1,5 @@
 import type { Bedrijf, Instellingen, Verlof, Taak, Brievenronde, Afspraak, Voorschouw, User, Project, ProjectPost, TauwOpdracht, Sanering, Buurtaanpak } from "./types";
-import { supabaseAan } from "./supabase";
+import { supabaseAan } from "./firebase";
 
 const isISODatum = (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d);
 const dezeISO = (offset = 0) => { const t = new Date(); t.setDate(t.getDate() + offset); return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`; };

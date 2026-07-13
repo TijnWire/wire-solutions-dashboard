@@ -9,7 +9,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { initializeApp, type FirebaseApp } from "firebase/app";
 import {
-  getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, type Auth,
+  getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, updatePassword, type Auth,
 } from "firebase/auth";
 import {
   getFirestore, collection, doc, getDoc, getDocs, setDoc, onSnapshot, query, where, documentId, writeBatch, limit, type Firestore,
@@ -18,12 +18,12 @@ import {
 // ── Firebase web-config (net als de Supabase anon-key: publiek; de beveiliging zit in de Firestore-regels) ──
 // VUL IN met de config uit je Firebase-project (Project settings → General → "Your apps" → SDK setup).
 const firebaseConfig = {
-  apiKey: "VUL-IN",
-  authDomain: "VUL-IN.firebaseapp.com",
-  projectId: "VUL-IN",
-  storageBucket: "VUL-IN.appspot.com",
-  messagingSenderId: "VUL-IN",
-  appId: "VUL-IN",
+  apiKey: "AIzaSyC18h0HZ2xHmRk3ny1VmAiGvK9HXMiqeN0",
+  authDomain: "wire-solutions-b5b02.firebaseapp.com",
+  projectId: "wire-solutions-b5b02",
+  storageBucket: "wire-solutions-b5b02.firebasestorage.app",
+  messagingSenderId: "481467205794",
+  appId: "1:481467205794:web:0126c69e22208500e56ffb",
 };
 
 // Of de centrale database geconfigureerd is. Zonder echte config draait de app gewoon local-first.
@@ -182,6 +182,11 @@ export async function sbRegistreer(email: string, wachtwoord: string): Promise<b
 }
 
 export async function sbLogout(): Promise<void> { try { await signOut(auth()); } catch { /* netwerk weg — lokaal toch uitloggen */ } }
+
+// Werkt het eigen wachtwoord in Firebase Auth bij (de gebruiker heeft een sessie). Geeft false bij geen sessie/fout.
+export async function wijzigEigenWachtwoord(nieuw: string): Promise<boolean> {
+  try { const u = auth().currentUser; if (!u) return false; await updatePassword(u, nieuw); return true; } catch { return false; }
+}
 
 export async function sbSessieEmail(): Promise<string | null> { return auth().currentUser?.email ?? null; }
 

@@ -71,7 +71,7 @@ import {
 } from "../lib/seed";
 import { idbGet, idbSet } from "./db";
 import { mergeCollection, mergeTombstones, type Tombstones } from "../lib/merge";
-import { supabaseAan, sb, sbLeesAlles, sbSchrijf, sbVersies, sbLeesKeys, sbLogin, sbRegistreer, sbLogout, sbSessieEmail, bewaarSyncCred, wisSyncCred, sbHerstelSessie } from "../lib/supabase";
+import { supabaseAan, sbLeesAlles, sbSchrijf, sbVersies, sbLeesKeys, sbLogin, sbRegistreer, sbLogout, sbSessieEmail, bewaarSyncCred, wisSyncCred, sbHerstelSessie, cloudAuthListener, cloudRealtime } from "../lib/firebase";
 
 // Oude browseropslag-sleutels — alleen nog om eenmalig naar IndexedDB te migreren.
 const LS = {
@@ -739,12 +739,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!supabaseAan) return;
     let actief = true;
     void sbHerstelSessie().then((ok) => { if (actief) setSbSessie(ok); });
-    const { data: sub } = sb().auth.onAuthStateChange((_e, session) => { if (actief) setSbSessie(!!session); });
+    const off = cloudAuthListener((ingelogd) => { if (actief) setSbSessie(ingelogd); });
     // Probeer het ook opnieuw zodra het apparaat weer online komt of het tabblad weer zichtbaar wordt.
     const opnieuw = () => { if (actief) void sbHerstelSessie().then((ok) => { if (actief && ok) setSbSessie(true); }); };
     window.addEventListener("online", opnieuw);
     document.addEventListener("visibilitychange", opnieuw);
-    return () => { actief = false; sub.subscription.unsubscribe(); window.removeEventListener("online", opnieuw); document.removeEventListener("visibilitychange", opnieuw); };
+    return () => { actief = false; off(); window.removeEventListener("online", opnieuw); document.removeEventListener("visibilitychange", opnieuw); };
   }, []);
 
   // 2) Bij een actieve sessie: haal de gedeelde data op, zet ontbrekende onderdelen klaar,
@@ -801,19 +801,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         sync.current.laatsteFout = "";
       } catch (e) { sync.current.laatsteFout = String((e as Error)?.message ?? e); /* blijf local-first werken */ }
     })();
-    const kanaal = sb()
-      .channel("wire_state")
-      .on("postgres_changes", { event: "*", schema: "public", table: "wire_state" }, (payload) => {
-        const row = (payload.new ?? payload.old) as { key?: string; data?: unknown; updated_at?: string } | null;
-        if (!row?.key || !(row.key in setters)) return;
-        if (row.updated_at) sync.current.versies[row.key] = row.updated_at; // bijgewerkt → 5s-poll haalt 'm niet nogmaals op
-        if (sync.current.bezig.has(row.key)) return; // eigen push onderweg
-        const j = JSON.stringify(row.data);
-        if (sync.current.gezien[row.key] === j) return; // eigen wijziging — overslaan
-        sync.current.gezien[row.key] = j;
-        applyRemote(row.key, row.data); // lijsten samenvoegen → nooit een record kwijt
-      })
-      .subscribe();
+    const stopRealtime = cloudRealtime((key, data, updated_at) => {
+      if (!(key in setters)) return;
+      if (updated_at) sync.current.versies[key] = updated_at; // bijgewerkt → poll haalt 'm niet nogmaals op
+      if (sync.current.bezig.has(key)) return; // eigen push onderweg
+      const j = JSON.stringify(data);
+      if (sync.current.gezien[key] === j) return; // eigen wijziging — overslaan
+      sync.current.gezien[key] = j;
+      applyRemote(key, data); // lijsten samenvoegen → nooit een record kwijt
+    });
     // Vangnet-poll elke 2 seconden: eerst een piepkleine check op tijdstempels, en alléén de
     // daadwerkelijk gewijzigde onderdelen ophalen. De realtime-subscription hierboven (postgres_changes)
     // levert wijzigingen doorgaans binnen ~1s; deze poll is de terugval als de websocket even wegvalt,
@@ -845,7 +841,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         } catch (e) { sync.current.laatsteFout = String((e as Error)?.message ?? e); }
       })();
     }, 2000);
-    return () => { actief = false; sync.current.klaar = false; clearInterval(interval); void sb().removeChannel(kanaal); };
+    return () => { actief = false; sync.current.klaar = false; clearInterval(interval); stopRealtime(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supabaseAan, sbSessie, hydrated]);
 
