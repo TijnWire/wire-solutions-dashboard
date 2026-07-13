@@ -121,7 +121,7 @@ export function Urenstaat() {
             <>
               <FolderKanban className="h-4 w-4 shrink-0 text-brand-600" />
               <span className="shrink-0 text-sm font-semibold text-ink-600">Project:</span>
-              <div className="min-w-0 flex-1 sm:max-w-md"><Keuze value={projSel} onChange={(w) => { setProjSel(w); setVoegToe(""); }} opties={[{ waarde: "", label: "Algemeen (geen project)" }, ...actieveProjecten.map((p) => ({ waarde: p.id, label: p.wijk ? `${p.naam} · ${p.wijk}` : p.naam }))]} title="Project kiezen" /></div>
+              <div className="min-w-0 flex-1 sm:max-w-md"><Keuze value={projSel} onChange={(w) => { setProjSel(w); setVoegToe(""); }} altijdZoeken opties={[{ waarde: "", label: "Algemeen (geen project)" }, ...actieveProjecten.map((p) => ({ waarde: p.id, label: p.wijk ? `${p.naam} · ${p.wijk}` : p.naam }))]} title="Project kiezen" /></div>
             </>
           )}
         </div>
@@ -261,7 +261,7 @@ function BulkBoeken({ weekISO, weekISOs, weekNr, medewerkers, actieveProjecten, 
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
           <span className="mb-1 block text-xs font-semibold text-ink-500">Project</span>
-          <Keuze value={projectId} onChange={(w) => { setGeboekt(0); setProjectId(w); }} opties={[{ waarde: "", label: "Algemeen (geen project)" }, ...actieveProjecten.map((p) => ({ waarde: p.id, label: p.wijk ? `${p.naam} · ${p.wijk}` : p.naam }))]} title="Project" />
+          <Keuze value={projectId} onChange={(w) => { setGeboekt(0); setProjectId(w); }} altijdZoeken opties={[{ waarde: "", label: "Algemeen (geen project)" }, ...actieveProjecten.map((p) => ({ waarde: p.id, label: p.wijk ? `${p.naam} · ${p.wijk}` : p.naam }))]} title="Project" />
         </div>
         <label className="flex items-end gap-2 pb-1.5">
           <input type="checkbox" checked={auto} onChange={(e) => { setGeboekt(0); setAuto(e.target.checked); }} className="h-4 w-4 accent-brand-600" />
@@ -419,7 +419,7 @@ function PerMedewerker({ persoon, weekISO, weekISOs, weekNr, records, actievePro
         <div className="flex flex-wrap items-center gap-2 border-t border-ink-100 px-4 py-2.5">
           <Plus className="h-4 w-4 text-ink-400" />
           <span className="text-xs font-semibold text-ink-500">Project toevoegen:</span>
-          <div className="w-64"><Keuze value={voegProject} onChange={voegRijToe} opties={toevoegOpties} title="Project toevoegen" size="sm" /></div>
+          <div className="w-64"><Keuze value={voegProject} onChange={voegRijToe} altijdZoeken opties={toevoegOpties} title="Project toevoegen" size="sm" /></div>
         </div>
       )}
 

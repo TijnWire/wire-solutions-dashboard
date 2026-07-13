@@ -73,7 +73,18 @@ export function MededelingenBord({ compose = false }: { compose?: boolean }) {
             </label>
             <label className="block">
               <span className="mb-1 block text-[11px] font-semibold text-ink-500">Project (optioneel)</span>
-              <Keuze value={projectId} onChange={setProjectId} opties={[{ waarde: "", label: "Geen project" }, ...projects.map((p) => ({ waarde: p.id, label: p.naam }))]} />
+              <Keuze
+                value={projectId}
+                onChange={setProjectId}
+                altijdZoeken
+                opties={[
+                  { waarde: "", label: "Geen project" },
+                  ...projects
+                    .filter((p) => p.boekhouding !== "gefactureerd") // alleen lopende projecten
+                    .sort((a, b) => a.naam.localeCompare(b.naam, "nl"))
+                    .map((p) => ({ waarde: p.id, label: p.pdNummer ? `${p.naam} · ${p.pdNummer}` : p.naam })),
+                ]}
+              />
             </label>
             <label className="block">
               <span className="mb-1 block text-[11px] font-semibold text-ink-500">Deadline (optioneel)</span>

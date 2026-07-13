@@ -7,7 +7,7 @@ export type KeuzeOptie = { waarde: string; label: string; kleur?: string };
 // Afgeronde keuzelijst die de native <select> vervangt. Het menu wordt via een portal getoond
 // (position: fixed) zodat het nooit wordt afgeknipt door een overflow-hidden kaart, en het is
 // even breed als de knop. Bij veel opties verschijnt bovenaan automatisch een zoekveld.
-export function Keuze({ value, onChange, opties, placeholder = "Kies…", disabled = false, className = "", title, size = "md" }: {
+export function Keuze({ value, onChange, opties, placeholder = "Kies…", disabled = false, className = "", title, size = "md", altijdZoeken = false }: {
   value: string;
   onChange: (waarde: string) => void;
   opties: KeuzeOptie[];
@@ -16,6 +16,7 @@ export function Keuze({ value, onChange, opties, placeholder = "Kies…", disabl
   className?: string;
   title?: string;
   size?: "sm" | "md";
+  altijdZoeken?: boolean; // toon het zoekveld ook bij een kortere lijst (handig voor projecten/klanten)
 }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
@@ -23,8 +24,8 @@ export function Keuze({ value, onChange, opties, placeholder = "Kies…", disabl
   const btnRef = useRef<HTMLButtonElement | null>(null);
   const popRef = useRef<HTMLDivElement | null>(null);
   const zoekRef = useRef<HTMLInputElement | null>(null);
-  // Zoekveld verschijnt automatisch zodra de lijst lang wordt.
-  const zoekbaar = opties.length > 7;
+  // Zoekveld verschijnt automatisch zodra de lijst lang wordt (of altijd, als daarom gevraagd wordt).
+  const zoekbaar = altijdZoeken ? opties.length > 3 : opties.length > 7;
   const hoogte = zoekbaar ? 332 : 288; // px — voor plaatsing boven/onder
 
   const openen = () => {
