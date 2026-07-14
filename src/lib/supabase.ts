@@ -58,6 +58,14 @@ async function api<T = unknown>(path: string, opts: ApiOpts = {}): Promise<T> {
   }
 }
 
+// WebSocket-URL voor realtime (token in de query, want een browser-WebSocket kan geen header meesturen).
+// Geeft "" als er geen sessie is — dan valt de app terug op de poll.
+export function cloudWsUrl(): string {
+  const t = leesToken();
+  if (!t || !supabaseAan) return "";
+  return CLOUD_API_URL.replace(/^http/, "ws") + "/ws?token=" + encodeURIComponent(t);
+}
+
 // Publieke helpers voor de andere modules (verlof, admin) — zelfde gedrag als de oude .from()/.invoke().
 export function cloudGet<T = unknown>(path: string): Promise<T> { return api<T>(path, { method: "GET" }); }
 export function cloudPost<T = unknown>(path: string, body: unknown): Promise<T> { return api<T>(path, { method: "POST", body }); }

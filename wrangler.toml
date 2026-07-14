@@ -14,3 +14,13 @@ database_id = "193678aa-11c6-4565-ab4c-f7e1954c58cd"
 
 # JWT_SECRET is een secret, GEEN gewone var. Zet 'm met:
 #   npx wrangler secret put JWT_SECRET
+
+# Realtime-hub (Durable Object) — houdt de WebSockets vast en broadcast wijzigingen.
+[[durable_objects.bindings]]
+name = "SYNC_HUB"
+class_name = "SyncHub"
+
+# SQLite-backed DO → beschikbaar op de gratis laag (met WebSocket-hibernation).
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["SyncHub"]

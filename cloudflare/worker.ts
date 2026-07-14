@@ -27,6 +27,50 @@
 export interface Env {
   DB: D1Database;
   JWT_SECRET: string;
+  SYNC_HUB: DurableObjectNamespace;
+}
+
+// ── Realtime-hub (Durable Object) ──
+// Eén globale instantie houdt alle open WebSockets van de apparaten vast (met hibernation, zodat idle
+// verbindingen niets kosten). Na elke schrijfactie stuurt de Worker hierheen een broadcast, die de hub
+// meteen naar álle verbonden apparaten doorstuurt → wijzigingen verschijnen binnen een fractie van een sec.
+export class SyncHub {
+  state: DurableObjectState;
+  constructor(state: DurableObjectState) {
+    this.state = state;
+  }
+  async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+    if (url.pathname.endsWith("/broadcast")) {
+      const msg = await request.text();
+      for (const ws of this.state.getWebSockets()) {
+        try { ws.send(msg); } catch { /* dode socket — hibernation ruimt op */ }
+      }
+      return new Response("ok");
+    }
+    if (request.headers.get("Upgrade") === "websocket") {
+      const pair = new WebSocketPair();
+      this.state.acceptWebSocket(pair[1]); // hibernation API: overleeft idle-periodes gratis
+      return new Response(null, { status: 101, webSocket: pair[0] });
+    }
+    return new Response("not found", { status: 404 });
+  }
+  // Client stuurt af en toe "ping" om de verbinding warm te houden → wij antwoorden "pong".
+  webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): void {
+    if (message === "ping") { try { ws.send("pong"); } catch { /* noop */ } }
+  }
+  webSocketClose(ws: WebSocket): void {
+    try { ws.close(); } catch { /* noop */ }
+  }
+  webSocketError(): void { /* niets — hibernation ruimt de socket op */ }
+}
+
+// Stuurt een bericht naar alle verbonden apparaten (fire-and-forget; vertraagt de schrijf niet).
+function broadcast(env: Env, ctx: ExecutionContext, msg: unknown): void {
+  try {
+    const stub = env.SYNC_HUB.get(env.SYNC_HUB.idFromName("global"));
+    ctx.waitUntil(stub.fetch("https://hub/broadcast", { method: "POST", body: JSON.stringify(msg) }));
+  } catch { /* realtime is een extra bovenop de poll — nooit de schrijf laten falen */ }
 }
 
 // ── CORS ── auth loopt via de Authorization-header (geen cookies), dus '*' mag.
@@ -136,7 +180,7 @@ async function seedRollenUitUsers(env: Env, users: unknown, nuISO: string): Prom
 }
 
 export default {
-  async fetch(req: Request, env: Env): Promise<Response> {
+  async fetch(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
     const nu = Math.floor(Date.now() / 1000);
     const nuISO = new Date().toISOString();
@@ -166,6 +210,14 @@ export default {
         const rij = await env.DB.prepare("select pw_hash from users_auth where email = ?").bind(email).first<{ pw_hash: string }>();
         if (!rij || !(await verifieerWachtwoord(ww, rij.pw_hash))) return json({ error: "Onjuiste inloggegevens." }, 401);
         return json({ token: await maakToken(email, env.JWT_SECRET, nu), email });
+      }
+
+      // ── WebSocket-verbinding voor realtime (token via query, want browsers kunnen geen header meesturen) ──
+      if (path === "/ws") {
+        const t = url.searchParams.get("token") ?? "";
+        const s = t ? await leesToken(t, env.JWT_SECRET, nu) : null;
+        if (!s) return new Response("unauthorized", { status: 401, headers: CORS });
+        return env.SYNC_HUB.get(env.SYNC_HUB.idFromName("global")).fetch(req);
       }
 
       // ── Vanaf hier: geldige token vereist ──
@@ -220,6 +272,7 @@ export default {
         ).bind(key, dataText, nuISO).run();
         // Rol-spiegel bijwerken zodra de gebruikerslijst verandert (zodat is_owner/is_boekhouding kloppen).
         if (key === "users") await seedRollenUitUsers(env, body.data, nuISO);
+        broadcast(env, ctx, { type: "changed", keys: [key], updated_at: nuISO }); // alle apparaten meteen op de hoogte
         return json({ updated_at: nuISO });
       }
 

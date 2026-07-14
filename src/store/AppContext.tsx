@@ -71,7 +71,7 @@ import {
 } from "../lib/seed";
 import { idbGet, idbSet } from "./db";
 import { mergeCollection, mergeTombstones, type Tombstones } from "../lib/merge";
-import { supabaseAan, sbLeesAlles, sbSchrijf, sbVersies, sbLeesKeys, sbLogin, sbRegistreer, sbLogout, sbSessieEmail, bewaarSyncCred, wisSyncCred, sbHerstelSessie } from "../lib/supabase";
+import { supabaseAan, sbLeesAlles, sbSchrijf, sbVersies, sbLeesKeys, sbLogin, sbRegistreer, sbLogout, sbSessieEmail, bewaarSyncCred, wisSyncCred, sbHerstelSessie, cloudWsUrl } from "../lib/supabase";
 
 // Oude browseropslag-sleutels — alleen nog om eenmalig naar IndexedDB te migreren.
 const LS = {
@@ -800,37 +800,74 @@ export function AppProvider({ children }: { children: ReactNode }) {
         sync.current.laatsteFout = "";
       } catch (e) { sync.current.laatsteFout = String((e as Error)?.message ?? e); /* blijf local-first werken */ }
     })();
-    // Poll elke 2 seconden: eerst een piepkleine check op tijdstempels, en alléén de daadwerkelijk
-    // gewijzigde onderdelen ophalen. Zo verschijnen wijzigingen van collega's snel (≤2s) — zónder telkens
-    // alle data te downloaden. (Er is geen realtime-websocket meer; deze poll is de manier van syncen.)
-    const interval = setInterval(() => {
-      if (!actief || !sync.current.klaar) return;
-      void (async () => {
+    // ── Realtime via WebSocket (Durable Object) ── directe push: zodra iemand iets wijzigt, krijgen álle
+    // apparaten binnen een fractie van een seconde bericht en halen ze precies dat onderdeel op.
+    let ws: WebSocket | null = null;
+    let wsHerverbind: ReturnType<typeof setTimeout> | null = null;
+    let wsPing: ReturnType<typeof setInterval> | null = null;
+    let backoff = 1000;
+    const wsStatus = { verbonden: false };
+    const sluitWs = () => { if (wsPing) { clearInterval(wsPing); wsPing = null; } try { ws?.close(); } catch { /* noop */ } ws = null; };
+    const verbindWs = () => {
+      if (!actief) return;
+      if (wsHerverbind) { clearTimeout(wsHerverbind); wsHerverbind = null; }
+      if (ws && ws.readyState <= 1) return; // al aan het (ver)binden
+      const url = cloudWsUrl();
+      if (!url) { wsHerverbind = setTimeout(verbindWs, 3000); return; } // nog geen token → zo weer proberen
+      try { ws = new WebSocket(url); } catch { wsHerverbind = setTimeout(verbindWs, backoff); backoff = Math.min(backoff * 2, 15000); return; }
+      ws.onopen = () => { wsStatus.verbonden = true; backoff = 1000; wsPing = setInterval(() => { try { ws?.send("ping"); } catch { /* noop */ } }, 25000); };
+      ws.onmessage = (ev) => {
         try {
-          const versies = await sbVersies();
+          const msg = JSON.parse(String(ev.data));
+          if (msg?.type === "changed" && Array.isArray(msg.keys)) {
+            const teHalen = (msg.keys as string[]).filter((k) => k in setters && !sync.current.bezig.has(k));
+            if (teHalen.length) void sbLeesKeys(teHalen).then((d) => { if (actief) pasToe(d); }).catch(() => { /* de poll vangt het op */ });
+          }
+        } catch { /* onbekend bericht — negeren */ }
+      };
+      const herstart = () => { wsStatus.verbonden = false; if (wsPing) { clearInterval(wsPing); wsPing = null; } if (actief) { wsHerverbind = setTimeout(verbindWs, backoff); backoff = Math.min(backoff * 2, 15000); } };
+      ws.onclose = herstart;
+      ws.onerror = () => { try { ws?.close(); } catch { /* noop */ } };
+    };
+    verbindWs();
+
+    // Vangnet-poll: is de WebSocket verbonden, dan alleen af en toe (12s) als controle; is hij weg
+    // (bv. telefoon zonder bereik), dan elke 2s zodat wijzigingen tóch snel binnenkomen. Haalt vooraf een
+    // piepkleine tijdstempel-check op en daarna alléén de daadwerkelijk gewijzigde onderdelen.
+    let pollTimer: ReturnType<typeof setTimeout> | null = null;
+    const pollTick = async () => {
+      try {
+        const versies = await sbVersies();
+        if (!actief) return;
+        const gewijzigd = Object.keys(versies).filter((k) => k in setters && !sync.current.bezig.has(k) && versies[k] !== sync.current.versies[k]);
+        if (gewijzigd.length) {
+          const data = await sbLeesKeys(gewijzigd);
           if (!actief) return;
-          const gewijzigd = Object.keys(versies).filter((k) => k in setters && !sync.current.bezig.has(k) && versies[k] !== sync.current.versies[k]);
-          if (gewijzigd.length) {
-            const data = await sbLeesKeys(gewijzigd);
-            if (!actief) return;
-            pasToe(data);
-          }
-          for (const k of gewijzigd) sync.current.versies[k] = versies[k];
-          // Veiligheidsnet: lokale onderdelen die data hebben maar nog NIET in de centrale database staan,
-          // worden vanzelf geüpload (geen handmatige actie nodig). Eenmaal geüpload staan ze in 'versies'.
-          for (const key of Object.keys(setters)) {
-            if (key in versies || sync.current.bezig.has(key)) continue;
-            const lokaal = waardenRef.current[key];
-            const heeftData = Array.isArray(lokaal) ? lokaal.length > 0 : !!lokaal;
-            if (!heeftData) continue;
-            sync.current.bezig.add(key);
-            void sbSchrijf(key, lokaal).then((ua) => { sync.current.versies[key] = ua; }).catch((e) => { sync.current.laatsteFout = String((e as Error)?.message ?? e); }).finally(() => sync.current.bezig.delete(key));
-          }
-          sync.current.laatsteFout = "";
-        } catch (e) { sync.current.laatsteFout = String((e as Error)?.message ?? e); }
-      })();
-    }, 2000);
-    return () => { actief = false; sync.current.klaar = false; clearInterval(interval); };
+          pasToe(data);
+        }
+        for (const k of gewijzigd) sync.current.versies[k] = versies[k];
+        // Veiligheidsnet: lokale onderdelen die data hebben maar nog NIET in de centrale database staan,
+        // worden vanzelf geüpload (geen handmatige actie nodig). Eenmaal geüpload staan ze in 'versies'.
+        for (const key of Object.keys(setters)) {
+          if (key in versies || sync.current.bezig.has(key)) continue;
+          const lokaal = waardenRef.current[key];
+          const heeftData = Array.isArray(lokaal) ? lokaal.length > 0 : !!lokaal;
+          if (!heeftData) continue;
+          sync.current.bezig.add(key);
+          void sbSchrijf(key, lokaal).then((ua) => { sync.current.versies[key] = ua; }).catch((e) => { sync.current.laatsteFout = String((e as Error)?.message ?? e); }).finally(() => sync.current.bezig.delete(key));
+        }
+        sync.current.laatsteFout = "";
+      } catch (e) { sync.current.laatsteFout = String((e as Error)?.message ?? e); }
+    };
+    const planPoll = () => {
+      if (!actief) return;
+      pollTimer = setTimeout(async () => {
+        if (actief && sync.current.klaar) await pollTick();
+        planPoll();
+      }, wsStatus.verbonden ? 12000 : 2000);
+    };
+    planPoll();
+    return () => { actief = false; sync.current.klaar = false; if (pollTimer) clearTimeout(pollTimer); if (wsHerverbind) clearTimeout(wsHerverbind); sluitWs(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supabaseAan, sbSessie, hydrated]);
 
