@@ -25,12 +25,14 @@ import {
   CheckCircle2,
   ArrowLeft,
   Calendar,
+  User,
 } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { Card, Badge, Bevestig } from "../components/ui";
 import { VoorschouwForm } from "../components/VoorschouwForm";
 import { VoorschouwScanModal } from "../components/VoorschouwScanModal";
 import { Keuze } from "../components/Keuze";
+import { WerknemerKiezer } from "../components/WerknemerKiezer";
 import {
   downloadVoorschouwPdf,
   downloadVoorschouwenZip,
@@ -249,9 +251,11 @@ export function Voorschouwen() {
 
   // Gearchiveerde mappen (en hun adressen) verdwijnen uit de actieve lijst — ze staan in de database.
   const archiefMapIds = new Set(voorschouwMappen.filter((m) => m.gearchiveerd).map((m) => m.id));
+  // Een monteur ziet: z'n eigen ingevulde voorschouwen én álle voorschouwen in mappen die aan hém zijn toegewezen.
+  const mijnMapIds = new Set(voorschouwMappen.filter((m) => m.toegewezenAan === currentUser.id).map((m) => m.id));
   const zichtbaar = (isLeiding
     ? voorschouwen
-    : voorschouwen.filter((v) => v.ingevuldDoor === currentUser.id)
+    : voorschouwen.filter((v) => v.ingevuldDoor === currentUser.id || (v.mapId ? mijnMapIds.has(v.mapId) : false))
   ).filter((v) => !(v.mapId && archiefMapIds.has(v.mapId)));
 
   const naamVan = (id: string) => users.find((u) => u.id === id)?.naam ?? "Onbekend";
@@ -403,7 +407,13 @@ export function Voorschouwen() {
     || (a.straatnaam || "").localeCompare(b.straatnaam || "", "nl", { numeric: true, sensitivity: "base" });
   // Mapgroepen in de gekozen sorteervolgorde; "Zonder map" komt altijd als laatste.
   const opNaam = (a: VoorschouwMap, b: VoorschouwMap) => a.naam.localeCompare(b.naam, "nl");
-  const mapGroepen = actieveMappen.map((m) => ({ map: m, items: zichtbaar.filter((v) => v.mapId === m.id).sort(opPostcode) }));
+  // Welke mappen tonen we? Leiding: alle. Monteur: alleen mappen die aan hem zijn toegewezen of waar
+  // z'n eigen voorschouwen in zitten — zo ziet hij precies wat hij moet oppakken (óók nog lege mappen).
+  const zichtbareMappen = isLeiding
+    ? actieveMappen
+    : actieveMappen.filter((m) => m.toegewezenAan === currentUser.id || zichtbaar.some((v) => v.mapId === m.id));
+  const mapGroepen = zichtbareMappen.map((m) => ({ map: m, items: zichtbaar.filter((v) => v.mapId === m.id).sort(opPostcode) }));
+  const zetMapToegewezen = (id: string, userId: string) => updateVoorschouwMap(id, { toegewezenAan: userId || undefined });
   // Open = nog niet ingediend (concept) óf zonder foto — deze mappen vragen nog aandacht.
   const nOpen = (items: Voorschouw[]) => items.filter((v) => v.status !== "Ingediend" || !v.fotos || v.fotos.length === 0).length;
   mapGroepen.sort((ga, gb) => {
@@ -416,7 +426,7 @@ export function Voorschouwen() {
       default: return opNaam(ga.map, gb.map) || ga.map.id.localeCompare(gb.map.id); // "naam" (A–Z)
     }
   });
-  const groepen: { map: { id: string; naam: string } | null; items: Voorschouw[] }[] = mapGroepen;
+  const groepen: { map: VoorschouwMap | null; items: Voorschouw[] }[] = mapGroepen;
   const zonderMap = zichtbaar.filter((v) => !v.mapId || !geldigeMapIds.has(v.mapId)).sort(opPostcode);
   if (zonderMap.length) groepen.push({ map: null, items: zonderMap });
 
@@ -809,6 +819,9 @@ export function Voorschouwen() {
                         {zonderFoto > 0 && (
                           <span title={`${zonderFoto} ${zonderFoto === 1 ? "adres" : "adressen"} zonder foto`} className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700 ring-1 ring-amber-200"><AlertTriangle className="h-3 w-3" /> {zonderFoto} zonder foto</span>
                         )}
+                        {g.map?.toegewezenAan && (
+                          <span title="Toegewezen aan" className="inline-flex shrink-0 items-center gap-1 rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700 ring-1 ring-brand-200"><User className="h-3 w-3" /> {naamVan(g.map.toegewezenAan)}</span>
+                        )}
                       </button>
                       <div className="flex w-full items-center gap-2 sm:w-auto">
                         {isLeiding && g.map && (
@@ -819,6 +832,7 @@ export function Voorschouwen() {
                                 <button type="button" onClick={() => verplaatsMap(g.map!.id, "omlaag")} disabled={idx < 0 || idx >= eigenVolgordeIds.length - 1} title="Map omlaag" aria-label="Map omlaag verplaatsen" className="shrink-0 rounded-lg p-2 text-ink-400 hover:bg-ink-100 hover:text-ink-700 disabled:cursor-not-allowed disabled:opacity-30"><ArrowDown className="h-4 w-4" /></button>
                               </>
                             )}
+                            <WerknemerKiezer value={g.map!.toegewezenAan ?? ""} onChange={(uid) => zetMapToegewezen(g.map!.id, uid)} users={users} leegLabel="Niemand" />
                             <button type="button" onClick={() => startBewerkMap(g.map!.id, g.map!.naam)} title="Naam wijzigen" aria-label="Map hernoemen" className="shrink-0 rounded-lg p-2 text-ink-400 hover:bg-ink-100 hover:text-brand-600"><Pencil className="h-4 w-4" /></button>
                             <button type="button" onClick={() => verwijderMap(g.map!.id, g.map!.naam, g.items.length)} title="Map verwijderen" aria-label="Map verwijderen" className="shrink-0 rounded-lg p-2 text-red-400 hover:bg-red-50 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
                           </>
