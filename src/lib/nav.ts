@@ -44,9 +44,9 @@ const ALLE: Role[] = ["eigenaar", "beheer", "monteur"];
 const LEIDING: Role[] = ["eigenaar", "beheer"];
 const EIGENAAR: Role[] = ["eigenaar"];
 
-// Werk-onderdelen waarvan de eigenaar de toegang per werknemer kan aan-/uitzetten (Toegang-pagina).
-// Persoonlijke onderdelen (Mijn werk, Verlof, Loonstroken, Boetes, Mededelingen, Kennisbank) blijven
-// altijd zichtbaar; boekhouding/klanten/beheer zijn sowieso al leiding-only.
+// Project-onderdelen waarvan de eigenaar de toegang per werknemer kan aan-/uitzetten (Toegang-pagina).
+// Werk (Mijn werk, Projecten, Agenda, Mededelingen), Kennisbank en Communicatie blijven ALTIJD zichtbaar;
+// Boekhouding, Klanten & Database en beheer zijn sowieso leiding-only (werknemers zien die niet).
 export const WERKNEMER_TOEGANG: { key: string; label: string }[] = [
   { key: "brieven", label: "Brieven & Routes" },
   { key: "buurtaanpak", label: "Buurtaanpak" },
@@ -54,14 +54,12 @@ export const WERKNEMER_TOEGANG: { key: string; label: string }[] = [
   { key: "voorschouwen", label: "Voorschouwen" },
   { key: "schouwafspraken", label: "Schouwafspraken" },
   { key: "tauw", label: "TAUW" },
-  { key: "agenda", label: "Agenda" },
-  { key: "communicatie", label: "Communicatie" },
 ];
 export const WERKNEMER_TOEGANG_KEYS = WERKNEMER_TOEGANG.map((x) => x.key);
 
 export const NAV: NavItem[] = [
   { key: "mijnwerk", label: "Mijn werk", icon: ClipboardList, group: "Werk", roles: ALLE },
-  { key: "projecten", label: "Projecten", icon: FolderKanban, group: "Werk", roles: LEIDING },
+  { key: "projecten", label: "Projecten", icon: FolderKanban, group: "Werk", roles: ALLE },
   { key: "agenda", label: "Agenda", icon: CalendarDays, group: "Werk", roles: ALLE },
   { key: "mededelingen", label: "Mededelingen", icon: Megaphone, group: "Werk", roles: ALLE },
 
@@ -78,9 +76,9 @@ export const NAV: NavItem[] = [
   { key: "facturen", label: "Facturen", icon: Receipt, group: "Boekhouding", roles: LEIDING },
   { key: "urenstaat", label: "Urenstaat", icon: Clock, group: "Boekhouding", roles: LEIDING },
   { key: "vrijedagen", label: "Vrije dagen", icon: Sun, group: "Boekhouding", roles: LEIDING },
-  { key: "loonstroken", label: "Loonstroken", icon: Wallet, group: "Boekhouding", roles: ALLE },
-  { key: "boetes", label: "Boetes", icon: AlertTriangle, group: "Boekhouding", roles: ALLE },
-  { key: "verlof", label: "Verlof", icon: Plane, group: "Boekhouding", roles: ALLE },
+  { key: "loonstroken", label: "Loonstroken", icon: Wallet, group: "Boekhouding", roles: LEIDING },
+  { key: "boetes", label: "Boetes", icon: AlertTriangle, group: "Boekhouding", roles: LEIDING },
+  { key: "verlof", label: "Verlof", icon: Plane, group: "Boekhouding", roles: LEIDING },
   { key: "medewerkers", label: "Medewerkers", icon: Users, group: "Boekhouding", roles: LEIDING },
   { key: "communicatie", label: "Communicatie", icon: MessagesSquare, badge: "AI", group: "Operatie", roles: ALLE },
   { key: "klanten", label: "Klanten & Database", icon: Database, group: "Operatie", roles: LEIDING },
