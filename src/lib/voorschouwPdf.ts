@@ -1,7 +1,8 @@
 import JSZip from "jszip";
 import type { Voorschouw, JaNee } from "./types";
 
-// ⚙️ Vul hier het Stedin-mailadres in waar de voorschouwen naartoe moeten.
+// Optioneel vast Stedin-mailadres. Leeg laten is prima: de mail opent dan met een leeg "Aan"-veld dat je
+// zelf invult. Weet je het adres later, vul het hier in (bv. "voorschouwen@stedin.net").
 export const STEDIN_EMAIL = "";
 
 const SZ = 10.5; // tekstgrootte van de waarden
@@ -203,7 +204,7 @@ export async function mailVoorschouwenNaarStedin(lijst: Voorschouw[]) {
 // Slim versturen: op telefoon/tablet de PDF's (als ZIP) direct als bijlage delen via de mail-app
 // (Web Share). Lukt dat niet (meestal desktop), dan de ZIP downloaden + een kant-en-klaar mailconcept
 // openen. Geeft terug hoe het is verstuurd, zodat de UI de juiste melding kan tonen.
-export async function verstuurVoorschouwenNaarStedin(lijst: Voorschouw[]): Promise<"gedeeld" | "gedownload" | "leeg" | "fout"> {
+export async function verstuurVoorschouwenNaarStedin(lijst: Voorschouw[]): Promise<"gedeeld" | "gedownload" | "geannuleerd" | "leeg" | "fout"> {
   if (lijst.length === 0) return "leeg";
   let blob: Blob;
   try { blob = await genereerZipBlob(lijst); } catch { meldFout(); return "fout"; }
@@ -222,8 +223,9 @@ export async function verstuurVoorschouwenNaarStedin(lijst: Voorschouw[]): Promi
       return "gedeeld";
     }
   } catch (e) {
-    if ((e as Error)?.name === "AbortError") return "gedeeld"; // gebruiker sloot het deelvenster zelf
-    // anders: door naar de download-terugval hieronder
+    // Gebruiker sloot het deelvenster zelf → NIET als verstuurd tellen (anders wordt de map onterecht
+    // als verzonden gemarkeerd). Andere fouten: door naar de download-terugval hieronder.
+    if ((e as Error)?.name === "AbortError") return "geannuleerd";
   }
 
   // 2) Laptop/desktop: ZIP downloaden + kant-en-klaar mailconcept openen.

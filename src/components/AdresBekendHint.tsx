@@ -1,11 +1,11 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Info, X, MapPin } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { useNav } from "../store/NavContext";
-import { bouwAdresIndex, zoekTreffers, straatSleutel } from "../lib/adresIndex";
+import { bouwAdresIndex, zoekTreffers, straatSleutels } from "../lib/adresIndex";
 
 // Subtiel infobalkje: "dit adres kennen we misschien al". Verschijnt alléén als er op deze straat al
-// eerder iets is gedaan (in welk project dan ook). Niet opdringerig: weg te klikken (× voor nu), of
+// eerder iets is gedaan (in welk project dan ook). Niet opdringerig: weg te klikken (× voor dit adres), of
 // permanent uit te zetten voor dit adres ("komt vaker terug — niet meer melden", synct via instellingen).
 export function AdresBekendHint({
   straat,
@@ -31,11 +31,18 @@ export function AdresBekendHint({
     [idx, straat, plaats, postcode, negeerRecordId],
   );
 
-  const sleutel = straatSleutel(straat, plaats, postcode);
-  const genegeerd = (instellingen.adresNegeer ?? []).includes(sleutel);
-  if (verborgen || genegeerd || !sleutel || treffers.length === 0) return null;
+  const sleutels = straatSleutels(straat, plaats, postcode);
+  const sleutelId = sleutels.join("~"); // stabiele dependency voor de reset-effect
 
-  const nietMeerMelden = () => updateInstellingen({ adresNegeer: [...(instellingen.adresNegeer ?? []), sleutel] });
+  // Reset het wegklikken zodra het adres wijzigt: één keer wegklikken mag de hint bij een ánder (ook
+  // bekend) adres niet onderdrukken.
+  useEffect(() => { setVerborgen(false); }, [sleutelId]);
+
+  const negeerLijst = instellingen.adresNegeer ?? [];
+  const genegeerd = sleutels.some((s) => negeerLijst.includes(s));
+  if (verborgen || genegeerd || sleutels.length === 0 || treffers.length === 0) return null;
+
+  const nietMeerMelden = () => updateInstellingen({ adresNegeer: [...new Set([...negeerLijst, ...sleutels])] });
 
   return (
     <div className="rounded-xl border border-blue-200 bg-blue-50 p-3">

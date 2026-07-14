@@ -213,7 +213,9 @@ export function VoorschouwForm({
       for (const file of Array.from(files)) {
         nieuwe.push(await fileNaarDataUrl(file));
       }
-      set({ fotos: [...data.fotos, ...nieuwe] });
+      // Functionele update: voeg toe aan de MEEST RECENTE fotos, niet aan de (mogelijk verouderde) snapshot —
+      // anders gaan foto's verloren als er twee batches vlak na elkaar worden toegevoegd.
+      setData((d) => ({ ...d, fotos: [...d.fotos, ...nieuwe] }));
     } finally {
       setBezig(false);
     }

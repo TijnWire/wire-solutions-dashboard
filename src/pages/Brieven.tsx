@@ -852,7 +852,14 @@ function BrievenMap({ naam, rondes, isLeiding, onOpenRonde, startOpen }: { naam:
   const hernoem = (v: string) => { const n = v.trim(); if (n) rondes.forEach((r) => updateRonde(r.id, { mapNaam: n })); setNaamBewerk(null); };
   const zetPd = (v: string) => rondes.forEach((r) => updateRonde(r.id, { pdNummer: v.trim() || undefined }));
   const zetDeadline = (d: string) => rondes.forEach((r) => updateRonde(r.id, { deadline: d || undefined }));
-  const zetToegewezen = (id: string) => rondes.forEach((r) => updateRonde(r.id, id && r.status === "nieuw" ? { toegewezenAan: id || undefined, status: "toegewezen", toegewezenOp: nu() } : { toegewezenAan: id || undefined }));
+  const zetToegewezen = (id: string) => rondes.forEach((r) => updateRonde(
+    r.id,
+    id
+      ? (r.status === "nieuw" ? { toegewezenAan: id, status: "toegewezen", toegewezenOp: nu() } : { toegewezenAan: id })
+      // "Niemand" gekozen: haal de toewijzing weg én zet een nog-niet-gestarte ronde terug naar "nieuw"
+      // (anders blijft 'ie in "toegewezen" hangen zonder monteur en kan niemand 'm meer oppakken).
+      : { toegewezenAan: undefined, status: r.status === "toegewezen" ? "nieuw" : r.status, toegewezenOp: undefined },
+  ));
   const naarBoekhouding = () => { const n = teBezorgen.length; rondes.forEach((r) => updateRonde(r.id, { status: "verstuurd", verstuurdOp: nu(), boekhouding: "te_factureren", doorgestuurdOp: nu() })); setVraagBoek(false); setBoekKlaar(n); };
   // Zacht verwijderen: de hele map uit het overzicht halen, maar de rondes blijven in de data (dus in de
   // database) staan — alleen gemarkeerd als verwijderd, zodat je 'm later kunt terugzetten.

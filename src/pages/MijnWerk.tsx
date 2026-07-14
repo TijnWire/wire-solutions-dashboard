@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ListTodo, Loader2, CheckCircle2, Plus, FolderKanban, Mailbox, CalendarCheck, ChevronRight, ChevronDown, FileScan, FlaskConical, CalendarDays, CalendarClock, Mail, AlertTriangle, Cable, Phone, Check } from "lucide-react";
+import { ListTodo, Loader2, CheckCircle2, Plus, FolderKanban, Mailbox, CalendarCheck, ChevronRight, ChevronDown, FileScan, FlaskConical, ClipboardCheck, CalendarDays, CalendarClock, Mail, AlertTriangle, Cable, Phone, Check } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { useNav } from "../store/NavContext";
 import { TAUW_TYPE_LABEL } from "../lib/types";
@@ -36,7 +36,7 @@ import { MededelingenBord } from "../components/MededelingenBord";
 import type { LucideIcon } from "lucide-react";
 
 export function MijnWerk({ initieelProject }: { initieelProject?: string }) {
-  const { currentUser, projects, taken, rondes, afspraken, tauwOpdrachten, addTaak, voorschouwen, projectPosts, saneringen, buurtaanpak, updateBuurtaanpak, users, bedrijf, instellingen, verlof } = useApp();
+  const { currentUser, projects, taken, rondes, afspraken, tauwOpdrachten, addTaak, voorschouwen, voorschouwMappen, projectPosts, saneringen, buurtaanpak, updateBuurtaanpak, users, bedrijf, instellingen, verlof } = useApp();
   const { navigeer } = useNav();
   const [nieuwBijProject, setNieuwBijProject] = useState<string | null>(null);
   const [nieuweTitel, setNieuweTitel] = useState("");
@@ -104,7 +104,7 @@ export function MijnWerk({ initieelProject }: { initieelProject?: string }) {
   ];
 
   // Werkbonnen: door de manager toegewezen rondes en afspraken
-  type WerkArea = "brieven" | "afspraken" | "tauw" | "buurtaanpak";
+  type WerkArea = "brieven" | "afspraken" | "tauw" | "buurtaanpak" | "voorschouwen";
   type Werkbon = {
     key: string;
     area: WerkArea; // onder welk mapje het valt
@@ -192,6 +192,22 @@ export function MijnWerk({ initieelProject }: { initieelProject?: string }) {
       open: () => navigeer("buurtaanpak", { buurtaanpakId: b.id }),
     });
   }
+  // Voorschouw-mappen die de manager aan mij heeft toegewezen
+  for (const m of voorschouwMappen.filter((m) => !m.gearchiveerd && m.toegewezenAan === currentUser.id)) {
+    const items = voorschouwen.filter((v) => v.mapId === m.id);
+    const metFoto = items.filter((v) => v.fotos && v.fotos.length > 0).length;
+    werkbonnen.push({
+      key: "vs-" + m.id,
+      area: "voorschouwen",
+      icon: ClipboardCheck,
+      type: "Voorschouwen",
+      titel: m.naam,
+      sub: `${items.length} ${items.length === 1 ? "adres" : "adressen"}`,
+      pct: items.length ? Math.round((metFoto / items.length) * 100) : 0,
+      voortgang: `${metFoto}/${items.length} met foto`,
+      open: () => navigeer("voorschouwen"),
+    });
+  }
 
   // ── Mappen: werkbonnen gegroepeerd per onderdeel; klik op een item → naar die pagina ──
   const mapMeta: { area: WerkArea; label: string; icon: LucideIcon; navKey: string }[] = [
@@ -199,6 +215,7 @@ export function MijnWerk({ initieelProject }: { initieelProject?: string }) {
     { area: "afspraken", label: "Afspraken", icon: CalendarCheck, navKey: "afspraken" },
     { area: "tauw", label: "TAUW", icon: FlaskConical, navKey: "tauw" },
     { area: "buurtaanpak", label: "Buurtaanpak", icon: Cable, navKey: "buurtaanpak" },
+    { area: "voorschouwen", label: "Voorschouwen", icon: ClipboardCheck, navKey: "voorschouwen" },
   ];
   const mappen = mapMeta
     .map((m) => ({ ...m, items: werkbonnen.filter((w) => w.area === m.area) }))
@@ -357,7 +374,7 @@ export function MijnWerk({ initieelProject }: { initieelProject?: string }) {
           )}
         </div>
       ) : (
-        <Card className="p-6 text-center text-sm text-ink-500">Je hebt nog geen werk toegewezen. Je manager wijst het toe via Brieven, Afspraken, TAUW en Buurtaanpak.</Card>
+        <Card className="p-6 text-center text-sm text-ink-500">Je hebt nog geen werk toegewezen. Je manager wijst het toe via Brieven, Afspraken, TAUW, Buurtaanpak en Voorschouwen.</Card>
       )}
 
       {/* Eigen taken per project */}
