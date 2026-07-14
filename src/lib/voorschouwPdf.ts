@@ -199,3 +199,36 @@ export async function mailVoorschouwenNaarStedin(lijst: Voorschouw[]) {
 
   window.location.href = `mailto:${STEDIN_EMAIL}?subject=${encodeURIComponent(onderwerp)}&body=${encodeURIComponent(tekst)}`;
 }
+
+// Slim versturen: op telefoon/tablet de PDF's (als ZIP) direct als bijlage delen via de mail-app
+// (Web Share). Lukt dat niet (meestal desktop), dan de ZIP downloaden + een kant-en-klaar mailconcept
+// openen. Geeft terug hoe het is verstuurd, zodat de UI de juiste melding kan tonen.
+export async function verstuurVoorschouwenNaarStedin(lijst: Voorschouw[]): Promise<"gedeeld" | "gedownload" | "leeg" | "fout"> {
+  if (lijst.length === 0) return "leeg";
+  let blob: Blob;
+  try { blob = await genereerZipBlob(lijst); } catch { meldFout(); return "fout"; }
+  const bestand = `Voorschouwen_Stedin_${new Date().toISOString().slice(0, 10)}.zip`;
+  const adressen = lijst.map((v) => `- ${v.straatnaam || "Onbekend"}${v.plaats ? `, ${v.plaats}` : ""}`).join("\n");
+  const onderwerp = `Voorschouwen Wire Solutions (${lijst.length} ${lijst.length === 1 ? "adres" : "adressen"})`;
+  const kop = `Beste Stedin,\n\nHierbij de ingevulde voorschouwen voor de volgende adressen:\n${adressen}\n\n`;
+  const voet = `Met vriendelijke groet,\nWire Solutions`;
+
+  // 1) Telefoon/tablet: direct delen mét bijlage naar de mail-app.
+  try {
+    const file = new File([blob], bestand, { type: "application/zip" });
+    const nav = navigator as Navigator & { canShare?: (d: { files: File[] }) => boolean; share?: (d: unknown) => Promise<void> };
+    if (nav.canShare && nav.share && nav.canShare({ files: [file] })) {
+      await nav.share({ files: [file], title: onderwerp, text: kop + voet });
+      return "gedeeld";
+    }
+  } catch (e) {
+    if ((e as Error)?.name === "AbortError") return "gedeeld"; // gebruiker sloot het deelvenster zelf
+    // anders: door naar de download-terugval hieronder
+  }
+
+  // 2) Laptop/desktop: ZIP downloaden + kant-en-klaar mailconcept openen.
+  triggerDownload(blob, bestand);
+  const tekst = kop + `De PDF's zitten in het zojuist gedownloade bestand "${bestand}". Voeg dat toe als bijlage bij deze mail.\n\n` + voet;
+  window.location.href = `mailto:${STEDIN_EMAIL}?subject=${encodeURIComponent(onderwerp)}&body=${encodeURIComponent(tekst)}`;
+  return "gedownload";
+}

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   Plus,
@@ -8,7 +8,6 @@ import {
   Trash2,
   MapPin,
   ClipboardCheck,
-  Mail,
   FolderArchive,
   Loader2,
   X,
@@ -22,6 +21,10 @@ import {
   ArrowDown,
   AlertTriangle,
   ImageOff,
+  Send,
+  CheckCircle2,
+  ArrowLeft,
+  Calendar,
 } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { Card, Badge, Bevestig } from "../components/ui";
@@ -31,9 +34,26 @@ import { Keuze } from "../components/Keuze";
 import {
   downloadVoorschouwPdf,
   downloadVoorschouwenZip,
-  mailVoorschouwenNaarStedin,
+  verstuurVoorschouwenNaarStedin,
 } from "../lib/voorschouwPdf";
 import type { Voorschouw, VoorschouwMap } from "../lib/types";
+
+// Weekgroepering (maandag als weekstart) — voor de "Per week"-weergave.
+const VS_MAANDEN = ["jan", "feb", "mrt", "apr", "mei", "jun", "jul", "aug", "sep", "okt", "nov", "dec"];
+function vsWeekStart(iso: string): string {
+  const d = new Date((iso || "").slice(0, 10) + "T00:00:00");
+  if (isNaN(d.getTime())) return "";
+  const dag = (d.getDay() + 6) % 7; // maandag = 0
+  d.setDate(d.getDate() - dag);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+function vsWeekLabel(maandagISO: string): string {
+  if (!maandagISO) return "Zonder datum";
+  const [j, mnd, d] = maandagISO.split("-").map(Number);
+  return `Week van ${d} ${VS_MAANDEN[mnd - 1]} ${j}`;
+}
+// "Open" = nog geen foto toegevoegd (deze vragen nog aandacht).
+const vsZonderFoto = (v: Voorschouw) => !v.fotos || v.fotos.length === 0;
 
 // Grote pop-up: map een naam geven en in één keer adressen aanvinken (met zoekbalk) om 'm te vullen.
 function NieuweMapModal({ voorschouwen, naamVan, voorinvulIds, onAnnuleer, onMaak }: {
@@ -218,6 +238,10 @@ export function Voorschouwen() {
     } catch { return "open"; }
   });
   const [teVerwijderenMap, setTeVerwijderenMap] = useState<{ id: string; naam: string; aantal: number } | null>(null);
+  const [tab, setTab] = useState<"overzicht" | "stedin">("overzicht");
+  const [alleenOpen, setAlleenOpen] = useState(false); // alleen adressen zónder foto tonen
+  const [perWeek, setPerWeek] = useState(false); // mappen groeperen per week i.p.v. op gebied
+  const [teVersturenMap, setTeVersturenMap] = useState<VoorschouwMap | null>(null); // bevestiging vóór versturen
   useEffect(() => { try { localStorage.setItem("vs-mapSort", sorteerModus); } catch { /* opslag niet beschikbaar */ } }, [sorteerModus]);
 
   if (!currentUser) return null;
@@ -276,15 +300,6 @@ export function Voorschouwen() {
       setBezig(false);
     }
   };
-  const exporteerMail = async () => {
-    setBezig(true);
-    try {
-      await mailVoorschouwenNaarStedin(geselecteerd());
-    } finally {
-      setBezig(false);
-    }
-  };
-
   const ingediend = zichtbaar.filter((v) => v.status === "Ingediend").length;
   const concept = zichtbaar.filter((v) => v.status === "Concept").length;
 
@@ -352,8 +367,32 @@ export function Voorschouwen() {
   };
 
   // Groepeer de zichtbare voorschouwen per eigen map; losse adressen onder "Zonder map".
-  const actieveMappen = voorschouwMappen.filter((m) => !m.gearchiveerd);
+  const actieveMappen = voorschouwMappen.filter((m) => !m.gearchiveerd && !m.gereedVoorStedin);
   const geldigeMapIds = new Set(actieveMappen.map((m) => m.id));
+  // Mappen die klaarstaan voor de controle-/verstuurpagina "Klaar voor Stedin".
+  const gereedeMappen = voorschouwMappen.filter((m) => !m.gearchiveerd && m.gereedVoorStedin);
+  const itemsVanMap = (id: string) => voorschouwen.filter((v) => v.mapId === id);
+  // Voortgang: "gedaan" = mét foto toegevoegd.
+  const metFoto = zichtbaar.filter((v) => !vsZonderFoto(v)).length;
+  const pctFoto = zichtbaar.length ? Math.round((metFoto / zichtbaar.length) * 100) : 0;
+  // Geselecteerde adressen → hun mappen klaarzetten op de Stedin-pagina.
+  const klaarzettenVoorStedin = () => {
+    const mapIds = new Set(geselecteerd().map((v) => v.mapId).filter((x): x is string => !!x));
+    if (mapIds.size === 0) return;
+    const nu = new Date().toISOString();
+    mapIds.forEach((id) => updateVoorschouwMap(id, { gereedVoorStedin: true, gereedOp: nu }));
+    wis();
+    setTab("stedin");
+  };
+  const terugUitStedin = (m: VoorschouwMap) => updateVoorschouwMap(m.id, { gereedVoorStedin: false, gereedOp: undefined });
+  const verstuurMapNaarStedin = async (m: VoorschouwMap) => {
+    setBezig(true);
+    try {
+      const res = await verstuurVoorschouwenNaarStedin(itemsVanMap(m.id));
+      if (res === "gedeeld" || res === "gedownload") updateVoorschouwMap(m.id, { verzondenOp: new Date().toISOString() });
+    } finally { setBezig(false); setTeVersturenMap(null); }
+  };
+  const afrondenStedin = (m: VoorschouwMap) => updateVoorschouwMap(m.id, { gereedVoorStedin: false, gearchiveerd: true, gearchiveerdOp: new Date().toISOString() });
   const gesorteerdeMappen = [...actieveMappen].sort((a, b) => a.naam.localeCompare(b.naam, "nl")); // voor het map-menu (voorspelbaar A–Z)
   // Handmatige volgorde (voor de omhoog/omlaag-knoppen): bepaalt of een map boven- of onderaan staat.
   const eigenVolgordeIds = [...actieveMappen].sort(opEigenVolgorde).map((m) => m.id);
@@ -385,14 +424,21 @@ export function Voorschouwen() {
   // een adres matcht (dan alleen die adressen in de body). Puur cosmetisch — raakt de bulk-selectie niet.
   const q = mapZoek.trim().toLowerCase();
   const itemMatch = (v: Voorschouw) => `${v.straatnaam} ${v.postcode} ${v.plaats}`.toLowerCase().includes(q);
+  const weekVanGroep = (g: { items: Voorschouw[] }) => {
+    const ds = g.items.map((v) => v.aangemaakt).filter(Boolean).sort();
+    return ds.length ? vsWeekStart(ds[ds.length - 1]) : "";
+  };
   const weergave = groepen
     .map((g) => {
       const naamMatch = q === "" || (g.map?.naam ?? "zonder map").toLowerCase().includes(q);
-      const body = naamMatch ? g.items : g.items.filter(itemMatch);
-      return { map: g.map, items: g.items, body, toon: q === "" || naamMatch || body.length > 0 };
+      let body = naamMatch ? g.items : g.items.filter(itemMatch);
+      if (alleenOpen) body = body.filter(vsZonderFoto); // alleen adressen zónder foto
+      const zoekOk = q === "" || naamMatch || body.length > 0;
+      return { map: g.map, items: g.items, body, toon: zoekOk && (!alleenOpen || body.length > 0) };
     })
     .filter((g) => g.toon);
-  const eigenModus = sorteerModus === "eigen" && q === ""; // alleen dan mag je met de pijlen herordenen
+  if (perWeek) weergave.sort((a, b) => { const wa = weekVanGroep(a), wb = weekVanGroep(b); return wa < wb ? 1 : wa > wb ? -1 : 0; }); // nieuwste week eerst
+  const eigenModus = !perWeek && sorteerModus === "eigen" && q === ""; // herordenen alleen in de gebied-weergave
 
   // Eén adres-rij (in de lijst, binnen een map-groep).
   const rij = (v: Voorschouw) => {
@@ -443,6 +489,77 @@ export function Voorschouwen() {
     );
   };
 
+  // ── Controle-/verstuurpagina "Klaar voor Stedin" ──
+  if (tab === "stedin" && isLeiding) {
+    return (
+      <div className="space-y-6">
+        <button type="button" onClick={() => setTab("overzicht")} className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-500 hover:text-ink-800"><ArrowLeft className="h-4 w-4" /> Terug naar overzicht</button>
+        <div>
+          <h2 className="text-xl font-bold text-ink-900">Klaar voor Stedin</h2>
+          <p className="text-sm text-ink-500">Controleer elke map en verstuur 'm dan. Op de telefoon voegt de deel-knop de PDF's meteen als bijlage toe in je mail-app; op de laptop download ik de map (ZIP) en open ik een kant-en-klaar mailconcept.</p>
+        </div>
+
+        {gereedeMappen.length === 0 ? (
+          <Card className="p-10 text-center">
+            <Send className="mx-auto h-10 w-10 text-ink-300" />
+            <p className="mt-3 text-sm text-ink-500">Nog geen mappen klaargezet. Ga naar het overzicht, selecteer een map en klik op <span className="font-semibold">"Naar Stedin klaarzetten"</span>.</p>
+          </Card>
+        ) : (
+          <div className="space-y-4">
+            {gereedeMappen.map((m) => {
+              const items = itemsVanMap(m.id).sort(opPostcode);
+              const zonder = items.filter(vsZonderFoto).length;
+              return (
+                <div key={m.id} className="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-card">
+                  <div className="flex flex-wrap items-center gap-3 p-4">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600"><Folder className="h-5 w-5" /></span>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate font-bold text-ink-900">{m.naam}</div>
+                      <div className="truncate text-xs text-ink-500">{items.length} {items.length === 1 ? "adres" : "adressen"}{zonder > 0 ? ` · ${zonder} zonder foto` : " · alle met foto"}{m.verzondenOp ? " · ✓ verstuurd" : ""}</div>
+                    </div>
+                    {zonder > 0 && <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700 ring-1 ring-amber-200"><AlertTriangle className="h-3 w-3" /> {zonder} zonder foto</span>}
+                  </div>
+                  <div className="border-t border-ink-100 bg-ink-50/30 p-3">
+                    <div className="space-y-1.5">
+                      {items.map((v) => (
+                        <div key={v.id} className="flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm">
+                          <MapPin className="h-4 w-4 shrink-0 text-ink-400" />
+                          <span className="min-w-0 flex-1 truncate text-ink-800">{v.straatnaam || "Onbekend"}{v.postcode || v.plaats ? `, ${[v.postcode, v.plaats].filter(Boolean).join(" ")}` : ""}</span>
+                          {vsZonderFoto(v)
+                            ? <span className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-amber-600"><ImageOff className="h-3.5 w-3.5" /> geen foto</span>
+                            : <span className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-green-600"><CheckCircle2 className="h-3.5 w-3.5" /> {v.fotos.length} foto{v.fotos.length > 1 ? "'s" : ""}</span>}
+                          <button type="button" onClick={() => open(v)} title="Bekijken/bewerken" className="shrink-0 rounded p-1 text-ink-400 hover:bg-ink-100 hover:text-ink-700"><Pencil className="h-3.5 w-3.5" /></button>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <button type="button" disabled={bezig || items.length === 0} onClick={() => setTeVersturenMap(m)} className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-40">
+                        {bezig ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Deze map versturen naar Stedin
+                      </button>
+                      <button type="button" disabled={bezig || items.length === 0} onClick={() => void downloadMap(items)} className="inline-flex items-center gap-2 rounded-lg border border-ink-200 bg-white px-4 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50 disabled:cursor-not-allowed disabled:opacity-40"><FolderArchive className="h-4 w-4" /> Download (ZIP)</button>
+                      {m.verzondenOp && <button type="button" onClick={() => afrondenStedin(m)} className="inline-flex items-center gap-2 rounded-lg border border-green-300 bg-green-50 px-4 py-2.5 text-sm font-semibold text-green-700 hover:bg-green-100"><CheckCircle2 className="h-4 w-4" /> Afronden (uit lijst)</button>}
+                      <button type="button" onClick={() => terugUitStedin(m)} className="ml-auto inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-ink-500 hover:bg-ink-100"><ArrowLeft className="h-4 w-4" /> Terug naar overzicht</button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <Bevestig
+          open={!!teVersturenMap}
+          titel="Deze map versturen naar Stedin?"
+          tekst={teVersturenMap ? `"${teVersturenMap.naam}" (${itemsVanMap(teVersturenMap.id).length} adressen) wordt klaargezet om te versturen. Op de telefoon opent de deel-knop je mail-app met de PDF's als bijlage; op de laptop download ik de ZIP en open ik een mailconcept naar Stedin.` : ""}
+          bevestigLabel="Versturen"
+          bevestigTone="brand"
+          onBevestig={() => teVersturenMap && void verstuurMapNaarStedin(teVersturenMap)}
+          onAnnuleer={() => setTeVersturenMap(null)}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -475,6 +592,13 @@ export function Voorschouwen() {
       </div>
       <VoorschouwScanModal open={scanOpen} onSluit={() => setScanOpen(false)} onResultaat={naScan} />
 
+      {isLeiding && (
+        <div className="flex gap-1 rounded-xl border border-ink-200 bg-white p-1 shadow-card">
+          <button type="button" onClick={() => setTab("overzicht")} className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${tab === "overzicht" ? "bg-brand-600 text-white" : "text-ink-600 hover:bg-ink-50"}`}>Overzicht</button>
+          <button type="button" onClick={() => setTab("stedin")} className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${tab === "stedin" ? "bg-brand-600 text-white" : "text-ink-600 hover:bg-ink-50"}`}>Klaar voor Stedin{gereedeMappen.length ? ` (${gereedeMappen.length})` : ""}</button>
+        </div>
+      )}
+
       {/* Mini-overzicht */}
       <div className="grid grid-cols-3 gap-4">
         <Card className="flex flex-col items-start gap-1.5 p-3 sm:flex-row sm:items-center sm:gap-3 sm:p-4">
@@ -506,6 +630,17 @@ export function Voorschouwen() {
         </Card>
       </div>
 
+      {/* Voortgang: hoeveel adressen al mét foto (= gedaan) */}
+      {zichtbaar.length > 0 && (
+        <div className="rounded-xl border border-ink-200 bg-white p-4 shadow-card">
+          <div className="mb-2 flex items-center justify-between text-sm">
+            <span className="font-semibold text-ink-700">Voortgang — adressen mét foto</span>
+            <span className="text-ink-500">{metFoto} van {zichtbaar.length} ({pctFoto}%)</span>
+          </div>
+          <div className="h-2.5 overflow-hidden rounded-full bg-ink-100"><div className="h-full rounded-full bg-green-500 transition-all" style={{ width: `${pctFoto}%` }} /></div>
+        </div>
+      )}
+
       {/* Mappen op postcode — automatisch versturen zodra een map vol is */}
 
       {/* Selectie- en actiebalk */}
@@ -533,16 +668,18 @@ export function Voorschouwen() {
           )}
 
           <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto">
-            <span className="hidden text-xs text-ink-400 sm:inline">Verstuur naar Stedin:</span>
-            <button
-              type="button"
-              disabled={selectie.size === 0 || bezig}
-              onClick={exporteerMail}
-              className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-brand-600 px-3.5 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-40 sm:flex-none sm:py-2"
-            >
-              {bezig ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
-              Mail naar Stedin
-            </button>
+            <span className="hidden text-xs text-ink-400 sm:inline">Met selectie:</span>
+            {isLeiding && (
+              <button
+                type="button"
+                disabled={selectie.size === 0}
+                onClick={klaarzettenVoorStedin}
+                title="Zet de mappen van de geselecteerde adressen klaar op de controle-/verstuurpagina"
+                className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-brand-600 px-3.5 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-40 sm:flex-none sm:py-2"
+              >
+                <Send className="h-4 w-4" /> Naar Stedin klaarzetten
+              </button>
+            )}
             <button
               type="button"
               disabled={selectie.size === 0 || bezig}
@@ -571,6 +708,18 @@ export function Voorschouwen() {
             <button type="button" onClick={nieuweMap} className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 bg-white px-3 py-1.5 text-xs font-semibold text-ink-700 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700">
               <FolderPlus className="h-4 w-4" /> Nieuwe map
             </button>
+          </div>
+
+          {/* Filters: alles vs alleen open (zonder foto) + gebied vs per week */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex gap-1 rounded-lg border border-ink-200 bg-white p-0.5">
+              <button type="button" onClick={() => setAlleenOpen(false)} className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${!alleenOpen ? "bg-brand-600 text-white" : "text-ink-600 hover:bg-ink-50"}`}>Alles</button>
+              <button type="button" onClick={() => setAlleenOpen(true)} className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${alleenOpen ? "bg-amber-500 text-white" : "text-ink-600 hover:bg-ink-50"}`}><ImageOff className="h-3.5 w-3.5" /> Alleen open (zonder foto)</button>
+            </div>
+            <div className="flex gap-1 rounded-lg border border-ink-200 bg-white p-0.5">
+              <button type="button" onClick={() => setPerWeek(false)} className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${!perWeek ? "bg-brand-600 text-white" : "text-ink-600 hover:bg-ink-50"}`}>Op gebied</button>
+              <button type="button" onClick={() => setPerWeek(true)} className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${perWeek ? "bg-brand-600 text-white" : "text-ink-600 hover:bg-ink-50"}`}><Calendar className="h-3.5 w-3.5" /> Per week</button>
+            </div>
           </div>
 
           {/* Mappen zoeken/filteren + sorteren — zichtbaar voor iedereen */}
@@ -611,13 +760,17 @@ export function Voorschouwen() {
               <p className="mt-2 text-sm text-ink-500">Geen mappen of adressen gevonden voor “{mapZoek.trim()}”.</p>
               <button type="button" onClick={() => setMapZoek("")} className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-ink-200 bg-white px-3 py-1.5 text-xs font-semibold text-ink-700 hover:bg-ink-50"><X className="h-3.5 w-3.5" /> Zoekopdracht wissen</button>
             </Card>
-          ) : weergave.map((g) => {
+          ) : weergave.map((g, gi) => {
             const key = g.map?.id ?? "zonder";
             const uitgeklapt = q !== "" ? true : openMappen.has(key);
             const idx = g.map ? eigenVolgordeIds.indexOf(g.map.id) : -1;
             const zonderFoto = g.items.filter((v) => !v.fotos || v.fotos.length === 0).length;
+            const wk = perWeek ? weekVanGroep(g) : "";
+            const toonWeekkop = perWeek && wk !== (gi > 0 ? weekVanGroep(weergave[gi - 1]) : null);
             return (
-              <div key={key} className="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-card">
+              <Fragment key={key}>
+                {toonWeekkop && <h3 className="flex items-center gap-1.5 pt-1 text-sm font-bold text-ink-700"><Calendar className="h-4 w-4 text-ink-400" /> {vsWeekLabel(wk)}</h3>}
+                <div className="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-card">
                 <div className="flex flex-wrap items-center gap-3 px-4 py-4">
                   <input
                     type="checkbox"
@@ -687,7 +840,8 @@ export function Voorschouwen() {
                     )}
                   </div>
                 )}
-              </div>
+                </div>
+              </Fragment>
             );
           })}
         </div>

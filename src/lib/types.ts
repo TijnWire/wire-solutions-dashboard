@@ -137,6 +137,9 @@ export type VoorschouwMap = {
   aangemaakt?: string; // ISO — voor "nieuwste eerst"-sortering
   gearchiveerd?: boolean; // naar de database verstuurd → uit de actieve lijst, bewaard onder "Voorschouwen"
   gearchiveerdOp?: string; // ISO
+  gereedVoorStedin?: boolean; // klaargezet op de controle-/verstuurpagina "Klaar voor Stedin"
+  gereedOp?: string; // ISO
+  verzondenOp?: string; // ISO — wanneer daadwerkelijk naar Stedin verstuurd
 };
 
 export type Voorschouw = {
