@@ -3,6 +3,7 @@ import { ArrowLeft, X, Save, Send, Folder, FolderPlus, Check, Search, ChevronDow
 import { useApp } from "../store/AppContext";
 import { Card } from "./ui";
 import { FotoKnoppen } from "./FotoKnoppen";
+import { AdresBekendHint } from "./AdresBekendHint";
 import { fileNaarDataUrl } from "../lib/image";
 import { legeVoorschouw, type Voorschouw, type JaNee } from "../lib/types";
 
@@ -274,6 +275,8 @@ export function VoorschouwForm({
           <Tekstveld label="Postcode" value={data.postcode} onChange={(v) => set({ postcode: v })} placeholder="1234 AB" />
           <Tekstveld label="Plaats" value={data.plaats} onChange={(v) => set({ plaats: v })} placeholder="Rotterdam" />
         </div>
+        {/* Alleen bij een nieuw formulier: melden als we deze straat al eens hebben gedaan (in welk project dan ook). */}
+        {!bestaande && <AdresBekendHint straat={data.straatnaam} postcode={data.postcode} plaats={data.plaats} />}
         <JaNeeKnop label="Gebouw aan meerdere straten verbonden" value={data.meerdereStraten} onChange={(v) => set({ meerdereStraten: v })} />
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Tekstveld label="Aantal woningen / adressen" value={data.aantalWoningen} onChange={(v) => set({ aantalWoningen: v })} placeholder="bijv. 24" />

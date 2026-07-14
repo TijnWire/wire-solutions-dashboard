@@ -450,6 +450,7 @@ export type Instellingen = {
   googleMapsKey: string;
   whatsappToken: string;
   claudeKey: string;
+  adresNegeer?: string[]; // straat-sleutels waarvoor de "dit adres kennen we al"-melding is uitgezet
 };
 
 // ── Kennisbank ──
