@@ -1,6 +1,6 @@
 // Automatische mail-import voor Wire Solutions.
 // Leest de mailbox uit (IMAP), pakt Excel-bijlagen, herkent het type (nu: Klantafspraaklijst →
-// Buurtaanpak), en zet de gegevens in de centrale database (Supabase) → verschijnt vanzelf in de app.
+// Buurtaanpak), en zet de gegevens in de centrale database (Cloudflare Worker) → verschijnt vanzelf in de app.
 //
 // Draait via .github/workflows/mail-import.yml (elke 10 min). Lokaal testen:
 //   $env:IMAP_USER="..."; $env:IMAP_PASS="..."; $env:BOT_EMAIL="..."; $env:BOT_PASS="..."; node scripts/mail-import.mjs
@@ -14,10 +14,27 @@
 import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
 import ExcelJS from "exceljs";
-import { createClient } from "@supabase/supabase-js";
 
-const SUPABASE_URL = "https://buauptxdaiuvqazhlrhk.supabase.co";
-const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ1YXVwdHhkYWl1dnFhemhscmhrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5MTQ0ODAsImV4cCI6MjA5NjQ5MDQ4MH0.OeQlHefazX6XLdAoOQtJEWs9lUqctjP3rC4_L7byn_4";
+// Centrale database: de Cloudflare Worker (zie MIGRATIE-CLOUDFLARE.md). Vul de URL hieronder in, of zet 'm
+// als GitHub Actions-secret CLOUD_API_URL (heeft voorrang).
+const CLOUD_API_URL = process.env.CLOUD_API_URL || "https://wire-solutions-api.denhaantijn1.workers.dev";
+
+async function cloudFetch(path, { method = "GET", body, token } = {}) {
+  const res = await fetch(CLOUD_API_URL + path, {
+    method,
+    headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  return data;
+}
+async function botLogin() {
+  // Signup is idempotent (maakt het bot-account aan als het nog niet bestaat); daarna login voor de token.
+  await cloudFetch("/auth/signup", { method: "POST", body: { email: BOT_EMAIL, wachtwoord: BOT_PASS } }).catch(() => {});
+  const r = await cloudFetch("/auth/login", { method: "POST", body: { email: BOT_EMAIL, wachtwoord: BOT_PASS } });
+  return r.token;
+}
 
 const IMAP_HOST = process.env.IMAP_HOST || "imap.hostnet.nl";
 const IMAP_PORT = Number(process.env.IMAP_PORT || 993);
@@ -91,9 +108,8 @@ function herkenType(rijen) {
 }
 
 async function main() {
-  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON, { auth: { persistSession: false } });
-  const { error: loginErr } = await supabase.auth.signInWithPassword({ email: BOT_EMAIL, password: BOT_PASS });
-  if (loginErr) { console.error("Supabase-login mislukt:", loginErr.message); process.exit(1); }
+  let token;
+  try { token = await botLogin(); } catch (e) { console.error("Login bij de centrale database mislukt:", e.message); process.exit(1); }
 
   const client = new ImapFlow({ host: IMAP_HOST, port: IMAP_PORT, secure: true, auth: { user: IMAP_USER, pass: IMAP_PASS }, logger: false });
   await client.connect();
@@ -119,9 +135,9 @@ async function main() {
             const id = `ba-mail-${Date.now().toString(36)}`;
             const nieuw = { id, aangemaakt: new Date().toISOString(), naam: naam.charAt(0).toUpperCase() + naam.slice(1), regio: "", opdrachtgever: "Stedin / FUES", adressen };
             // Mergen: huidige slice ophalen, nieuw project erbij, terugschrijven.
-            const { data: rij } = await supabase.from("wire_state").select("data").eq("key", "buurtaanpak").maybeSingle();
-            const huidig = Array.isArray(rij?.data) ? rij.data : [];
-            await supabase.from("wire_state").upsert({ key: "buurtaanpak", data: [nieuw, ...huidig], updated_at: new Date().toISOString() }, { onConflict: "key" });
+            const cur = await cloudFetch("/state/keys", { method: "POST", token, body: { keys: ["buurtaanpak"] } });
+            const huidig = Array.isArray(cur.buurtaanpak) ? cur.buurtaanpak : [];
+            await cloudFetch("/state", { method: "POST", token, body: { key: "buurtaanpak", data: [nieuw, ...huidig] } });
             console.log(`✓ ${bijlage.filename}: buurtaanpak "${nieuw.naam}" met ${adressen.length} adressen toegevoegd`);
             verwerkt++;
           } else {

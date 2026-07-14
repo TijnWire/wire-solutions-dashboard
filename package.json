@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "cf:deploy": "wrangler deploy",
+    "cf:schema": "wrangler d1 execute wire-solutions --remote --file cloudflare/schema.sql",
+    "cf:tail": "wrangler tail"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.108.0",
@@ -33,6 +36,7 @@
     "postcss": "^8.4.39",
     "tailwindcss": "^3.4.6",
     "typescript": "^5.5.3",
-    "vite": "^5.3.4"
+    "vite": "^5.3.4",
+    "wrangler": "^4.20.0"
   }
 }

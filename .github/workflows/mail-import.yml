@@ -25,6 +25,7 @@ jobs:
       - name: Mailbox uitlezen en importeren
         run: node scripts/mail-import.mjs
         env:
+          CLOUD_API_URL: ${{ secrets.CLOUD_API_URL }}
           IMAP_HOST: ${{ secrets.IMAP_HOST }}
           IMAP_USER: ${{ secrets.IMAP_USER }}
           IMAP_PASS: ${{ secrets.IMAP_PASS }}

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Lock, Eye, EyeOff, ShieldCheck } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { hashWachtwoord } from "../lib/auth";
-import { sb, supabaseAan, bewaarSyncCred } from "../lib/supabase";
+import { sbWijzigWachtwoord, supabaseAan, bewaarSyncCred } from "../lib/supabase";
 
 // Verplicht scherm ná een door de beheerder afgedwongen reset: de medewerker kiest hier zelf een
 // nieuw wachtwoord voordat hij verder kan. Zo wordt het tijdelijke wachtwoord meteen vervangen en
@@ -23,9 +23,9 @@ export function WachtwoordWijzigen() {
     if (nw !== herhaal) return setFout("De twee wachtwoorden zijn niet gelijk.");
     setBezig(true);
     try {
-      // 1) Echt wachtwoord in Supabase Auth bijwerken (de medewerker heeft een sessie via het tijdelijke wachtwoord).
+      // 1) Echt wachtwoord in de centrale database bijwerken (de medewerker heeft een sessie via het tijdelijke wachtwoord).
       if (supabaseAan) {
-        try { await sb().auth.updateUser({ password: nw }); } catch { /* geen sessie? dan blijft de lokale hash leidend */ }
+        try { await sbWijzigWachtwoord(nw); } catch { /* geen sessie? dan blijft de lokale hash leidend */ }
       }
       // 2) Lokale hash bijwerken + de force-vlag uitzetten.
       const cred = await hashWachtwoord(nw);

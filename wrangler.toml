@@ -1,0 +1,16 @@
+# Wire Solutions — Cloudflare Worker (centrale database, vervangt Supabase)
+# Deploy:  npx wrangler deploy
+# Zie MIGRATIE-CLOUDFLARE.md voor het volledige stappenplan.
+
+name = "wire-solutions-api"
+main = "cloudflare/worker.ts"
+compatibility_date = "2024-11-01"
+
+# D1-database. De database_id vul je in na:  npx wrangler d1 create wire-solutions
+[[d1_databases]]
+binding = "DB"
+database_name = "wire-solutions"
+database_id = "193678aa-11c6-4565-ab4c-f7e1954c58cd"
+
+# JWT_SECRET is een secret, GEEN gewone var. Zet 'm met:
+#   npx wrangler secret put JWT_SECRET

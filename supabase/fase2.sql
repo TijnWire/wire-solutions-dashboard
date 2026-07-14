@@ -13,8 +13,10 @@
 -- ── Helper: is de huidige sessie een ingelogd team-account? (zelfde definitie als schema.sql) ──
 create or replace function public.is_team() returns boolean
   language sql stable as $$
+    -- IEDEREEN die is ingelogd mag synchroniseren — bewust GEEN e-mail-domein-eis.
+    -- Teamleden loggen ook in met gmail e.d.; een domein-eis blokkeerde hun lezen/schrijven
+    -- via RLS, waardoor de sync tussen apparaten "kapot" leek. Zie sync-goedzetten.sql.
     select auth.role() = 'authenticated'
-       and lower(coalesce(auth.jwt() ->> 'email', '')) like '%@wiresolutions.nl'
   $$;
 
 -- ─────────────────────────────────────────────────────────────────────────────
