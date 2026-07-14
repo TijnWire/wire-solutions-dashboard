@@ -56,7 +56,7 @@ export function meldingenVoor(user: User, data: MeldingData): Melding[] {
   if (openTaken.length) m.push({ id: "taken", ernst: "info", titel: `${openTaken.length} ${openTaken.length === 1 ? "taak" : "taken"} te doen`, tekst: "Bekijk je openstaande taken in Mijn werk.", navKey: "mijnwerk" });
 
   // Toegewezen brievenrondes met nog te gooien adressen
-  for (const r of rondes.filter((r) => r.toegewezenAan === user.id)) {
+  for (const r of rondes.filter((r) => r.toegewezenAan === user.id && !r.verwijderd)) {
     const open = r.adressen.filter((a) => !a.ontbreekt && a.status === "Te doen").length;
     if (open > 0) m.push({ id: "ronde-" + r.id, ernst: "info", titel: `Brieven: ${r.straat}`, tekst: `Nog ${open} adres${open === 1 ? "" : "sen"} te gooien.`, navKey: "brieven", target: { ronde: r.id } });
   }
@@ -76,7 +76,7 @@ export function meldingenVoor(user: User, data: MeldingData): Melding[] {
   // Saneren: bevestigings-sms 24u vóór de afspraak. Pas zodra bij élk adres een afspraak is gemaakt,
   // en alleen voor afspraken die vandaag of morgen plaatsvinden en nog geen bevestiging hebben gehad.
   const vandaag = dezeISO(0), morgen = dezeISO(1);
-  for (const s of saneringen.filter((s) => !s.gearchiveerd && (isLeiding || s.toegewezenAan === user.id))) {
+  for (const s of saneringen.filter((s) => !s.gearchiveerd && !s.verwijderd && (isLeiding || s.toegewezenAan === user.id))) {
     if (s.adressen.length === 0 || !s.adressen.every((a) => a.bevestigd)) continue;
     const teVersturen = s.adressen.filter((a) => a.telefoon.trim() && isISODatum(a.datum) && !a.herinnerVerstuurdOp && a.datum >= vandaag && a.datum <= morgen).length;
     if (teVersturen > 0) m.push({ id: "san-sms-" + s.id, ernst: "waarschuwing", titel: `${teVersturen} bevestigings-sms te versturen`, tekst: `Stuur de bewoners van “${s.naam}” vandaag nog de afspraakbevestiging — hun afspraak is vandaag of morgen (24 uur vooraf).`, navKey: "saneren", target: { saneringId: s.id } });
@@ -144,7 +144,7 @@ export function meldingenVoor(user: User, data: MeldingData): Melding[] {
 
   // Afgeronde brievenrondes die klaarstaan voor de boekhouding (facturatie)
   if (isLeiding) {
-    for (const r of rondes.filter((r) => r.boekhouding === "te_factureren")) {
+    for (const r of rondes.filter((r) => r.boekhouding === "te_factureren" && !r.verwijderd)) {
       m.push({ id: "ronde-fact-" + r.id, ernst: "info", titel: `Brievenronde afgerond: ${r.straat}`, tekst: "Klaar voor facturatie — verwerk bij de boekhouding.", navKey: "facturen", target: { ronde: r.id } });
     }
   }

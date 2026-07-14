@@ -822,6 +822,7 @@ function BrievenMap({ naam, rondes, isLeiding, onOpenRonde, startOpen }: { naam:
   const [pdBewerk, setPdBewerk] = useState(false);
   const [routeOpen, setRouteOpen] = useState(false);
   const [vraagBoek, setVraagBoek] = useState(false);
+  const [vraagVerwijder, setVraagVerwijder] = useState(false);
   const [boekKlaar, setBoekKlaar] = useState(0); // >0 → succes-popup met aantal verzonden adressen
   const [sel, setSel] = useState<Set<string>>(new Set()); // geselecteerde adres-id's voor bulk-acties
   const [tikModus, setTikModus] = useState<BriefStatus | null>(null); // null = selecteren; anders zet één tik direct deze status
@@ -853,6 +854,9 @@ function BrievenMap({ naam, rondes, isLeiding, onOpenRonde, startOpen }: { naam:
   const zetDeadline = (d: string) => rondes.forEach((r) => updateRonde(r.id, { deadline: d || undefined }));
   const zetToegewezen = (id: string) => rondes.forEach((r) => updateRonde(r.id, id && r.status === "nieuw" ? { toegewezenAan: id || undefined, status: "toegewezen", toegewezenOp: nu() } : { toegewezenAan: id || undefined }));
   const naarBoekhouding = () => { const n = teBezorgen.length; rondes.forEach((r) => updateRonde(r.id, { status: "verstuurd", verstuurdOp: nu(), boekhouding: "te_factureren", doorgestuurdOp: nu() })); setVraagBoek(false); setBoekKlaar(n); };
+  // Zacht verwijderen: de hele map uit het overzicht halen, maar de rondes blijven in de data (dus in de
+  // database) staan — alleen gemarkeerd als verwijderd, zodat je 'm later kunt terugzetten.
+  const verwijderMap = () => { rondes.forEach((r) => updateRonde(r.id, { verwijderd: true, verwijderdOp: nu() })); setVraagVerwijder(false); };
 
   // ── Adressen selecteren (per stuk / hele straat / alles) en in bulk markeren ──
   const alleIds = straten.flatMap((r) => r.adressen.filter((a) => !a.ontbreekt).map((a) => a.id));
@@ -914,6 +918,7 @@ function BrievenMap({ naam, rondes, isLeiding, onOpenRonde, startOpen }: { naam:
           <div className="truncate text-xs text-ink-500">{rondes.length} {rondes.length === 1 ? "ronde" : "rondes"} · {teBezorgen.length} adressen · {openA} open{pd ? ` · ${pd}` : ""}{alAfgerond ? " · ✓ boekhouding" : ""}</div>
         </div>
         {isLeiding && naamBewerk === null && <button type="button" onClick={() => setNaamBewerk(naam)} className="shrink-0 rounded-lg p-2 text-ink-400 hover:bg-ink-100" title="Naam wijzigen"><Pencil className="h-4 w-4" /></button>}
+        {isLeiding && naamBewerk === null && <button type="button" onClick={() => setVraagVerwijder(true)} className="shrink-0 rounded-lg p-2 text-ink-400 hover:bg-red-50 hover:text-red-600" title="Map verwijderen"><Trash2 className="h-4 w-4" /></button>}
         <button type="button" onClick={() => setOpen((o) => !o)} className="shrink-0 rounded-lg p-1 text-ink-400" title="Uit-/inklappen"><ChevronDown className={`h-5 w-5 transition-transform ${open ? "rotate-180" : ""}`} /></button>
       </div>
       <div className="h-1 bg-ink-100"><div className="h-full bg-green-500" style={{ width: `${pct}%` }} /></div>
@@ -1065,6 +1070,7 @@ function BrievenMap({ naam, rondes, isLeiding, onOpenRonde, startOpen }: { naam:
         </div>
       )}
       <Bevestig open={vraagBoek} titel="Hele map naar de boekhouding?" tekst={`Alle ${rondes.length} rondes (${teBezorgen.length} adressen) van "${naam}" worden afgerond en doorgestuurd naar de boekhouding.`} bevestigLabel="Naar boekhouding" bevestigTone="brand" onBevestig={naarBoekhouding} onAnnuleer={() => setVraagBoek(false)} />
+      <Bevestig open={vraagVerwijder} titel="Map verwijderen" tekst={`Weet je het zeker dat je de map "${naam}" (${rondes.length} ${rondes.length === 1 ? "ronde" : "rondes"} · ${teBezorgen.length} adressen) wilt verwijderen? De map verdwijnt uit dit overzicht, maar blijft bewaard in de database — je kunt 'm onderaan bij "Verwijderde mappen" weer terugzetten.`} bevestigLabel="Ja, verwijderen" onBevestig={verwijderMap} onAnnuleer={() => setVraagVerwijder(false)} />
 
       {/* Succes-melding ná het doorsturen */}
       {boekKlaar > 0 && (
@@ -1083,17 +1089,30 @@ function BrievenMap({ naam, rondes, isLeiding, onOpenRonde, startOpen }: { naam:
 }
 
 export function Brieven({ initieelRonde }: { initieelRonde?: string }) {
-  const { rondes, currentUser } = useApp();
+  const { rondes, currentUser, updateRonde } = useApp();
   const [openId, setOpenId] = useState<string | null>(initieelRonde ?? null);
   const [nieuw, setNieuw] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
+  const [prullenOpen, setPrullenOpen] = useState(false);
 
   if (!currentUser) return null;
   const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer";
   const zichtbaar = (isLeiding
     ? rondes
     : rondes.filter((r) => r.toegewezenAan === currentUser.id)
-  ).filter((r) => !r.gearchiveerd);
+  ).filter((r) => !r.gearchiveerd && !r.verwijderd);
+
+  // Verwijderde mappen — zacht verwijderd: weg uit het overzicht maar bewaard in de database, terug te zetten.
+  const verwijderdeMappen: { naam: string; items: Brievenronde[] }[] = [];
+  if (isLeiding) {
+    for (const r of rondes) {
+      if (!r.verwijderd || !r.mapNaam) continue;
+      let m = verwijderdeMappen.find((x) => x.naam === r.mapNaam);
+      if (!m) { m = { naam: r.mapNaam, items: [] }; verwijderdeMappen.push(m); }
+      m.items.push(r);
+    }
+  }
+  const herstelMap = (items: Brievenronde[]) => items.forEach((r) => updateRonde(r.id, { verwijderd: false, verwijderdOp: undefined }));
 
   if (nieuw) return <NieuweRonde onKlaar={() => setNieuw(false)} />;
 
@@ -1241,6 +1260,38 @@ export function Brieven({ initieelRonde }: { initieelRonde?: string }) {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Verwijderde mappen — bewaard in de database, hier terug te zetten. */}
+      {isLeiding && verwijderdeMappen.length > 0 && (
+        <div className="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-card">
+          <button type="button" onClick={() => setPrullenOpen((o) => !o)} className="flex w-full items-center gap-2 px-4 py-3 text-left hover:bg-ink-50">
+            <span className="shrink-0 rounded-lg bg-ink-100 p-2.5 text-ink-500"><Trash2 className="h-5 w-5" /></span>
+            <div className="min-w-0 flex-1">
+              <div className="font-semibold text-ink-900">Verwijderde mappen</div>
+              <div className="text-xs text-ink-500">{verwijderdeMappen.length} {verwijderdeMappen.length === 1 ? "map" : "mappen"} · bewaard in de database, terug te zetten</div>
+            </div>
+            <ChevronDown className={`h-5 w-5 shrink-0 text-ink-400 transition-transform ${prullenOpen ? "rotate-180" : ""}`} />
+          </button>
+          {prullenOpen && (
+            <div className="space-y-2 border-t border-ink-100 p-4">
+              {verwijderdeMappen.map((m) => {
+                const adr = m.items.flatMap((r) => r.adressen.filter((a) => !a.ontbreekt)).length;
+                const verwOp = m.items.find((r) => r.verwijderdOp)?.verwijderdOp;
+                return (
+                  <div key={m.naam} className="flex flex-wrap items-center gap-2 rounded-xl border border-ink-200 bg-ink-50/50 px-3 py-2.5">
+                    <Folder className="h-4 w-4 shrink-0 text-ink-400" />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-semibold text-ink-800">{m.naam}</div>
+                      <div className="truncate text-xs text-ink-500">{m.items.length} {m.items.length === 1 ? "ronde" : "rondes"} · {adr} adressen{verwOp ? ` · verwijderd op ${datumKort(verwOp)}` : ""}</div>
+                    </div>
+                    <button type="button" onClick={() => herstelMap(m.items)} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-ink-200 bg-white px-3 py-1.5 text-xs font-semibold text-ink-700 hover:bg-ink-50"><RotateCcw className="h-3.5 w-3.5" /> Terugzetten</button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
     </div>

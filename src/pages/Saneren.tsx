@@ -541,8 +541,10 @@ function SaneringDetail({ sanering, onTerug }: { sanering: Sanering; onTerug: ()
 
 // ── Hoofdcomponent: overzicht per werkweek (TAUW-layout) ──
 export function Saneren({ initieelSanering }: { initieelSanering?: string }) {
-  const { saneringen, users, currentUser, addSanering } = useApp();
+  const { saneringen, users, currentUser, addSanering, updateSanering } = useApp();
   const [openId, setOpenId] = useState<string | null>(initieelSanering ?? null);
+  const [vraagVerwijder, setVraagVerwijder] = useState<Sanering | null>(null);
+  const [prullenOpen, setPrullenOpen] = useState(false);
   const importInput = useRef<HTMLInputElement | null>(null);
   const scan = useSaneerScan();
 
@@ -564,7 +566,10 @@ export function Saneren({ initieelSanering }: { initieelSanering?: string }) {
 
   if (!currentUser) return null;
   const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer";
-  const zichtbaar = (isLeiding ? saneringen : saneringen.filter((s) => s.toegewezenAan === currentUser.id)).filter((s) => !s.gearchiveerd);
+  const zichtbaar = (isLeiding ? saneringen : saneringen.filter((s) => s.toegewezenAan === currentUser.id)).filter((s) => !s.gearchiveerd && !s.verwijderd);
+  const verwijderdeProjecten = isLeiding ? saneringen.filter((s) => s.verwijderd) : [];
+  const verwijderProject = (s: Sanering) => { updateSanering(s.id, { verwijderd: true, verwijderdOp: new Date().toISOString() }); setVraagVerwijder(null); };
+  const herstelProject = (s: Sanering) => updateSanering(s.id, { verwijderd: false, verwijderdOp: undefined });
 
   const open = zichtbaar.find((s) => s.id === openId);
   if (open) return <SaneringDetail sanering={open} onTerug={() => setOpenId(null)} />;
@@ -650,6 +655,7 @@ export function Saneren({ initieelSanering }: { initieelSanering?: string }) {
                             <div className="truncate text-xs text-ink-500">{[s.regio, `${tot} adres${tot === 1 ? "" : "sen"}`].filter(Boolean).join(" · ")}</div>
                           </div>
                           <Badge tone={STATUS_TONE[s.status]}>{TAUW_STATUS_LABEL[s.status]}</Badge>
+                          {isLeiding && <button type="button" onClick={(e) => { e.stopPropagation(); setVraagVerwijder(s); }} className="shrink-0 rounded-lg p-1.5 text-ink-300 hover:bg-red-50 hover:text-red-600" title="Project verwijderen"><Trash2 className="h-4 w-4" /></button>}
                           <ChevronRight className="h-5 w-5 shrink-0 text-ink-300" />
                         </div>
                         <div className="mt-3 flex items-center justify-between gap-2 text-xs">
@@ -666,6 +672,43 @@ export function Saneren({ initieelSanering }: { initieelSanering?: string }) {
               </div>
             );
           })}
+        </div>
+      )}
+
+      <Bevestig
+        open={!!vraagVerwijder}
+        titel="Project verwijderen"
+        tekst={vraagVerwijder ? `Weet je het zeker dat je "${vraagVerwijder.naam}" (${vraagVerwijder.adressen.length} adres${vraagVerwijder.adressen.length === 1 ? "" : "sen"}) wilt verwijderen? Het project verdwijnt uit dit overzicht, maar blijft bewaard in de database — je kunt 'm onderaan bij "Verwijderde projecten" weer terugzetten.` : ""}
+        bevestigLabel="Ja, verwijderen"
+        onBevestig={() => vraagVerwijder && verwijderProject(vraagVerwijder)}
+        onAnnuleer={() => setVraagVerwijder(null)}
+      />
+
+      {/* Verwijderde projecten — bewaard in de database, hier terug te zetten. */}
+      {isLeiding && verwijderdeProjecten.length > 0 && (
+        <div className="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-card">
+          <button type="button" onClick={() => setPrullenOpen((o) => !o)} className="flex w-full items-center gap-2 px-4 py-3 text-left hover:bg-ink-50">
+            <span className="shrink-0 rounded-lg bg-ink-100 p-2.5 text-ink-500"><Trash2 className="h-5 w-5" /></span>
+            <div className="min-w-0 flex-1">
+              <div className="font-semibold text-ink-900">Verwijderde projecten</div>
+              <div className="text-xs text-ink-500">{verwijderdeProjecten.length} {verwijderdeProjecten.length === 1 ? "project" : "projecten"} · bewaard in de database, terug te zetten</div>
+            </div>
+            <ChevronDown className={`h-5 w-5 shrink-0 text-ink-400 transition-transform ${prullenOpen ? "rotate-180" : ""}`} />
+          </button>
+          {prullenOpen && (
+            <div className="space-y-2 border-t border-ink-100 p-4">
+              {verwijderdeProjecten.map((s) => (
+                <div key={s.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-ink-200 bg-ink-50/50 px-3 py-2.5">
+                  <Recycle className="h-4 w-4 shrink-0 text-ink-400" />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-semibold text-ink-800">{s.naam}</div>
+                    <div className="truncate text-xs text-ink-500">{s.adressen.length} adres{s.adressen.length === 1 ? "" : "sen"}{s.verwijderdOp ? ` · verwijderd op ${datumKort(s.verwijderdOp)}` : ""}</div>
+                  </div>
+                  <button type="button" onClick={() => herstelProject(s)} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-ink-200 bg-white px-3 py-1.5 text-xs font-semibold text-ink-700 hover:bg-ink-50"><RotateCcw className="h-3.5 w-3.5" /> Terugzetten</button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

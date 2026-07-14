@@ -215,6 +215,8 @@ export type Brievenronde = {
   gefactureerdOp?: string; // ISO
   gearchiveerd?: boolean; // naar de database verstuurd → uit de actieve lijst, bewaard onder "Brieven & Routes"
   gearchiveerdOp?: string; // ISO
+  verwijderd?: boolean; // zacht verwijderd: weg uit het overzicht, maar de data blijft bewaard in de database
+  verwijderdOp?: string; // ISO
 };
 
 // ── Afspraken ──
@@ -578,6 +580,8 @@ export type Sanering = {
   stappen?: SaneerStapStatus[];
   gearchiveerd?: boolean; // naar de database verstuurd → uit de actieve lijst, bewaard onder "Saneren"
   gearchiveerdOp?: string; // ISO
+  verwijderd?: boolean; // zacht verwijderd: weg uit het overzicht, maar de data blijft bewaard in de database
+  verwijderdOp?: string; // ISO
 };
 
 // ── Stappenplan Saneren: het 5-fase werkproces dat de teams samen doorlopen ──
