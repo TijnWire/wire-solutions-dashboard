@@ -2,7 +2,7 @@ import { useState } from "react";
 import {
   Search, Plus, ArrowLeft, MapPin, Phone, Trash2, X,
   CalendarCheck, Mailbox, ClipboardCheck, Database, Image as ImageIcon, Download,
-  Building2, ChevronDown, ChevronRight, FlaskConical, Recycle, FolderArchive,
+  ChevronDown, ChevronRight, FlaskConical, Recycle, FolderArchive, Layers, Hash, Map as MapIcon,
 } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { Card, Badge, Bevestig } from "../components/ui";
@@ -12,6 +12,7 @@ import { downloadVoorschouwPdf } from "../lib/voorschouwPdf";
 import { datumLabel } from "../lib/afspraak";
 import { TAUW_TYPE_LABEL } from "../lib/types";
 import { PeriodeNavigator, periodeRange, type Periode } from "../components/PeriodeNavigator";
+import { afleidRegio, afleidProvincie } from "../lib/regio";
 
 const veld = "w-full rounded-xl border border-ink-200 px-3.5 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100";
 const labelCls = "mb-1 block text-xs font-semibold text-ink-600";
@@ -69,15 +70,13 @@ function KlantForm({ onKlaar }: { onKlaar: () => void }) {
 }
 
 export function Klanten({ initieelKey }: { initieelKey?: string }) {
-  const { klanten, afspraken, rondes, voorschouwen, voorschouwMappen, saneringen, tauwOpdrachten, currentUser, addKlant, updateKlant, deleteKlant, updateRonde, updateSanering, updateTauw, updateVoorschouwMap } = useApp();
+  const { klanten, afspraken, rondes, voorschouwen, voorschouwMappen, saneringen, tauwOpdrachten, buurtaanpak, currentUser, addKlant, updateKlant, deleteKlant, updateRonde, updateSanering, updateTauw, updateVoorschouwMap } = useApp();
   const [zoek, setZoek] = useState("");
   const [openKey, setOpenKey] = useState<string | null>(initieelKey ?? null);
   const [nieuw, setNieuw] = useState(false);
   const [verwijder, setVerwijder] = useState<string | null>(null);
   const [bezig, setBezig] = useState(false);
-  const [sorteer, setSorteer] = useState<"straat" | "postcode">("straat");
-  const [geopend, setGeopend] = useState<Set<string>>(new Set());
-  const [geopendStraat, setGeopendStraat] = useState<Set<string>>(new Set());
+  const [openNodes, setOpenNodes] = useState<Set<string>>(new Set()); // uitgeklapte mappen in de adres-boom (pad-sleutel)
   const [detailCat, setDetailCat] = useState<string | null>(null); // geopende projectsoort-filterpagina
   const [detailZoek, setDetailZoek] = useState("");
   const [tab, setTab] = useState<"adressen" | "projecten">("projecten");
@@ -101,6 +100,9 @@ export function Klanten({ initieelKey }: { initieelKey?: string }) {
   for (const k of klanten) merge({ key: normKey(k.straat, k.huisnummer), naam: k.naam, straat: k.straat, huisnummer: k.huisnummer, postcode: k.postcode, plaats: k.plaats, telefoon: k.telefoon, klantId: k.id });
   for (const a of afspraken) if (a.straat && a.huisnummer) merge({ key: normKey(a.straat, a.huisnummer), naam: a.klantNaam, straat: a.straat, huisnummer: a.huisnummer, postcode: a.postcode, plaats: a.plaats, telefoon: a.telefoon });
   for (const r of rondes) for (const ad of r.adressen) merge({ key: normKey(r.straat, String(ad.huisnummer)), naam: "", straat: r.straat, huisnummer: String(ad.huisnummer), postcode: r.postcode, plaats: r.plaats, telefoon: "" });
+  for (const s of saneringen) for (const a of (s.adressen ?? [])) if (a.straat && a.huisnummer) merge({ key: normKey(a.straat, a.huisnummer), naam: a.naam || "", straat: a.straat, huisnummer: a.huisnummer, postcode: a.postcode, plaats: a.plaats, telefoon: a.telefoon || "" });
+  for (const o of tauwOpdrachten) for (const a of o.adressen) if (a.straat && a.huisnummer) merge({ key: normKey(a.straat, a.huisnummer), naam: a.bewoner || "", straat: a.straat, huisnummer: a.huisnummer, postcode: a.postcode, plaats: a.plaats, telefoon: a.telefoon || "" });
+  for (const b of buurtaanpak) for (const a of b.adressen) if (a.straat && a.huisnummer) merge({ key: normKey(a.straat, a.huisnummer), naam: "", straat: a.straat, huisnummer: a.huisnummer, postcode: a.postcode, plaats: "", telefoon: a.telefoon || "" });
 
   const alle = [...map.values()].sort((a, b) => a.straat.localeCompare(b.straat, "nl", { numeric: true }) || Number(a.huisnummer) - Number(b.huisnummer));
 
@@ -423,91 +425,117 @@ export function Klanten({ initieelKey }: { initieelKey?: string }) {
         <input value={zoek} onChange={(e) => setZoek(e.target.value)} placeholder="Zoek op naam, adres, postcode of plaats…" className="w-full rounded-2xl border border-ink-200 bg-white py-3.5 pl-12 pr-4 text-base outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100" />
       </div>
 
-      {/* Sorteren */}
-      <div className="flex flex-wrap items-center gap-3">
-        <span className="text-xs text-ink-400">{zichtbaar.length} adres{zichtbaar.length === 1 ? "" : "sen"} · gegroepeerd per gemeente</span>
-        <div className="ml-auto flex items-center gap-1.5">
-          <span className="text-xs text-ink-400">Sorteer op</span>
-          {([["straat", "Straatnaam"], ["postcode", "Postcode"]] as const).map(([k, l]) => (
-            <button key={k} type="button" onClick={() => setSorteer(k)} className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${sorteer === k ? "bg-brand-600 text-white" : "bg-white text-ink-600 ring-1 ring-ink-200 hover:bg-ink-50"}`}>{l}</button>
-          ))}
-        </div>
-      </div>
+      <p className="text-xs text-ink-400">{zichtbaar.length} adres{zichtbaar.length === 1 ? "" : "sen"} · gestructureerd op provincie → regio → postcode → straat</p>
 
       {zichtbaar.length === 0 ? (
         <Card className="p-10 text-center text-sm text-ink-500">Geen adressen gevonden.</Card>
       ) : (
         (() => {
-          // Niveau 1: gemeente → Niveau 2: straat → Niveau 3: huisnummers
-          const perGemeente = new Map<string, Map<string, AdresItem[]>>();
+          const toggle = (k: string) => setOpenNodes((p) => { const n = new Set(p); n.has(k) ? n.delete(k) : n.add(k); return n; });
+          const isOpen = (k: string) => q !== "" || openNodes.has(k); // bij zoeken alles open
+          // Boom: provincie → regio → postcode → straat → adressen
+          const boom = new Map<string, Map<string, Map<string, Map<string, AdresItem[]>>>>();
           for (const it of zichtbaar) {
-            const g = it.plaats?.trim() || "Onbekende gemeente";
-            const s = it.straat?.trim() || "Onbekende straat";
-            if (!perGemeente.has(g)) perGemeente.set(g, new Map());
-            const straatMap = perGemeente.get(g)!;
-            (straatMap.get(s) ?? straatMap.set(s, []).get(s)!).push(it);
+            const prov = afleidProvincie(it.postcode);
+            const reg = afleidRegio(it.postcode, it.plaats);
+            const pc = (it.postcode || "").replace(/\s/g, "").slice(0, 4) || "Onbekend";
+            const straat = it.straat?.trim() || "Onbekende straat";
+            const regM = boom.get(prov) ?? boom.set(prov, new Map()).get(prov)!;
+            const pcM = regM.get(reg) ?? regM.set(reg, new Map()).get(reg)!;
+            const sM = pcM.get(pc) ?? pcM.set(pc, new Map()).get(pc)!;
+            (sM.get(straat) ?? sM.set(straat, []).get(straat)!).push(it);
           }
-          const gemeenteLijst = [...perGemeente.entries()].sort((a, b) => a[0].localeCompare(b[0], "nl"));
-          const postcodeVan = (items: AdresItem[]) => items.map((i) => i.postcode).filter(Boolean).sort()[0] ?? "";
+          const telAdres = (m: Map<string, unknown>): number => { let n = 0; for (const x of m.values()) n += x instanceof Map ? telAdres(x as Map<string, unknown>) : (x as AdresItem[]).length; return n; };
+          const provList = [...boom.entries()].sort((a, b) => (a[0].startsWith("Overig") ? 1 : b[0].startsWith("Overig") ? -1 : a[0].localeCompare(b[0], "nl")));
 
           return (
-            <div className="space-y-4">
-              {gemeenteLijst.map(([gemeente, straatMap]) => {
-                const openG = geopend.has(gemeente);
-                const totaal = [...straatMap.values()].reduce((s, a) => s + a.length, 0);
-                const straten = [...straatMap.entries()].sort((a, b) =>
-                  sorteer === "postcode"
-                    ? postcodeVan(a[1]).localeCompare(postcodeVan(b[1]), "nl", { numeric: true }) || a[0].localeCompare(b[0], "nl")
-                    : a[0].localeCompare(b[0], "nl", { numeric: true })
-                );
+            <div className="space-y-3">
+              {provList.map(([prov, regM]) => {
+                const openP = isOpen(prov);
+                const regList = [...regM.entries()].sort((a, b) => a[0].localeCompare(b[0], "nl"));
                 return (
-                  <div key={gemeente} className="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-card">
-                    <button type="button" onClick={() => setGeopend((p) => { const n = new Set(p); n.has(gemeente) ? n.delete(gemeente) : n.add(gemeente); return n; })} className="flex w-full items-center gap-3 px-5 py-4 text-left outline-none hover:bg-ink-50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-400" aria-expanded={openG}>
-                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600"><Building2 className="h-5 w-5" /></span>
+                  <div key={prov} className="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-card">
+                    <button type="button" onClick={() => toggle(prov)} className="flex w-full items-center gap-3 px-4 py-3.5 text-left hover:bg-ink-50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-400" aria-expanded={openP}>
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-600 text-white"><Layers className="h-5 w-5" /></span>
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-base font-bold text-ink-900">{gemeente}</span>
-                        <span className="block text-xs text-ink-500">{straten.length} {straten.length === 1 ? "straat" : "straten"} · {totaal} adres{totaal === 1 ? "" : "sen"}</span>
+                        <span className="block truncate text-base font-bold text-ink-900">{prov}</span>
+                        <span className="block text-xs text-ink-500">{regList.length} regio{regList.length === 1 ? "" : "'s"} · {telAdres(regM)} adres{telAdres(regM) === 1 ? "" : "sen"}</span>
                       </span>
-                      <ChevronDown className={`h-5 w-5 shrink-0 text-ink-400 transition-transform ${openG ? "" : "-rotate-90"}`} />
+                      <ChevronDown className={`h-5 w-5 shrink-0 text-ink-400 transition-transform ${openP ? "" : "-rotate-90"}`} />
                     </button>
-
-                    {openG && (
-                      <div className="divide-y divide-ink-100 border-t border-ink-100">
-                        {straten.map(([straat, items]) => {
-                          const sKey = gemeente + "|" + straat;
-                          const openS = geopendStraat.has(sKey);
-                          const huisnrs = [...items].sort((a, b) => Number(a.huisnummer) - Number(b.huisnummer) || a.huisnummer.localeCompare(b.huisnummer, "nl"));
-                          const pc = postcodeVan(items);
+                    {openP && (
+                      <div className="space-y-1.5 border-t border-ink-100 bg-ink-50/40 p-2">
+                        {regList.map(([reg, pcM]) => {
+                          const kReg = prov + "|" + reg;
+                          const openR = isOpen(kReg);
+                          const pcList = [...pcM.entries()].sort((a, b) => a[0].localeCompare(b[0], "nl", { numeric: true }));
                           return (
-                            <div key={sKey}>
-                              <button type="button" onClick={() => setGeopendStraat((p) => { const n = new Set(p); n.has(sKey) ? n.delete(sKey) : n.add(sKey); return n; })} className="flex w-full items-center gap-3 px-5 py-3.5 text-left outline-none hover:bg-ink-50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-400" aria-expanded={openS}>
-                                <MapPin className="h-4 w-4 shrink-0 text-ink-400" />
-                                <span className="flex-1 truncate text-[15px] font-semibold text-ink-900">{straat}</span>
-                                {pc && <span className="hidden text-xs text-ink-400 sm:block">{pc}</span>}
-                                <span className="rounded-full bg-ink-100 px-2 py-0.5 text-xs font-medium text-ink-500">{huisnrs.length}</span>
-                                <ChevronDown className={`h-4 w-4 shrink-0 text-ink-400 transition-transform ${openS ? "" : "-rotate-90"}`} />
+                            <div key={kReg} className="overflow-hidden rounded-xl border border-ink-200 bg-white">
+                              <button type="button" onClick={() => toggle(kReg)} className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left hover:bg-ink-50" aria-expanded={openR}>
+                                <MapIcon className="h-4 w-4 shrink-0 text-brand-500" />
+                                <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink-800">{reg}</span>
+                                <span className="rounded-full bg-ink-100 px-2 py-0.5 text-[11px] font-medium text-ink-500">{telAdres(pcM)}</span>
+                                <ChevronDown className={`h-4 w-4 shrink-0 text-ink-400 transition-transform ${openR ? "" : "-rotate-90"}`} />
                               </button>
-                              {openS && (
-                                <div className="divide-y divide-ink-100 border-t border-ink-100 bg-ink-50/40">
-                                  {huisnrs.map((it) => {
-                                    const h = historie(it);
-                                    const fotoN = (h.klant?.fotos.length ?? 0) + h.voorschouwen.reduce((s, v) => s + v.fotos.length, 0);
+                              {openR && (
+                                <div className="space-y-1 border-t border-ink-100 p-1.5">
+                                  {pcList.map(([pc, sM]) => {
+                                    const kPc = kReg + "|" + pc;
+                                    const openPc = isOpen(kPc);
+                                    const sList = [...sM.entries()].sort((a, b) => a[0].localeCompare(b[0], "nl", { numeric: true }));
                                     return (
-                                      <button key={it.key} type="button" onClick={() => setOpenKey(it.key)} className="flex w-full items-center gap-3 py-3 pl-6 pr-5 text-left outline-none hover:bg-brand-50 focus-visible:bg-brand-50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-400 sm:pl-12">
-                                        <span className="flex h-9 w-11 shrink-0 items-center justify-center rounded-lg bg-white text-sm font-bold text-ink-700 ring-1 ring-ink-200">{it.huisnummer}</span>
-                                        <div className="min-w-0 flex-1">
-                                          <div className="truncate text-sm font-semibold text-ink-900">{it.straat} {it.huisnummer}{it.naam ? ` · ${it.naam}` : ""}</div>
-                                          <div className="mt-0.5 flex flex-wrap gap-1.5 text-[11px] text-ink-500">
-                                            {h.afspraken.length > 0 && <span className="rounded-full bg-ink-100 px-2 py-0.5">{h.afspraken.length} afspr.</span>}
-                                            {h.brieven.length > 0 && <span className="rounded-full bg-ink-100 px-2 py-0.5">{h.brieven.length} brief</span>}
-                                            {h.voorschouwen.length > 0 && <span className="rounded-full bg-ink-100 px-2 py-0.5">{h.voorschouwen.length} voorsch.</span>}
-                                            {fotoN > 0 && <span className="rounded-full bg-brand-50 px-2 py-0.5 font-medium text-brand-700">{fotoN} foto{fotoN === 1 ? "" : "'s"}</span>}
-                                            {h.afspraken.length + h.brieven.length + h.voorschouwen.length + fotoN === 0 && <span>geen historie</span>}
+                                      <div key={kPc} className="overflow-hidden rounded-lg border border-ink-100">
+                                        <button type="button" onClick={() => toggle(kPc)} className="flex w-full items-center gap-2 bg-ink-50/60 px-3 py-2 text-left hover:bg-ink-100" aria-expanded={openPc}>
+                                          <Hash className="h-3.5 w-3.5 shrink-0 text-ink-400" />
+                                          <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-700">{pc}</span>
+                                          <span className="text-[11px] text-ink-400">{sList.length} straat{sList.length === 1 ? "" : "en"}</span>
+                                          <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-ink-400 transition-transform ${openPc ? "" : "-rotate-90"}`} />
+                                        </button>
+                                        {openPc && (
+                                          <div className="divide-y divide-ink-100 border-t border-ink-100">
+                                            {sList.map(([straat, items]) => {
+                                              const kStraat = kPc + "|" + straat;
+                                              const openStr = isOpen(kStraat);
+                                              const huisnrs = [...items].sort((a, b) => Number(a.huisnummer) - Number(b.huisnummer) || a.huisnummer.localeCompare(b.huisnummer, "nl"));
+                                              return (
+                                                <div key={kStraat}>
+                                                  <button type="button" onClick={() => toggle(kStraat)} className="flex w-full items-center gap-2 px-3 py-2 pl-5 text-left hover:bg-brand-50/50" aria-expanded={openStr}>
+                                                    <MapPin className="h-3.5 w-3.5 shrink-0 text-ink-400" />
+                                                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink-800">{straat}</span>
+                                                    <span className="rounded-full bg-ink-100 px-2 py-0.5 text-[11px] font-medium text-ink-500">{huisnrs.length}</span>
+                                                    <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-ink-400 transition-transform ${openStr ? "" : "-rotate-90"}`} />
+                                                  </button>
+                                                  {openStr && (
+                                                    <div className="divide-y divide-ink-100 border-t border-ink-100 bg-ink-50/40">
+                                                      {huisnrs.map((it) => {
+                                                        const h = historie(it);
+                                                        const fotoN = (h.klant?.fotos.length ?? 0) + h.voorschouwen.reduce((s, v) => s + v.fotos.length, 0);
+                                                        return (
+                                                          <button key={it.key} type="button" onClick={() => setOpenKey(it.key)} className="flex w-full items-center gap-3 py-2.5 pl-7 pr-4 text-left hover:bg-brand-50 sm:pl-10">
+                                                            <span className="flex h-8 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-sm font-bold text-ink-700 ring-1 ring-ink-200">{it.huisnummer}</span>
+                                                            <div className="min-w-0 flex-1">
+                                                              <div className="truncate text-sm font-semibold text-ink-900">{it.straat} {it.huisnummer}{it.naam ? ` · ${it.naam}` : ""}</div>
+                                                              <div className="mt-0.5 flex flex-wrap gap-1.5 text-[11px] text-ink-500">
+                                                                {h.afspraken.length > 0 && <span className="rounded-full bg-ink-100 px-2 py-0.5">{h.afspraken.length} afspr.</span>}
+                                                                {h.brieven.length > 0 && <span className="rounded-full bg-ink-100 px-2 py-0.5">{h.brieven.length} brief</span>}
+                                                                {h.voorschouwen.length > 0 && <span className="rounded-full bg-ink-100 px-2 py-0.5">{h.voorschouwen.length} voorsch.</span>}
+                                                                {fotoN > 0 && <span className="rounded-full bg-brand-50 px-2 py-0.5 font-medium text-brand-700">{fotoN} foto{fotoN === 1 ? "" : "'s"}</span>}
+                                                                {h.afspraken.length + h.brieven.length + h.voorschouwen.length + fotoN === 0 && <span>geen historie</span>}
+                                                              </div>
+                                                            </div>
+                                                            {it.klantId && <Database className="h-4 w-4 shrink-0 text-brand-500" />}
+                                                            <ChevronRight className="h-4 w-4 shrink-0 text-ink-300" />
+                                                          </button>
+                                                        );
+                                                      })}
+                                                    </div>
+                                                  )}
+                                                </div>
+                                              );
+                                            })}
                                           </div>
-                                        </div>
-                                        {it.klantId && <Database className="h-4 w-4 shrink-0 text-brand-500" />}
-                                        <ChevronRight className="h-4 w-4 shrink-0 text-ink-300" />
-                                      </button>
+                                        )}
+                                      </div>
                                     );
                                   })}
                                 </div>
