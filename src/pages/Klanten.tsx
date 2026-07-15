@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  Search, Plus, ArrowLeft, MapPin, Phone, Trash2, X,
+  Search, Plus, ArrowLeft, MapPin, Phone, Mail, Trash2, X,
   CalendarCheck, Mailbox, ClipboardCheck, Database, Image as ImageIcon, Download,
   ChevronRight, FlaskConical, Recycle, FolderArchive,
 } from "lucide-react";
@@ -96,7 +96,7 @@ export function Klanten({ initieelKey }: { initieelKey?: string }) {
       telefoon: best.telefoon || it.telefoon, email: best.email || it.email, klantId: best.klantId || it.klantId,
     });
   };
-  for (const k of klanten) merge({ key: normKey(k.straat, k.huisnummer), naam: k.naam, straat: k.straat, huisnummer: k.huisnummer, postcode: k.postcode, plaats: k.plaats, telefoon: k.telefoon, klantId: k.id });
+  for (const k of klanten) merge({ key: normKey(k.straat, k.huisnummer), naam: k.naam, straat: k.straat, huisnummer: k.huisnummer, postcode: k.postcode, plaats: k.plaats, telefoon: k.telefoon, email: k.email, klantId: k.id });
   for (const a of afspraken) if (a.straat && a.huisnummer) merge({ key: normKey(a.straat, a.huisnummer), naam: a.klantNaam, straat: a.straat, huisnummer: a.huisnummer, postcode: a.postcode, plaats: a.plaats, telefoon: a.telefoon, email: a.email });
   for (const r of rondes) for (const ad of r.adressen) merge({ key: normKey(r.straat, String(ad.huisnummer)), naam: "", straat: r.straat, huisnummer: String(ad.huisnummer), postcode: r.postcode, plaats: r.plaats, telefoon: "" });
   for (const s of saneringen) for (const a of (s.adressen ?? [])) if (a.straat && a.huisnummer) merge({ key: normKey(a.straat, a.huisnummer), naam: a.naam || "", straat: a.straat, huisnummer: a.huisnummer, postcode: a.postcode, plaats: a.plaats, telefoon: a.telefoon || "" });
@@ -125,7 +125,7 @@ export function Klanten({ initieelKey }: { initieelKey?: string }) {
 
     const zorgKlant = (): string => {
       if (h.klant) return h.klant.id;
-      return addKlant({ naam: open.naam, straat: open.straat, huisnummer: open.huisnummer, postcode: open.postcode, plaats: open.plaats, telefoon: open.telefoon, notitie: "", fotos: [] });
+      return addKlant({ naam: open.naam, straat: open.straat, huisnummer: open.huisnummer, postcode: open.postcode, plaats: open.plaats, telefoon: open.telefoon, email: open.email ?? "", notitie: "", fotos: [] });
     };
     const uploadFotos = async (files: FileList | null) => {
       if (!files) return;
@@ -155,6 +155,25 @@ export function Klanten({ initieelKey }: { initieelKey?: string }) {
           {isLeiding && h.klant && (
             <button type="button" onClick={() => setVerwijder(h.klant!.id)} className="rounded-lg p-2 text-red-400 hover:bg-red-50 hover:text-red-600" title="Klantrecord verwijderen"><Trash2 className="h-5 w-5" /></button>
           )}
+        </Card>
+
+        {/* Contactgegevens — telefoon + e-mail, opgeslagen op dit adres in de database */}
+        <Card className="space-y-3 p-5">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold text-ink-900">Contactgegevens</h3>
+            {!h.klant && <span className="text-xs text-ink-400">Wordt opgeslagen in de database</span>}
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block">
+              <span className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-ink-600"><Phone className="h-3.5 w-3.5" /> Telefoon</span>
+              <input value={h.klant?.telefoon ?? open.telefoon ?? ""} onChange={(e) => { const id = zorgKlant(); updateKlant(id, { telefoon: e.target.value }); }} placeholder="06-…" inputMode="tel" className={veld} />
+            </label>
+            <label className="block">
+              <span className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-ink-600"><Mail className="h-3.5 w-3.5" /> E-mail</span>
+              <input value={h.klant?.email ?? open.email ?? ""} onChange={(e) => { const id = zorgKlant(); updateKlant(id, { email: e.target.value }); }} placeholder="naam@voorbeeld.nl" inputMode="email" className={veld} />
+            </label>
+          </div>
+          <p className="text-xs text-ink-400">Met toekomstige projecten worden telefoon en e-mail automatisch aangevuld; je kunt ze hier altijd aanpassen.</p>
         </Card>
 
         {/* Notitie */}

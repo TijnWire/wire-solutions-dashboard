@@ -440,6 +440,7 @@ export type Klant = {
   postcode: string;
   plaats: string;
   telefoon: string;
+  email?: string; // e-mail van het adres/bewoner (wordt met toekomstige projecten aangevuld)
   notitie: string;
   fotos: string[]; // meterkast-foto's (data-URL)
 };
