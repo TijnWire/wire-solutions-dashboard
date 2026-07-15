@@ -10,6 +10,7 @@ import { Overzicht } from "./pages/Overzicht";
 import { MijnWerk } from "./pages/MijnWerk";
 import { Team } from "./pages/Team";
 import { Projecten } from "./pages/Projecten";
+import { Projectbeheer } from "./pages/Projectbeheer";
 import { Planning } from "./pages/Planning";
 import { Voorschouwen } from "./pages/Voorschouwen";
 import { Saneren } from "./pages/Saneren";
@@ -107,6 +108,8 @@ export default function App() {
         return <Team />;
       case "projecten":
         return <Projecten key={target?.project ?? "lijst"} initieelProject={target?.project} />;
+      case "projectbeheer":
+        return <Projectbeheer />;
       case "planning":
         return <Planning key={target?.project ?? "geen"} projectId={target?.project} />;
       case "voorschouwen":
@@ -136,7 +139,7 @@ export default function App() {
       case "documenten":
         return <Documenten />;
       case "facturen":
-        return <Facturen initieelFactuur={target?.factuur} />;
+        return <Facturen key={target?.nieuwFactuurProject ?? target?.factuur ?? "lijst"} initieelFactuur={target?.factuur} nieuwFactuurProject={target?.nieuwFactuurProject} />;
       case "urenstaat":
         return <Urenstaat />;
       case "vrijedagen":

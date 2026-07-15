@@ -25,11 +25,12 @@ import {
   Recycle,
   FlaskConical,
   Cable,
+  Briefcase,
   type LucideIcon,
 } from "lucide-react";
 import type { Role } from "./types";
 
-export type NavGroup = "Werk" | "Projecten" | "Operatie" | "Boekhouding" | "Systeem";
+export type NavGroup = "Werk" | "Projecten" | "Vragen" | "Operatie" | "Boekhouding" | "Systeem";
 
 export type NavItem = {
   key: string;
@@ -70,11 +71,13 @@ export const NAV: NavItem[] = [
   { key: "voorschouwen", label: "Voorschouwen", icon: ClipboardCheck, group: "Projecten", roles: ALLE },
   { key: "schouwafspraken", label: "Schouwafspraken", icon: CalendarClock, group: "Projecten", roles: ALLE },
   { key: "tauw", label: "TAUW", icon: FlaskConical, group: "Projecten", roles: ALLE },
-  { key: "kennisbank", label: "Kennisbank", icon: BookOpen, group: "Projecten", roles: ALLE },
+
+  { key: "kennisbank", label: "Kennisbank", icon: BookOpen, group: "Vragen", roles: ALLE },
 
   { key: "afspraken", label: "Afspraken", icon: CalendarCheck, group: "Operatie", roles: LEIDING },
   { key: "documenten", label: "Documenten", icon: FileText, group: "Operatie", roles: LEIDING },
 
+  { key: "projectbeheer", label: "Projectbeheer", icon: Briefcase, group: "Boekhouding", roles: LEIDING },
   { key: "facturen", label: "Facturen", icon: Receipt, group: "Boekhouding", roles: LEIDING },
   { key: "urenstaat", label: "Urenstaat", icon: Clock, group: "Boekhouding", roles: LEIDING },
   { key: "vrijedagen", label: "Vrije dagen", icon: Sun, group: "Boekhouding", roles: LEIDING },
@@ -92,7 +95,7 @@ export const NAV: NavItem[] = [
   { key: "instellingen", label: "Instellingen", icon: Settings, group: "Systeem", roles: LEIDING },
 ];
 
-export const GROUPS: NavGroup[] = ["Werk", "Projecten", "Operatie", "Boekhouding", "Systeem"];
+export const GROUPS: NavGroup[] = ["Werk", "Projecten", "Vragen", "Operatie", "Boekhouding", "Systeem"];
 
 // Bepaalt of een gebruiker een menu-item mag zien.
 // Beheerders zien beheer-onderdelen alleen als de eigenaar dat gebied heeft toegewezen.

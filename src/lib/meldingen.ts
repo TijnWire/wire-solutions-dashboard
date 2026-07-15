@@ -21,7 +21,6 @@ export function berekenMeldingen(bedrijf: Bedrijf, inst: Instellingen, verlof: V
     m.push({ id: "proj-klaar-" + p.id, ernst: "info", titel: `Project afgerond: ${p.naam}`, tekst: "Klaar om naar de boekhouding te sturen.", navKey: "projecten", target: { project: p.id } });
   }
   if (!supabaseAan && !inst.supabaseUrl) m.push({ id: "db", ernst: "info", titel: "Geen centrale database", tekst: "Gegevens staan nu lokaal op elk apparaat. Koppel Supabase om alles te delen.", navKey: "instellingen" });
-  if (!inst.whatsappToken) m.push({ id: "wa", ernst: "info", titel: "WhatsApp-API niet ingesteld", tekst: "Berichten worden nu handmatig geopend.", navKey: "instellingen" });
   if (!bedrijf.btw) m.push({ id: "btw", ernst: "waarschuwing", titel: "BTW-nummer ontbreekt", tekst: "Vul je BTW-nummer in bij Instellingen voor volledige facturen.", navKey: "instellingen" });
   if (!bedrijf.iban) m.push({ id: "iban", ernst: "waarschuwing", titel: "IBAN ontbreekt", tekst: "Vul je IBAN in zodat klanten weten waarheen te betalen.", navKey: "instellingen" });
   const open = verlof.filter((v) => v.status === "Aangevraagd").length;

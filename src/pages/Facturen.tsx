@@ -431,7 +431,7 @@ function UrenFactuur({ facturenCount, opdrachtgevers, users, urenstaat, onGenere
 }
 
 // ── Hoofdcomponent ──
-export function Facturen({ initieelFactuur }: { initieelFactuur?: string }) {
+export function Facturen({ initieelFactuur, nieuwFactuurProject }: { initieelFactuur?: string; nieuwFactuurProject?: string }) {
   const { facturen, bedrijf, deleteFactuur, projects, updateProject, opdrachtgevers, buurtaanpak, updateBuurtaanpak, rondes, updateRonde, users, urenstaat } = useApp();
   const teFactureren = projects.filter((p) => p.boekhouding === "te_factureren");
   const teFacturerenBuurt = buurtaanpak.filter((b) => b.boekhouding === "te_factureren");
@@ -467,9 +467,30 @@ export function Facturen({ initieelFactuur }: { initieelFactuur?: string }) {
       notitie: "",
     };
   };
+  // Concept vanuit een project: gebruik de eigen opdrachtgever + uurtarief van het project (val terug op Stedin).
+  const maakConceptVanProject = (p: Project): Omit<Factuur, "id"> => {
+    const eigen = p.opdrachtgeverId ? opdrachtgevers.find((o) => o.id === p.opdrachtgeverId) : undefined;
+    const og = eigen ?? opdrachtgevers.find((o) => o.id === "og-stedin") ?? opdrachtgevers[0];
+    return {
+      nummer: `${new Date().getFullYear()}-${String(facturen.length + 1).padStart(4, "0")}`,
+      datum: new Date().toISOString().slice(0, 10),
+      klantNaam: og?.naam ?? "Stedin Netbeheer B.V.",
+      tav: og?.tav ?? "",
+      klantAdres: og?.adres ?? "",
+      klantPostcodePlaats: og?.postcodePlaats ?? "",
+      relatienummer: og?.relatienummer ?? "",
+      email: og?.email ?? "",
+      pdNummer: p.pdNummer ?? "",
+      betaaltermijn: 14,
+      regels: [{ omschrijving: [p.naam, p.wijk && p.wijk !== "—" ? p.wijk : ""].filter(Boolean).join(" — "), aantal: 1, prijs: p.uurtarief ?? 0 }],
+      btwPercentage: 21,
+      status: "Concept",
+      notitie: "",
+    };
+  };
   const nieuweLege = () => { setBewerk(undefined); setNieuwVan(undefined); setModus("formulier"); };
   const nieuweVanUren = (concept: Omit<Factuur, "id">) => { setBewerk(undefined); setNieuwVan(concept); setModus("formulier"); };
-  const nieuweVanProject = (p: Project) => { setBewerk(undefined); setNieuwVan(maakConceptVan(p.pdNummer ?? "", p.wijk)); setModus("formulier"); };
+  const nieuweVanProject = (p: Project) => { setBewerk(undefined); setNieuwVan(maakConceptVanProject(p)); setModus("formulier"); };
   const nieuweVanBuurt = (b: Buurtaanpak) => { setBewerk(undefined); setNieuwVan(maakConceptVan(b.pdNummer ?? "", b.naam)); setModus("formulier"); };
   const nieuweVanRonde = (r: Brievenronde) => {
     const gegooid = r.adressen.filter((a) => !a.ontbreekt && a.status === "Gegooid").length;
@@ -488,6 +509,14 @@ export function Facturen({ initieelFactuur }: { initieelFactuur?: string }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initieelFactuur]);
+
+  // Deep-link vanuit Projectbeheer: open meteen een nieuwe, voorgevulde factuur voor dit project.
+  useEffect(() => {
+    if (!nieuwFactuurProject) return;
+    const p = projects.find((x) => x.id === nieuwFactuurProject);
+    if (p) nieuweVanProject(p);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nieuwFactuurProject]);
 
   // Exporteer alle facturen naar Excel (verplaatst vanuit Documenten — hoort bij de boekhouding).
   const exporteerNaarExcel = () => {

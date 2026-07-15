@@ -36,7 +36,6 @@ export function ApiSleutels() {
   const integraties: Integratie[] = [
     { id: "idb", naam: "Lokale opslag (IndexedDB)", beschr: "Alles wordt veilig op dit apparaat bewaard.", status: "actief" },
     { id: "supabase", naam: "Centrale database (Supabase)", beschr: "Deelt en synchroniseert gegevens tussen alle apparaten en het hele team.", status: instellingen.supabaseUrl ? "ingesteld" : "niet", velden: [["supabaseUrl", "Project-URL"], ["supabaseKey", "Anon key"]] },
-    { id: "wa", naam: "WhatsApp Business API", beschr: "Verstuurt bevestigingen en herinneringen automatisch i.p.v. handmatig openen.", status: instellingen.whatsappToken ? "ingesteld" : "niet", velden: [["whatsappToken", "API-token"]] },
     { id: "maps", naam: "Google Maps", beschr: "Nu: gratis kaartlinks voor navigatie. Met API-sleutel: echte route-optimalisatie.", status: instellingen.googleMapsKey ? "ingesteld" : "demo", velden: [["googleMapsKey", "API-sleutel"]] },
     { id: "claude", naam: "Claude (AI & vertaling)", beschr: "Slimme vertaling en AI-chat. Nu een gratis vertaaldienst als demo.", status: instellingen.claudeKey ? "ingesteld" : "demo", velden: [["claudeKey", "API-sleutel"]] },
     { id: "speech", naam: "Spraakherkenning (browser)", beschr: "Voor de live vertaling aan de deur. Werkt het best in Chrome/Edge.", status: speechOK ? "actief" : "niet" },
