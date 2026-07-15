@@ -199,7 +199,7 @@ export function VoorschouwForm({
   );
   const [bezig, setBezig] = useState(false);
   // In welke map komt dit document — vooraf te kiezen (en later nog te wijzigen).
-  const [mapId, setMapId] = useState<string | undefined>(bestaande?.mapId);
+  const [mapId, setMapId] = useState<string | undefined>(bestaande?.mapId ?? voorinvul?.mapId);
   const actieveMappen = voorschouwMappen.filter((m) => !m.gearchiveerd);
   const kiesNieuweMap = (naam: string) => { setMapId(addVoorschouwMap(naam)); };
 

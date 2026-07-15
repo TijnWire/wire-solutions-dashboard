@@ -243,8 +243,10 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
   const [alleenOpen, setAlleenOpen] = useState(false); // alleen adressen zónder foto tonen
   const [perWeek, setPerWeek] = useState(false); // mappen groeperen per week i.p.v. op gebied
   const [teVersturenMap, setTeVersturenMap] = useState<VoorschouwMap | null>(null); // bevestiging vóór versturen
-  const [mapDetailId, setMapDetailId] = useState<string | null>(null); // geopende map-detailpagina (naam + toewijzen)
+  const [mapDetailId, setMapDetailId] = useState<string | null>(initieelMap ?? null); // geopende map-detailpagina (ook via "Mijn werk")
   const [naamZoek, setNaamZoek] = useState(""); // zoekterm voor het toewijzen-op-naam-veld
+  const [naamBewerk, setNaamBewerk] = useState(false); // mapnaam in bewerk-modus (alleen via het potlood)
+  const [vraagToewijzingWeg, setVraagToewijzingWeg] = useState(false); // bevestiging vóór toewijzing verwijderen
   useEffect(() => { try { localStorage.setItem("vs-mapSort", sorteerModus); } catch { /* opslag niet beschikbaar */ } }, [sorteerModus]);
   // Kwam je via "Mijn werk" recht op jóuw map? Die staat al open; scroll er meteen naartoe.
   useEffect(() => {
@@ -576,9 +578,10 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
     );
   }
 
-  // ── Map-detailpagina: naam wijzigen + iemand toewijzen (via naam intypen) ──
-  const detailMap = mapDetailId && isLeiding ? voorschouwMappen.find((m) => m.id === mapDetailId) : null;
-  if (detailMap) {
+  // ── Map-detailpagina: werkruimte voor één map (naam, toewijzen, nieuwe voorschouw, adressen) ──
+  // Zichtbaar voor de leiding én voor de medewerker aan wie de map is toegewezen (die komt hier via "Mijn werk").
+  const detailMap = mapDetailId ? voorschouwMappen.find((m) => m.id === mapDetailId) : null;
+  if (detailMap && (isLeiding || detailMap.toegewezenAan === currentUser.id)) {
     const items = itemsVanMap(detailMap.id).sort(opPostcode);
     const toegewezen = detailMap.toegewezenAan ? users.find((u) => u.id === detailMap.toegewezenAan) : null;
     const zoek = naamZoek.trim().toLowerCase();
@@ -589,74 +592,98 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
           return av - bv || a.naam.localeCompare(b.naam, "nl");
         })
       : [];
-    const sluit = () => { setMapDetailId(null); setNaamZoek(""); };
+    const sluit = () => { setMapDetailId(null); setNaamZoek(""); setNaamBewerk(false); };
+    const nieuweInMap = () => { setBewerk(undefined); setVoorinvul({ mapId: detailMap.id }); setModus("formulier"); };
+    const bewaarNaam = () => { const n = mapNaamConcept.trim(); if (n && n !== detailMap.naam) updateVoorschouwMap(detailMap.id, { naam: n }); setNaamBewerk(false); };
     return (
       <div className="space-y-6">
         <button type="button" onClick={sluit} className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-500 hover:text-ink-800"><ArrowLeft className="h-4 w-4" /> Terug naar overzicht</button>
 
+        {/* Kop: de naam is alleen met het potlood te wijzigen (niet zomaar aanklikken) */}
         <div className="flex items-center gap-3">
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600"><Folder className="h-6 w-6" /></span>
-          <input
-            value={mapNaamConcept}
-            onChange={(e) => setMapNaamConcept(e.target.value)}
-            onBlur={() => { const n = mapNaamConcept.trim(); if (n && n !== detailMap.naam) updateVoorschouwMap(detailMap.id, { naam: n }); }}
-            aria-label="Mapnaam"
-            className="min-w-0 flex-1 rounded-lg border border-ink-200 px-3 py-2 text-xl font-bold text-ink-900 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
-          />
+          {naamBewerk ? (
+            <>
+              <input autoFocus value={mapNaamConcept} onChange={(e) => setMapNaamConcept(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") bewaarNaam(); if (e.key === "Escape") setNaamBewerk(false); }} onBlur={bewaarNaam} aria-label="Mapnaam" className="min-w-0 flex-1 rounded-lg border border-brand-300 px-3 py-2 text-xl font-bold text-ink-900 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100" />
+              <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={bewaarNaam} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700"><Check className="h-4 w-4" /> Opslaan</button>
+            </>
+          ) : (
+            <>
+              <h2 className="min-w-0 flex-1 truncate text-2xl font-bold text-ink-900">{detailMap.naam}</h2>
+              {isLeiding && <button type="button" onClick={() => { setMapNaamConcept(detailMap.naam); setNaamBewerk(true); }} title="Naam wijzigen" aria-label="Naam wijzigen" className="shrink-0 rounded-lg p-2 text-ink-400 hover:bg-ink-100 hover:text-brand-600"><Pencil className="h-5 w-5" /></button>}
+            </>
+          )}
         </div>
 
-        {/* Toewijzen op naam */}
-        <Card className="space-y-3 p-5">
-          <div>
-            <h3 className="text-sm font-bold text-ink-900">Wie moet deze map oppakken?</h3>
-            <p className="mt-0.5 text-xs text-ink-500">Typ een naam en klik op de juiste persoon. Hij ziet de map dan bij <b>Mijn werk</b>.</p>
-          </div>
-          {toegewezen && (
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-3 py-1 text-sm font-semibold text-brand-700 ring-1 ring-brand-200"><User className="h-4 w-4" /> {toegewezen.naam}</span>
-              <button type="button" onClick={() => zetMapToegewezen(detailMap.id, "")} className="text-xs font-medium text-red-500 hover:underline">Toewijzing verwijderen</button>
+        {/* Werken in deze map: nieuwe voorschouw toevoegen (komt automatisch in deze map) */}
+        <button type="button" onClick={nieuweInMap} className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700">
+          <Plus className="h-4 w-4" /> Nieuwe voorschouw in deze map
+        </button>
+
+        {/* Toewijzen op naam — alleen de leiding */}
+        {isLeiding && (
+          <Card className="space-y-3 p-5">
+            <div>
+              <h3 className="text-sm font-bold text-ink-900">Wie moet deze map oppakken?</h3>
+              <p className="mt-0.5 text-xs text-ink-500">Typ een naam en klik op de juiste persoon. Hij ziet de map dan bij <b>Mijn werk</b>.</p>
             </div>
-          )}
-          <div>
-            <input value={naamZoek} onChange={(e) => setNaamZoek(e.target.value)} placeholder="Typ een naam…" aria-label="Zoek medewerker" className="w-full rounded-lg border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100" />
-            {zoek && (
-              <div className="mt-2 max-h-72 space-y-1 overflow-auto rounded-lg border border-ink-100 p-1">
-                {kandidaten.length === 0 ? (
-                  <p className="px-3 py-2 text-sm text-ink-400">Geen medewerker gevonden voor “{naamZoek.trim()}”.</p>
-                ) : kandidaten.map((u) => {
-                  const gekozen = detailMap.toegewezenAan === u.id;
-                  return (
-                    <button key={u.id} type="button" onClick={() => { zetMapToegewezen(detailMap.id, u.id); setNaamZoek(""); }} className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm hover:bg-brand-50 ${gekozen ? "bg-brand-50" : ""}`}>
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-ink-800 text-xs font-semibold text-white">{u.initialen}</span>
-                      <span className="min-w-0 flex-1 truncate font-medium text-ink-800">{u.naam}</span>
-                      {gekozen && <Check className="h-4 w-4 shrink-0 text-brand-600" />}
-                    </button>
-                  );
-                })}
+            {toegewezen && (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-3 py-1 text-sm font-semibold text-brand-700 ring-1 ring-brand-200"><User className="h-4 w-4" /> {toegewezen.naam}</span>
+                <button type="button" onClick={() => setVraagToewijzingWeg(true)} className="text-xs font-medium text-red-500 hover:underline">Toewijzing verwijderen</button>
               </div>
             )}
-          </div>
-        </Card>
+            <div>
+              <input value={naamZoek} onChange={(e) => setNaamZoek(e.target.value)} placeholder="Typ een naam…" aria-label="Zoek medewerker" className="w-full rounded-lg border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100" />
+              {zoek && (
+                <div className="mt-2 max-h-72 space-y-1 overflow-auto rounded-lg border border-ink-100 p-1">
+                  {kandidaten.length === 0 ? (
+                    <p className="px-3 py-2 text-sm text-ink-400">Geen medewerker gevonden voor “{naamZoek.trim()}”.</p>
+                  ) : kandidaten.map((u) => {
+                    const gekozen = detailMap.toegewezenAan === u.id;
+                    return (
+                      <button key={u.id} type="button" onClick={() => { zetMapToegewezen(detailMap.id, u.id); setNaamZoek(""); }} className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm hover:bg-brand-50 ${gekozen ? "bg-brand-50" : ""}`}>
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-ink-800 text-xs font-semibold text-white">{u.initialen}</span>
+                        <span className="min-w-0 flex-1 truncate font-medium text-ink-800">{u.naam}</span>
+                        {gekozen && <Check className="h-4 w-4 shrink-0 text-brand-600" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </Card>
+        )}
 
-        {/* Adressen in deze map (ter controle) */}
+        {/* Adressen in deze map — klik op een adres om het te openen/bewerken */}
         <Card className="p-4">
           <h3 className="mb-2 text-sm font-bold text-ink-900">Adressen in deze map ({items.length})</h3>
           {items.length === 0 ? (
-            <p className="text-sm text-ink-500">Nog geen adressen. Voeg voorschouwen toe en kies deze map.</p>
+            <p className="text-sm text-ink-500">Nog geen adressen. Klik op <b>Nieuwe voorschouw in deze map</b> om te beginnen.</p>
           ) : (
             <div className="space-y-1.5">
               {items.map((v) => (
-                <div key={v.id} className="flex items-center gap-2 rounded-lg bg-ink-50/60 px-3 py-2 text-sm">
+                <button key={v.id} type="button" onClick={() => open(v)} title="Openen / bewerken" className="flex w-full items-center gap-2 rounded-lg bg-ink-50/60 px-3 py-2 text-left text-sm hover:bg-ink-100">
                   <MapPin className="h-4 w-4 shrink-0 text-ink-400" />
                   <span className="min-w-0 flex-1 truncate text-ink-800">{v.straatnaam || "Onbekend"}{v.postcode || v.plaats ? `, ${[v.postcode, v.plaats].filter(Boolean).join(" ")}` : ""}</span>
                   {vsZonderFoto(v)
                     ? <span className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-amber-600"><ImageOff className="h-3.5 w-3.5" /> geen foto</span>
                     : <span className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-green-600"><CheckCircle2 className="h-3.5 w-3.5" /> {v.fotos.length}</span>}
-                </div>
+                  <Pencil className="h-3.5 w-3.5 shrink-0 text-ink-300" />
+                </button>
               ))}
             </div>
           )}
         </Card>
+
+        <Bevestig
+          open={vraagToewijzingWeg}
+          titel="Toewijzing verwijderen"
+          tekst={toegewezen ? `Weet je zeker dat je ${toegewezen.naam} wilt loskoppelen van de map "${detailMap.naam}"? Deze map verdwijnt dan bij hem uit Mijn werk.` : ""}
+          bevestigLabel="Ja, verwijderen"
+          onBevestig={() => { zetMapToegewezen(detailMap.id, ""); setVraagToewijzingWeg(false); }}
+          onAnnuleer={() => setVraagToewijzingWeg(false)}
+        />
       </div>
     );
   }
