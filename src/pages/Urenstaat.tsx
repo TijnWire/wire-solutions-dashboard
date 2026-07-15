@@ -1,11 +1,12 @@
 import { useState, Fragment } from "react";
-import { ChevronLeft, ChevronRight, CalendarDays, Wand2, RotateCcw, FolderKanban, Plus, User as UserIcon, Users, Trash2, Check, Search, X, Wallet } from "lucide-react";
+import { ChevronLeft, ChevronRight, CalendarDays, Wand2, RotateCcw, FolderKanban, Plus, User as UserIcon, Users, Trash2, Check, Search, X, Wallet, FileSpreadsheet } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { useNav } from "../store/NavContext";
 import { Card } from "../components/ui";
 import { Keuze } from "../components/Keuze";
 import { feestdagNaam } from "../lib/feestdagen";
 import { lopendeProjectOpties, werkNaam } from "../lib/lopendWerk";
+import { exporteerUrenstaat } from "../lib/urenstaatExcel";
 import type { User, Urenregel } from "../lib/types";
 
 const DAGEN = ["Ma", "Di", "Wo", "Do", "Vr", "Za", "Zo"];
@@ -57,7 +58,7 @@ function UurCel({ waarde, onChange, verlofType, feestdag, notitie, voorstel, ari
 }
 
 export function Urenstaat() {
-  const { users, projects, rondes, voorschouwMappen, tauwOpdrachten, urenstaat, verlof, currentUser, addUren, updateUren, deleteUren } = useApp();
+  const { users, projects, rondes, voorschouwMappen, tauwOpdrachten, urenstaat, verlof, bedrijf, currentUser, addUren, updateUren, deleteUren } = useApp();
   const { navigeer } = useNav();
   const [weekISO, setWeekISO] = useState(() => toISO(maandagVan(new Date())));
   const [weergave, setWeergave] = useState<"persoon" | "project" | "bulk">("persoon");
@@ -89,6 +90,43 @@ export function Urenstaat() {
   const verlofOp = (userId: string, iso: string) => verlof.find((v) => v.medewerkerId === userId && v.status === "Goedgekeurd" && v.van <= iso && v.tot >= iso);
   const autoUren = (u: User) => weekISOs.map((iso, i) => (i >= 5 || verlofOp(u.id, iso) || feestdagNaam(iso) ? 0 : contractDag(u)));
 
+  // Professionele urenstaat van de hele ploeg voor de getoonde week naar Excel (met formules).
+  const exporteerNaarExcel = () => {
+    const personen = medewerkers
+      .map((u) => {
+        const regels = urenstaat
+          .filter((x) => x.medewerkerId === u.id && x.week === weekISO)
+          .map((rec) => ({ label: projectLabel(rec.projectId), uren: rec.uren, notitie: rec.notitie }));
+        let verlofDagen = 0, ziekDagen = 0, feestdagDagen = 0;
+        weekISOs.forEach((iso, i) => {
+          const v = verlofOp(u.id, iso);
+          if (v) { if (v.type === "Ziek") ziekDagen++; else verlofDagen++; }
+          else if (i < 5 && feestdagNaam(iso)) feestdagDagen++;
+        });
+        return { u, regels, verlofDagen, ziekDagen, feestdagDagen };
+      })
+      .filter((x) => x.regels.length > 0 || x.verlofDagen > 0 || x.ziekDagen > 0)
+      .map(({ u, regels, verlofDagen, ziekDagen, feestdagDagen }) => ({
+        naam: u.naam,
+        functie: u.functie ?? "",
+        persnr: "",
+        projectRegels: regels,
+        verlofDagen,
+        ziekDagen,
+        feestdagDagen,
+      }));
+    exporteerUrenstaat({
+      bedrijfsnaam: bedrijf.naam,
+      weekNr: weekNr(weekDate),
+      jaar,
+      periodeLabel: weekLabel,
+      opsteller: currentUser.naam,
+      dagen: DAGEN,
+      datums: weekISOs,
+      personen,
+    });
+  };
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -96,9 +134,14 @@ export function Urenstaat() {
           <h2 className="text-xl font-bold text-ink-900">Urenstaat</h2>
           <p className="text-sm text-ink-500">Boek per medewerker de uren per dag, elke dag op het juiste project, met een notitie erbij. Wissel eventueel naar "Per project" om iedereen op één project ineens in te vullen. Vrije dagen staan op de aparte pagina <span className="font-semibold text-ink-600">Vrije dagen</span>.</p>
         </div>
-        <button type="button" onClick={() => navigeer("loonstroken", { loonWeek: weekISO })} title="Op basis van deze uren automatisch loonstroken aanmaken" className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-ink-200 bg-white px-4 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50">
-          <Wallet className="h-4 w-4 text-ink-500" /> Loonstroken maken
-        </button>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <button type="button" onClick={exporteerNaarExcel} title="Professionele urenstaat van deze week (hele ploeg) exporteren naar Excel — met formules en goedkeuringsblok" className="inline-flex items-center gap-2 rounded-xl border border-ink-200 bg-white px-4 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50">
+            <FileSpreadsheet className="h-4 w-4 text-green-600" /> Excel-urenstaat
+          </button>
+          <button type="button" onClick={() => navigeer("loonstroken", { loonWeek: weekISO })} title="Op basis van deze uren automatisch loonstroken aanmaken" className="inline-flex items-center gap-2 rounded-xl border border-ink-200 bg-white px-4 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50">
+            <Wallet className="h-4 w-4 text-ink-500" /> Loonstroken maken
+          </button>
+        </div>
       </div>
 
       {/* Week-navigatie + weergave-schakelaar + keuze */}
