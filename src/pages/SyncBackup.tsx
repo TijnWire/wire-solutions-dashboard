@@ -14,7 +14,7 @@ export function SyncBackup() {
   const [testBezig, setTestBezig] = useState(false);
 
   if (!currentUser) return null;
-  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer";
+  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr";
   if (!isLeiding) {
     return (
       <div className="mx-auto max-w-md py-16 text-center">
@@ -47,10 +47,7 @@ export function SyncBackup() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h2 className="text-xl font-bold text-ink-900">Sync &amp; back-up</h2>
-        <p className="text-sm text-ink-500">Of dit apparaat met het team synchroniseert, en de automatische veiligheidskopie.</p>
-      </div>
+      <p className="text-sm text-ink-500">Of dit apparaat met het team synchroniseert, en de automatische veiligheidskopie.</p>
 
       {/* Sync-status van DIT apparaat */}
       <Card className={`p-4 ${synced ? "border-green-300 bg-green-50/60" : "border-amber-300 bg-amber-50/60"}`}>

@@ -65,7 +65,7 @@ export function Urenstaat() {
   const [voegProject, setVoegProject] = useState(""); // project toevoegen (medewerker-weergave)
 
   if (!currentUser) return null;
-  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer";
+  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr";
   if (!isLeiding) return <Card className="p-8 text-center text-sm text-ink-500">De urenstaat is alleen voor de boekhouding/leiding.</Card>;
 
   const weekDate = new Date(weekISO + "T00:00:00");

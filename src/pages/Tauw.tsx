@@ -302,7 +302,7 @@ function TauwDetail({ opdracht, onTerug }: { opdracht: TauwOpdracht; onTerug: ()
   const [naamConcept, setNaamConcept] = useState("");
   const importInput = useRef<HTMLInputElement | null>(null);
   const scan = useExcelScan();
-  const isLeiding = currentUser?.rol === "eigenaar" || currentUser?.rol === "beheer";
+  const isLeiding = currentUser?.rol === "eigenaar" || currentUser?.rol === "beheer" || currentUser?.rol === "hr";
   const isToegewezen = !!currentUser && currentUser.id === opdracht.toegewezenAan;
   const magWerken = isLeiding || isToegewezen;
   const status = opdracht.status;
@@ -679,7 +679,7 @@ export function Tauw({ initieelTauw }: { initieelTauw?: string }) {
   };
 
   if (!currentUser) return null;
-  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer";
+  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr";
   const zichtbaar = (isLeiding ? tauwOpdrachten : tauwOpdrachten.filter((o) => o.toegewezenAan === currentUser.id)).filter((o) => !o.gearchiveerd);
 
   if (nieuw) return <TauwIntake type={nieuwType} onKlaar={(id) => { setNieuw(false); if (id) setOpenId(id); }} />;

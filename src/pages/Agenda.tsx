@@ -37,7 +37,7 @@ function DagPopup({ iso, onClose, effStatus }: { iso: string; onClose: () => voi
   const [todoTekst, setTodoTekst] = useState("");
 
   if (!currentUser) return null;
-  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer";
+  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr";
   const naamVan = (id?: string) => users.find((u) => u.id === id)?.naam ?? "";
 
   const afs = afspraken.filter((a) => a.datum === iso && (isLeiding || a.toegewezenAan === currentUser.id)).sort((a, b) => (a.tijd || "").localeCompare(b.tijd || ""));
@@ -158,7 +158,7 @@ export function Agenda() {
   const [ftWie, setFtWie] = useState("");
 
   if (!currentUser) return null;
-  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer";
+  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr";
   const naamVan = (id: string) => users.find((u) => u.id === id)?.naam ?? "Onbekend";
   const initVan = (id: string) => users.find((u) => u.id === id)?.initialen ?? "?";
   const effStatus = (v: VerlofT): VerlofStatus => beslissingen[v.id]?.status ?? v.status;

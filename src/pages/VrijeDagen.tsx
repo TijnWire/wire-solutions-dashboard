@@ -15,7 +15,7 @@ export function VrijeDagen() {
   const { users, verlof, urenstaat, currentUser, updateUser } = useApp();
 
   if (!currentUser) return null;
-  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer";
+  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr";
   if (!isLeiding) return <Card className="p-8 text-center text-sm text-ink-500">Dit overzicht is alleen voor de boekhouding/leiding.</Card>;
 
   const jaar = new Date().getFullYear();

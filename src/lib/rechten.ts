@@ -9,7 +9,7 @@ export const BOEKHOUDING_KEYS = ["facturen", "loonstroken", "boetes", "medewerke
 // (geen beperking ingesteld = alles). Werknemers nooit.
 export function magBoekhouding(user: { rol: Role; beheerRechten?: string[] } | null | undefined): boolean {
   if (!user) return false;
-  if (user.rol === "eigenaar") return true;
+  if (user.rol === "eigenaar" || user.rol === "hr") return true; // HR = boekhouding/personeelszaken → volledige toegang
   if (user.rol === "beheer") {
     if (!user.beheerRechten) return true; // geen beperking = alles
     return user.beheerRechten.some((k) => BOEKHOUDING_KEYS.includes(k));

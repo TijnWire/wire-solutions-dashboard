@@ -22,8 +22,8 @@ export function Toegang() {
   const [dichteGroepen, setDichteGroepen] = useState<Set<string>>(new Set()); // groepen staan standaard open
 
   if (!currentUser) return null;
-  if (currentUser.rol !== "eigenaar") {
-    return <Card className="p-8 text-center text-sm text-ink-500">Alleen de eigenaar kan de toegang beheren.</Card>;
+  if (currentUser.rol !== "eigenaar" && currentUser.rol !== "hr") {
+    return <Card className="p-8 text-center text-sm text-ink-500">Alleen de eigenaar en HR kunnen de toegang beheren.</Card>;
   }
 
   const werknemers = users.filter((u) => u.rol === "monteur");

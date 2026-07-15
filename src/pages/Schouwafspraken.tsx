@@ -32,7 +32,7 @@ export function Schouwafspraken() {
   const [zoek, setZoek] = useState("");
 
   if (!currentUser) return null;
-  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer";
+  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr";
   const naamVan = (id?: string) => users.find((u) => u.id === id)?.naam ?? "Niet toegewezen";
   const set = (p: Partial<typeof leegForm>) => setForm((f) => ({ ...(f ?? leegForm), ...p }));
 

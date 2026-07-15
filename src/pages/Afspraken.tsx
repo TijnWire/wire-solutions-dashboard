@@ -431,7 +431,7 @@ function NieuweGroep({ onKlaar }: { onKlaar: () => void }) {
 // ── Detail / bewerken van een groep ──
 function GroepDetail({ locatie, onTerug }: { locatie: string; onTerug: () => void }) {
   const { afspraken, currentUser, addAfspraak, updateAfspraak, deleteAfspraak } = useApp();
-  const isLeiding = currentUser?.rol === "eigenaar" || currentUser?.rol === "beheer";
+  const isLeiding = currentUser?.rol === "eigenaar" || currentUser?.rol === "beheer" || currentUser?.rol === "hr";
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [bevestig, setBevestig] = useState<{ titel: string; tekst: string; actie: () => void } | null>(null);
 
@@ -593,7 +593,7 @@ export function Afspraken({ initieelLocatie }: { initieelLocatie?: string }) {
     });
 
   if (!currentUser) return null;
-  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer";
+  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr";
 
   const zichtbaar = isLeiding ? afspraken : afspraken.filter((a) => a.toegewezenAan === currentUser.id);
   // Vervallen afspraken waarvan de betrokkenen nog niet geïnformeerd zijn.

@@ -27,8 +27,8 @@ import { magBoekhouding } from "../lib/rechten";
 import { supabaseAan } from "../lib/supabase";
 import { logAudit, syncAppRole, verwijderAppRole, resetAuthWachtwoord, wijzigAuthEmail } from "../lib/adminAccount";
 
-const ROLLEN: Role[] = ["eigenaar", "beheer", "monteur"];
-const rolTone: Record<Role, string> = { eigenaar: "green", beheer: "amber", monteur: "slate" };
+const ROLLEN: Role[] = ["eigenaar", "beheer", "hr", "monteur"];
+const rolTone: Record<Role, string> = { eigenaar: "green", beheer: "amber", hr: "indigo", monteur: "slate" };
 
 function initialenVan(naam: string): string {
   const delen = naam.trim().split(/\s+/).filter(Boolean);
@@ -52,6 +52,7 @@ function GebruikerEditor({
   const beginRoles = (): Set<string> => {
     if (!gebruiker) return new Set(["monteur"]);
     if (gebruiker.rol === "eigenaar") return new Set(["eigenaar"]);
+    if (gebruiker.rol === "hr") return new Set(["hr"]);
     if (gebruiker.rol === "beheer") return new Set(gebruiker.werknemer ? ["beheer", "monteur"] : ["beheer"]);
     return new Set(["monteur"]);
   };
@@ -68,8 +69,10 @@ function GebruikerEditor({
     if (!magRol) return;
     setSelRoles((prev) => {
       if (token === "eigenaar") return new Set(["eigenaar"]);
+      if (token === "hr") return new Set(["hr"]); // HR is een losse rol (niet te combineren)
       const n = new Set(prev);
       n.delete("eigenaar");
+      n.delete("hr");
       if (n.has(token)) n.delete(token);
       else n.add(token);
       if (n.size === 0) n.add("monteur");
@@ -117,10 +120,11 @@ function GebruikerEditor({
     if (!gebruiker && !wachtwoord.trim()) return setFout("Stel een wachtwoord in voor het nieuwe account.");
 
     const isEigenaar = selRoles.has("eigenaar");
+    const isHr = selRoles.has("hr");
     const heeftBeheer = selRoles.has("beheer");
-    const rol: Role = isEigenaar ? "eigenaar" : heeftBeheer ? "beheer" : "monteur";
-    const werknemer = !isEigenaar && heeftBeheer && selRoles.has("monteur");
-    const beheerRechten = heeftBeheer && !isEigenaar ? [...rechten] : undefined;
+    const rol: Role = isEigenaar ? "eigenaar" : isHr ? "hr" : heeftBeheer ? "beheer" : "monteur";
+    const werknemer = !isEigenaar && !isHr && heeftBeheer && selRoles.has("monteur");
+    const beheerRechten = heeftBeheer && !isEigenaar && !isHr ? [...rechten] : undefined;
 
     const basis = {
       naam: naam.trim(),
@@ -435,7 +439,7 @@ export function Gebruikersbeheer() {
   const [reset, setReset] = useState<User | null>(null);
 
   if (!currentUser) return null;
-  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer";
+  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr";
   if (!isLeiding) {
     return (
       <Card className="p-8 text-center text-sm text-ink-500">

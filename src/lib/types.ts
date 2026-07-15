@@ -1,4 +1,4 @@
-export type Role = "eigenaar" | "beheer" | "monteur";
+export type Role = "eigenaar" | "beheer" | "hr" | "monteur";
 
 export type User = {
   id: string;
@@ -121,6 +121,7 @@ export type Mededeling = {
 export const ROL_LABEL: Record<Role, string> = {
   eigenaar: "Eigenaar",
   beheer: "Beheer",
+  hr: "HR",
   monteur: "Werknemer",
 };
 

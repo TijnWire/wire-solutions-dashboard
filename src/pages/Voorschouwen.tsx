@@ -273,7 +273,7 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
   }, []);
 
   if (!currentUser) return null;
-  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer";
+  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr";
 
   // Gearchiveerde mappen (en hun adressen) verdwijnen uit de actieve lijst — ze staan in de database.
   // Mappen die uit het actieve overzicht horen: gearchiveerd (in de database) óf klaargezet voor Stedin —

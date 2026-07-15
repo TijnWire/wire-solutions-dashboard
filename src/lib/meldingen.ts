@@ -49,7 +49,7 @@ type MeldingData = {
 export function meldingenVoor(user: User, data: MeldingData): Melding[] {
   const { taken, rondes, afspraken, voorschouwen, projects, projectPosts, tauwOpdrachten, saneringen, buurtaanpak, users, bedrijf, instellingen, verlof } = data;
   const m: Melding[] = [];
-  const isLeiding = user.rol === "eigenaar" || user.rol === "beheer";
+  const isLeiding = user.rol === "eigenaar" || user.rol === "beheer" || user.rol === "hr";
 
   // Open taken
   const openTaken = taken.filter((t) => (t.toegewezenAan === user.id || t.toegewezenAan === "") && t.status !== "Klaar"); // "" = hele team

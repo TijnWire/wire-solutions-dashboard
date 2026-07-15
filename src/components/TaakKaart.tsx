@@ -19,7 +19,7 @@ export function TaakKaart({
 }) {
   const { updateTaak, deleteTaak, users, currentUser } = useApp();
   const [open, setOpen] = useState(false);
-  const isAdmin = currentUser?.rol === "eigenaar" || currentUser?.rol === "beheer";
+  const isAdmin = currentUser?.rol === "eigenaar" || currentUser?.rol === "beheer" || currentUser?.rol === "hr";
   const toegewezen = users.find((u) => u.id === taak.toegewezenAan);
 
   return (

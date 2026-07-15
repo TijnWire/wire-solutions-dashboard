@@ -75,7 +75,7 @@ function groepeerPerProject(items: ZoekItem[], projects: Project[]): ZoekGroep[]
 export function zoekResultaten(query: string, data: ZoekData, user: User | null): ZoekGroep[] {
   const q = query.trim().toLowerCase();
   if (q.length < 2 || !user) return [];
-  const isLeiding = user.rol === "eigenaar" || user.rol === "beheer";
+  const isLeiding = user.rol === "eigenaar" || user.rol === "beheer" || user.rol === "hr";
   const hit = (...delen: (string | number | undefined)[]) => delen.map((d) => String(d ?? "")).join(" ").toLowerCase().includes(q);
   const { projects } = data;
   const items: ZoekItem[] = [];

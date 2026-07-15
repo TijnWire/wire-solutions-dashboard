@@ -124,7 +124,7 @@ function projectNaamVanBestand(bestand: string): string {
 
 export function Buurtaanpak({ initieelId }: { initieelId?: string }) {
   const { buurtaanpak, addBuurtaanpak, currentUser } = useApp();
-  const isLeiding = currentUser?.rol === "eigenaar" || currentUser?.rol === "beheer";
+  const isLeiding = currentUser?.rol === "eigenaar" || currentUser?.rol === "beheer" || currentUser?.rol === "hr";
   const [selId, setSelId] = useState<string | null>(initieelId ?? null);
   const [nieuw, setNieuw] = useState(false);
   const [naam, setNaam] = useState("");

@@ -8,7 +8,7 @@ const isDev =
   (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.DEV) ||
   (typeof window !== "undefined" && /^(localhost|127\.0\.0\.1|0\.0\.0\.0)$/.test(window.location.hostname));
 
-const ROL_LABEL: Record<Role, string> = { eigenaar: "Eigenaar", beheer: "Beheer", monteur: "Werknemer" };
+const ROL_LABEL: Record<Role, string> = { eigenaar: "Eigenaar", beheer: "Beheer", hr: "HR", monteur: "Werknemer" };
 const initialen = (naam: string) => naam.split(" ").map((d) => d[0]).slice(0, 2).join("").toUpperCase();
 
 export function DevSwitcher() {
@@ -16,7 +16,7 @@ export function DevSwitcher() {
   const [open, setOpen] = useState(false);
   if (!isDev) return null;
 
-  const beheerders = users.filter((u) => u.rol === "eigenaar" || u.rol === "beheer");
+  const beheerders = users.filter((u) => u.rol === "eigenaar" || u.rol === "beheer" || u.rol === "hr");
   const werknemers = users.filter((u) => u.rol === "monteur");
 
   const Rij = ({ id, naam, rol }: { id: string; naam: string; rol: Role }) => {

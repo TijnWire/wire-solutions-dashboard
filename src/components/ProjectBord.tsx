@@ -154,7 +154,7 @@ export function ProjectBord({ projectId, defaultOpen = false }: { projectId: str
   }, [defaultOpen]);
 
   if (!currentUser) return null;
-  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer";
+  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr";
 
   const posts = projectPosts
     .filter((p) => p.projectId === projectId)

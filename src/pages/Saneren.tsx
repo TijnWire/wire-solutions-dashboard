@@ -258,7 +258,7 @@ function SaneringDetail({ sanering, onTerug }: { sanering: Sanering; onTerug: ()
   const importInput = useRef<HTMLInputElement | null>(null);
   const scan = useSaneerScan();
 
-  const isLeiding = currentUser?.rol === "eigenaar" || currentUser?.rol === "beheer";
+  const isLeiding = currentUser?.rol === "eigenaar" || currentUser?.rol === "beheer" || currentUser?.rol === "hr";
   const isToegewezen = !!currentUser && currentUser.id === sanering.toegewezenAan;
   const magWerken = isLeiding || isToegewezen;
   const status = sanering.status;
@@ -565,7 +565,7 @@ export function Saneren({ initieelSanering }: { initieelSanering?: string }) {
   };
 
   if (!currentUser) return null;
-  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer";
+  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr";
   const zichtbaar = (isLeiding ? saneringen : saneringen.filter((s) => s.toegewezenAan === currentUser.id)).filter((s) => !s.gearchiveerd && !s.verwijderd);
   const verwijderdeProjecten = isLeiding ? saneringen.filter((s) => s.verwijderd) : [];
   const verwijderProject = (s: Sanering) => { updateSanering(s.id, { verwijderd: true, verwijderdOp: new Date().toISOString() }); setVraagVerwijder(null); };

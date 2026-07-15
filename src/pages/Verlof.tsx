@@ -27,7 +27,7 @@ export function Verlof() {
   const [fout, setFout] = useState("");
 
   if (!currentUser) return null;
-  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer";
+  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr";
   const magBoek = magBoekhouding(currentUser);
   const naamVan = (id: string) => users.find((u) => u.id === id)?.naam ?? "Onbekend";
 

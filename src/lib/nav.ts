@@ -25,13 +25,11 @@ import {
   Recycle,
   FlaskConical,
   Cable,
-  KeyRound,
-  RefreshCw,
   type LucideIcon,
 } from "lucide-react";
 import type { Role } from "./types";
 
-export type NavGroup = "Werk" | "Projecten" | "Operatie" | "Boekhouding" | "Vragen" | "Systeem";
+export type NavGroup = "Werk" | "Projecten" | "Operatie" | "Boekhouding" | "Systeem";
 
 export type NavItem = {
   key: string;
@@ -42,9 +40,10 @@ export type NavItem = {
   roles: Role[];
 };
 
-const ALLE: Role[] = ["eigenaar", "beheer", "monteur"];
-const LEIDING: Role[] = ["eigenaar", "beheer"];
-const EIGENAAR: Role[] = ["eigenaar"];
+// HR ziet alles (personeelszaken/boekhouding) — daarom in élke rol-groep opgenomen.
+const ALLE: Role[] = ["eigenaar", "beheer", "hr", "monteur"];
+const LEIDING: Role[] = ["eigenaar", "beheer", "hr"];
+const EIGENAAR: Role[] = ["eigenaar", "hr"]; // Toegang: eigenaar + HR
 
 // Project-onderdelen waarvan de eigenaar de toegang per werknemer kan aan-/uitzetten (Toegang-pagina).
 // Werk (Mijn werk, Projecten, Agenda, Mededelingen), Kennisbank en Communicatie blijven ALTIJD zichtbaar;
@@ -71,6 +70,7 @@ export const NAV: NavItem[] = [
   { key: "voorschouwen", label: "Voorschouwen", icon: ClipboardCheck, group: "Projecten", roles: ALLE },
   { key: "schouwafspraken", label: "Schouwafspraken", icon: CalendarClock, group: "Projecten", roles: ALLE },
   { key: "tauw", label: "TAUW", icon: FlaskConical, group: "Projecten", roles: ALLE },
+  { key: "kennisbank", label: "Kennisbank", icon: BookOpen, group: "Projecten", roles: ALLE },
 
   { key: "afspraken", label: "Afspraken", icon: CalendarCheck, group: "Operatie", roles: LEIDING },
   { key: "documenten", label: "Documenten", icon: FileText, group: "Operatie", roles: LEIDING },
@@ -83,20 +83,16 @@ export const NAV: NavItem[] = [
   { key: "verlof", label: "Verlof", icon: Plane, group: "Boekhouding", roles: LEIDING },
   { key: "medewerkers", label: "Medewerkers", icon: Users, group: "Boekhouding", roles: LEIDING },
   { key: "communicatie", label: "Communicatie", icon: MessagesSquare, badge: "AI", group: "Operatie", roles: ALLE },
-  { key: "klanten", label: "Klanten & Database", icon: Database, group: "Operatie", roles: LEIDING },
-
-  { key: "kennisbank", label: "Kennisbank", icon: BookOpen, group: "Vragen", roles: ALLE },
 
   { key: "overzicht", label: "Dashboard", icon: LayoutDashboard, group: "Systeem", roles: LEIDING },
   { key: "team", label: "Team", icon: Users, group: "Systeem", roles: LEIDING },
+  { key: "klanten", label: "Klanten & Database", icon: Database, group: "Systeem", roles: LEIDING },
   { key: "beheer", label: "Gebruikersbeheer", icon: UserCog, group: "Systeem", roles: LEIDING },
   { key: "toegang", label: "Toegang", icon: Lock, group: "Systeem", roles: EIGENAAR },
-  { key: "api", label: "API-sleutels", icon: KeyRound, group: "Systeem", roles: LEIDING },
-  { key: "sync", label: "Sync & back-up", icon: RefreshCw, group: "Systeem", roles: LEIDING },
   { key: "instellingen", label: "Instellingen", icon: Settings, group: "Systeem", roles: LEIDING },
 ];
 
-export const GROUPS: NavGroup[] = ["Werk", "Projecten", "Operatie", "Boekhouding", "Vragen", "Systeem"];
+export const GROUPS: NavGroup[] = ["Werk", "Projecten", "Operatie", "Boekhouding", "Systeem"];
 
 // Bepaalt of een gebruiker een menu-item mag zien.
 // Beheerders zien beheer-onderdelen alleen als de eigenaar dat gebied heeft toegewezen.

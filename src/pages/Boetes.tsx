@@ -84,7 +84,7 @@ export function Boetes() {
   const [medewerker, setMedewerker] = useState("");
 
   if (!currentUser) return null;
-  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer";
+  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr";
   const naamVan = (id: string) => users.find((u) => u.id === id)?.naam ?? "Onbekend";
 
   if (modus === "formulier") return <BoeteForm bestaande={bewerk} onKlaar={() => setModus("lijst")} />;

@@ -83,7 +83,7 @@ export function Klanten({ initieelKey }: { initieelKey?: string }) {
   const [anker, setAnker] = useState(() => new Date().toISOString().slice(0, 10));
 
   if (!currentUser) return null;
-  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer";
+  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr";
 
   // Aggregatie: bouw één adressenindex uit klanten + afspraken + brieven
   const map = new Map<string, AdresItem>();

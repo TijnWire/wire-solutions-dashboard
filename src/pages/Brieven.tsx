@@ -198,7 +198,7 @@ function AdresRij({
 function RondeDetail({ ronde, onTerug }: { ronde: Brievenronde; onTerug: () => void }) {
   const { updateRonde, deleteRonde, currentUser, users, addFactuur, facturen } = useApp();
   const { navigeer } = useNav();
-  const isLeiding = currentUser?.rol === "eigenaar" || currentUser?.rol === "beheer";
+  const isLeiding = currentUser?.rol === "eigenaar" || currentUser?.rol === "beheer" || currentUser?.rol === "hr";
   const [toevoegenOpen, setToevoegenOpen] = useState(false);
   const [van, setVan] = useState("");
   const [tot, setTot] = useState("");
@@ -1103,7 +1103,7 @@ export function Brieven({ initieelRonde }: { initieelRonde?: string }) {
   const [prullenOpen, setPrullenOpen] = useState(false);
 
   if (!currentUser) return null;
-  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer";
+  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr";
   const zichtbaar = (isLeiding
     ? rondes
     : rondes.filter((r) => r.toegewezenAan === currentUser.id)

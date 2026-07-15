@@ -19,7 +19,7 @@ export function ApiSleutels() {
   const [bewerkId, setBewerkId] = useState<string | null>(null);
 
   if (!currentUser) return null;
-  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer";
+  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr";
   if (!isLeiding) {
     return (
       <div className="mx-auto max-w-md py-16 text-center">
@@ -44,10 +44,7 @@ export function ApiSleutels() {
 
   return (
     <div className="space-y-3">
-      <div className="mb-1">
-        <h2 className="text-xl font-bold text-ink-900">API-sleutels</h2>
-        <p className="text-sm text-ink-500">Overzicht van alle koppelingen en hun status. Vul de sleutels in om de bijbehorende functies aan te zetten.</p>
-      </div>
+      <p className="text-sm text-ink-500">Overzicht van alle koppelingen en hun status. Vul de sleutels in om de bijbehorende functies aan te zetten.</p>
       {integraties.map((i) => {
         const si = statusInfo[i.status];
         return (

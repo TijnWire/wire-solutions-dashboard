@@ -58,7 +58,7 @@ export function Kennisbank() {
   const [verwijder, setVerwijder] = useState<KennisArtikel | null>(null);
 
   if (!currentUser) return null;
-  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer";
+  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr";
   const categorieën = [...new Set(kennis.map((k) => k.categorie))];
 
   if (modus === "formulier") return <ArtikelForm bestaande={bewerk} categorieën={categorieën} onKlaar={() => setModus("lijst")} />;

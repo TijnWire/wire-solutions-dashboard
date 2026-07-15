@@ -221,7 +221,7 @@ function VerstuurWachtrij({
 
 function Berichten() {
   const { afspraken, comm, currentUser, updateComm } = useApp();
-  const isLeiding = currentUser?.rol === "eigenaar" || currentUser?.rol === "beheer";
+  const isLeiding = currentUser?.rol === "eigenaar" || currentUser?.rol === "beheer" || currentUser?.rol === "hr";
   const mijn = isLeiding ? afspraken : afspraken.filter((a) => a.toegewezenAan === currentUser?.id);
 
   const locaties = [...new Set(mijn.map((a) => a.locatie))];
@@ -375,7 +375,7 @@ function zoekAntwoord(vraag: string, faq: FaqItem[]): FaqItem | null {
 
 function AiChat() {
   const { comm, currentUser, updateComm } = useApp();
-  const isLeiding = currentUser?.rol === "eigenaar" || currentUser?.rol === "beheer";
+  const isLeiding = currentUser?.rol === "eigenaar" || currentUser?.rol === "beheer" || currentUser?.rol === "hr";
   const [berichten, setBerichten] = useState<{ van: "klant" | "bot"; tekst: string; door?: boolean }[]>([
     { van: "bot", tekst: "Hallo! Ik ben de assistent van Wire Solutions. Waarmee kan ik u helpen?" },
   ]);

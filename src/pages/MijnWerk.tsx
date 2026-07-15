@@ -57,7 +57,7 @@ export function MijnWerk({ initieelProject }: { initieelProject?: string }) {
   const mailbox = meldingenVoor(currentUser, { taken, rondes, afspraken, voorschouwen, projects, projectPosts, tauwOpdrachten, saneringen, buurtaanpak, users, bedrijf, instellingen, verlof });
 
   // SMS-herinneringen die binnen 24u verstuurd moeten worden (bevestigd, datum vandaag/morgen, nog niet verstuurd).
-  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer";
+  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr";
   const vandaagDt = vandaagISO(), morgenDt = morgenISO();
   const smsTeVersturen = buurtaanpak
     .filter((b) => !b.gearchiveerd && (isLeiding || b.toegewezenAan === currentUser.id))

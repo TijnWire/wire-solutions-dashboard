@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
-import { Building2, Activity, CheckCircle2, Info, AlertTriangle, RotateCcw, Database, Pencil, Save, Lock } from "lucide-react";
+import { Building2, Activity, CheckCircle2, Info, AlertTriangle, RotateCcw, Database, Pencil, Save, Lock, Plug, RefreshCw } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { Card, Bevestig } from "../components/ui";
 import { berekenMeldingen } from "../lib/meldingen";
 import { APP_VERSIE } from "../lib/versie";
+import { ApiSleutels } from "./ApiSleutels";
+import { SyncBackup } from "./SyncBackup";
 
 const veld = "w-full rounded-xl border border-ink-200 px-3.5 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100";
 const labelCls = "mb-1 block text-xs font-semibold text-ink-600";
@@ -171,9 +173,9 @@ function SysteemTab({ isLeiding }: { isLeiding: boolean }) {
 
 export function Instellingen() {
   const { currentUser } = useApp();
-  const [tab, setTab] = useState<"bedrijf" | "systeem">("bedrijf");
+  const [tab, setTab] = useState<"bedrijf" | "api" | "sync" | "systeem">("bedrijf");
   if (!currentUser) return null;
-  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer";
+  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr";
 
   // Instellingen zijn alleen voor de leiding — werknemers krijgen geen toegang.
   if (!isLeiding) {
@@ -188,6 +190,8 @@ export function Instellingen() {
 
   const tabs = [
     { key: "bedrijf", label: "Bedrijf & logo", icon: Building2 },
+    { key: "api", label: "API-sleutels", icon: Plug },
+    { key: "sync", label: "Sync & back-up", icon: RefreshCw },
     { key: "systeem", label: "Systeem & meldingen", icon: Activity },
   ] as const;
 
@@ -195,7 +199,7 @@ export function Instellingen() {
     <div className="space-y-5">
       <div>
         <h2 className="text-xl font-bold text-ink-900">Instellingen</h2>
-        <p className="text-sm text-ink-500">Bedrijfsgegevens en de systeemstatus van de app. API-sleutels en sync &amp; back-up staan nu op hun eigen pagina.</p>
+        <p className="text-sm text-ink-500">Bedrijfsgegevens, API-sleutels, sync &amp; back-up en de systeemstatus van de app.</p>
       </div>
 
       <div className="flex flex-wrap gap-2 border-b border-ink-200">
@@ -210,6 +214,8 @@ export function Instellingen() {
       </div>
 
       {tab === "bedrijf" && <BedrijfTab isLeiding={isLeiding} />}
+      {tab === "api" && <ApiSleutels />}
+      {tab === "sync" && <SyncBackup />}
       {tab === "systeem" && <SysteemTab isLeiding={isLeiding} />}
     </div>
   );

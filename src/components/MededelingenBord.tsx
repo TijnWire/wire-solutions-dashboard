@@ -32,7 +32,7 @@ export function MededelingenBord({ compose = false }: { compose?: boolean }) {
   const [deadline, setDeadline] = useState("");
 
   if (!currentUser) return null;
-  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer";
+  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr";
 
   const naamVan = (id?: string) => users.find((u) => u.id === id)?.naam ?? "Onbekend";
   const initialenVan = (id?: string) => users.find((u) => u.id === id)?.initialen ?? "?";

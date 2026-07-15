@@ -297,7 +297,7 @@ export function Medewerkers({ initieelMedewerker }: { initieelMedewerker?: strin
   const [selId, setSelId] = useState<string | null>(initieelMedewerker ?? null);
 
   if (!currentUser) return null;
-  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer";
+  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr";
   if (!isLeiding) {
     return <Card className="p-8 text-center text-sm text-ink-500">Je hebt geen toegang tot deze pagina.</Card>;
   }
