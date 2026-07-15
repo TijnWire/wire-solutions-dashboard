@@ -205,7 +205,7 @@ export function MijnWerk({ initieelProject }: { initieelProject?: string }) {
       sub: `${items.length} ${items.length === 1 ? "adres" : "adressen"}`,
       pct: items.length ? Math.round((metFoto / items.length) * 100) : 0,
       voortgang: `${metFoto}/${items.length} met foto`,
-      open: () => navigeer("voorschouwen"),
+      open: () => navigeer("voorschouwen", { voorschouwMap: m.id }),
     });
   }
 

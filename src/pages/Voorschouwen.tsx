@@ -217,7 +217,7 @@ function MapSelect({ value, mappen, onKies }: {
   );
 }
 
-export function Voorschouwen() {
+export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
   const { voorschouwen, voorschouwMappen, users, currentUser, deleteVoorschouw, updateVoorschouw, addVoorschouwMap, updateVoorschouwMap, deleteVoorschouwMap } = useApp();
   const [modus, setModus] = useState<"lijst" | "formulier">("lijst");
   const [bewerk, setBewerk] = useState<Voorschouw | undefined>(undefined);
@@ -227,7 +227,7 @@ export function Voorschouwen() {
   const [bezig, setBezig] = useState(false);
   const [nieuweMapOpen, setNieuweMapOpen] = useState(false);
   const [voorinvulIds, setVoorinvulIds] = useState<string[]>([]);
-  const [openMappen, setOpenMappen] = useState<Set<string>>(new Set()); // standaard alle mappen dicht
+  const [openMappen, setOpenMappen] = useState<Set<string>>(() => new Set(initieelMap ? [initieelMap] : [])); // standaard dicht; een map die je via "Mijn werk" opent, staat meteen open
   const [bewerkMapId, setBewerkMapId] = useState<string | null>(null);
   const [mapNaamConcept, setMapNaamConcept] = useState("");
   // Mappen zoeken/filteren + sorteren (sorteervoorkeur lokaal per apparaat, NIET in de gesyncte store).
@@ -246,6 +246,13 @@ export function Voorschouwen() {
   const [mapDetailId, setMapDetailId] = useState<string | null>(null); // geopende map-detailpagina (naam + toewijzen)
   const [naamZoek, setNaamZoek] = useState(""); // zoekterm voor het toewijzen-op-naam-veld
   useEffect(() => { try { localStorage.setItem("vs-mapSort", sorteerModus); } catch { /* opslag niet beschikbaar */ } }, [sorteerModus]);
+  // Kwam je via "Mijn werk" recht op jóuw map? Die staat al open; scroll er meteen naartoe.
+  useEffect(() => {
+    if (!initieelMap) return;
+    const el = document.getElementById(`vsmap-${initieelMap}`);
+    el?.scrollIntoView({ behavior: "smooth", block: "start" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (!currentUser) return null;
   const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer";
@@ -864,7 +871,7 @@ export function Voorschouwen() {
             return (
               <Fragment key={key}>
                 {toonWeekkop && <h3 className="flex items-center gap-1.5 pt-1 text-sm font-bold text-ink-700"><Calendar className="h-4 w-4 text-ink-400" /> {vsWeekLabel(wk)}</h3>}
-                <div className="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-card">
+                <div id={g.map ? `vsmap-${g.map.id}` : undefined} className="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-card">
                 <div className="flex flex-wrap items-center gap-3 px-4 py-4">
                   <input
                     type="checkbox"

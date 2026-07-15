@@ -110,7 +110,7 @@ export default function App() {
       case "planning":
         return <Planning key={target?.project ?? "geen"} projectId={target?.project} />;
       case "voorschouwen":
-        return <Voorschouwen />;
+        return <Voorschouwen key={target?.voorschouwMap ?? "lijst"} initieelMap={target?.voorschouwMap} />;
       case "saneren":
         return <Saneren key={target?.saneringId ?? "lijst"} initieelSanering={target?.saneringId} />;
       case "buurtaanpak":
