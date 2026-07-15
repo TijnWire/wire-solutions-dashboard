@@ -65,7 +65,7 @@ function DagPopup({ iso, onClose, effStatus }: { iso: string; onClose: () => voi
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {isLeiding && (
-              <div className="min-w-40 flex-1"><Keuze value={wie} onChange={setWie} opties={[{ waarde: "", label: "Niemand" }, ...users.map((u) => ({ waarde: u.id, label: u.naam }))]} title="Wie" /></div>
+              <div className="min-w-40 flex-1"><Keuze value={wie} onChange={setWie} altijdZoeken opties={[{ waarde: "", label: "Niemand" }, ...users.map((u) => ({ waarde: u.id, label: u.naam }))]} title="Wie" /></div>
             )}
             <button type="button" onClick={voegItem} disabled={!titel.trim()} className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-40"><Plus className="h-4 w-4" /> Toevoegen</button>
           </div>
@@ -253,7 +253,7 @@ export function Agenda() {
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <label className={labelCls}>Medewerker</label>
-              <Keuze value={isLeiding ? vMedewerker : currentUser.id} onChange={isLeiding ? setVMedewerker : () => {}} opties={isLeiding ? users.map((u) => ({ waarde: u.id, label: u.naam })) : [{ waarde: currentUser.id, label: currentUser.naam }]} disabled={!isLeiding} title="Medewerker" />
+              <Keuze value={isLeiding ? vMedewerker : currentUser.id} onChange={isLeiding ? setVMedewerker : () => {}} altijdZoeken opties={isLeiding ? users.map((u) => ({ waarde: u.id, label: u.naam })) : [{ waarde: currentUser.id, label: currentUser.naam }]} disabled={!isLeiding} title="Medewerker" />
             </div>
             <div>
               <label className={labelCls}>Soort</label>
@@ -324,7 +324,7 @@ export function Agenda() {
               <button key={label} type="button" onClick={() => set((v) => !v)} className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors ${aan ? "bg-brand-600 text-white" : "bg-white text-ink-500 ring-1 ring-ink-200 hover:bg-ink-50"}`}>{label}</button>
             ))}
             {isLeiding && (
-              <div className="ml-auto w-44"><Keuze value={ftWie} onChange={setFtWie} opties={[{ waarde: "", label: "Iedereen" }, ...users.map((u) => ({ waarde: u.id, label: u.naam }))]} title="Medewerker" /></div>
+              <div className="ml-auto w-44"><Keuze value={ftWie} onChange={setFtWie} altijdZoeken opties={[{ waarde: "", label: "Iedereen" }, ...users.map((u) => ({ waarde: u.id, label: u.naam }))]} title="Medewerker" /></div>
             )}
           </div>
 

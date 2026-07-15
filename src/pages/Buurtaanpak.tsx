@@ -456,7 +456,7 @@ function Detail({ project, onTerug, isLeiding }: { project: BuurtaanpakT; onTeru
             </div>
             <div>
               <label className="mb-1 block text-xs font-semibold text-ink-600">Uitvoerder (werknemer)</label>
-              <Keuze value={project.toegewezenAan ?? ""} onChange={(w) => updateBuurtaanpak(project.id, { toegewezenAan: w || undefined })} opties={[{ waarde: "", label: "— Nog niet toewijzen —" }, ...users.map((u) => ({ waarde: u.id, label: u.naam }))]} title="Uitvoerder" />
+              <Keuze value={project.toegewezenAan ?? ""} onChange={(w) => updateBuurtaanpak(project.id, { toegewezenAan: w || undefined })} altijdZoeken opties={[{ waarde: "", label: "— Nog niet toewijzen —" }, ...users.map((u) => ({ waarde: u.id, label: u.naam }))]} title="Uitvoerder" />
             </div>
             <div>
               <label className="mb-1 block text-xs font-semibold text-ink-600">Opdrachtgever</label>

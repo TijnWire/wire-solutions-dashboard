@@ -124,7 +124,7 @@ export function Urenstaat() {
             <>
               <UserIcon className="h-4 w-4 shrink-0 text-brand-600" />
               <span className="shrink-0 text-sm font-semibold text-ink-600">Medewerker:</span>
-              <div className="min-w-0 flex-1 sm:max-w-xs"><Keuze value={persSel || medewerkers[0]?.id || ""} onChange={(w) => { setPersSel(w); setVoegProject(""); }} opties={medewerkers.map((u) => ({ waarde: u.id, label: u.naam }))} title="Medewerker kiezen" /></div>
+              <div className="min-w-0 flex-1 sm:max-w-xs"><Keuze value={persSel || medewerkers[0]?.id || ""} onChange={(w) => { setPersSel(w); setVoegProject(""); }} altijdZoeken opties={medewerkers.map((u) => ({ waarde: u.id, label: u.naam }))} title="Medewerker kiezen" /></div>
             </>
           ) : (
             <>
@@ -554,7 +554,7 @@ function PerProject({ weekISO, weekISOs, weekNr, projSel, projects, medewerkers,
         <div className="flex flex-wrap items-center gap-2 border-t border-ink-100 px-4 py-2.5">
           <Plus className="h-4 w-4 text-ink-400" />
           <span className="text-xs font-semibold text-ink-500">Medewerker toevoegen:</span>
-          <div className="w-56"><Keuze value={voegToe} onChange={voegPersoonToe} opties={[{ waarde: "", label: "Kies medewerker…" }, ...toevoegbaar.map((u) => ({ waarde: u.id, label: u.naam }))]} title="Medewerker toevoegen" size="sm" /></div>
+          <div className="w-56"><Keuze value={voegToe} onChange={voegPersoonToe} altijdZoeken opties={[{ waarde: "", label: "Kies medewerker…" }, ...toevoegbaar.map((u) => ({ waarde: u.id, label: u.naam }))]} title="Medewerker toevoegen" size="sm" /></div>
         </div>
       )}
 

@@ -406,7 +406,7 @@ function NieuweGroep({ onKlaar }: { onKlaar: () => void }) {
         </div>
         <div>
           <label className={labelCls}>Wie gaat het doen?</label>
-          <Keuze value={toegewezenAan} onChange={setToegewezenAan} opties={[{ waarde: "", label: "— Nog niet toewijzen —" }, ...users.map((u) => ({ waarde: u.id, label: u.naam }))]} title="Wie gaat het doen?" />
+          <Keuze value={toegewezenAan} onChange={setToegewezenAan} altijdZoeken opties={[{ waarde: "", label: "— Nog niet toewijzen —" }, ...users.map((u) => ({ waarde: u.id, label: u.naam }))]} title="Wie gaat het doen?" />
         </div>
       </Card>
 

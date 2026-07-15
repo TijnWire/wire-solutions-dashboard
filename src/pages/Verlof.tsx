@@ -87,6 +87,7 @@ export function Verlof() {
             <Keuze
               value={isLeiding ? vMedewerker : currentUser.id}
               onChange={isLeiding ? setVMedewerker : () => {}}
+              altijdZoeken
               opties={isLeiding ? users.map((u) => ({ waarde: u.id, label: u.naam })) : [{ waarde: currentUser.id, label: currentUser.naam }]}
               disabled={!isLeiding}
               title="Medewerker"

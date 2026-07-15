@@ -25,6 +25,7 @@ function MonteurCel({ slot, monteurs, onChange }: { slot: PlanningSlot; monteurs
     <Keuze
       value={slot.monteurId}
       onChange={(v) => { if (v === "__vrij") { setVrij(true); onChange({ monteurId: "", monteurVrij: "" }); } else onChange({ monteurId: v, monteurVrij: "" }); }}
+      altijdZoeken
       opties={[{ waarde: "", label: "—" }, ...monteurs.map((u) => ({ waarde: u.id, label: u.naam })), { waarde: "__vrij", label: "Anders…" }]}
       size="sm"
       title="Werknemer"

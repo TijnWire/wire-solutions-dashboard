@@ -95,7 +95,7 @@ export function TaakKaart({
             <div className="flex items-center justify-between gap-2">
               <label className="flex items-center gap-2 text-xs text-ink-500">
                 Toegewezen aan:
-                <div className="w-40"><Keuze value={taak.toegewezenAan} onChange={(w) => updateTaak(taak.id, { toegewezenAan: w })} opties={[{ waarde: "", label: "Hele team" }, ...users.map((u) => ({ waarde: u.id, label: u.naam }))]} size="sm" /></div>
+                <div className="w-40"><Keuze value={taak.toegewezenAan} onChange={(w) => updateTaak(taak.id, { toegewezenAan: w })} altijdZoeken opties={[{ waarde: "", label: "Hele team" }, ...users.map((u) => ({ waarde: u.id, label: u.naam }))]} size="sm" /></div>
               </label>
               <button
                 onClick={() => deleteTaak(taak.id)}

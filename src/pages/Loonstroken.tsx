@@ -109,7 +109,7 @@ function LoonstrookForm({ bestaande, onKlaar }: { bestaande?: Loonstrook; onKlaa
       <Card className="space-y-4 p-4">
         <div>
           <label className={labelCls}>Medewerker</label>
-          <Keuze value={d.medewerkerId} onChange={(w) => { set({ medewerkerId: w, boetes: 0, bestand: undefined, bestandsnaam: undefined, ...contractWaarden(users.find((u) => u.id === w)) }); setVerreken(new Set()); }} opties={users.map((u) => ({ waarde: u.id, label: u.naam }))} title="Medewerker" />
+          <Keuze value={d.medewerkerId} onChange={(w) => { set({ medewerkerId: w, boetes: 0, bestand: undefined, bestandsnaam: undefined, ...contractWaarden(users.find((u) => u.id === w)) }); setVerreken(new Set()); }} altijdZoeken opties={users.map((u) => ({ waarde: u.id, label: u.naam }))} title="Medewerker" />
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
@@ -385,7 +385,7 @@ export function Loonstroken({ loonWeek }: { loonWeek?: string }) {
           </button>
         ))}
         {isLeiding && (
-          <div className="ml-auto w-52"><Keuze value={medewerker} onChange={setMedewerker} opties={[{ waarde: "", label: "Alle medewerkers" }, ...users.map((u) => ({ waarde: u.id, label: u.naam }))]} title="Medewerker" /></div>
+          <div className="ml-auto w-52"><Keuze value={medewerker} onChange={setMedewerker} altijdZoeken opties={[{ waarde: "", label: "Alle medewerkers" }, ...users.map((u) => ({ waarde: u.id, label: u.naam }))]} title="Medewerker" /></div>
         )}
       </div>
 

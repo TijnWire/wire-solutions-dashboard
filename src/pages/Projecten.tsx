@@ -201,7 +201,7 @@ function ProjectKaart({ project, initieelProject, onScan }: { project: Project; 
                 <div className="flex flex-wrap items-end gap-2">
                   <label className="block">
                     <span className="mb-1 block text-[11px] font-semibold text-ink-500">Voor wie?</span>
-                    <Keuze value={taakPersoon} onChange={setTaakPersoon} opties={[{ waarde: "", label: "Hele team" }, ...users.map((u) => ({ waarde: u.id, label: u.naam }))]} />
+                    <Keuze value={taakPersoon} onChange={setTaakPersoon} altijdZoeken opties={[{ waarde: "", label: "Hele team" }, ...users.map((u) => ({ waarde: u.id, label: u.naam }))]} />
                   </label>
                   <label className="block w-48">
                     <span className="mb-1 block text-[11px] font-semibold text-ink-500">Deadline (optioneel)</span>

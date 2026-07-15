@@ -70,7 +70,7 @@ export function MededelingenBord({ compose = false }: { compose?: boolean }) {
           <div className="grid gap-2.5 sm:grid-cols-3">
             <label className="block">
               <span className="mb-1 flex items-center gap-1 text-[11px] font-semibold text-ink-500">{gerichtAan ? <User className="h-3 w-3" /> : <Users2 className="h-3 w-3" />} Voor wie?</span>
-              <Keuze value={gerichtAan} onChange={setGerichtAan} opties={[{ waarde: "", label: "Hele team" }, ...users.filter((u) => u.id !== currentUser.id).map((u) => ({ waarde: u.id, label: u.naam }))]} />
+              <Keuze value={gerichtAan} onChange={setGerichtAan} altijdZoeken opties={[{ waarde: "", label: "Hele team" }, ...users.filter((u) => u.id !== currentUser.id).map((u) => ({ waarde: u.id, label: u.naam }))]} />
             </label>
             <label className="block">
               <span className="mb-1 block text-[11px] font-semibold text-ink-500">Project (optioneel)</span>

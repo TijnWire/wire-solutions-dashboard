@@ -42,7 +42,7 @@ function BoeteForm({ bestaande, onKlaar }: { bestaande?: Boete; onKlaar: () => v
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <label className={labelCls}>Medewerker</label>
-            <Keuze value={d.medewerkerId} onChange={(w) => set({ medewerkerId: w })} opties={users.map((u) => ({ waarde: u.id, label: u.naam }))} title="Medewerker" />
+            <Keuze value={d.medewerkerId} onChange={(w) => set({ medewerkerId: w })} altijdZoeken opties={users.map((u) => ({ waarde: u.id, label: u.naam }))} title="Medewerker" />
           </div>
           <div>
             <label className={labelCls}>Datum</label>
@@ -111,7 +111,7 @@ export function Boetes() {
       {isLeiding && (
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm font-medium text-ink-600">Medewerker:</span>
-          <div className="w-52"><Keuze value={medewerker} onChange={setMedewerker} opties={[{ waarde: "", label: "Alle medewerkers" }, ...users.map((u) => ({ waarde: u.id, label: u.naam }))]} title="Filter op medewerker" /></div>
+          <div className="w-52"><Keuze value={medewerker} onChange={setMedewerker} altijdZoeken opties={[{ waarde: "", label: "Alle medewerkers" }, ...users.map((u) => ({ waarde: u.id, label: u.naam }))]} title="Filter op medewerker" /></div>
         </div>
       )}
 
