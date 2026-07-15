@@ -92,7 +92,7 @@ export default function App() {
   if (currentUser.moetWachtwoordWijzigen) return <WachtwoordWijzigen />;
 
   const item = NAV.find((n) => n.key === active);
-  const titel = active === "overzicht" ? "Dashboard" : active === "planning" ? "Weekplanning" : item?.label ?? "Dashboard";
+  const titel = active === "overzicht" ? "Dashboard" : active === "planning" ? "Weekplanning" : active === "projecten" ? "Projecten" : item?.label ?? "Dashboard";
 
   const render = () => {
     // Vangnet: onderdelen die deze gebruiker niet mag zien, ook niet via een omweg openen.

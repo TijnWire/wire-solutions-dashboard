@@ -13,7 +13,6 @@ import {
   Lock,
   ClipboardList,
   ClipboardCheck,
-  FolderKanban,
   Receipt,
   Wallet,
   Clock,
@@ -61,7 +60,6 @@ export const WERKNEMER_TOEGANG_KEYS = WERKNEMER_TOEGANG.map((x) => x.key);
 
 export const NAV: NavItem[] = [
   { key: "mijnwerk", label: "Mijn werk", icon: ClipboardList, group: "Werk", roles: ALLE },
-  { key: "projecten", label: "Projecten", icon: FolderKanban, group: "Werk", roles: ALLE },
   { key: "agenda", label: "Agenda", icon: CalendarDays, group: "Werk", roles: ALLE },
   { key: "mededelingen", label: "Mededelingen", icon: Megaphone, group: "Werk", roles: ALLE },
 
