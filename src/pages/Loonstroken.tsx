@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Plus, ArrowLeft, Download, Pencil, Trash2, Upload, Wallet, Car, AlertTriangle } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Plus, ArrowLeft, Download, Pencil, Trash2, Upload, Wallet, Car, AlertTriangle, Clock, Wand2, Check, CheckSquare, Square } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { DatumKiezer } from "../components/DatumKiezer";
 import { Keuze } from "../components/Keuze";
@@ -9,6 +9,10 @@ import { PERIODE_TYPES, type Loonstrook, type PeriodeType, type User } from "../
 const euro = (n: number) => n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
 const veld = "w-full rounded-lg border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100";
 const labelCls = "mb-1 block text-xs font-semibold text-ink-600";
+const toISO = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const maandagVan = (d: Date) => { const x = new Date(d); const dow = (x.getDay() + 6) % 7; x.setDate(x.getDate() - dow); x.setHours(0, 0, 0, 0); return x; };
+const somUren = (uren?: number[]) => (uren ?? []).reduce((a, b) => a + (Number(b) || 0), 0);
+const uurTekst = (n: number) => (Number.isInteger(n) ? String(n) : (Math.round(n * 10) / 10).toString().replace(".", ","));
 
 function isoWeek(d: Date): number {
   const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
@@ -195,19 +199,157 @@ function LoonstrookForm({ bestaande, onKlaar }: { bestaande?: Loonstrook; onKlaa
   );
 }
 
-export function Loonstroken() {
+// ── Automatisch loonstroken aanmaken op basis van de gewerkte uren (Urenstaat) ──
+function LoonstrookGenerator({ startWeek, onKlaar }: { startWeek?: string; onKlaar: () => void }) {
+  const { users, urenstaat, loonstroken, addLoonstrook } = useApp();
+  const [periodeType, setPeriodeType] = useState<PeriodeType>("Maand");
+  const [anker, setAnker] = useState(() => startWeek || new Date().toISOString().slice(0, 10));
+  const [gekozen, setGekozen] = useState<Set<string>>(new Set());
+  const [klaar, setKlaar] = useState(0);
+
+  // Periode-grenzen (van–tot) bepalen uit type + ankerdatum. urenregel.week = maandag van die week.
+  const d0 = new Date(anker + "T00:00:00");
+  const y = d0.getFullYear();
+  let van = "", tot = "";
+  if (periodeType === "Week") {
+    const mon = maandagVan(d0); van = toISO(mon);
+    const sun = new Date(mon); sun.setDate(sun.getDate() + 6); tot = toISO(sun);
+  } else if (periodeType === "Jaar") {
+    van = `${y}-01-01`; tot = `${y}-12-31`;
+  } else {
+    const mm = String(d0.getMonth() + 1).padStart(2, "0");
+    const laatste = new Date(y, d0.getMonth() + 1, 0).getDate();
+    van = `${y}-${mm}-01`; tot = `${y}-${mm}-${String(laatste).padStart(2, "0")}`;
+  }
+  const label = periodeLabel(periodeType, anker);
+
+  const urenVan = (userId: string) =>
+    urenstaat.filter((x) => x.medewerkerId === userId && x.week >= van && x.week <= tot).reduce((s, x) => s + somUren(x.uren), 0);
+  const alBestaat = (userId: string) => loonstroken.some((l) => l.medewerkerId === userId && l.periodeType === periodeType && l.periode === label);
+
+  const rijen = [...users]
+    .sort((a, b) => a.naam.localeCompare(b.naam, "nl"))
+    .map((u) => ({ u, uren: urenVan(u.id), bestaat: alBestaat(u.id) }));
+
+  // Standaard aangevinkt: iedereen met uren die nog geen loonstrook voor deze periode heeft.
+  useEffect(() => {
+    setGekozen(new Set(rijen.filter((r) => r.uren > 0 && !r.bestaat).map((r) => r.u.id)));
+    setKlaar(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [periodeType, anker, loonstroken.length]);
+
+  const toggle = (id: string) => { setKlaar(0); setGekozen((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; }); };
+  const teMaken = rijen.filter((r) => gekozen.has(r.u.id) && !r.bestaat).length;
+
+  const genereer = () => {
+    let n = 0;
+    for (const r of rijen) {
+      if (!gekozen.has(r.u.id) || r.bestaat) continue;
+      const c = r.u.contract ?? {};
+      addLoonstrook({
+        medewerkerId: r.u.id,
+        periodeType,
+        refDatum: tot,
+        periode: label,
+        bruto: c.bruto ?? 0,
+        bijtelling: c.bijtelling ?? 0,
+        netto: c.netto ?? 0,
+        boetes: 0,
+        uren: Math.round(r.uren * 100) / 100,
+        notitie: `Automatisch aangemaakt uit de urenstaat (${label})`,
+      });
+      n++;
+    }
+    setKlaar(n);
+  };
+
+  return (
+    <div className="mx-auto max-w-2xl space-y-5">
+      <button type="button" onClick={onKlaar} className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-500 hover:text-ink-800"><ArrowLeft className="h-4 w-4" /> Terug naar loonstroken</button>
+      <div>
+        <h2 className="text-xl font-bold text-ink-900">Loonstroken uit urenstaat</h2>
+        <p className="text-sm text-ink-500">Kies een periode. De app telt de gewerkte uren per medewerker uit de Urenstaat en maakt per persoon een concept-loonstrook (met bruto/netto/bijtelling uit hun contract). Alles blijft daarna handmatig aanpasbaar.</p>
+      </div>
+
+      <Card className="space-y-4 p-4">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className={labelCls}>Periode</label>
+            <div className="flex gap-1.5">
+              {PERIODE_TYPES.map((p) => (
+                <button key={p} type="button" onClick={() => setPeriodeType(p)} className={`flex-1 rounded-lg px-2 py-2 text-sm font-semibold ${periodeType === p ? "bg-brand-600 text-white" : "bg-ink-100 text-ink-600 hover:bg-ink-200"}`}>{p}</button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className={labelCls}>Datum in periode</label>
+            <DatumKiezer value={anker} onChange={setAnker} />
+          </div>
+        </div>
+        <p className="-mt-1 text-xs text-ink-500">Periode wordt: <span className="font-semibold text-ink-700">{label}</span> <span className="text-ink-400">({new Date(van + "T00:00:00").toLocaleDateString("nl-NL")} – {new Date(tot + "T00:00:00").toLocaleDateString("nl-NL")})</span></p>
+
+        <div className="overflow-hidden rounded-xl border border-ink-200">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-ink-50/60 text-xs text-ink-500">
+                <th className="px-3 py-2 text-left font-semibold">Medewerker</th>
+                <th className="px-3 py-2 text-right font-semibold">Uren</th>
+                <th className="px-3 py-2 text-right font-semibold">Bruto (contract)</th>
+                <th className="px-3 py-2 text-right font-semibold">Netto</th>
+                <th className="px-3 py-2 text-center font-semibold">Aanmaken</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rijen.map((r) => (
+                <tr key={r.u.id} className={`border-t border-ink-100 ${r.uren === 0 && !r.bestaat ? "text-ink-300" : ""}`}>
+                  <td className="px-3 py-2">{r.u.naam}</td>
+                  <td className="px-3 py-2 text-right font-medium text-ink-800">{r.uren ? `${uurTekst(r.uren)} u` : "0 u"}</td>
+                  <td className="px-3 py-2 text-right">{euro(r.u.contract?.bruto ?? 0)}</td>
+                  <td className="px-3 py-2 text-right">{euro(r.u.contract?.netto ?? 0)}</td>
+                  <td className="px-3 py-2 text-center">
+                    {r.bestaat ? (
+                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600"><Check className="h-3.5 w-3.5" /> al aangemaakt</span>
+                    ) : (
+                      <button type="button" onClick={() => toggle(r.u.id)} aria-label={`${r.u.naam} ${gekozen.has(r.u.id) ? "niet" : "wel"} aanmaken`} className="inline-flex">
+                        {gekozen.has(r.u.id) ? <CheckSquare className="h-5 w-5 text-brand-600" /> : <Square className="h-5 w-5 text-ink-300" />}
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3 border-t border-ink-100 pt-3">
+          <button type="button" onClick={genereer} disabled={teMaken === 0} className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-40">
+            <Wand2 className="h-4 w-4" /> {teMaken} loonstro{teMaken === 1 ? "ok" : "ken"} aanmaken
+          </button>
+          {klaar > 0 && <span className="text-sm font-semibold text-emerald-600">✓ {klaar} loonstro{klaar === 1 ? "ok" : "ken"} aangemaakt — bewerk ze in de lijst.</span>}
+        </div>
+      </Card>
+      <p className="text-xs text-ink-400">Bruto, netto en bijtelling komen uit het contract van de medewerker (Medewerkers-pagina). De uren komen uit de Urenstaat. Pas elke loonstrook daarna nog aan waar nodig.</p>
+    </div>
+  );
+}
+
+export function Loonstroken({ loonWeek }: { loonWeek?: string }) {
   const { loonstroken, users, currentUser, deleteLoonstrook } = useApp();
-  const [modus, setModus] = useState<"lijst" | "formulier">("lijst");
+  const [modus, setModus] = useState<"lijst" | "formulier" | "genereer">("lijst");
   const [bewerk, setBewerk] = useState<Loonstrook | undefined>(undefined);
   const [verwijder, setVerwijder] = useState<Loonstrook | null>(null);
   const [filter, setFilter] = useState<"Alle" | PeriodeType>("Alle");
   const [medewerker, setMedewerker] = useState("");
+
+  // Deep-link vanuit de Urenstaat: open meteen de generator (voorgevuld op de meegegeven week).
+  useEffect(() => { if (loonWeek) setModus("genereer"); }, [loonWeek]);
 
   if (!currentUser) return null;
   const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr";
   const naamVan = (id: string) => users.find((u) => u.id === id)?.naam ?? "Onbekend";
 
   if (modus === "formulier") return <LoonstrookForm bestaande={bewerk} onKlaar={() => setModus("lijst")} />;
+  if (modus === "genereer") return <LoonstrookGenerator startWeek={loonWeek} onKlaar={() => setModus("lijst")} />;
 
   let zichtbaar = isLeiding ? loonstroken : loonstroken.filter((l) => l.medewerkerId === currentUser.id);
   if (filter !== "Alle") zichtbaar = zichtbaar.filter((l) => l.periodeType === filter);
@@ -224,9 +366,14 @@ export function Loonstroken() {
           <p className="text-sm text-ink-500">{isLeiding ? "Beheer loonstroken, bijtelling en boetes." : "Jouw loonstroken."}</p>
         </div>
         {isLeiding && (
-          <button type="button" onClick={() => { setBewerk(undefined); setModus("formulier"); }} className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-brand-700">
-            <Plus className="h-4 w-4" /> Nieuwe loonstrook
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={() => setModus("genereer")} className="inline-flex items-center gap-2 rounded-xl border border-ink-200 bg-white px-4 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50">
+              <Clock className="h-4 w-4 text-ink-500" /> Uit urenstaat
+            </button>
+            <button type="button" onClick={() => { setBewerk(undefined); setModus("formulier"); }} className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-brand-700">
+              <Plus className="h-4 w-4" /> Nieuwe loonstrook
+            </button>
+          </div>
         )}
       </div>
 

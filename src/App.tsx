@@ -145,7 +145,7 @@ export default function App() {
       case "vrijedagen":
         return <VrijeDagen />;
       case "loonstroken":
-        return <Loonstroken />;
+        return <Loonstroken key={target?.loonWeek ?? "lijst"} loonWeek={target?.loonWeek} />;
       case "boetes":
         return <Boetes />;
       case "medewerkers":

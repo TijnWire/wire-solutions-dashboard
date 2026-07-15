@@ -1,6 +1,7 @@
 import { useState, Fragment } from "react";
-import { ChevronLeft, ChevronRight, CalendarDays, Wand2, RotateCcw, FolderKanban, Plus, User as UserIcon, Users, Trash2, Check, Search, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, CalendarDays, Wand2, RotateCcw, FolderKanban, Plus, User as UserIcon, Users, Trash2, Check, Search, X, Wallet } from "lucide-react";
 import { useApp } from "../store/AppContext";
+import { useNav } from "../store/NavContext";
 import { Card } from "../components/ui";
 import { Keuze } from "../components/Keuze";
 import { feestdagNaam } from "../lib/feestdagen";
@@ -57,6 +58,7 @@ function UurCel({ waarde, onChange, verlofType, feestdag, notitie, voorstel, ari
 
 export function Urenstaat() {
   const { users, projects, rondes, voorschouwMappen, tauwOpdrachten, urenstaat, verlof, currentUser, addUren, updateUren, deleteUren } = useApp();
+  const { navigeer } = useNav();
   const [weekISO, setWeekISO] = useState(() => toISO(maandagVan(new Date())));
   const [weergave, setWeergave] = useState<"persoon" | "project" | "bulk">("persoon");
   const [projSel, setProjSel] = useState(""); // "" = algemeen (geen project)
@@ -89,9 +91,14 @@ export function Urenstaat() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h2 className="text-xl font-bold text-ink-900">Urenstaat</h2>
-        <p className="text-sm text-ink-500">Boek per medewerker de uren per dag, elke dag op het juiste project, met een notitie erbij. Wissel eventueel naar "Per project" om iedereen op één project ineens in te vullen. Vrije dagen staan op de aparte pagina <span className="font-semibold text-ink-600">Vrije dagen</span>.</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-xl font-bold text-ink-900">Urenstaat</h2>
+          <p className="text-sm text-ink-500">Boek per medewerker de uren per dag, elke dag op het juiste project, met een notitie erbij. Wissel eventueel naar "Per project" om iedereen op één project ineens in te vullen. Vrije dagen staan op de aparte pagina <span className="font-semibold text-ink-600">Vrije dagen</span>.</p>
+        </div>
+        <button type="button" onClick={() => navigeer("loonstroken", { loonWeek: weekISO })} title="Op basis van deze uren automatisch loonstroken aanmaken" className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-ink-200 bg-white px-4 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50">
+          <Wallet className="h-4 w-4 text-ink-500" /> Loonstroken maken
+        </button>
       </div>
 
       {/* Week-navigatie + weergave-schakelaar + keuze */}
