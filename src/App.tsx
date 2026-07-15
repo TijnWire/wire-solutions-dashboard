@@ -36,6 +36,8 @@ import { meldingenVoor, type Melding } from "./lib/meldingen";
 import { zoekResultaten, type ZoekItem } from "./lib/zoeken";
 import { Gebruikersbeheer } from "./pages/Gebruikersbeheer";
 import { Toegang } from "./pages/Toegang";
+import { ApiSleutels } from "./pages/ApiSleutels";
+import { SyncBackup } from "./pages/SyncBackup";
 import { Module } from "./pages/Module";
 import { AiAssistent } from "./components/AiAssistent";
 import { OfflineBanner } from "./components/OfflineBanner";
@@ -151,6 +153,10 @@ export default function App() {
         return <Kennisbank />;
       case "instellingen":
         return <Instellingen />;
+      case "api":
+        return <ApiSleutels />;
+      case "sync":
+        return <SyncBackup />;
       case "beheer":
         return <Gebruikersbeheer />;
       case "toegang":

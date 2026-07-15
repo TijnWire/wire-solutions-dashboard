@@ -25,6 +25,8 @@ import {
   Recycle,
   FlaskConical,
   Cable,
+  KeyRound,
+  RefreshCw,
   type LucideIcon,
 } from "lucide-react";
 import type { Role } from "./types";
@@ -89,6 +91,8 @@ export const NAV: NavItem[] = [
   { key: "team", label: "Team", icon: Users, group: "Systeem", roles: LEIDING },
   { key: "beheer", label: "Gebruikersbeheer", icon: UserCog, group: "Systeem", roles: LEIDING },
   { key: "toegang", label: "Toegang", icon: Lock, group: "Systeem", roles: EIGENAAR },
+  { key: "api", label: "API-sleutels", icon: KeyRound, group: "Systeem", roles: LEIDING },
+  { key: "sync", label: "Sync & back-up", icon: RefreshCw, group: "Systeem", roles: LEIDING },
   { key: "instellingen", label: "Instellingen", icon: Settings, group: "Systeem", roles: LEIDING },
 ];
 
