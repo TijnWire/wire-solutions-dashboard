@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   Plus,
@@ -16,6 +16,8 @@ import {
   Search,
   Check,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   ScanLine,
   ArrowUp,
   ArrowDown,
@@ -39,8 +41,7 @@ import {
 } from "../lib/voorschouwPdf";
 import type { Voorschouw, VoorschouwMap } from "../lib/types";
 
-// Weekgroepering (maandag als weekstart) — voor de "Per week"-weergave.
-const VS_MAANDEN = ["jan", "feb", "mrt", "apr", "mei", "jun", "jul", "aug", "sep", "okt", "nov", "dec"];
+// Maandag (weekstart) van een datum — voor de "Per week"-navigator.
 function vsWeekStart(iso: string): string {
   const d = new Date((iso || "").slice(0, 10) + "T00:00:00");
   if (isNaN(d.getTime())) return "";
@@ -48,11 +49,25 @@ function vsWeekStart(iso: string): string {
   d.setDate(d.getDate() - dag);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
-function vsWeekLabel(maandagISO: string): string {
-  if (!maandagISO) return "Zonder datum";
-  const [j, mnd, d] = maandagISO.split("-").map(Number);
-  return `Week van ${d} ${VS_MAANDEN[mnd - 1]} ${j}`;
+// ISO-weeknummer + datumbereik voor de week-navigator (maandag → zondag).
+function vsWeekNr(maandagISO: string): number {
+  const [j, m, d] = maandagISO.split("-").map(Number);
+  if (!j) return 0;
+  const t = new Date(Date.UTC(j, m - 1, d));
+  const dag = (t.getUTCDay() + 6) % 7;
+  t.setUTCDate(t.getUTCDate() - dag + 3); // donderdag van deze week
+  const eersteDo = new Date(Date.UTC(t.getUTCFullYear(), 0, 4));
+  const ed = (eersteDo.getUTCDay() + 6) % 7;
+  eersteDo.setUTCDate(eersteDo.getUTCDate() - ed + 3);
+  return 1 + Math.round((t.getTime() - eersteDo.getTime()) / (7 * 24 * 3600 * 1000));
 }
+function vsWeekBereik(maandagISO: string): string {
+  const ma = new Date(maandagISO + "T00:00:00");
+  if (isNaN(ma.getTime())) return "";
+  const zo = new Date(ma); zo.setDate(zo.getDate() + 6);
+  return `${ma.toLocaleDateString("nl-NL", { day: "numeric", month: "short" })} – ${zo.toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" })}`;
+}
+
 // "Open" = nog geen foto toegevoegd (deze vragen nog aandacht).
 const vsZonderFoto = (v: Voorschouw) => !v.fotos || v.fotos.length === 0;
 
@@ -241,7 +256,8 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
   const [teVerwijderenMap, setTeVerwijderenMap] = useState<{ id: string; naam: string; aantal: number } | null>(null);
   const [tab, setTab] = useState<"overzicht" | "stedin">("overzicht");
   const [alleenOpen, setAlleenOpen] = useState(false); // alleen adressen zónder foto tonen
-  const [perWeek, setPerWeek] = useState(false); // mappen groeperen per week i.p.v. op gebied
+  const [perWeek, setPerWeek] = useState(false); // week-navigator (één week tegelijk) i.p.v. alles op gebied
+  const [weekISO, setWeekISO] = useState(() => vsWeekStart(new Date().toISOString())); // maandag van de gekozen week
   const [teVersturenMap, setTeVersturenMap] = useState<VoorschouwMap | null>(null); // bevestiging vóór versturen
   const [mapDetailId, setMapDetailId] = useState<string | null>(initieelMap ?? null); // geopende map-detailpagina (ook via "Mijn werk")
   const [naamZoek, setNaamZoek] = useState(""); // zoekterm voor het toewijzen-op-naam-veld
@@ -455,7 +471,12 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
       return { map: g.map, items: g.items, body, toon: zoekOk && (!alleenOpen || body.length > 0) };
     })
     .filter((g) => g.toon);
-  if (perWeek) weergave.sort((a, b) => { const wa = weekVanGroep(a), wb = weekVanGroep(b); return wa < wb ? 1 : wa > wb ? -1 : 0; }); // nieuwste week eerst
+  // Per week: alleen de mappen van de gekozen week (mappen zonder datum tonen we in de huidige week).
+  const huidigeWeekISO = vsWeekStart(new Date().toISOString());
+  const weergaveGetoond = perWeek
+    ? weergave.filter((g) => { const wk = weekVanGroep(g); return wk ? wk === weekISO : weekISO === huidigeWeekISO; })
+    : weergave;
+  const verschuifWeek = (dagen: number) => { const d = new Date(weekISO + "T00:00:00"); d.setDate(d.getDate() + dagen); setWeekISO(vsWeekStart(d.toISOString())); };
   const eigenModus = !perWeek && sorteerModus === "eigen" && q === ""; // herordenen alleen in de gebied-weergave
 
   // Eén adres-rij (in de lijst, binnen een map-groep).
@@ -850,6 +871,19 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
             </div>
           </div>
 
+          {/* Week-navigator — alleen in de "Per week"-weergave: stap per week door je werk */}
+          {perWeek && (
+            <div className="flex flex-wrap items-center gap-2 rounded-xl border border-ink-200 bg-white p-2 shadow-card">
+              <button type="button" onClick={() => verschuifWeek(-7)} className="inline-flex items-center gap-1 rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-50"><ChevronLeft className="h-4 w-4" /> Vorige</button>
+              <div className="flex min-w-0 flex-1 items-center justify-center gap-1.5 px-2 text-center">
+                <Calendar className="h-4 w-4 shrink-0 text-ink-400" />
+                <span className="text-sm font-bold text-ink-900">Week {vsWeekNr(weekISO)} · {vsWeekBereik(weekISO)}</span>
+              </div>
+              <button type="button" onClick={() => verschuifWeek(7)} className="inline-flex items-center gap-1 rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-50">Volgende <ChevronRight className="h-4 w-4" /></button>
+              {weekISO !== huidigeWeekISO && <button type="button" onClick={() => setWeekISO(huidigeWeekISO)} className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700">Deze week</button>}
+            </div>
+          )}
+
           {/* Mappen zoeken/filteren + sorteren — zichtbaar voor iedereen */}
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <div className="relative min-w-0 flex-1">
@@ -888,17 +922,18 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
               <p className="mt-2 text-sm text-ink-500">Geen mappen of adressen gevonden voor “{mapZoek.trim()}”.</p>
               <button type="button" onClick={() => setMapZoek("")} className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-ink-200 bg-white px-3 py-1.5 text-xs font-semibold text-ink-700 hover:bg-ink-50"><X className="h-3.5 w-3.5" /> Zoekopdracht wissen</button>
             </Card>
-          ) : weergave.map((g, gi) => {
+          ) : perWeek && weergaveGetoond.length === 0 ? (
+            <Card className="p-8 text-center">
+              <Calendar className="mx-auto h-8 w-8 text-ink-300" />
+              <p className="mt-2 text-sm text-ink-500">Geen mappen in deze week.</p>
+            </Card>
+          ) : weergaveGetoond.map((g) => {
             const key = g.map?.id ?? "zonder";
             const uitgeklapt = q !== "" ? true : openMappen.has(key);
             const idx = g.map ? eigenVolgordeIds.indexOf(g.map.id) : -1;
             const zonderFoto = g.items.filter((v) => !v.fotos || v.fotos.length === 0).length;
-            const wk = perWeek ? weekVanGroep(g) : "";
-            const toonWeekkop = perWeek && wk !== (gi > 0 ? weekVanGroep(weergave[gi - 1]) : null);
             return (
-              <Fragment key={key}>
-                {toonWeekkop && <h3 className="flex items-center gap-1.5 pt-1 text-sm font-bold text-ink-700"><Calendar className="h-4 w-4 text-ink-400" /> {vsWeekLabel(wk)}</h3>}
-                <div id={g.map ? `vsmap-${g.map.id}` : undefined} className="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-card">
+              <div key={key} id={g.map ? `vsmap-${g.map.id}` : undefined} className="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-card">
                 <div className="flex flex-wrap items-center gap-3 px-4 py-4">
                   <input
                     type="checkbox"
@@ -972,7 +1007,6 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
                   </div>
                 )}
                 </div>
-              </Fragment>
             );
           })}
         </div>
