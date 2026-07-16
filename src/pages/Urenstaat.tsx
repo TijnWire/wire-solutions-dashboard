@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ChevronLeft, ChevronRight, ChevronDown, Plus, Copy, Trash2, Wallet, FileSpreadsheet, SlidersHorizontal, Save, ArrowLeft, ArrowRight, Clock, CheckCircle2, Circle, Users2, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronDown, Plus, Copy, Trash2, Wallet, FileSpreadsheet, SlidersHorizontal, Save, ArrowLeft, ArrowRight, Clock, CheckCircle2, Circle, Users2, Search, CalendarCheck, AlertCircle } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { useNav } from "../store/NavContext";
-import { Card } from "../components/ui";
+import { Card, Bevestig } from "../components/ui";
 import { Keuze } from "../components/Keuze";
 import { DatumKiezer } from "../components/DatumKiezer";
 import { TijdKiezer } from "../components/TijdKiezer";
@@ -48,6 +48,17 @@ const STANDAARD_UURSOORTEN: Uursoort[] = [
 const STANDAARD_BEGIN = "09:00";
 const STANDAARD_EIND = "17:30";
 const STANDAARD_PAUZE = 30;
+const STANDAARD_DAG = 8; // uren per volle werkdag
+// Contracturen per week; staat er niets ingevuld, dan 40 (zelfde afspraak als bij Vrije dagen).
+const STANDAARD_CONTRACT = 40;
+const contractUren = (u: User) => (u.contract?.uren != null ? u.contract.uren : STANDAARD_CONTRACT);
+
+// Eindtijd = begintijd + gewerkte uren + pauze. 09:00 + 8 u + 30 min = 17:30.
+const eindNa = (begin: string, uren: number, pauze: number) => {
+  const [h, m] = begin.split(":").map(Number);
+  const tot = h * 60 + m + Math.round(uren * 60) + Math.max(0, pauze || 0);
+  return `${String(Math.floor(tot / 60) % 24).padStart(2, "0")}:${String(tot % 60).padStart(2, "0")}`;
+};
 
 // Op welk onderdeel zijn de uren geboekt (of Algemeen).
 const projectNaam = (id?: string) => werkCategorieNaam(id) ?? "Algemeen";
@@ -98,11 +109,20 @@ function UursoortBeheer({ bedrijf, updateBedrijf, onKlaar }: { bedrijf: Bedrijf;
 // ── Medewerker kiezen: een scrollbaar menu met zoekveld waarin je meteen ziet wie je deze week
 // al hebt ingevuld ("Klaar") en wie nog moet ("Nog te doen"). Het menu hangt via een portal aan
 // het scherm, zodat het niet wordt afgeknipt door de kaart eromheen. ──
-function MedewerkerKiezer({ medewerkers, waarde, onKies, urenVan, totaalIedereen }: {
+type UrenStatus = "leeg" | "deels" | "klaar";
+const STATUS_ICOON: Record<UrenStatus, JSX.Element> = {
+  klaar: <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600" />,
+  deels: <AlertCircle className="h-4 w-4 shrink-0 text-amber-500" />,
+  leeg: <Circle className="h-4 w-4 shrink-0 text-ink-300" />,
+};
+
+function MedewerkerKiezer({ medewerkers, waarde, onKies, urenVan, contractVan, statusVan, totaalIedereen }: {
   medewerkers: User[];
   waarde: string; // "" = iedereen
   onKies: (id: string) => void;
   urenVan: (id: string) => number;
+  contractVan: (u: User) => number;
+  statusVan: (u: User) => UrenStatus;
   totaalIedereen: number;
 }) {
   const [open, setOpen] = useState(false);
@@ -147,20 +167,24 @@ function MedewerkerKiezer({ medewerkers, waarde, onKies, urenVan, totaalIedereen
 
   const q = zoek.trim().toLowerCase();
   const gevonden = medewerkers.filter((u) => !q || u.naam.toLowerCase().includes(q) || (u.functie ?? "").toLowerCase().includes(q));
-  const teDoen = gevonden.filter((u) => urenVan(u.id) === 0);
-  const klaar = gevonden.filter((u) => urenVan(u.id) > 0);
+  const teDoen = gevonden.filter((u) => statusVan(u) === "leeg");
+  const deels = gevonden.filter((u) => statusVan(u) === "deels");
+  const klaar = gevonden.filter((u) => statusVan(u) === "klaar");
   const gekozen = medewerkers.find((u) => u.id === waarde);
   const gekozenUren = gekozen ? urenVan(gekozen.id) : 0;
 
   const kies = (id: string) => { onKies(id); setOpen(false); };
   const rij = (u: User) => {
     const n = urenVan(u.id);
+    const st = statusVan(u);
     const actief = u.id === waarde;
     return (
       <button key={u.id} type="button" onClick={() => kies(u.id)} className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm outline-none ${actief ? "bg-brand-50 font-semibold text-brand-700" : "text-ink-700 hover:bg-ink-50"}`}>
-        {n > 0 ? <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600" /> : <Circle className="h-4 w-4 shrink-0 text-ink-300" />}
+        {STATUS_ICOON[st]}
         <span className="min-w-0 flex-1 truncate">{u.naam}</span>
-        <span className={`shrink-0 text-xs tabular-nums ${n > 0 ? "font-semibold text-ink-600" : "text-ink-300"}`}>{n > 0 ? `${uurTekst(n)} u` : "—"}</span>
+        <span className={`shrink-0 text-xs tabular-nums ${st === "klaar" ? "font-semibold text-ink-600" : st === "deels" ? "font-semibold text-amber-600" : "text-ink-300"}`}>
+          {st === "leeg" ? "—" : `${uurTekst(n)}/${uurTekst(contractVan(u))} u`}
+        </span>
       </button>
     );
   };
@@ -179,11 +203,11 @@ function MedewerkerKiezer({ medewerkers, waarde, onKies, urenVan, totaalIedereen
         className={`flex w-full items-center justify-between gap-2 rounded-lg border bg-white px-3 py-2 text-sm outline-none transition-colors hover:border-ink-300 focus:border-brand-400 focus:ring-2 focus:ring-brand-100 ${open ? "border-brand-400 ring-2 ring-brand-100" : "border-ink-200"}`}
       >
         <span className="flex min-w-0 flex-1 items-center gap-2">
-          {!gekozen ? <Users2 className="h-4 w-4 shrink-0 text-ink-400" />
-            : gekozenUren > 0 ? <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600" />
-              : <Circle className="h-4 w-4 shrink-0 text-ink-300" />}
+          {gekozen ? STATUS_ICOON[statusVan(gekozen)] : <Users2 className="h-4 w-4 shrink-0 text-ink-400" />}
           <span className="truncate font-semibold text-ink-800">{gekozen ? gekozen.naam : "Iedereen"}</span>
-          <span className="shrink-0 text-xs text-ink-400">{gekozen ? (gekozenUren > 0 ? `${uurTekst(gekozenUren)} u` : "nog geen uren") : `${uurTekst(totaalIedereen)} u`}</span>
+          <span className="shrink-0 text-xs text-ink-400">
+            {gekozen ? (gekozenUren > 0 ? `${uurTekst(gekozenUren)}/${uurTekst(contractVan(gekozen))} u` : "nog geen uren") : `${uurTekst(totaalIedereen)} u`}
+          </span>
         </span>
         <ChevronDown className={`h-4 w-4 shrink-0 text-ink-400 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
@@ -212,6 +236,8 @@ function MedewerkerKiezer({ medewerkers, waarde, onKies, urenVan, totaalIedereen
             {gevonden.length === 0 && <div className="px-3 py-6 text-center text-sm text-ink-400">Niemand gevonden</div>}
             {teDoen.length > 0 && kop("Nog te doen", teDoen.length)}
             {teDoen.map(rij)}
+            {deels.length > 0 && kop("Niet compleet", deels.length)}
+            {deels.map(rij)}
             {klaar.length > 0 && kop("Klaar", klaar.length)}
             {klaar.map(rij)}
           </div>
@@ -227,6 +253,7 @@ export function Urenstaat() {
   const { navigeer } = useNav();
   const [weekISO, setWeekISO] = useState(() => toISO(maandagVan(new Date())));
   const [modus, setModus] = useState<"lijst" | "uursoorten">("lijst");
+  const [vraagVullen, setVraagVullen] = useState(false); // bevestiging vóór de week volgens contract te vullen
   const [filterPersoon, setFilterPersoon] = useState(() => [...users].sort((a, b) => a.naam.localeCompare(b.naam, "nl"))[0]?.id ?? ""); // standaard één medewerker; "" = iedereen
 
   const weekDate = new Date(weekISO + "T00:00:00");
@@ -259,16 +286,55 @@ export function Urenstaat() {
   const totaalUren = rijen.reduce((s, r) => s + (Number(r.uren) || 0), 0);
   const weekTotaalIedereen = weekRegels.reduce((s, r) => s + (Number(r.uren) || 0), 0);
 
-  // Overzicht: wie heb je deze week al ingevuld en wie nog niet?
-  const klaarLijst = medewerkers.filter((u) => urenVanPersoon(u.id) > 0);
-  const teDoenLijst = medewerkers.filter((u) => urenVanPersoon(u.id) === 0);
+  // Overzicht: wie is deze week compleet volgens zijn contract, wie is begonnen maar nog niet
+  // compleet, en wie staat nog op nul? Die middengroep is belangrijk: iemand met 24 van de 40 uur
+  // ziet er anders "klaar" uit terwijl er nog 2 dagen ontbreken.
+  const statusVan = (u: User): "leeg" | "deels" | "klaar" => {
+    const n = urenVanPersoon(u.id);
+    if (n <= 0) return "leeg";
+    return n + 0.01 >= contractUren(u) ? "klaar" : "deels";
+  };
+  const klaarLijst = medewerkers.filter((u) => statusVan(u) === "klaar");
+  const deelsLijst = medewerkers.filter((u) => statusVan(u) === "deels");
+  const teDoenLijst = medewerkers.filter((u) => statusVan(u) === "leeg");
   const pctKlaar = medewerkers.length ? Math.round((klaarLijst.length / medewerkers.length) * 100) : 0;
-  const volgendeZonderUren = () => {
+  // Springt naar de volgende die nog niet compleet is (leeg óf te weinig uren).
+  const nogNodig = medewerkers.filter((u) => statusVan(u) !== "klaar");
+  const volgendeOnaf = () => {
     const i = medewerkers.findIndex((u) => u.id === filterPersoon);
     const volgorde = [...medewerkers.slice(i + 1), ...medewerkers.slice(0, Math.max(0, i + 1))];
-    const v = volgorde.find((u) => urenVanPersoon(u.id) === 0);
+    const v = volgorde.find((u) => statusVan(u) !== "klaar");
     if (v) setFilterPersoon(v.id);
   };
+
+  // Vult de week volgens het contract: volle dagen van 8 uur vanaf maandag, de rest op de laatste dag.
+  // 40 u → ma t/m vr 09:00–17:30. 32 u → ma t/m do. 36 u → 4 volle dagen + een halve vrijdag.
+  const contractRegels = (u: User): Omit<Urenregel, "id">[] => {
+    let rest = contractUren(u);
+    const uit: Omit<Urenregel, "id">[] = [];
+    for (let i = 0; i < 5 && rest > 0.01; i++) {
+      const uren = Math.min(STANDAARD_DAG, rest);
+      rest -= uren;
+      const d = new Date(weekDate); d.setDate(d.getDate() + i);
+      uit.push({
+        medewerkerId: u.id,
+        datum: toISO(d),
+        uursoortId: uursoorten[0]?.id,
+        begin: STANDAARD_BEGIN,
+        eind: eindNa(STANDAARD_BEGIN, uren, STANDAARD_PAUZE),
+        pauze: STANDAARD_PAUZE,
+        uren,
+        notitie: "",
+      });
+    }
+    return uit;
+  };
+  // Alleen wie nog niets heeft staan krijgt regels — zo kan dit nooit dubbele uren opleveren.
+  const vulWeekVolgensContract = () => {
+    for (const u of teDoenLijst) for (const r of contractRegels(u)) addUren(r);
+    setVraagVullen(false);
+  };
+  const contractTotaal = teDoenLijst.reduce((s, u) => s + contractUren(u), 0);
 
   // Tijden/pauze wijzigen → totaal automatisch herberekenen (handmatig overschrijven blijft mogelijk).
   const zet = (r: Urenregel, patch: Partial<Urenregel>) => {
@@ -363,11 +429,11 @@ export function Urenstaat() {
           <div className="flex flex-wrap items-center gap-2">
             <span className="shrink-0 text-sm font-semibold text-ink-600">Kies een medewerker:</span>
             <div className="w-full sm:w-80">
-              <MedewerkerKiezer medewerkers={medewerkers} waarde={filterPersoon} onKies={setFilterPersoon} urenVan={urenVanPersoon} totaalIedereen={weekTotaalIedereen} />
+              <MedewerkerKiezer medewerkers={medewerkers} waarde={filterPersoon} onKies={setFilterPersoon} urenVan={urenVanPersoon} contractVan={contractUren} statusVan={statusVan} totaalIedereen={weekTotaalIedereen} />
             </div>
-            {teDoenLijst.length > 0 && (
-              <button type="button" onClick={volgendeZonderUren} title="Spring naar de volgende medewerker zonder uren" className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-ink-200 bg-white px-2.5 py-2 text-xs font-semibold text-ink-600 hover:bg-ink-50">
-                Volgende zonder uren <ArrowRight className="h-3.5 w-3.5" />
+            {nogNodig.length > 0 && (
+              <button type="button" onClick={volgendeOnaf} title="Spring naar de volgende medewerker die nog niet compleet is" className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-ink-200 bg-white px-2.5 py-2 text-xs font-semibold text-ink-600 hover:bg-ink-50">
+                Volgende onaf <ArrowRight className="h-3.5 w-3.5" />
               </button>
             )}
             <span className="ml-auto shrink-0 text-sm font-semibold text-ink-500">
@@ -377,16 +443,31 @@ export function Urenstaat() {
 
           {/* Overzicht: hoeveel medewerkers heb je al gehad, en hoeveel moeten er nog? */}
           <div className="space-y-1.5">
-            <div className="flex flex-wrap items-center justify-between gap-x-3 text-xs">
-              <span className="font-semibold text-ink-600">{klaarLijst.length} van de {medewerkers.length} medewerkers ingevuld</span>
-              <span className={teDoenLijst.length === 0 ? "font-semibold text-green-600" : "text-ink-400"}>
-                {teDoenLijst.length === 0 ? "iedereen is klaar" : `${teDoenLijst.length} nog te doen`}
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs">
+              <span className="font-semibold text-ink-600">{klaarLijst.length} van de {medewerkers.length} medewerkers compleet volgens contract</span>
+              <span className="flex items-center gap-2">
+                {deelsLijst.length > 0 && <span className="font-semibold text-amber-600">{deelsLijst.length} niet compleet</span>}
+                {teDoenLijst.length > 0 && <span className="text-ink-400">{teDoenLijst.length} nog te doen</span>}
+                {nogNodig.length === 0 && <span className="font-semibold text-green-600">iedereen is klaar</span>}
               </span>
             </div>
             <div className="h-1.5 w-full overflow-hidden rounded-full bg-ink-100">
               <div className="h-full rounded-full bg-green-500 transition-all" style={{ width: `${pctKlaar}%` }} />
             </div>
           </div>
+
+          {/* Hele week in één klik volgens contract. Alleen wie nog niets heeft staan wordt gevuld. */}
+          {teDoenLijst.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setVraagVullen(true)}
+              className="flex w-full items-center justify-center gap-2 rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-sm font-bold text-brand-700 transition-colors hover:bg-brand-100"
+            >
+              <CalendarCheck className="h-4 w-4" />
+              Vul week {weekNr(weekDate)} volgens contract
+              <span className="font-semibold text-brand-600/70">· {teDoenLijst.length} {teDoenLijst.length === 1 ? "medewerker" : "medewerkers"}, {uurTekst(contractTotaal)} u</span>
+            </button>
+          )}
         </div>
       </Card>
 
@@ -482,7 +563,17 @@ export function Urenstaat() {
         </div>
       </Card>
 
-      <p className="text-xs text-ink-400">Het totaal wordt berekend uit begintijd − eindtijd − pauze; je kunt het altijd handmatig overschrijven. Feestdagen en goedgekeurd verlof worden bij de datum getoond. Vrije dagen beheer je op de pagina <span className="font-semibold text-ink-500">Vrije dagen</span>.</p>
+      <p className="text-xs text-ink-400">Het totaal wordt berekend uit begintijd − eindtijd − pauze; je kunt het altijd handmatig overschrijven. Feestdagen en goedgekeurd verlof worden bij de datum getoond. Contracturen stel je per persoon in bij <span className="font-semibold text-ink-500">Medewerkers</span>; staat er niets, dan rekenen we met {STANDAARD_CONTRACT} uur.</p>
+
+      <Bevestig
+        open={vraagVullen}
+        titel={`Week ${weekNr(weekDate)} volgens contract vullen`}
+        tekst={`${teDoenLijst.length} ${teDoenLijst.length === 1 ? "medewerker heeft" : "medewerkers hebben"} nog geen uren deze week. Ze krijgen elk hun contracturen op ma t/m vr (${STANDAARD_BEGIN}–${STANDAARD_EIND}, ${STANDAARD_PAUZE} min pauze), samen ${uurTekst(contractTotaal)} uur. Wie al uren heeft, blijft ongemoeid. Je kunt daarna alles gewoon aanpassen.`}
+        bevestigLabel="Week vullen"
+        bevestigTone="brand"
+        onBevestig={vulWeekVolgensContract}
+        onAnnuleer={() => setVraagVullen(false)}
+      />
     </div>
   );
 }

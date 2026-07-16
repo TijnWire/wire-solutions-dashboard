@@ -84,22 +84,30 @@ import { supabaseAan, sbLeesAlles, sbSchrijf, sbVersies, sbLeesKeys, sbLogin, sb
 // met begin/eindtijd. Oude regels zetten we om naar losse dagregels (tijden blijven leeg —
 // die zijn nooit vastgelegd). De id's zijn afgeleid van het oude id, dus elk apparaat komt
 // op exact dezelfde regels uit en de samenvoeging levert geen dubbelen op.
+// Ontdubbelt ook op id. Dat is nodig omdat het omzetten vroeger ná het samenvoegen gebeurde: de
+// samenvoeging vergeleek dan de nieuwe id's (ur-1-0) met de oude (ur-1), zag geen overlap en zette
+// dezelfde regels er elke ronde nóg een keer bij. Resultaat: elke regel precies dubbel, en dus een
+// week van 80 i.p.v. 40 uur. Bestaande dubbele data heelt zichzelf hiermee bij het inladen.
 const migreerUren = (lijst: unknown): Urenregel[] => {
   if (!Array.isArray(lijst)) return [];
-  return lijst.flatMap((r) => {
+  const uit: Urenregel[] = [];
+  const gezien = new Set<string>();
+  const voegToe = (r: Urenregel) => { if (!r?.id || gezien.has(r.id)) return; gezien.add(r.id); uit.push(r); };
+  for (const r of lijst) {
     const o = r as Urenregel & { week?: string; uren?: unknown };
-    if (!Array.isArray(o.uren)) return o?.id ? [o as Urenregel] : []; // al nieuw formaat
+    if (!Array.isArray(o.uren)) { if (o?.id) voegToe(o as Urenregel); continue; } // al nieuw formaat
     const week = o.week ?? "";
-    if (!week) return [];
-    return (o.uren as number[]).flatMap((u, i) => {
+    if (!week) continue;
+    (o.uren as number[]).forEach((u, i) => {
       const n = Number(u) || 0;
-      if (n <= 0) return [];
+      if (n <= 0) return;
       const d = new Date(week + "T00:00:00");
       d.setDate(d.getDate() + i);
       const datum = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-      return [{ id: `${o.id}-${i}`, medewerkerId: o.medewerkerId, datum, uren: n, projectId: o.projectId, notitie: o.notitie }];
+      voegToe({ id: `${o.id}-${i}`, medewerkerId: o.medewerkerId, datum, uren: n, projectId: o.projectId, notitie: o.notitie });
     });
-  });
+  }
+  return uit;
 };
 
 const VS_SHARDS = 16;
@@ -699,9 +707,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     if (!(key in setters)) return;
     if (COLLECTIONS.has(key)) {
+      // Urenstaat éérst omzetten naar het nieuwe formaat (één rij per dag). Doen we dat pas ná het
+      // samenvoegen, dan legt het samenvoegen de nieuwe id's (ur-1-0) naast de oude (ur-1), ziet het
+      // geen overlap en zet het dezelfde regels er elke ronde nóg een keer bij → dubbele uren.
+      const binnen = key === "urenstaat" ? migreerUren(val) : val;
       const merged = mergeCollection(
         waardenRef.current[key] as { id: string }[] | undefined,
-        val as { id: string }[] | undefined,
+        binnen as { id: string }[] | undefined,
         deletesRef.current[isVsShard(key) ? "voorschouwen" : key]
       );
       setters[key](merged);

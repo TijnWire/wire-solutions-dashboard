@@ -339,6 +339,8 @@ export function Loonstroken({ loonWeek }: { loonWeek?: string }) {
   const [verwijder, setVerwijder] = useState<Loonstrook | null>(null);
   const [filter, setFilter] = useState<"Alle" | PeriodeType>("Alle");
   const [medewerker, setMedewerker] = useState("");
+  const [selectie, setSelectie] = useState<Set<string>>(new Set());
+  const [vraagSelectieWeg, setVraagSelectieWeg] = useState(false); // bevestiging vóór meerdere tegelijk verwijderen
 
   // Deep-link vanuit de Urenstaat: open meteen de generator (voorgevuld op de meegegeven week).
   useEffect(() => { if (loonWeek) setModus("genereer"); }, [loonWeek]);
@@ -356,6 +358,14 @@ export function Loonstroken({ loonWeek }: { loonWeek?: string }) {
   zichtbaar = [...zichtbaar].sort((a, b) => b.refDatum.localeCompare(a.refDatum));
 
   const som = (f: (l: Loonstrook) => number) => zichtbaar.reduce((s, l) => s + f(l), 0);
+
+  // Selecteren: per stuk of alles tegelijk. We rekenen altijd met wat je nú ziet, zodat een
+  // selectie van vóór een filterwissel nooit stiekem iets meeneemt dat buiten beeld staat.
+  const geselecteerd = zichtbaar.filter((l) => selectie.has(l.id));
+  const allesAan = zichtbaar.length > 0 && geselecteerd.length === zichtbaar.length;
+  const toggle = (id: string) => setSelectie((p) => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const toggleAlles = () => setSelectie(allesAan ? new Set() : new Set(zichtbaar.map((l) => l.id)));
+  const verwijderSelectie = () => { for (const l of geselecteerd) deleteLoonstrook(l.id); setSelectie(new Set()); setVraagSelectieWeg(false); };
 
   return (
     <div className="space-y-6">
@@ -405,8 +415,29 @@ export function Loonstroken({ loonWeek }: { loonWeek?: string }) {
         </Card>
       ) : (
         <div className="space-y-3">
+          {/* Selecteren + in één keer verwijderen */}
+          {isLeiding && (
+            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-ink-200 bg-white p-3 shadow-card">
+              <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-semibold text-ink-700">
+                <input type="checkbox" checked={allesAan} onChange={toggleAlles} className="h-4 w-4 accent-brand-600" />
+                Alles selecteren
+              </label>
+              <span className="text-xs text-ink-400">{geselecteerd.length} van de {zichtbaar.length} geselecteerd</span>
+              <button
+                type="button"
+                disabled={geselecteerd.length === 0}
+                onClick={() => setVraagSelectieWeg(true)}
+                className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-bold text-red-600 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:border-ink-200 disabled:bg-white disabled:text-ink-300"
+              >
+                <Trash2 className="h-3.5 w-3.5" /> Verwijder selectie{geselecteerd.length ? ` (${geselecteerd.length})` : ""}
+              </button>
+            </div>
+          )}
           {zichtbaar.map((l) => (
-            <Card key={l.id} className="flex flex-wrap items-center gap-4 p-4">
+            <Card key={l.id} className={`flex flex-wrap items-center gap-4 p-4 ${selectie.has(l.id) ? "ring-2 ring-brand-400" : ""}`}>
+              {isLeiding && (
+                <input type="checkbox" checked={selectie.has(l.id)} onChange={() => toggle(l.id)} aria-label={`Loonstrook ${l.periode} selecteren`} className="h-4 w-4 shrink-0 accent-brand-600" />
+              )}
               <div className="rounded-lg bg-brand-50 p-2.5 text-brand-600">
                 <Wallet className="h-5 w-5" />
               </div>
@@ -454,6 +485,15 @@ export function Loonstroken({ loonWeek }: { loonWeek?: string }) {
         tekst={`Weet je het zeker dat je de loonstrook (${verwijder?.periode}) wilt verwijderen?`}
         onBevestig={() => { if (verwijder) deleteLoonstrook(verwijder.id); setVerwijder(null); }}
         onAnnuleer={() => setVerwijder(null)}
+      />
+
+      <Bevestig
+        open={vraagSelectieWeg}
+        titel={`${geselecteerd.length} ${geselecteerd.length === 1 ? "loonstrook" : "loonstroken"} verwijderen`}
+        tekst={`Je verwijdert ${geselecteerd.length} ${geselecteerd.length === 1 ? "loonstrook" : "loonstroken"} in één keer${geselecteerd.length === 1 ? ` (${geselecteerd[0]?.periode})` : ""}. Dit kan niet ongedaan worden gemaakt.`}
+        bevestigLabel={`Verwijder ${geselecteerd.length}`}
+        onBevestig={verwijderSelectie}
+        onAnnuleer={() => setVraagSelectieWeg(false)}
       />
     </div>
   );
