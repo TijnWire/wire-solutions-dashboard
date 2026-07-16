@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Plus, ArrowLeft, Download, Pencil, Trash2, Receipt, X, FileSpreadsheet, Users, Search, Mail, Clock, ArrowDownToLine } from "lucide-react";
+import { Plus, ArrowLeft, Download, Pencil, Trash2, Receipt, X, FileSpreadsheet, Users, Search, Mail, Clock, ArrowDownToLine, SlidersHorizontal, Save } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { DatumKiezer } from "../components/DatumKiezer";
 import { Keuze } from "../components/Keuze";
@@ -8,7 +8,7 @@ import { downloadFactuurPdf, mailFactuur, factuurTotalen, euro } from "../lib/fa
 import { exporteerExcel } from "../lib/excel";
 import { weekStartISO, weekLabel, isISODatum } from "../lib/week";
 import { PeriodeNavigator, periodeRange, type Periode } from "../components/PeriodeNavigator";
-import type { Factuur, FactuurRegel, FactuurStatus, Project, Opdrachtgever, Buurtaanpak, Brievenronde } from "../lib/types";
+import type { Factuur, FactuurRegel, FactuurStatus, Project, Opdrachtgever, Buurtaanpak, Brievenronde, Bedrijf, FactuurPreset } from "../lib/types";
 
 // Concept = blauw, Verstuurd = oranje/geel, Betaald = groen — zo zie je de status in één oogopslag.
 const statusTone: Record<FactuurStatus, string> = {
@@ -28,6 +28,13 @@ const FACTUUR_STATUSSEN: FactuurStatus[] = ["Concept", "Verstuurd", "Betaald"];
 const veld =
   "w-full rounded-lg border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100";
 const labelCls = "mb-1 block text-xs font-semibold text-ink-600";
+
+// Standaard factuurregels als terugval wanneer er nog niets is ingesteld bij Facturen → Tarieven.
+const STANDAARD_PRESETS: FactuurPreset[] = [
+  { id: "brieven", label: "Brieven", prijs: 2.2 },
+  { id: "uren", label: "Uren", prijs: 42.35 },
+];
+const presetsVan = (b: Bedrijf): FactuurPreset[] => (b.factuurPresets?.length ? b.factuurPresets : STANDAARD_PRESETS);
 
 // ── Factuur aanmaken / bewerken ──
 function FactuurForm({ bestaande, initieel, onKlaar, onOpgeslagen }: { bestaande?: Factuur; initieel?: Omit<Factuur, "id">; onKlaar: () => void; onOpgeslagen?: () => void }) {
@@ -179,12 +186,11 @@ function FactuurForm({ bestaande, initieel, onKlaar, onOpgeslagen }: { bestaande
           </div>
         ))}
         <div className="flex flex-wrap items-center gap-2">
-          <button type="button" onClick={() => addPreset({ omschrijving: "Brieven", aantal: 1, prijs: 2.2 })} className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-2.5 py-1.5 text-sm font-semibold text-ink-700 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700">
-            <Plus className="h-4 w-4" /> Brieven (€2,20)
+          {presetsVan(bedrijf).map((p) => (
+            <button key={p.id} type="button" onClick={() => addPreset({ omschrijving: p.label, aantal: 1, prijs: p.prijs })} className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-2.5 py-1.5 text-sm font-semibold text-ink-700 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700">
+            <Plus className="h-4 w-4" /> {p.label} ({euro(p.prijs)})
           </button>
-          <button type="button" onClick={() => addPreset({ omschrijving: "Uren", aantal: 1, prijs: 42.35 })} className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-2.5 py-1.5 text-sm font-semibold text-ink-700 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700">
-            <Plus className="h-4 w-4" /> Uren (€42,35)
-          </button>
+          ))}
           <button type="button" onClick={() => addRegel({ omschrijving: "", aantal: 1, prijs: 0 })} className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-medium text-brand-600 hover:bg-brand-50">
             <Plus className="h-4 w-4" /> Lege regel
           </button>
@@ -405,8 +411,53 @@ function UrenFactuur({ facturenCount, opdrachtgevers, users, urenstaat, onGenere
 }
 
 // ── Hoofdcomponent ──
+// ── Standaardtarieven beheren (Brieven, Uren en eigen regels) — prijzen op één plek aanpassen ──
+function TarievenBeheer({ bedrijf, updateBedrijf, onKlaar }: { bedrijf: Bedrijf; updateBedrijf: (patch: Partial<Bedrijf>) => void; onKlaar: () => void }) {
+  const [rijen, setRijen] = useState<FactuurPreset[]>(() => presetsVan(bedrijf).map((p) => ({ ...p })));
+  const setPrijs = (id: string, prijs: number) => setRijen((r) => r.map((x) => (x.id === id ? { ...x, prijs } : x)));
+  const setLabel = (id: string, label: string) => setRijen((r) => r.map((x) => (x.id === id ? { ...x, label } : x)));
+  const verwijder = (id: string) => setRijen((r) => r.filter((x) => x.id !== id));
+  const voegToe = () => setRijen((r) => [...r, { id: `preset-${Date.now()}-${r.length}`, label: "", prijs: 0 }]);
+  const opslaan = () => { updateBedrijf({ factuurPresets: rijen.filter((x) => x.label.trim()) }); onKlaar(); };
+
+  return (
+    <div className="mx-auto max-w-2xl space-y-5">
+      <button type="button" onClick={onKlaar} className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-500 hover:text-ink-800"><ArrowLeft className="h-4 w-4" /> Terug naar facturen</button>
+      <div>
+        <h2 className="text-xl font-bold text-ink-900">Tarieven</h2>
+        <p className="text-sm text-ink-500">De standaard factuurregels (Brieven, Uren, …) met hun prijs. Ze verschijnen als snelknoppen bij het maken van een factuur — pas hier de prijs aan als er iets verandert.</p>
+      </div>
+
+      <Card className="space-y-3 p-4">
+        <div className="hidden gap-2 px-1 text-xs font-semibold text-ink-500 sm:grid sm:grid-cols-[1fr_9rem_2rem]">
+          <span>Omschrijving</span><span className="text-right">Prijs (€ excl. btw)</span><span />
+        </div>
+        {rijen.length === 0 ? (
+          <p className="px-1 py-3 text-sm text-ink-400">Nog geen tarieven. Voeg er een toe.</p>
+        ) : rijen.map((p) => (
+          <div key={p.id} className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_9rem_2rem] sm:items-center">
+            <input value={p.label} onChange={(e) => setLabel(p.id, e.target.value)} placeholder="Bijv. Brieven, Uren, Voorrijkosten" className={veld} />
+            <div className="flex items-center gap-1">
+              <span className="text-sm text-ink-400">€</span>
+              <input inputMode="decimal" value={p.prijs ? String(p.prijs).replace(".", ",") : ""} onChange={(e) => { const n = parseFloat(e.target.value.replace(",", ".")); setPrijs(p.id, Number.isFinite(n) && n >= 0 ? n : 0); }} placeholder="0,00" aria-label={`Prijs ${p.label}`} className={veld + " text-right"} />
+            </div>
+            <button type="button" onClick={() => verwijder(p.id)} className="justify-self-end rounded-lg p-2 text-red-400 hover:bg-red-50 hover:text-red-600" title="Tarief verwijderen"><Trash2 className="h-4 w-4" /></button>
+          </div>
+        ))}
+        <button type="button" onClick={voegToe} className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-medium text-brand-600 hover:bg-brand-50"><Plus className="h-4 w-4" /> Tarief toevoegen</button>
+      </Card>
+
+      <div className="flex gap-2">
+        <button type="button" onClick={opslaan} className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-5 py-3 text-sm font-bold text-white hover:bg-brand-700"><Save className="h-4 w-4" /> Opslaan</button>
+        <button type="button" onClick={onKlaar} className="rounded-xl border border-ink-200 bg-white px-5 py-3 text-sm font-semibold text-ink-700 hover:bg-ink-50">Annuleren</button>
+      </div>
+      <p className="text-xs text-ink-400">De regel "Brieven" wordt ook gebruikt om automatisch een brieven-factuur per map voor te vullen.</p>
+    </div>
+  );
+}
+
 export function Facturen({ initieelFactuur, nieuwFactuurProject }: { initieelFactuur?: string; nieuwFactuurProject?: string }) {
-  const { facturen, bedrijf, deleteFactuur, projects, updateProject, opdrachtgevers, buurtaanpak, updateBuurtaanpak, rondes, updateRonde, users, urenstaat } = useApp();
+  const { facturen, bedrijf, updateBedrijf, deleteFactuur, projects, updateProject, opdrachtgevers, buurtaanpak, updateBuurtaanpak, rondes, updateRonde, users, urenstaat } = useApp();
   const teFactureren = projects.filter((p) => p.boekhouding === "te_factureren");
   const teFacturerenBuurt = buurtaanpak.filter((b) => b.boekhouding === "te_factureren");
   const teFacturerenRondes = rondes.filter((r) => r.boekhouding === "te_factureren");
@@ -432,7 +483,7 @@ export function Facturen({ initieelFactuur, nieuwFactuurProject }: { initieelFac
   const inkomendAantal = teFactureren.length + teFacturerenBuurt.length + teFacturerenMappen.length;
   const [tab, setTab] = useState<"facturen" | "inkomend">("facturen");
   const [bron, setBron] = useState<null | (() => void)>(null); // markeert de bron als gefactureerd zodra de factuur is opgeslagen
-  const [modus, setModus] = useState<"lijst" | "formulier" | "opdrachtgevers" | "uren">("lijst");
+  const [modus, setModus] = useState<"lijst" | "formulier" | "opdrachtgevers" | "uren" | "tarieven">("lijst");
   const [bewerk, setBewerk] = useState<Factuur | undefined>(undefined);
   const [nieuwVan, setNieuwVan] = useState<Omit<Factuur, "id"> | undefined>(undefined);
   const [verwijder, setVerwijder] = useState<Factuur | null>(null);
@@ -492,9 +543,10 @@ export function Facturen({ initieelFactuur, nieuwFactuurProject }: { initieelFac
   const nieuweVanProject = (p: Project) => { setBewerk(undefined); setNieuwVan(maakConceptVanProject(p)); setBron(() => () => updateProject(p.id, { boekhouding: "gefactureerd", gefactureerdOp: nu() })); setModus("formulier"); };
   const nieuweVanBuurt = (b: Buurtaanpak) => { setBewerk(undefined); setNieuwVan(maakConceptVan(b.pdNummer ?? "", b.naam)); setBron(() => () => updateBuurtaanpak(b.id, { boekhouding: "gefactureerd", gefactureerdOp: nu() })); setModus("formulier"); };
   // Eén factuur voor de héle map (alle te-factureren rondes van die map worden op 'gefactureerd' gezet).
+  const brievenTarief = presetsVan(bedrijf).find((p) => p.id === "brieven" || p.label.toLowerCase() === "brieven")?.prijs ?? 2.2;
   const nieuweVanMap = (groep: { naam: string; gegooid: number; pd?: string; rondes: Brievenronde[] }) => {
     setBewerk(undefined);
-    setNieuwVan(maakConceptVan(groep.pd ?? "", `Brieven & route — ${groep.naam}`, groep.gegooid || 1, 2.2));
+    setNieuwVan(maakConceptVan(groep.pd ?? "", `Brieven & route — ${groep.naam}`, groep.gegooid || 1, brievenTarief));
     setBron(() => () => groep.rondes.forEach((r) => updateRonde(r.id, { boekhouding: "gefactureerd", gefactureerdOp: nu() })));
     setModus("formulier");
   };
@@ -537,6 +589,9 @@ export function Facturen({ initieelFactuur, nieuwFactuurProject }: { initieelFac
   if (modus === "uren") {
     return <UrenFactuur facturenCount={facturen.length} opdrachtgevers={opdrachtgevers} users={users} urenstaat={urenstaat} onGenereer={nieuweVanUren} onNaarOpdrachtgevers={() => setModus("opdrachtgevers")} onKlaar={() => setModus("lijst")} />;
   }
+  if (modus === "tarieven") {
+    return <TarievenBeheer bedrijf={bedrijf} updateBedrijf={updateBedrijf} onKlaar={() => setModus("lijst")} />;
+  }
 
   // ── Filteren (zoektekst + periode + status) en groeperen per week ──
   const range = periodeRange(periode, anker);
@@ -575,6 +630,9 @@ export function Facturen({ initieelFactuur, nieuwFactuurProject }: { initieelFac
           </button>
           <button type="button" onClick={() => setModus("uren")} className="inline-flex items-center gap-2 rounded-xl border border-ink-200 bg-white px-4 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50">
             <Clock className="h-4 w-4 text-ink-500" /> Factuur op uren
+          </button>
+          <button type="button" onClick={() => setModus("tarieven")} className="inline-flex items-center gap-2 rounded-xl border border-ink-200 bg-white px-4 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50">
+            <SlidersHorizontal className="h-4 w-4 text-ink-500" /> Tarieven
           </button>
           {facturen.length > 0 && (
             <button type="button" onClick={exporteerNaarExcel} className="inline-flex items-center gap-2 rounded-xl border border-ink-200 bg-white px-4 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50">

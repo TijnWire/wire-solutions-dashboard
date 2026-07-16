@@ -25,7 +25,7 @@ function BedrijfTab({ isLeiding }: { isLeiding: boolean }) {
     <div>
       <label className={labelCls}>{label}</label>
       <input
-        value={draft[key] ?? ""}
+        value={(draft[key] ?? "") as string}
         disabled={!bewerk}
         onChange={(e) => setDraft((d) => ({ ...d, [key]: e.target.value }))}
         placeholder={ph}

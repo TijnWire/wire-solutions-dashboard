@@ -288,6 +288,14 @@ export type Bedrijf = {
   btw: string;
   iban: string;
   bic?: string;
+  factuurPresets?: FactuurPreset[]; // standaard factuurregels (Brieven, Uren, …) met aanpasbare prijs
+};
+
+// Standaard factuurregel-knop (bijv. "Brieven" € 2,20). Prijs is per plek aan te passen bij Facturen → Tarieven.
+export type FactuurPreset = {
+  id: string;
+  label: string;
+  prijs: number; // per stuk, excl. btw
 };
 
 export type FactuurRegel = {
