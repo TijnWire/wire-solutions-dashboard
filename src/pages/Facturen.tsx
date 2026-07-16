@@ -38,6 +38,7 @@ function FactuurForm({ bestaande, initieel, onKlaar }: { bestaande?: Factuur; in
       nummer: `${new Date().getFullYear()}-${volgnr}`,
       datum: new Date().toISOString().slice(0, 10),
       klantNaam: "",
+      afdeling: "",
       klantAdres: "",
       klantPostcodePlaats: "",
       tav: "",
@@ -62,7 +63,7 @@ function FactuurForm({ bestaande, initieel, onKlaar }: { bestaande?: Factuur; in
   // Klantvelden in één keer invullen vanuit een opgeslagen opdrachtgever.
   const kiesOpdrachtgever = (id: string) => {
     const o = opdrachtgevers.find((x) => x.id === id);
-    if (o) set({ klantNaam: o.naam, tav: o.tav ?? "", klantAdres: o.adres, klantPostcodePlaats: o.postcodePlaats, relatienummer: o.relatienummer, email: o.email });
+    if (o) set({ klantNaam: o.naam, afdeling: o.afdeling ?? "", tav: o.tav ?? "", klantAdres: o.adres, klantPostcodePlaats: o.postcodePlaats, relatienummer: o.relatienummer, email: o.email });
   };
 
   const totalen = factuurTotalen({ ...f, id: "x" });
@@ -113,7 +114,7 @@ function FactuurForm({ bestaande, initieel, onKlaar }: { bestaande?: Factuur; in
         <div className="flex flex-wrap items-center gap-2 border-t border-ink-100 pt-3">
           <span className="text-xs font-semibold text-ink-500">Opdrachtgever</span>
           <div className="w-full sm:w-64">
-            <Keuze value="" onChange={kiesOpdrachtgever} opties={[{ waarde: "", label: opdrachtgevers.length ? "Kies opdrachtgever…" : "Nog geen opdrachtgevers" }, ...opdrachtgevers.map((o) => ({ waarde: o.id, label: o.naam }))]} title="Opdrachtgever kiezen" />
+            <Keuze value="" onChange={kiesOpdrachtgever} altijdZoeken opties={[{ waarde: "", label: opdrachtgevers.length ? "Kies opdrachtgever…" : "Nog geen opdrachtgevers" }, ...opdrachtgevers.map((o) => ({ waarde: o.id, label: o.afdeling ? `${o.naam} — ${o.afdeling}` : o.naam }))]} title="Opdrachtgever kiezen" />
           </div>
           <span className="text-xs text-ink-400">vult de klantgegevens automatisch in</span>
         </div>
@@ -121,6 +122,10 @@ function FactuurForm({ bestaande, initieel, onKlaar }: { bestaande?: Factuur; in
           <div>
             <label className={labelCls}>Klantnaam</label>
             <input value={f.klantNaam} onChange={(e) => set({ klantNaam: e.target.value })} placeholder="Stedin Netbeheer B.V." className={veld} />
+          </div>
+          <div>
+            <label className={labelCls}>Afdeling</label>
+            <input value={f.afdeling ?? ""} onChange={(e) => set({ afdeling: e.target.value })} placeholder="bijv. Aansluitingen" className={veld} />
           </div>
           <div>
             <label className={labelCls}>T.a.v.</label>
@@ -219,14 +224,14 @@ function FactuurForm({ bestaande, initieel, onKlaar }: { bestaande?: Factuur; in
 // ── Opdrachtgevers beheren (vaste klantgegevens) ──
 function OpdrachtgeverBeheer({ onKlaar }: { onKlaar: () => void }) {
   const { opdrachtgevers, addOpdrachtgever, updateOpdrachtgever, deleteOpdrachtgever, users } = useApp();
-  const leeg = { naam: "", relatienummer: "", adres: "", postcodePlaats: "", email: "", tav: "", personen: [] as { userId: string; uurtarief: number }[] };
+  const leeg = { naam: "", afdeling: "", relatienummer: "", adres: "", postcodePlaats: "", email: "", tav: "", personen: [] as { userId: string; uurtarief: number }[] };
   const [bewerkId, setBewerkId] = useState<string | null>(null); // null = dicht, "nieuw" = nieuw, id = bewerken
   const [d, setD] = useState(leeg);
   const [zoek, setZoek] = useState(""); // zoeken in de medewerkerslijst
   const set = (patch: Partial<typeof d>) => setD((x) => ({ ...x, ...patch }));
   const start = (o?: Opdrachtgever) => {
     setZoek("");
-    if (o) { setBewerkId(o.id); setD({ naam: o.naam, relatienummer: o.relatienummer, adres: o.adres, postcodePlaats: o.postcodePlaats, email: o.email, tav: o.tav ?? "", personen: o.personen ?? [] }); }
+    if (o) { setBewerkId(o.id); setD({ naam: o.naam, afdeling: o.afdeling ?? "", relatienummer: o.relatienummer, adres: o.adres, postcodePlaats: o.postcodePlaats, email: o.email, tav: o.tav ?? "", personen: o.personen ?? [] }); }
     else { setBewerkId("nieuw"); setD(leeg); }
   };
   const persoonAan = (userId: string) => d.personen.some((p) => p.userId === userId);
@@ -261,6 +266,7 @@ function OpdrachtgeverBeheer({ onKlaar }: { onKlaar: () => void }) {
           <h3 className="text-sm font-bold text-ink-900">{bewerkId === "nieuw" ? "Nieuwe opdrachtgever" : "Opdrachtgever bewerken"}</h3>
           <div className="grid gap-3 sm:grid-cols-2">
             <div><label className={labelCls}>Naam</label><input value={d.naam} onChange={(e) => set({ naam: e.target.value })} placeholder="Stedin Netbeheer B.V." className={veld} /></div>
+            <div><label className={labelCls}>Afdeling <span className="font-normal text-ink-400">(optioneel)</span></label><input value={d.afdeling} onChange={(e) => set({ afdeling: e.target.value })} placeholder="bijv. Aansluitingen / Sanering" className={veld} /></div>
             <div><label className={labelCls}>Relatienummer</label><input value={d.relatienummer} onChange={(e) => set({ relatienummer: e.target.value })} placeholder="20200015" className={veld} /></div>
             <div><label className={labelCls}>T.a.v.</label><input value={d.tav} onChange={(e) => set({ tav: e.target.value })} placeholder="Contactpersoon" className={veld} /></div>
             <div><label className={labelCls}>E-mail (waar de factuur heen moet)</label><input type="email" value={d.email} onChange={(e) => set({ email: e.target.value })} placeholder="facturen@opdrachtgever.nl" className={veld} /></div>
@@ -323,6 +329,7 @@ function OpdrachtgeverBeheer({ onKlaar }: { onKlaar: () => void }) {
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-semibold text-ink-900">{o.naam}</span>
+                  {o.afdeling && <Badge tone="indigo">{o.afdeling}</Badge>}
                   {o.relatienummer && <Badge tone="slate">{o.relatienummer}</Badge>}
                 </div>
                 <div className="truncate text-xs text-ink-500">{[o.tav ? `t.a.v. ${o.tav}` : "", o.adres, o.postcodePlaats, o.email, o.personen?.length ? `${o.personen.length} ${o.personen.length === 1 ? "medewerker" : "medewerkers"}` : ""].filter(Boolean).join(" · ")}</div>
@@ -375,7 +382,7 @@ function UrenFactuur({ facturenCount, opdrachtgevers, users, urenstaat, onGenere
     const concept: Omit<Factuur, "id"> = {
       nummer: `${new Date().getFullYear()}-${String(facturenCount + 1).padStart(4, "0")}`,
       datum: new Date().toISOString().slice(0, 10),
-      klantNaam: og.naam, tav: og.tav ?? "", klantAdres: og.adres, klantPostcodePlaats: og.postcodePlaats,
+      klantNaam: og.naam, afdeling: og.afdeling ?? "", tav: og.tav ?? "", klantAdres: og.adres, klantPostcodePlaats: og.postcodePlaats,
       relatienummer: og.relatienummer, email: og.email, betaaltermijn: 14,
       regels: metUren.map((r) => ({ omschrijving: `Gewerkte uren ${r.naam} (${fmt(van)} – ${fmt(tot)})`, aantal: Math.round(r.uren * 100) / 100, prijs: r.tarief })),
       btwPercentage: 21, status: "Concept", notitie: "",
@@ -394,7 +401,7 @@ function UrenFactuur({ facturenCount, opdrachtgevers, users, urenstaat, onGenere
       <Card className="space-y-4 p-4">
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="sm:col-span-2"><label className={labelCls}>Opdrachtgever</label>
-            <Keuze value={ogId} onChange={setOgId} opties={opdrachtgevers.length ? opdrachtgevers.map((o) => ({ waarde: o.id, label: o.naam })) : [{ waarde: "", label: "Nog geen opdrachtgevers" }]} title="Opdrachtgever" />
+            <Keuze value={ogId} onChange={setOgId} altijdZoeken opties={opdrachtgevers.length ? opdrachtgevers.map((o) => ({ waarde: o.id, label: o.afdeling ? `${o.naam} — ${o.afdeling}` : o.naam })) : [{ waarde: "", label: "Nog geen opdrachtgevers" }]} title="Opdrachtgever" />
           </div>
           <div><label className={labelCls}>Van</label><DatumKiezer value={van} onChange={setVan} /></div>
           <div><label className={labelCls}>Tot en met</label><DatumKiezer value={tot} onChange={setTot} /></div>
@@ -470,6 +477,7 @@ export function Facturen({ initieelFactuur, nieuwFactuurProject }: { initieelFac
       nummer: `${new Date().getFullYear()}-${String(facturen.length + 1).padStart(4, "0")}`,
       datum: new Date().toISOString().slice(0, 10),
       klantNaam: og?.naam ?? "Stedin Netbeheer B.V.",
+      afdeling: og?.afdeling ?? "",
       tav: og?.tav ?? "",
       klantAdres: og?.adres ?? "",
       klantPostcodePlaats: og?.postcodePlaats ?? "",
@@ -491,6 +499,7 @@ export function Facturen({ initieelFactuur, nieuwFactuurProject }: { initieelFac
       nummer: `${new Date().getFullYear()}-${String(facturen.length + 1).padStart(4, "0")}`,
       datum: new Date().toISOString().slice(0, 10),
       klantNaam: og?.naam ?? "Stedin Netbeheer B.V.",
+      afdeling: og?.afdeling ?? "",
       tav: og?.tav ?? "",
       klantAdres: og?.adres ?? "",
       klantPostcodePlaats: og?.postcodePlaats ?? "",

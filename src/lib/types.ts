@@ -303,6 +303,7 @@ export type Factuur = {
   nummer: string;
   datum: string; // ISO "2026-06-01"
   klantNaam: string;
+  afdeling?: string; // afdeling van de opdrachtgever (bijv. Stedin — Aansluitingen)
   klantAdres: string;
   klantPostcodePlaats: string;
   tav?: string; // t.a.v. contactpersoon
@@ -320,6 +321,7 @@ export type Factuur = {
 export type Opdrachtgever = {
   id: string;
   naam: string;
+  afdeling?: string; // bijv. Stedin per afdeling (Aansluitingen, Sanering, …)
   relatienummer: string;
   adres: string;
   postcodePlaats: string;

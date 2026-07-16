@@ -35,8 +35,7 @@ import { Instellingen } from "./pages/Instellingen";
 import { Klanten } from "./pages/Klanten";
 import { meldingenVoor, type Melding } from "./lib/meldingen";
 import { zoekResultaten, type ZoekItem } from "./lib/zoeken";
-import { Gebruikersbeheer } from "./pages/Gebruikersbeheer";
-import { Toegang } from "./pages/Toegang";
+import { GebruikersToegang } from "./pages/GebruikersToegang";
 import { Module } from "./pages/Module";
 import { AiAssistent } from "./components/AiAssistent";
 import { OfflineBanner } from "./components/OfflineBanner";
@@ -155,9 +154,7 @@ export default function App() {
       case "instellingen":
         return <Instellingen />;
       case "beheer":
-        return <Gebruikersbeheer />;
-      case "toegang":
-        return <Toegang />;
+        return <GebruikersToegang />;
       default:
         return <Module moduleKey={active} />;
     }

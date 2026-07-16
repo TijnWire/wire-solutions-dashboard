@@ -10,7 +10,6 @@ import {
   BookOpen,
   UserCog,
   Settings,
-  Lock,
   ClipboardList,
   ClipboardCheck,
   Receipt,
@@ -43,7 +42,6 @@ export type NavItem = {
 // HR ziet alles (personeelszaken/boekhouding) — daarom in élke rol-groep opgenomen.
 const ALLE: Role[] = ["eigenaar", "beheer", "hr", "monteur"];
 const LEIDING: Role[] = ["eigenaar", "beheer", "hr"];
-const EIGENAAR: Role[] = ["eigenaar", "hr"]; // Toegang: eigenaar + HR
 
 // Project-onderdelen waarvan de eigenaar de toegang per werknemer kan aan-/uitzetten (Toegang-pagina).
 // Werk (Mijn werk, Projecten, Agenda, Mededelingen), Kennisbank en Communicatie blijven ALTIJD zichtbaar;
@@ -78,18 +76,17 @@ export const NAV: NavItem[] = [
   { key: "projectbeheer", label: "Projectbeheer", icon: Briefcase, group: "Boekhouding", roles: LEIDING },
   { key: "facturen", label: "Facturen", icon: Receipt, group: "Boekhouding", roles: LEIDING },
   { key: "urenstaat", label: "Urenstaat", icon: Clock, group: "Boekhouding", roles: LEIDING },
-  { key: "vrijedagen", label: "Vrije dagen", icon: Sun, group: "Boekhouding", roles: LEIDING },
   { key: "loonstroken", label: "Loonstroken", icon: Wallet, group: "Boekhouding", roles: LEIDING },
-  { key: "boetes", label: "Boetes", icon: AlertTriangle, group: "Boekhouding", roles: LEIDING },
+  { key: "vrijedagen", label: "Vrije dagen", icon: Sun, group: "Boekhouding", roles: LEIDING },
   { key: "verlof", label: "Verlof", icon: Plane, group: "Boekhouding", roles: LEIDING },
+  { key: "boetes", label: "Boetes", icon: AlertTriangle, group: "Boekhouding", roles: LEIDING },
   { key: "medewerkers", label: "Medewerkers", icon: Users, group: "Boekhouding", roles: LEIDING },
   { key: "communicatie", label: "Communicatie", icon: MessagesSquare, badge: "AI", group: "Operatie", roles: ALLE },
 
   { key: "overzicht", label: "Dashboard", icon: LayoutDashboard, group: "Systeem", roles: LEIDING },
   { key: "team", label: "Team", icon: Users, group: "Systeem", roles: LEIDING },
   { key: "klanten", label: "Klanten & Database", icon: Database, group: "Systeem", roles: LEIDING },
-  { key: "beheer", label: "Gebruikersbeheer", icon: UserCog, group: "Systeem", roles: LEIDING },
-  { key: "toegang", label: "Toegang", icon: Lock, group: "Systeem", roles: EIGENAAR },
+  { key: "beheer", label: "Gebruikers & toegang", icon: UserCog, group: "Systeem", roles: LEIDING },
   { key: "instellingen", label: "Instellingen", icon: Settings, group: "Systeem", roles: LEIDING },
 ];
 

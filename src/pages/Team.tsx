@@ -1,7 +1,6 @@
 import { Users2 } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { Card } from "../components/ui";
-import { MededelingenBord } from "../components/MededelingenBord";
 import { ROL_LABEL } from "../lib/types";
 
 export function Team() {
@@ -9,9 +8,6 @@ export function Team() {
 
   return (
     <div className="space-y-6">
-      {/* Mededelingen / prikbord — beheerder plaatst, team leest */}
-      <MededelingenBord compose />
-
       {/* Teamoverzicht */}
       <Card>
         <div className="flex items-center justify-between border-b border-ink-100 px-5 py-4">

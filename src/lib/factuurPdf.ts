@@ -62,7 +62,7 @@ async function maakFactuurPdfBytes(f: Factuur): Promise<Uint8Array> {
   const xTariefR = 468, xBedragR = 530;
 
   // ── Geadresseerde (klant) — links, baselines uit het voorbeeld ──
-  const klant = [f.klantNaam, f.tav ? `T.a.v. ${f.tav}` : "", f.klantAdres, f.klantPostcodePlaats].filter(Boolean);
+  const klant = [f.klantNaam, f.afdeling ? `Afdeling ${f.afdeling}` : "", f.tav ? `T.a.v. ${f.tav}` : "", f.klantAdres, f.klantPostcodePlaats].filter(Boolean);
   klant.forEach((r, i) => tekst(r, 36, 189.5 + i * 12.1));
 
   // ── Metadata — rechts (label + waarde) ──

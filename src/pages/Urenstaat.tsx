@@ -5,13 +5,23 @@ import { useNav } from "../store/NavContext";
 import { Card } from "../components/ui";
 import { Keuze } from "../components/Keuze";
 import { feestdagNaam } from "../lib/feestdagen";
-import { lopendeProjectOpties, werkNaam } from "../lib/lopendWerk";
+import { werkNaam } from "../lib/lopendWerk";
 import { exporteerUrenstaat } from "../lib/urenstaatExcel";
 import type { User, Urenregel } from "../lib/types";
 
 const DAGEN = ["Ma", "Di", "Wo", "Do", "Vr", "Za", "Zo"];
 const STANDAARD_CONTRACT = 40; // u/week als er (nog) geen contract is ingesteld
 const LEEG: number[] = [0, 0, 0, 0, 0, 0, 0];
+
+// In de urenstaat boek je op een onderdeel-categorie (of Algemeen), niet op een los sub-project.
+const WERK_CATEGORIEEN: { id: string; naam: string }[] = [
+  { id: "brieven", naam: "Brieven & Routes" },
+  { id: "buurtaanpak", naam: "Buurtaanpak" },
+  { id: "saneren", naam: "Saneren" },
+  { id: "voorschouwen", naam: "Voorschouwen" },
+  { id: "schouwafspraken", naam: "Schouwafspraken" },
+  { id: "tauw", naam: "TAUW" },
+];
 
 const VERLOF_TINT: Record<string, string> = { Vakantie: "bg-green-50 text-green-700", Verlof: "bg-indigo-50 text-indigo-700", Ziek: "bg-red-50 text-red-700" };
 const VERLOF_STIP: Record<string, string> = { Vakantie: "bg-green-500", Verlof: "bg-indigo-500", Ziek: "bg-red-500" };
@@ -58,7 +68,7 @@ function UurCel({ waarde, onChange, verlofType, feestdag, notitie, voorstel, ari
 }
 
 export function Urenstaat() {
-  const { users, projects, rondes, voorschouwMappen, tauwOpdrachten, urenstaat, verlof, bedrijf, currentUser, addUren, updateUren, deleteUren } = useApp();
+  const { users, projects, voorschouwMappen, tauwOpdrachten, urenstaat, verlof, bedrijf, currentUser, addUren, updateUren, deleteUren } = useApp();
   const { navigeer } = useNav();
   const [weekISO, setWeekISO] = useState(() => toISO(maandagVan(new Date())));
   const [weergave, setWeergave] = useState<"persoon" | "project" | "bulk">("persoon");
@@ -81,8 +91,9 @@ export function Urenstaat() {
 
   const medewerkers = [...users].sort((a, b) => a.naam.localeCompare(b.naam, "nl"));
   const werkCtx = { projects, voorschouwMappen, tauwOpdrachten };
-  const actieveProjecten = lopendeProjectOpties(projects, rondes, voorschouwMappen, tauwOpdrachten);
-  const projectLabel = (pid?: string) => werkNaam(pid, werkCtx) ?? "Algemeen";
+  const actieveProjecten = WERK_CATEGORIEEN;
+  const categorieNaam = (pid?: string) => WERK_CATEGORIEEN.find((c) => c.id === pid)?.naam;
+  const projectLabel = (pid?: string) => (!pid ? "Algemeen" : categorieNaam(pid) ?? werkNaam(pid, werkCtx) ?? "Algemeen");
   const projectSub = (pid?: string) => { const p = pid && !pid.includes(":") ? projects.find((x) => x.id === pid) : undefined; return p?.wijk ?? ""; };
 
   const contractUren = (u: User) => (u.contract?.uren != null ? u.contract.uren : STANDAARD_CONTRACT);
