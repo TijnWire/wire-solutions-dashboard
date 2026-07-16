@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Plus, ArrowLeft, Download, Pencil, Trash2, Receipt, X, FileSpreadsheet, Check, Users, Search, Mail, Clock } from "lucide-react";
+import { Plus, ArrowLeft, Download, Pencil, Trash2, Receipt, X, FileSpreadsheet, Users, Search, Mail, Clock, ArrowDownToLine } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { DatumKiezer } from "../components/DatumKiezer";
 import { Keuze } from "../components/Keuze";
@@ -30,7 +30,7 @@ const veld =
 const labelCls = "mb-1 block text-xs font-semibold text-ink-600";
 
 // ── Factuur aanmaken / bewerken ──
-function FactuurForm({ bestaande, initieel, onKlaar }: { bestaande?: Factuur; initieel?: Omit<Factuur, "id">; onKlaar: () => void }) {
+function FactuurForm({ bestaande, initieel, onKlaar, onOpgeslagen }: { bestaande?: Factuur; initieel?: Omit<Factuur, "id">; onKlaar: () => void; onOpgeslagen?: () => void }) {
   const { bedrijf, facturen, addFactuur, updateFactuur, opdrachtgevers } = useApp();
   const volgnr = String(facturen.length + 1).padStart(4, "0");
   const [f, setF] = useState<Omit<Factuur, "id">>(
@@ -71,7 +71,7 @@ function FactuurForm({ bestaande, initieel, onKlaar }: { bestaande?: Factuur; in
   const opslaan = () => {
     if (!f.klantNaam.trim()) return;
     if (bestaande) updateFactuur(bestaande.id, f);
-    else addFactuur(f);
+    else { addFactuur(f); onOpgeslagen?.(); }
     onKlaar();
   };
 
@@ -410,6 +410,28 @@ export function Facturen({ initieelFactuur, nieuwFactuurProject }: { initieelFac
   const teFactureren = projects.filter((p) => p.boekhouding === "te_factureren");
   const teFacturerenBuurt = buurtaanpak.filter((b) => b.boekhouding === "te_factureren");
   const teFacturerenRondes = rondes.filter((r) => r.boekhouding === "te_factureren");
+  // Brievenrondes groeperen per map (mapNaam) → in "Te factureren" één regel per map, niet per straat.
+  const teFacturerenMappen = (() => {
+    const groepen = new Map<string, Brievenronde[]>();
+    for (const r of teFacturerenRondes) {
+      const key = r.mapNaam || `ronde-${r.id}`;
+      const arr = groepen.get(key) ?? [];
+      arr.push(r);
+      groepen.set(key, arr);
+    }
+    return [...groepen.values()].map((rs) => ({
+      key: rs[0].mapNaam || rs[0].id,
+      naam: rs[0].mapNaam || rs[0].straat,
+      plaats: rs[0].plaats,
+      rondes: rs,
+      gegooid: rs.reduce((s, r) => s + r.adressen.filter((a) => !a.ontbreekt && a.status === "Gegooid").length, 0),
+      pd: rs.find((r) => r.pdNummer)?.pdNummer,
+      doorgestuurd: rs.map((r) => r.doorgestuurdOp).filter(Boolean).sort()[0],
+    }));
+  })();
+  const inkomendAantal = teFactureren.length + teFacturerenBuurt.length + teFacturerenMappen.length;
+  const [tab, setTab] = useState<"facturen" | "inkomend">("facturen");
+  const [bron, setBron] = useState<null | (() => void)>(null); // markeert de bron als gefactureerd zodra de factuur is opgeslagen
   const [modus, setModus] = useState<"lijst" | "formulier" | "opdrachtgevers" | "uren">("lijst");
   const [bewerk, setBewerk] = useState<Factuur | undefined>(undefined);
   const [nieuwVan, setNieuwVan] = useState<Omit<Factuur, "id"> | undefined>(undefined);
@@ -464,14 +486,16 @@ export function Facturen({ initieelFactuur, nieuwFactuurProject }: { initieelFac
       notitie: "",
     };
   };
-  const nieuweLege = () => { setBewerk(undefined); setNieuwVan(undefined); setModus("formulier"); };
-  const nieuweVanUren = (concept: Omit<Factuur, "id">) => { setBewerk(undefined); setNieuwVan(concept); setModus("formulier"); };
-  const nieuweVanProject = (p: Project) => { setBewerk(undefined); setNieuwVan(maakConceptVanProject(p)); setModus("formulier"); };
-  const nieuweVanBuurt = (b: Buurtaanpak) => { setBewerk(undefined); setNieuwVan(maakConceptVan(b.pdNummer ?? "", b.naam)); setModus("formulier"); };
-  const nieuweVanRonde = (r: Brievenronde) => {
-    const gegooid = r.adressen.filter((a) => !a.ontbreekt && a.status === "Gegooid").length;
+  const nu = () => new Date().toISOString();
+  const nieuweLege = () => { setBewerk(undefined); setNieuwVan(undefined); setBron(null); setModus("formulier"); };
+  const nieuweVanUren = (concept: Omit<Factuur, "id">) => { setBewerk(undefined); setNieuwVan(concept); setBron(null); setModus("formulier"); };
+  const nieuweVanProject = (p: Project) => { setBewerk(undefined); setNieuwVan(maakConceptVanProject(p)); setBron(() => () => updateProject(p.id, { boekhouding: "gefactureerd", gefactureerdOp: nu() })); setModus("formulier"); };
+  const nieuweVanBuurt = (b: Buurtaanpak) => { setBewerk(undefined); setNieuwVan(maakConceptVan(b.pdNummer ?? "", b.naam)); setBron(() => () => updateBuurtaanpak(b.id, { boekhouding: "gefactureerd", gefactureerdOp: nu() })); setModus("formulier"); };
+  // Eén factuur voor de héle map (alle te-factureren rondes van die map worden op 'gefactureerd' gezet).
+  const nieuweVanMap = (groep: { naam: string; gegooid: number; pd?: string; rondes: Brievenronde[] }) => {
     setBewerk(undefined);
-    setNieuwVan(maakConceptVan("", `Brieven & route — ${[r.straat, r.plaats].filter(Boolean).join(", ")}`, gegooid || 1, 2.2));
+    setNieuwVan(maakConceptVan(groep.pd ?? "", `Brieven & route — ${groep.naam}`, groep.gegooid || 1, 2.2));
+    setBron(() => () => groep.rondes.forEach((r) => updateRonde(r.id, { boekhouding: "gefactureerd", gefactureerdOp: nu() })));
     setModus("formulier");
   };
 
@@ -505,7 +529,7 @@ export function Facturen({ initieelFactuur, nieuwFactuurProject }: { initieelFac
   };
 
   if (modus === "formulier") {
-    return <FactuurForm bestaande={bewerk} initieel={nieuwVan} onKlaar={() => setModus("lijst")} />;
+    return <FactuurForm bestaande={bewerk} initieel={nieuwVan} onKlaar={() => setModus("lijst")} onOpgeslagen={() => { bron?.(); setBron(null); }} />;
   }
   if (modus === "opdrachtgevers") {
     return <OpdrachtgeverBeheer onKlaar={() => setModus("lijst")} />;
@@ -563,14 +587,31 @@ export function Facturen({ initieelFactuur, nieuwFactuurProject }: { initieelFac
         </div>
       </div>
 
-      {/* Te factureren: afgerond werk (projecten, buurtaanpakken én brievenrondes) */}
-      {(teFactureren.length > 0 || teFacturerenBuurt.length > 0 || teFacturerenRondes.length > 0) && (
+      {/* Tabs: facturen vs. inkomende afgeronde projecten */}
+      <div className="flex flex-wrap gap-2 border-b border-ink-200">
+        <button type="button" onClick={() => setTab("facturen")} className={`-mb-px inline-flex items-center gap-2 border-b-2 px-3 py-2.5 text-sm font-semibold ${tab === "facturen" ? "border-brand-600 text-brand-700" : "border-transparent text-ink-500 hover:text-ink-800"}`}>
+          <Receipt className="h-4 w-4" /> Facturen
+        </button>
+        <button type="button" onClick={() => setTab("inkomend")} className={`-mb-px inline-flex items-center gap-2 border-b-2 px-3 py-2.5 text-sm font-semibold ${tab === "inkomend" ? "border-brand-600 text-brand-700" : "border-transparent text-ink-500 hover:text-ink-800"}`}>
+          <ArrowDownToLine className="h-4 w-4" /> Te factureren
+          {inkomendAantal > 0 && <span className="inline-flex min-w-[18px] items-center justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white">{inkomendAantal}</span>}
+        </button>
+      </div>
+
+      {tab === "inkomend" && inkomendAantal === 0 && (
+        <Card className="p-10 text-center">
+          <Receipt className="mx-auto h-10 w-10 text-ink-300" />
+          <p className="mt-3 text-sm text-ink-500">Geen afgerond werk dat nog gefactureerd moet worden. Zodra de leiding een project of map naar de boekhouding stuurt, verschijnt het hier.</p>
+        </Card>
+      )}
+
+      {tab === "inkomend" && inkomendAantal > 0 && (
         <Card className="overflow-hidden">
           <div className="flex flex-wrap items-center gap-2 border-b border-ink-100 bg-amber-50/60 px-5 py-3">
             <Receipt className="h-4 w-4 text-amber-600" />
-            <h3 className="text-sm font-bold text-ink-900">Te factureren</h3>
-            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">{teFactureren.length + teFacturerenBuurt.length + teFacturerenRondes.length}</span>
-            <span className="ml-1 hidden text-xs text-ink-400 sm:inline">Afgerond werk, doorgeschakeld door de leiding</span>
+            <h3 className="text-sm font-bold text-ink-900">Afgeronde projecten — te factureren</h3>
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">{inkomendAantal}</span>
+            <span className="ml-1 hidden text-xs text-ink-400 sm:inline">Doorgeschakeld door de leiding · maak per project/map één factuur</span>
           </div>
           <div className="divide-y divide-ink-100">
             {teFactureren.map((p) => (
@@ -582,10 +623,7 @@ export function Facturen({ initieelFactuur, nieuwFactuurProject }: { initieelFac
                   </div>
                   <div className="text-xs text-ink-500">{[p.wijk, p.doorgestuurdOp ? `doorgeschakeld ${datumKort(p.doorgestuurdOp)}` : ""].filter(Boolean).join(" · ")}</div>
                 </div>
-                <div className="flex w-full items-center gap-2 sm:w-auto">
-                  <button type="button" onClick={() => nieuweVanProject(p)} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700 sm:flex-none"><Plus className="h-4 w-4" /> Factuur maken</button>
-                  <button type="button" onClick={() => updateProject(p.id, { boekhouding: "gefactureerd", gefactureerdOp: new Date().toISOString() })} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm font-semibold text-green-700 hover:bg-green-100 sm:flex-none"><Check className="h-4 w-4" /> Gefactureerd</button>
-                </div>
+                <button type="button" onClick={() => nieuweVanProject(p)} className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700 sm:w-auto"><Plus className="h-4 w-4" /> Factuur maken</button>
               </div>
             ))}
             {teFacturerenBuurt.map((b) => (
@@ -598,35 +636,27 @@ export function Facturen({ initieelFactuur, nieuwFactuurProject }: { initieelFac
                   </div>
                   <div className="text-xs text-ink-500">{[b.regio, b.doorgestuurdOp ? `doorgeschakeld ${datumKort(b.doorgestuurdOp)}` : ""].filter(Boolean).join(" · ")}</div>
                 </div>
-                <div className="flex w-full items-center gap-2 sm:w-auto">
-                  <button type="button" onClick={() => nieuweVanBuurt(b)} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700 sm:flex-none"><Plus className="h-4 w-4" /> Factuur maken</button>
-                  <button type="button" onClick={() => updateBuurtaanpak(b.id, { boekhouding: "gefactureerd", gefactureerdOp: new Date().toISOString() })} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm font-semibold text-green-700 hover:bg-green-100 sm:flex-none"><Check className="h-4 w-4" /> Gefactureerd</button>
-                </div>
+                <button type="button" onClick={() => nieuweVanBuurt(b)} className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700 sm:w-auto"><Plus className="h-4 w-4" /> Factuur maken</button>
               </div>
             ))}
-            {teFacturerenRondes.map((r) => {
-              const gegooid = r.adressen.filter((a) => !a.ontbreekt && a.status === "Gegooid").length;
-              return (
-                <div key={r.id} className="flex flex-wrap items-center gap-3 px-5 py-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="truncate text-sm font-semibold text-ink-900">{r.straat}</span>
-                      <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-semibold text-brand-700">Brieven &amp; route</span>
-                    </div>
-                    <div className="text-xs text-ink-500">{[r.plaats, `${gegooid} gegooid`, r.doorgestuurdOp ? `afgerond ${datumKort(r.doorgestuurdOp)}` : ""].filter(Boolean).join(" · ")}</div>
+            {teFacturerenMappen.map((m) => (
+              <div key={m.key} className="flex flex-wrap items-center gap-3 px-5 py-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {m.pd && <span className="rounded-md bg-ink-900 px-2 py-0.5 text-xs font-bold tracking-wide text-white">{m.pd}</span>}
+                    <span className="truncate text-sm font-semibold text-ink-900">{m.naam}</span>
+                    <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-semibold text-brand-700">Brieven &amp; route</span>
                   </div>
-                  <div className="flex w-full items-center gap-2 sm:w-auto">
-                    <button type="button" onClick={() => nieuweVanRonde(r)} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700 sm:flex-none"><Plus className="h-4 w-4" /> Factuur maken</button>
-                    <button type="button" onClick={() => updateRonde(r.id, { boekhouding: "gefactureerd", gefactureerdOp: new Date().toISOString() })} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm font-semibold text-green-700 hover:bg-green-100 sm:flex-none"><Check className="h-4 w-4" /> Gefactureerd</button>
-                  </div>
+                  <div className="text-xs text-ink-500">{[m.plaats, `${m.rondes.length} ${m.rondes.length === 1 ? "straat" : "straten"}`, `${m.gegooid} gegooid`, m.doorgestuurd ? `afgerond ${datumKort(m.doorgestuurd)}` : ""].filter(Boolean).join(" · ")}</div>
                 </div>
-              );
-            })}
+                <button type="button" onClick={() => nieuweVanMap(m)} className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700 sm:w-auto"><Plus className="h-4 w-4" /> Factuur maken</button>
+              </div>
+            ))}
           </div>
         </Card>
       )}
 
-      {facturen.length === 0 ? (
+      {tab === "facturen" && (facturen.length === 0 ? (
         <Card className="p-10 text-center">
           <Receipt className="mx-auto h-10 w-10 text-ink-300" />
           <p className="mt-3 text-sm text-ink-500">Nog geen facturen. Klik op <span className="font-semibold">Nieuwe factuur</span>.</p>
@@ -707,7 +737,7 @@ export function Facturen({ initieelFactuur, nieuwFactuurProject }: { initieelFac
             </div>
           )}
         </div>
-      )}
+      ))}
 
       <Bevestig
         open={!!verwijder}

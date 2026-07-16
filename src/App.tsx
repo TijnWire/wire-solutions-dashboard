@@ -85,7 +85,8 @@ export default function App() {
     () =>
       projects.filter((p) => p.boekhouding === "te_factureren").length +
       buurtaanpak.filter((b) => b.boekhouding === "te_factureren").length +
-      rondes.filter((r) => r.boekhouding === "te_factureren").length,
+      // Brievenrondes tellen per map (mapNaam), niet per straat.
+      new Set(rondes.filter((r) => r.boekhouding === "te_factureren").map((r) => r.mapNaam || r.id)).size,
     [projects, buurtaanpak, rondes]
   );
   const sidebarBadges = useMemo<Record<string, number>>(() => ({ facturen: teFactureren }), [teFactureren]);
