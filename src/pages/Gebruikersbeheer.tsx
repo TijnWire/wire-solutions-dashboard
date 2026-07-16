@@ -381,9 +381,9 @@ function WachtwoordResetModal({ gebruiker, onSluit }: { gebruiker: User; onSluit
         const r = await resetAuthWachtwoord(gebruiker.email, nieuw);
         authOk = r.ok; authErr = r.error ?? "";
       }
-      // Lokale hash bijwerken (voor het lokale inlogmodel) + force-change aanzetten.
+      // Lokale hash bijwerken: het nieuwe wachtwoord werkt meteen om mee in te loggen (geen gedwongen wissel).
       const cred = await hashWachtwoord(nieuw);
-      updateUser(gebruiker.id, { ...cred, moetWachtwoordWijzigen: true });
+      updateUser(gebruiker.id, { ...cred, moetWachtwoordWijzigen: false });
       void logAudit("wachtwoord_reset", { email: currentUser?.email ?? "onbekend", naam: currentUser?.naam ?? "onbekend" }, { userId: gebruiker.id, email: gebruiker.email, naam: gebruiker.naam }, { echteAuth: authOk });
       setTemp(nieuw);
       setWaarschuwing(authOk || !supabaseAan ? "" : `Let op: het inlog-wachtwoord in Supabase Auth is niet bijgewerkt (${authErr}). De medewerker kan wél inloggen; deploy de Edge Function 'admin-account' voor volledige werking.`);
@@ -393,6 +393,27 @@ function WachtwoordResetModal({ gebruiker, onSluit }: { gebruiker: User; onSluit
 
   const kopieer = async () => {
     try { await navigator.clipboard.writeText(temp); setGekopieerd(true); setTimeout(() => setGekopieerd(false), 2000); } catch { /* clipboard geblokkeerd — handmatig overtypen */ }
+  };
+
+  // Opent een kant-en-klare e-mail naar de medewerker met de inloggegevens (via de eigen mailapp).
+  const mailNaar = () => {
+    const url = window.location.origin;
+    const onderwerp = "Je inloggegevens voor het Wire Solutions dashboard";
+    const body = [
+      `Hoi ${gebruiker.naam},`,
+      "",
+      "Je kunt inloggen op het Wire Solutions dashboard met deze gegevens:",
+      "",
+      `Website: ${url}`,
+      `E-mail: ${gebruiker.email}`,
+      `Wachtwoord: ${temp}`,
+      "",
+      "Dit wachtwoord werkt meteen. Je kunt het later zelf wijzigen.",
+      "",
+      "Groet,",
+      "Wire Solutions",
+    ].join("\n");
+    window.location.href = `mailto:${encodeURIComponent(gebruiker.email)}?subject=${encodeURIComponent(onderwerp)}&body=${encodeURIComponent(body)}`;
   };
 
   return (
@@ -408,7 +429,7 @@ function WachtwoordResetModal({ gebruiker, onSluit }: { gebruiker: User; onSluit
 
         {fase === "bevestig" ? (
           <div className="space-y-4">
-            <p className="text-sm text-ink-600">Er wordt een nieuw tijdelijk wachtwoord ingesteld. De medewerker moet bij de eerstvolgende login zelf een nieuw wachtwoord kiezen. Het tijdelijke wachtwoord zie je hierna éénmalig.</p>
+            <p className="text-sm text-ink-600">Er wordt een nieuw wachtwoord ingesteld dat meteen werkt om mee in te loggen. Daarna kun je het in één klik naar de medewerker mailen. Je ziet het wachtwoord hierna éénmalig.</p>
             <div className="flex items-center gap-2">
               <button type="button" onClick={doeReset} disabled={bezig} className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-brand-700 disabled:opacity-60"><KeyRound className="h-4 w-4" /> {bezig ? "Bezig…" : "Nieuw wachtwoord instellen"}</button>
               <button type="button" onClick={onSluit} className="rounded-lg border border-ink-200 bg-white px-5 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50">Annuleren</button>
@@ -417,15 +438,16 @@ function WachtwoordResetModal({ gebruiker, onSluit }: { gebruiker: User; onSluit
         ) : (
           <div className="space-y-4">
             <div>
-              <span className="mb-1.5 block text-sm font-medium text-ink-700">Tijdelijk wachtwoord — geef dit door aan de medewerker</span>
+              <span className="mb-1.5 block text-sm font-medium text-ink-700">Nieuw wachtwoord — mail het of geef het door</span>
               <div className="flex items-center gap-2">
                 <code className="flex-1 select-all rounded-lg border border-ink-200 bg-ink-50 px-3 py-2.5 font-mono text-sm text-ink-900">{temp}</code>
                 <button type="button" onClick={kopieer} className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-3 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50">{gekopieerd ? <><Check className="h-4 w-4 text-green-600" /> Gekopieerd</> : <><Copy className="h-4 w-4" /> Kopieer</>}</button>
               </div>
-              <p className="mt-1.5 text-xs text-ink-400">Dit wachtwoord is hierna niet meer op te vragen. Bij de eerstvolgende login kiest de medewerker zelf een nieuw wachtwoord.</p>
+              <button type="button" onClick={mailNaar} className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-brand-700"><Mail className="h-4 w-4" /> Mail naar {gebruiker.email}</button>
+              <p className="mt-1.5 text-xs text-ink-400">Dit wachtwoord werkt meteen om mee in te loggen. Het is hierna niet meer op te vragen — mail of noteer het nu. De medewerker kan het later zelf wijzigen.</p>
             </div>
             {waarschuwing && <div className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">{waarschuwing}</div>}
-            <button type="button" onClick={onSluit} className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-brand-700">Klaar</button>
+            <button type="button" onClick={onSluit} className="inline-flex items-center gap-2 rounded-lg border border-ink-200 bg-white px-5 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50">Klaar</button>
           </div>
         )}
       </div>
