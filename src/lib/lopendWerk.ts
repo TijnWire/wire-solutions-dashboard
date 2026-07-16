@@ -1,5 +1,17 @@
 import type { Project, Brievenronde, VoorschouwMap, TauwOpdracht } from "./types";
 
+// De vaste projecten/onderdelen waar werk op geboekt wordt of een mededeling over gaat.
+// Bewust de onderdelen zelf — niet het losse werk erbinnen (dat wordt een onleesbare lijst).
+export const WERK_CATEGORIEEN: { id: string; naam: string }[] = [
+  { id: "brieven", naam: "Brieven & Routes" },
+  { id: "buurtaanpak", naam: "Buurtaanpak" },
+  { id: "saneren", naam: "Saneren" },
+  { id: "voorschouwen", naam: "Voorschouwen" },
+  { id: "schouwafspraken", naam: "Schouwafspraken" },
+  { id: "tauw", naam: "TAUW" },
+];
+export const werkCategorieNaam = (id?: string) => WERK_CATEGORIEEN.find((c) => c.id === id)?.naam;
+
 // Bouwt één lijst "lopende projecten" voor de projectkeuzes: echte projecten + lopend werk uit
 // Brieven & Routes, Voorschouwen en TAUW. Zo kun je uren/mededelingen ook aan dat werk koppelen zonder
 // er apart een project voor aan te maken. Werk-items krijgen een voorvoegsel in hun id (brv:/vsm:/tauw:)

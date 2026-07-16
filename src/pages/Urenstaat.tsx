@@ -7,6 +7,7 @@ import { Keuze } from "../components/Keuze";
 import { DatumKiezer } from "../components/DatumKiezer";
 import { feestdagNaam } from "../lib/feestdagen";
 import { exporteerUrenstaat } from "../lib/urenstaatExcel";
+import { WERK_CATEGORIEEN, werkCategorieNaam } from "../lib/lopendWerk";
 import type { Bedrijf, Urenregel, Uursoort } from "../lib/types";
 
 const DAGNAAM = ["zo", "ma", "di", "wo", "do", "vr", "za"];
@@ -42,15 +43,7 @@ const STANDAARD_UURSOORTEN: Uursoort[] = [
 ];
 
 // Op welk onderdeel zijn de uren geboekt (of Algemeen).
-const WERK_CATEGORIEEN: { id: string; naam: string }[] = [
-  { id: "brieven", naam: "Brieven & Routes" },
-  { id: "buurtaanpak", naam: "Buurtaanpak" },
-  { id: "saneren", naam: "Saneren" },
-  { id: "voorschouwen", naam: "Voorschouwen" },
-  { id: "schouwafspraken", naam: "Schouwafspraken" },
-  { id: "tauw", naam: "TAUW" },
-];
-const projectNaam = (id?: string) => WERK_CATEGORIEEN.find((c) => c.id === id)?.naam ?? "Algemeen";
+const projectNaam = (id?: string) => werkCategorieNaam(id) ?? "Algemeen";
 const uursoortenVan = (b: Bedrijf): Uursoort[] => (b.uursoorten?.length ? b.uursoorten : STANDAARD_UURSOORTEN);
 const uursoortLabel = (u: Uursoort) => [u.code, u.label].filter(Boolean).join(" · ");
 

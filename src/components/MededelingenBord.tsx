@@ -4,7 +4,7 @@ import { useApp } from "../store/AppContext";
 import { Card } from "./ui";
 import { DatumKiezer } from "./DatumKiezer";
 import { Keuze } from "./Keuze";
-import { lopendeProjectOpties, werkNaam } from "../lib/lopendWerk";
+import { WERK_CATEGORIEEN, werkCategorieNaam, werkNaam } from "../lib/lopendWerk";
 
 const datumKort = (iso: string) => { const d = iso.slice(0, 10).split("-"); return d.length === 3 ? `${d[2]}-${d[1]}-${d[0]}` : iso; };
 function vandaagISO(): string { const t = new Date(); return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`; }
@@ -23,7 +23,7 @@ function tijdGeleden(iso: string): string {
 
 // ── Invoer: de leiding plaatst een mededeling (met optioneel project, persoon, deadline, "let op"). ──
 export function MededelingComposer({ className = "" }: { className?: string }) {
-  const { users, projects, rondes, voorschouwMappen, tauwOpdrachten, currentUser, addMededeling } = useApp();
+  const { users, currentUser, addMededeling } = useApp();
   const [tekst, setTekst] = useState("");
   const [projectId, setProjectId] = useState("");
   const [gerichtAan, setGerichtAan] = useState("");
@@ -63,7 +63,7 @@ export function MededelingComposer({ className = "" }: { className?: string }) {
             altijdZoeken
             opties={[
               { waarde: "", label: "Geen project" },
-              ...lopendeProjectOpties(projects, rondes, voorschouwMappen, tauwOpdrachten).map((o) => ({ waarde: o.id, label: o.naam })),
+              ...WERK_CATEGORIEEN.map((c) => ({ waarde: c.id, label: c.naam })),
             ]}
           />
         </label>
@@ -93,7 +93,8 @@ export function MededelingenFeed({ scrollClass = "max-h-96" }: { scrollClass?: s
 
   const naamVan = (id?: string) => users.find((u) => u.id === id)?.naam ?? "Onbekend";
   const initialenVan = (id?: string) => users.find((u) => u.id === id)?.initialen ?? "?";
-  const projectVan = (id?: string) => werkNaam(id, { projects, voorschouwMappen, tauwOpdrachten });
+  // Nieuwe mededelingen wijzen naar een project (categorie); oudere nog naar een los werk-item.
+  const projectVan = (id?: string) => werkCategorieNaam(id) ?? werkNaam(id, { projects, voorschouwMappen, tauwOpdrachten });
 
   // Werknemers zien team-brede + aan hen gerichte mededelingen; leiding ziet alles. Vastgezet bovenaan, daarna nieuwste eerst.
   const zichtbaar = mededelingen
