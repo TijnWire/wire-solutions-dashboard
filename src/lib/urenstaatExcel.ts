@@ -11,12 +11,10 @@ export type UrenExportRegel = {
   dag: string;        // ma/di/…
   uursoort: string;
   project: string;
-  objectCode: string;
-  begin: string;      // "06:30" (kan leeg zijn bij oude, omgezette regels)
-  eind: string;       // "15:00"
+  begin: string;      // "09:00" (kan leeg zijn bij oude, omgezette regels)
+  eind: string;       // "17:30"
   pauze: number;      // minuten
   uren: number;       // totaal uren
-  reis: number;       // reisuren
   notitie: string;
   feestdag: string;
   verlof: string;
@@ -40,7 +38,10 @@ export type UrenExportData = {
 };
 
 const enc = (r: number, c: number) => XLSX.utils.encode_cell({ r, c });
-const NKOL = 12; // Datum..Opmerking
+// Kolommen: 0 Datum · 1 Dag · 2 Uursoort · 3 Project · 4 Begin · 5 Eind · 6 Pauze · 7 Totaal · 8 Bijzonder · 9 Omschrijving
+const NKOL = 10;
+const K_BEGIN = 4, K_EIND = 5, K_PAUZE = 6, K_TOTAAL = 7;
+const LINKS = [0, 2, 3, 9]; // kolommen die links uitgelijnd staan; de rest gecentreerd
 
 const INK = "111827";
 const GRIJS = "F3F4F6";
@@ -83,41 +84,40 @@ export function exporteerUrenstaat(data: UrenExportData): void {
     setStijl(R, 0, { font: { bold: true, sz: 11, color: { rgb: INK } } });
     R++;
 
-    const kop = ["Datum", "Dag", "Uursoort", "Project", "Object code", "Begin", "Eind", "Pauze (min)", "Totaal (u)", "Reis (u)", "Bijzonder", "Omschrijving werkzaamheden"];
+    const kop = ["Datum", "Dag", "Uursoort", "Project", "Begin", "Eind", "Pauze (min)", "Totaal (u)", "Bijzonder", "Omschrijving werkzaamheden"];
     aoa.push(kop);
     const kopRij = R;
     for (let c = 0; c < NKOL; c++) {
       setStijl(kopRij, c, {
         font: { bold: true, sz: 10, color: { rgb: "FFFFFF" } },
         fill: { fgColor: { rgb: INK } },
-        alignment: { horizontal: c === 0 || c === 2 || c === 3 || c === 11 ? "left" : "center", vertical: "center", wrapText: true },
+        alignment: { horizontal: LINKS.includes(c) ? "left" : "center", vertical: "center", wrapText: true },
         border: alleRanden,
       });
     }
     R++;
 
     const regelRijen: number[] = [];
-    let weekTot = 0, reisTot = 0;
+    let weekTot = 0;
     for (const g of p.regels) {
       const bijzonder = [g.feestdag, g.verlof].filter(Boolean).join(" · ");
       const uren = Number(g.uren) || 0;
-      const reis = Number(g.reis) || 0;
-      weekTot += uren; reisTot += reis;
-      aoa.push([dagDatum(g.datum), g.dag, g.uursoort, g.project, g.objectCode, g.begin, g.eind, g.pauze || 0, uren, reis, bijzonder, g.notitie]);
+      weekTot += uren;
+      aoa.push([dagDatum(g.datum), g.dag, g.uursoort, g.project, g.begin, g.eind, g.pauze || 0, uren, bijzonder, g.notitie]);
       const rr = R;
       regelRijen.push(rr);
       // Begin/eind als échte tijdwaarden + het totaal als formule (alleen als beide tijden er zijn).
       const b = tijdWaarde(g.begin), e = tijdWaarde(g.eind);
-      if (b !== null) tijden.push({ addr: enc(rr, 5), v: b });
-      if (e !== null) tijden.push({ addr: enc(rr, 6), v: e });
+      if (b !== null) tijden.push({ addr: enc(rr, K_BEGIN), v: b });
+      if (e !== null) tijden.push({ addr: enc(rr, K_EIND), v: e });
       if (b !== null && e !== null) {
         const nacht = e < b ? "+1" : ""; // over middernacht doorgewerkt
-        formules.push({ addr: enc(rr, 8), f: `(${enc(rr, 6)}-${enc(rr, 5)}${nacht})*24-${enc(rr, 7)}/60`, v: uren });
+        formules.push({ addr: enc(rr, K_TOTAAL), f: `(${enc(rr, K_EIND)}-${enc(rr, K_BEGIN)}${nacht})*24-${enc(rr, K_PAUZE)}/60`, v: uren });
       }
       for (let c = 0; c < NKOL; c++) {
         setStijl(rr, c, {
-          font: { sz: 10, bold: c === 8 },
-          alignment: { horizontal: c === 0 || c === 2 || c === 3 || c === 4 || c === 11 ? "left" : "center" },
+          font: { sz: 10, bold: c === K_TOTAAL },
+          alignment: { horizontal: LINKS.includes(c) ? "left" : "center" },
           fill: bijzonder ? { fgColor: { rgb: GRIJS } } : undefined,
           border: alleRanden,
         });
@@ -127,11 +127,10 @@ export function exporteerUrenstaat(data: UrenExportData): void {
 
     // Weektotaal van deze medewerker
     const totRij = R;
-    aoa.push(["Totaal", "", "", "", "", "", "", "", weekTot, reisTot, "", ""]);
+    aoa.push(["Totaal", "", "", "", "", "", "", weekTot, "", ""]);
     if (regelRijen.length) {
       const a = regelRijen[0], z = regelRijen[regelRijen.length - 1];
-      formules.push({ addr: enc(totRij, 8), f: `SUM(${enc(a, 8)}:${enc(z, 8)})`, v: weekTot });
-      formules.push({ addr: enc(totRij, 9), f: `SUM(${enc(a, 9)}:${enc(z, 9)})`, v: reisTot });
+      formules.push({ addr: enc(totRij, K_TOTAAL), f: `SUM(${enc(a, K_TOTAAL)}:${enc(z, K_TOTAAL)})`, v: weekTot });
     }
     for (let c = 0; c < NKOL; c++) {
       setStijl(totRij, c, {
@@ -141,7 +140,7 @@ export function exporteerUrenstaat(data: UrenExportData): void {
         border: alleRanden,
       });
     }
-    weekTotaalCellen.push(enc(totRij, 8));
+    weekTotaalCellen.push(enc(totRij, K_TOTAAL));
     groepTotaal += weekTot;
     R++;
 
@@ -157,15 +156,20 @@ export function exporteerUrenstaat(data: UrenExportData): void {
   R += 2; aoa.push([]);
 
   // ── Goedkeuringsblok ──
+  // De labels staan in kolom A en E. Die kolommen zijn smal (Datum / Begin), en de lege cel
+  // ernaast blokkeert het doorlopen van tekst in Excel — "Handtekening:" zou dus afgekapt worden.
+  // Daarom elk label over twee kolommen samenvoegen; de handtekeninglijn schuift een kolom op.
   aoa.push(["Akkoord medewerker", "", "", "", "Akkoord opdrachtgever / leidinggevende"]);
   setStijl(R, 0, { font: { bold: true, sz: 10 } });
   setStijl(R, 4, { font: { bold: true, sz: 10 } });
+  merges.push({ s: { r: R, c: 0 }, e: { r: R, c: 1 } }, { s: { r: R, c: 4 }, e: { r: R, c: 7 } });
   R++;
   for (const v of ["Naam:", "Datum:", "Handtekening:"]) {
     aoa.push([v, "", "", "", v]);
     setStijl(R, 0, { font: { sz: 10 } });
     setStijl(R, 4, { font: { sz: 10 } });
-    for (const c of [1, 2, 5, 6]) setStijl(R, c, { border: { bottom: { style: "thin", color: { rgb: "9CA3AF" } } } });
+    merges.push({ s: { r: R, c: 0 }, e: { r: R, c: 1 } }, { s: { r: R, c: 4 }, e: { r: R, c: 5 } });
+    for (const c of [2, 3, 6, 7]) setStijl(R, c, { border: { bottom: { style: "thin", color: { rgb: "9CA3AF" } } } });
     R++;
   }
   aoa.push([]); R++;
@@ -174,8 +178,8 @@ export function exporteerUrenstaat(data: UrenExportData): void {
 
   // ── Worksheet ──
   const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws["!cols"] = [{ wch: 11 }, { wch: 5 }, { wch: 24 }, { wch: 18 }, { wch: 14 }, { wch: 8 }, { wch: 8 }, { wch: 11 }, { wch: 10 }, { wch: 8 }, { wch: 14 }, { wch: 34 }];
-  merges.push({ s: { r: 0, c: 0 }, e: { r: 0, c: 11 } }, { s: { r: 1, c: 0 }, e: { r: 1, c: 11 } });
+  ws["!cols"] = [{ wch: 11 }, { wch: 5 }, { wch: 24 }, { wch: 18 }, { wch: 8 }, { wch: 8 }, { wch: 11 }, { wch: 10 }, { wch: 14 }, { wch: 34 }];
+  merges.push({ s: { r: 0, c: 0 }, e: { r: 0, c: NKOL - 1 } }, { s: { r: 1, c: 0 }, e: { r: 1, c: NKOL - 1 } });
   ws["!merges"] = merges;
 
   for (const { addr, v } of tijden) ws[addr] = { t: "n", v, z: "hh:mm" };

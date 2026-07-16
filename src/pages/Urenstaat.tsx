@@ -1,14 +1,16 @@
-import { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Plus, Copy, Trash2, Wallet, FileSpreadsheet, SlidersHorizontal, Save, ArrowLeft, Clock } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { ChevronLeft, ChevronRight, ChevronDown, Plus, Copy, Trash2, Wallet, FileSpreadsheet, SlidersHorizontal, Save, ArrowLeft, ArrowRight, Clock, CheckCircle2, Circle, Users2, Search } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { useNav } from "../store/NavContext";
 import { Card } from "../components/ui";
 import { Keuze } from "../components/Keuze";
 import { DatumKiezer } from "../components/DatumKiezer";
+import { TijdKiezer } from "../components/TijdKiezer";
 import { feestdagNaam } from "../lib/feestdagen";
 import { exporteerUrenstaat } from "../lib/urenstaatExcel";
 import { WERK_CATEGORIEEN, werkCategorieNaam } from "../lib/lopendWerk";
-import type { Bedrijf, Urenregel, Uursoort } from "../lib/types";
+import type { Bedrijf, Urenregel, Uursoort, User } from "../lib/types";
 
 const DAGNAAM = ["zo", "ma", "di", "wo", "do", "vr", "za"];
 const toISO = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -42,15 +44,19 @@ const STANDAARD_UURSOORTEN: Uursoort[] = [
   { id: "overwerk", code: "", label: "Overwerk" },
 ];
 
+// Standaard werkdag voor een nieuwe regel — per regel altijd zelf aan te passen.
+const STANDAARD_BEGIN = "09:00";
+const STANDAARD_EIND = "17:30";
+const STANDAARD_PAUZE = 30;
+
 // Op welk onderdeel zijn de uren geboekt (of Algemeen).
 const projectNaam = (id?: string) => werkCategorieNaam(id) ?? "Algemeen";
 const uursoortenVan = (b: Bedrijf): Uursoort[] => (b.uursoorten?.length ? b.uursoorten : STANDAARD_UURSOORTEN);
 const uursoortLabel = (u: Uursoort) => [u.code, u.label].filter(Boolean).join(" · ");
 
-const veld = "w-full rounded-lg border border-ink-200 bg-white px-2 py-1.5 text-sm text-ink-800 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100";
-const chip = (aan: boolean) =>
-  "inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors " +
-  (aan ? "bg-brand-600 text-white" : "border border-ink-200 bg-white text-ink-600 hover:bg-ink-50");
+// Alle velden in een tabelrij zijn even hoog (34px): dezelfde padding en tekstgrootte.
+// Keuze size="rij", DatumKiezer compact en TijdKiezer size="rij" komen op precies dezelfde maat uit.
+const veld = "w-full rounded-lg border border-ink-200 bg-white px-2.5 py-1.5 text-sm text-ink-800 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100";
 
 // ── Uursoorten beheren (zelf de lijst bepalen, net als de tarieven bij Facturen) ──
 function UursoortBeheer({ bedrijf, updateBedrijf, onKlaar }: { bedrijf: Bedrijf; updateBedrijf: (p: Partial<Bedrijf>) => void; onKlaar: () => void }) {
@@ -89,6 +95,133 @@ function UursoortBeheer({ bedrijf, updateBedrijf, onKlaar }: { bedrijf: Bedrijf;
   );
 }
 
+// ── Medewerker kiezen: een scrollbaar menu met zoekveld waarin je meteen ziet wie je deze week
+// al hebt ingevuld ("Klaar") en wie nog moet ("Nog te doen"). Het menu hangt via een portal aan
+// het scherm, zodat het niet wordt afgeknipt door de kaart eromheen. ──
+function MedewerkerKiezer({ medewerkers, waarde, onKies, urenVan, totaalIedereen }: {
+  medewerkers: User[];
+  waarde: string; // "" = iedereen
+  onKies: (id: string) => void;
+  urenVan: (id: string) => number;
+  totaalIedereen: number;
+}) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [zoek, setZoek] = useState("");
+  const btnRef = useRef<HTMLButtonElement | null>(null);
+  const popRef = useRef<HTMLDivElement | null>(null);
+  const zoekRef = useRef<HTMLInputElement | null>(null);
+  const HOOGTE = 392;
+
+  const openen = () => {
+    setZoek("");
+    const r = btnRef.current?.getBoundingClientRect();
+    if (r) {
+      let top = r.bottom + 4;
+      if (top + HOOGTE > window.innerHeight - 8) top = Math.max(8, r.top - HOOGTE - 4);
+      const breedte = Math.max(r.width, 288);
+      setPos({ top, left: Math.min(r.left, window.innerWidth - breedte - 8), width: breedte });
+    }
+    setOpen(true);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    setTimeout(() => zoekRef.current?.focus(), 0); // direct kunnen typen
+    const buiten = (e: MouseEvent) => { if (btnRef.current?.contains(e.target as Node) || popRef.current?.contains(e.target as Node)) return; setOpen(false); };
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    // Sluiten als de pagina eronder scrolt, maar niet als je in de lijst zelf scrolt.
+    const bijScroll = (e: Event) => { if (popRef.current?.contains(e.target as Node)) return; setOpen(false); };
+    const bijResize = () => setOpen(false);
+    document.addEventListener("mousedown", buiten);
+    document.addEventListener("keydown", esc);
+    window.addEventListener("scroll", bijScroll, true);
+    window.addEventListener("resize", bijResize);
+    return () => {
+      document.removeEventListener("mousedown", buiten);
+      document.removeEventListener("keydown", esc);
+      window.removeEventListener("scroll", bijScroll, true);
+      window.removeEventListener("resize", bijResize);
+    };
+  }, [open]);
+
+  const q = zoek.trim().toLowerCase();
+  const gevonden = medewerkers.filter((u) => !q || u.naam.toLowerCase().includes(q) || (u.functie ?? "").toLowerCase().includes(q));
+  const teDoen = gevonden.filter((u) => urenVan(u.id) === 0);
+  const klaar = gevonden.filter((u) => urenVan(u.id) > 0);
+  const gekozen = medewerkers.find((u) => u.id === waarde);
+  const gekozenUren = gekozen ? urenVan(gekozen.id) : 0;
+
+  const kies = (id: string) => { onKies(id); setOpen(false); };
+  const rij = (u: User) => {
+    const n = urenVan(u.id);
+    const actief = u.id === waarde;
+    return (
+      <button key={u.id} type="button" onClick={() => kies(u.id)} className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm outline-none ${actief ? "bg-brand-50 font-semibold text-brand-700" : "text-ink-700 hover:bg-ink-50"}`}>
+        {n > 0 ? <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600" /> : <Circle className="h-4 w-4 shrink-0 text-ink-300" />}
+        <span className="min-w-0 flex-1 truncate">{u.naam}</span>
+        <span className={`shrink-0 text-xs tabular-nums ${n > 0 ? "font-semibold text-ink-600" : "text-ink-300"}`}>{n > 0 ? `${uurTekst(n)} u` : "—"}</span>
+      </button>
+    );
+  };
+  const kop = (tekst: string, n: number) => (
+    <div className="sticky top-0 z-10 bg-white px-2.5 pb-1 pt-2 text-[11px] font-bold uppercase tracking-wide text-ink-400">{tekst} ({n})</div>
+  );
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => (open ? setOpen(false) : openen())}
+        className={`flex w-full items-center justify-between gap-2 rounded-lg border bg-white px-3 py-2 text-sm outline-none transition-colors hover:border-ink-300 focus:border-brand-400 focus:ring-2 focus:ring-brand-100 ${open ? "border-brand-400 ring-2 ring-brand-100" : "border-ink-200"}`}
+      >
+        <span className="flex min-w-0 flex-1 items-center gap-2">
+          {!gekozen ? <Users2 className="h-4 w-4 shrink-0 text-ink-400" />
+            : gekozenUren > 0 ? <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600" />
+              : <Circle className="h-4 w-4 shrink-0 text-ink-300" />}
+          <span className="truncate font-semibold text-ink-800">{gekozen ? gekozen.naam : "Iedereen"}</span>
+          <span className="shrink-0 text-xs text-ink-400">{gekozen ? (gekozenUren > 0 ? `${uurTekst(gekozenUren)} u` : "nog geen uren") : `${uurTekst(totaalIedereen)} u`}</span>
+        </span>
+        <ChevronDown className={`h-4 w-4 shrink-0 text-ink-400 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && pos && createPortal(
+        <div ref={popRef} style={{ position: "fixed", top: pos.top, left: pos.left, width: pos.width }} className="z-[60] overflow-hidden rounded-xl border border-ink-200 bg-white shadow-cardhover">
+          <div className="flex items-center gap-1.5 border-b border-ink-100 px-2.5 py-2">
+            <Search className="h-4 w-4 shrink-0 text-ink-400" />
+            <input
+              ref={zoekRef}
+              value={zoek}
+              onChange={(e) => setZoek(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); const eerste = [...teDoen, ...klaar][0]; if (eerste) kies(eerste.id); } }}
+              placeholder="Zoek een medewerker…"
+              className="w-full bg-transparent text-sm text-ink-800 outline-none placeholder:text-ink-400"
+            />
+          </div>
+          <div className="scrollbar-thin max-h-80 overflow-auto p-1">
+            {!q && (
+              <button type="button" onClick={() => kies("")} className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm outline-none ${waarde === "" ? "bg-brand-50 font-semibold text-brand-700" : "text-ink-700 hover:bg-ink-50"}`}>
+                <Users2 className="h-4 w-4 shrink-0 text-ink-400" />
+                <span className="min-w-0 flex-1 truncate">Iedereen</span>
+                <span className="shrink-0 text-xs font-semibold tabular-nums text-ink-500">{uurTekst(totaalIedereen)} u</span>
+              </button>
+            )}
+            {gevonden.length === 0 && <div className="px-3 py-6 text-center text-sm text-ink-400">Niemand gevonden</div>}
+            {teDoen.length > 0 && kop("Nog te doen", teDoen.length)}
+            {teDoen.map(rij)}
+            {klaar.length > 0 && kop("Klaar", klaar.length)}
+            {klaar.map(rij)}
+          </div>
+        </div>,
+        document.body
+      )}
+    </>
+  );
+}
+
 export function Urenstaat() {
   const { users, bedrijf, updateBedrijf, urenstaat, verlof, currentUser, addUren, updateUren, deleteUren } = useApp();
   const { navigeer } = useNav();
@@ -96,35 +229,46 @@ export function Urenstaat() {
   const [modus, setModus] = useState<"lijst" | "uursoorten">("lijst");
   const [filterPersoon, setFilterPersoon] = useState(() => [...users].sort((a, b) => a.naam.localeCompare(b.naam, "nl"))[0]?.id ?? ""); // standaard één medewerker; "" = iedereen
 
+  const weekDate = new Date(weekISO + "T00:00:00");
+  const weekEinde = new Date(weekDate); weekEinde.setDate(weekEinde.getDate() + 6);
+  const weekEindISO = toISO(weekEinde);
+
+  // LET OP: alle hooks staan bewust vóór de early returns hieronder. Stond een useMemo eronder,
+  // dan sloeg de "Uursoorten"-knop (die vroeg returnt) hem over en crashte React met
+  // "Rendered fewer hooks than expected" — een wit scherm i.p.v. de pagina.
+  const weekRegels = useMemo(() => urenstaat.filter((r) => r.datum >= weekISO && r.datum <= weekEindISO), [urenstaat, weekISO, weekEindISO]);
+  const rijen = useMemo(() => {
+    const naam = (id: string) => users.find((u) => u.id === id)?.naam ?? "Onbekend";
+    return weekRegels
+      .filter((r) => !filterPersoon || r.medewerkerId === filterPersoon)
+      .sort((a, b) => a.datum.localeCompare(b.datum) || (a.begin ?? "").localeCompare(b.begin ?? "") || naam(a.medewerkerId).localeCompare(naam(b.medewerkerId), "nl"));
+  }, [weekRegels, filterPersoon, users]);
+
   if (!currentUser) return null;
   const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr";
   if (!isLeiding) return <Card className="p-8 text-center text-sm text-ink-500">De urenstaat is alleen voor de boekhouding/leiding.</Card>;
   if (modus === "uursoorten") return <UursoortBeheer bedrijf={bedrijf} updateBedrijf={updateBedrijf} onKlaar={() => setModus("lijst")} />;
 
-  const weekDate = new Date(weekISO + "T00:00:00");
-  const weekEinde = new Date(weekDate); weekEinde.setDate(weekEinde.getDate() + 6);
-  const weekEindISO = toISO(weekEinde);
   const verschuif = (dagen: number) => { const d = new Date(weekDate); d.setDate(d.getDate() + dagen); setWeekISO(toISO(maandagVan(d))); };
   const dezeWeek = toISO(maandagVan(new Date())) === weekISO;
   const weekLabel = `${weekDate.toLocaleDateString("nl-NL", { day: "numeric", month: "short" })} – ${weekEinde.toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" })}`;
 
   const medewerkers = [...users].sort((a, b) => a.naam.localeCompare(b.naam, "nl"));
   const uursoorten = uursoortenVan(bedrijf);
-  const naamVan = (id: string) => users.find((u) => u.id === id)?.naam ?? "Onbekend";
-
-  // Regels van deze week (en eventueel van één medewerker), op datum en dan op begintijd.
-  const weekRegels = useMemo(() => urenstaat.filter((r) => r.datum >= weekISO && r.datum <= weekEindISO), [urenstaat, weekISO, weekEindISO]);
   const urenVanPersoon = (id: string) => weekRegels.filter((r) => r.medewerkerId === id).reduce((s, r) => s + (Number(r.uren) || 0), 0);
-  const rijen = useMemo(
-    () =>
-      weekRegels
-        .filter((r) => !filterPersoon || r.medewerkerId === filterPersoon)
-        .sort((a, b) => a.datum.localeCompare(b.datum) || (a.begin ?? "").localeCompare(b.begin ?? "") || naamVan(a.medewerkerId).localeCompare(naamVan(b.medewerkerId), "nl")),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [weekRegels, filterPersoon]
-  );
   const totaalUren = rijen.reduce((s, r) => s + (Number(r.uren) || 0), 0);
-  const totaalReis = rijen.reduce((s, r) => s + (Number(r.reis) || 0), 0);
+  const weekTotaalIedereen = weekRegels.reduce((s, r) => s + (Number(r.uren) || 0), 0);
+
+  // Overzicht: wie heb je deze week al ingevuld en wie nog niet?
+  const klaarLijst = medewerkers.filter((u) => urenVanPersoon(u.id) > 0);
+  const teDoenLijst = medewerkers.filter((u) => urenVanPersoon(u.id) === 0);
+  const pctKlaar = medewerkers.length ? Math.round((klaarLijst.length / medewerkers.length) * 100) : 0;
+  const volgendeZonderUren = () => {
+    const i = medewerkers.findIndex((u) => u.id === filterPersoon);
+    const volgorde = [...medewerkers.slice(i + 1), ...medewerkers.slice(0, Math.max(0, i + 1))];
+    const v = volgorde.find((u) => urenVanPersoon(u.id) === 0);
+    if (v) setFilterPersoon(v.id);
+  };
 
   // Tijden/pauze wijzigen → totaal automatisch herberekenen (handmatig overschrijven blijft mogelijk).
   const zet = (r: Urenregel, patch: Partial<Urenregel>) => {
@@ -142,12 +286,10 @@ export function Urenstaat() {
       datum: laatste?.datum ?? (dezeWeek ? toISO(new Date()) : weekISO),
       uursoortId: laatste?.uursoortId ?? uursoorten[0]?.id,
       projectId: laatste?.projectId,
-      objectCode: laatste?.objectCode ?? "",
-      begin: laatste?.begin ?? "07:00",
-      eind: laatste?.eind ?? "16:00",
-      pauze: laatste?.pauze ?? 30,
-      uren: berekenUren(laatste?.begin ?? "07:00", laatste?.eind ?? "16:00", laatste?.pauze ?? 30) ?? 0,
-      reis: 0,
+      begin: STANDAARD_BEGIN,
+      eind: STANDAARD_EIND,
+      pauze: STANDAARD_PAUZE,
+      uren: berekenUren(STANDAARD_BEGIN, STANDAARD_EIND, STANDAARD_PAUZE) ?? 0,
       notitie: "",
     });
   };
@@ -166,12 +308,10 @@ export function Urenstaat() {
           dag: DAGNAAM[new Date(r.datum + "T00:00:00").getDay()],
           uursoort: uursoorten.find((x) => x.id === r.uursoortId)?.label ?? "",
           project: projectNaam(r.projectId),
-          objectCode: r.objectCode ?? "",
           begin: r.begin ?? "",
           eind: r.eind ?? "",
           pauze: r.pauze ?? 0,
           uren: Number(r.uren) || 0,
-          reis: Number(r.reis) || 0,
           notitie: r.notitie ?? "",
           feestdag: feestdagNaam(r.datum) ?? "",
           verlof: verlof.find((v) => v.medewerkerId === u.id && v.status === "Goedgekeurd" && v.van <= r.datum && v.tot >= r.datum)?.type ?? "",
@@ -207,7 +347,7 @@ export function Urenstaat() {
         </div>
       </div>
 
-      {/* Week-navigatie + filter op medewerker */}
+      {/* Week-navigatie + medewerker kiezen */}
       <Card className="space-y-3 p-3">
         <div className="flex flex-wrap items-center gap-2">
           <button type="button" onClick={() => verschuif(-7)} className="inline-flex items-center gap-1 rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-50"><ChevronLeft className="h-4 w-4" /> Vorige</button>
@@ -218,26 +358,34 @@ export function Urenstaat() {
           <button type="button" onClick={() => verschuif(7)} className="inline-flex items-center gap-1 rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-50">Volgende <ChevronRight className="h-4 w-4" /></button>
           {!dezeWeek && <button type="button" onClick={() => setWeekISO(toISO(maandagVan(new Date())))} className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700">Deze week</button>}
         </div>
-        <div className="space-y-2 border-t border-ink-100 pt-3">
+
+        <div className="space-y-2.5 border-t border-ink-100 pt-3">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm font-semibold text-ink-600">Kies een medewerker:</span>
-            <span className="ml-auto text-sm font-semibold text-ink-500">
+            <span className="shrink-0 text-sm font-semibold text-ink-600">Kies een medewerker:</span>
+            <div className="w-full sm:w-80">
+              <MedewerkerKiezer medewerkers={medewerkers} waarde={filterPersoon} onKies={setFilterPersoon} urenVan={urenVanPersoon} totaalIedereen={weekTotaalIedereen} />
+            </div>
+            {teDoenLijst.length > 0 && (
+              <button type="button" onClick={volgendeZonderUren} title="Spring naar de volgende medewerker zonder uren" className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-ink-200 bg-white px-2.5 py-2 text-xs font-semibold text-ink-600 hover:bg-ink-50">
+                Volgende zonder uren <ArrowRight className="h-3.5 w-3.5" />
+              </button>
+            )}
+            <span className="ml-auto shrink-0 text-sm font-semibold text-ink-500">
               Totaal: <span className="text-ink-900">{uurTekst(totaalUren)} u</span>
-              {totaalReis > 0 && <span className="ml-2 text-ink-400">· reis {uurTekst(totaalReis)} u</span>}
             </span>
           </div>
-          {/* Klik iemand aan en vul alleen zijn uren in; "Iedereen" toont de hele week. */}
-          <div className="flex flex-wrap gap-1.5">
-            <button type="button" onClick={() => setFilterPersoon("")} className={chip(filterPersoon === "")}>Iedereen</button>
-            {medewerkers.map((u) => {
-              const n = urenVanPersoon(u.id);
-              return (
-                <button key={u.id} type="button" onClick={() => setFilterPersoon(u.id)} className={chip(filterPersoon === u.id)}>
-                  {u.naam}
-                  <span className={filterPersoon === u.id ? "text-white/70" : "text-ink-400"}>{n > 0 ? `${uurTekst(n)} u` : "—"}</span>
-                </button>
-              );
-            })}
+
+          {/* Overzicht: hoeveel medewerkers heb je al gehad, en hoeveel moeten er nog? */}
+          <div className="space-y-1.5">
+            <div className="flex flex-wrap items-center justify-between gap-x-3 text-xs">
+              <span className="font-semibold text-ink-600">{klaarLijst.length} van de {medewerkers.length} medewerkers ingevuld</span>
+              <span className={teDoenLijst.length === 0 ? "font-semibold text-green-600" : "text-ink-400"}>
+                {teDoenLijst.length === 0 ? "iedereen is klaar" : `${teDoenLijst.length} nog te doen`}
+              </span>
+            </div>
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-ink-100">
+              <div className="h-full rounded-full bg-green-500 transition-all" style={{ width: `${pctKlaar}%` }} />
+            </div>
           </div>
         </div>
       </Card>
@@ -254,19 +402,17 @@ export function Urenstaat() {
           <p className="px-5 py-10 text-center text-sm text-ink-400">Nog geen uren in week {weekNr(weekDate)}. Voeg hieronder een regel toe.</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1320px] border-collapse text-sm">
+            <table className="w-full min-w-[1080px] border-collapse text-sm">
               <thead>
                 <tr className="border-b border-ink-100 bg-ink-50/40 text-xs font-semibold text-ink-500">
                   <th className="px-3 py-2.5 text-left">Medewerker</th>
                   <th className="px-3 py-2.5 text-left">Uursoort</th>
                   <th className="px-3 py-2.5 text-left">Project</th>
-                  <th className="px-3 py-2.5 text-left">Object code</th>
                   <th className="px-3 py-2.5 text-left">Datum</th>
                   <th className="px-3 py-2.5 text-left">Begintijd</th>
                   <th className="px-3 py-2.5 text-left">Eindtijd</th>
                   <th className="px-3 py-2.5 text-left">Pauze</th>
                   <th className="px-3 py-2.5 text-left">Totaal</th>
-                  <th className="px-3 py-2.5 text-left">Reis</th>
                   <th className="px-3 py-2.5 text-left">Opmerking</th>
                   <th className="px-2 py-2.5"><span className="sr-only">Acties</span></th>
                 </tr>
@@ -277,29 +423,26 @@ export function Urenstaat() {
                   const vrij = verlof.find((v) => v.medewerkerId === r.medewerkerId && v.status === "Goedgekeurd" && v.van <= r.datum && v.tot >= r.datum);
                   return (
                     <tr key={r.id} className={`align-top hover:bg-ink-50/40 ${fd || vrij ? "bg-amber-50/40" : ""}`}>
-                      <td className="px-3 py-2 w-44">
-                        <Keuze value={r.medewerkerId} onChange={(w) => zet(r, { medewerkerId: w })} altijdZoeken size="sm" opties={medewerkers.map((u) => ({ waarde: u.id, label: u.naam }))} title="Medewerker" />
+                      <td className="w-48 px-3 py-2">
+                        <Keuze value={r.medewerkerId} onChange={(w) => zet(r, { medewerkerId: w })} altijdZoeken size="rij" opties={medewerkers.map((u) => ({ waarde: u.id, label: u.naam }))} title="Medewerker" />
                       </td>
-                      <td className="px-3 py-2 w-52">
-                        <Keuze value={r.uursoortId ?? ""} onChange={(w) => zet(r, { uursoortId: w || undefined })} altijdZoeken size="sm" opties={[{ waarde: "", label: "—" }, ...uursoorten.map((u) => ({ waarde: u.id, label: uursoortLabel(u) }))]} title="Uursoort" />
+                      <td className="w-52 px-3 py-2">
+                        <Keuze value={r.uursoortId ?? ""} onChange={(w) => zet(r, { uursoortId: w || undefined })} altijdZoeken size="rij" opties={[{ waarde: "", label: "—" }, ...uursoorten.map((u) => ({ waarde: u.id, label: uursoortLabel(u) }))]} title="Uursoort" />
                       </td>
-                      <td className="px-3 py-2 w-44">
-                        <Keuze value={r.projectId ?? ""} onChange={(w) => zet(r, { projectId: w || undefined })} altijdZoeken size="sm" opties={[{ waarde: "", label: "Algemeen" }, ...WERK_CATEGORIEEN.map((c) => ({ waarde: c.id, label: c.naam }))]} title="Project / onderdeel" />
+                      <td className="w-44 px-3 py-2">
+                        <Keuze value={r.projectId ?? ""} onChange={(w) => zet(r, { projectId: w || undefined })} altijdZoeken size="rij" opties={[{ waarde: "", label: "Algemeen" }, ...WERK_CATEGORIEEN.map((c) => ({ waarde: c.id, label: c.naam }))]} title="Project / onderdeel" />
                       </td>
-                      <td className="px-3 py-2 w-36">
-                        <input value={r.objectCode ?? ""} onChange={(e) => zet(r, { objectCode: e.target.value })} placeholder="Begin met typen…" className={veld} />
-                      </td>
-                      <td className="px-3 py-2 w-40">
-                        <DatumKiezer value={r.datum} onChange={(iso) => zet(r, { datum: iso })} />
+                      <td className="w-40 px-3 py-2">
+                        <DatumKiezer value={r.datum} onChange={(iso) => zet(r, { datum: iso })} compact />
                         <span className="mt-0.5 block text-[11px] text-ink-400">{DAGNAAM[new Date(r.datum + "T00:00:00").getDay()]}{fd ? ` · ${fd}` : ""}{vrij ? ` · ${vrij.type}` : ""}</span>
                       </td>
-                      <td className="px-3 py-2 w-28"><input type="time" value={r.begin ?? ""} onChange={(e) => zet(r, { begin: e.target.value })} className={veld} /></td>
-                      <td className="px-3 py-2 w-28"><input type="time" value={r.eind ?? ""} onChange={(e) => zet(r, { eind: e.target.value })} className={veld} /></td>
-                      <td className="px-3 py-2 w-24">
+                      <td className="w-28 px-3 py-2"><TijdKiezer value={r.begin ?? ""} onChange={(t) => zet(r, { begin: t })} size="rij" placeholder="--:--" title="Begintijd" /></td>
+                      <td className="w-28 px-3 py-2"><TijdKiezer value={r.eind ?? ""} onChange={(t) => zet(r, { eind: t })} size="rij" placeholder="--:--" title="Eindtijd" /></td>
+                      <td className="w-24 px-3 py-2">
                         <input inputMode="numeric" value={r.pauze ?? 0} onChange={(e) => { const n = parseInt(e.target.value.replace(/\D/g, ""), 10); zet(r, { pauze: Number.isFinite(n) ? n : 0 }); }} aria-label="Pauze in minuten" className={veld} />
                         <span className="mt-0.5 block text-[11px] text-ink-400">min</span>
                       </td>
-                      <td className="px-3 py-2 w-24">
+                      <td className="w-24 px-3 py-2">
                         <input
                           inputMode="decimal"
                           value={uurTekst(Number(r.uren) || 0)}
@@ -309,10 +452,7 @@ export function Urenstaat() {
                         />
                         <span className="mt-0.5 block text-[11px] text-ink-400">{klok(Number(r.uren) || 0)}</span>
                       </td>
-                      <td className="px-3 py-2 w-20">
-                        <input inputMode="decimal" value={r.reis ? uurTekst(r.reis) : ""} onChange={(e) => { const n = parseFloat(e.target.value.replace(",", ".")); zet(r, { reis: Number.isFinite(n) && n >= 0 ? n : 0 }); }} placeholder="0" aria-label="Reisuren" className={veld} />
-                      </td>
-                      <td className="px-3 py-2 min-w-[12rem]">
+                      <td className="min-w-[12rem] px-3 py-2">
                         <input value={r.notitie ?? ""} onChange={(e) => zet(r, { notitie: e.target.value })} placeholder="Opmerking…" className={veld} />
                       </td>
                       <td className="px-2 py-2">
@@ -327,9 +467,8 @@ export function Urenstaat() {
               </tbody>
               <tfoot>
                 <tr className="border-t border-ink-200 bg-ink-50/60 text-sm">
-                  <td className="px-3 py-2.5 font-bold text-ink-900" colSpan={8}>Totaal week {weekNr(weekDate)}</td>
+                  <td className="px-3 py-2.5 font-bold text-ink-900" colSpan={7}>Totaal week {weekNr(weekDate)}</td>
                   <td className="px-3 py-2.5 font-bold text-ink-900">{uurTekst(totaalUren)} u</td>
-                  <td className="px-3 py-2.5 font-semibold text-ink-600">{totaalReis ? `${uurTekst(totaalReis)} u` : "—"}</td>
                   <td colSpan={2} />
                 </tr>
               </tfoot>
@@ -339,7 +478,7 @@ export function Urenstaat() {
 
         <div className="flex flex-wrap items-center gap-3 border-t border-ink-100 px-5 py-3">
           <button type="button" onClick={nieuweRegel} className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-bold text-white hover:bg-brand-700"><Plus className="h-4 w-4" /> Toevoegen</button>
-          <span className="text-xs text-ink-400">Wijzigingen worden meteen opgeslagen en gedeeld met het team.</span>
+          <span className="text-xs text-ink-400">Nieuwe regel staat standaard op {STANDAARD_BEGIN}–{STANDAARD_EIND} met {STANDAARD_PAUZE} min pauze; alles blijft aanpasbaar. Wijzigingen worden meteen opgeslagen en gedeeld met het team.</span>
         </div>
       </Card>
 

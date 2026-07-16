@@ -409,12 +409,10 @@ export type Urenregel = {
   medewerkerId: string;
   datum: string;        // ISO-dag (yyyy-mm-dd)
   uursoortId?: string;  // uit de zelf beheerde lijst (zie Bedrijf.uursoorten)
-  objectCode?: string;  // vrij in te vullen (bijv. een Stedin-objectcode)
-  begin?: string;       // "06:30" — leeg bij oude, omgezette regels
-  eind?: string;        // "15:00"
+  begin?: string;       // "09:00" — leeg bij oude, omgezette regels
+  eind?: string;        // "17:30"
   pauze?: number;       // minuten
   uren: number;         // totaal gewerkte uren (uit begin/eind/pauze, of handmatig)
-  reis?: number;        // reisuren
   projectId?: string;   // onderdeel (Brieven & Routes, Voorschouwen, …); leeg = algemeen
   notitie?: string;     // "Opmerking"
 };

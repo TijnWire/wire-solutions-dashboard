@@ -16,8 +16,6 @@ import {
   Search,
   Check,
   ChevronDown,
-  ChevronLeft,
-  ChevronRight,
   ArrowUp,
   ArrowDown,
   AlertTriangle,
@@ -25,7 +23,6 @@ import {
   Send,
   CheckCircle2,
   ArrowLeft,
-  Calendar,
   User,
 } from "lucide-react";
 import { useApp } from "../store/AppContext";
@@ -39,33 +36,6 @@ import {
   verstuurVoorschouwenNaarStedin,
 } from "../lib/voorschouwPdf";
 import type { Voorschouw, VoorschouwMap } from "../lib/types";
-
-// Maandag (weekstart) van een datum — voor de "Per week"-navigator.
-function vsWeekStart(iso: string): string {
-  const d = new Date((iso || "").slice(0, 10) + "T00:00:00");
-  if (isNaN(d.getTime())) return "";
-  const dag = (d.getDay() + 6) % 7; // maandag = 0
-  d.setDate(d.getDate() - dag);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-// ISO-weeknummer + datumbereik voor de week-navigator (maandag → zondag).
-function vsWeekNr(maandagISO: string): number {
-  const [j, m, d] = maandagISO.split("-").map(Number);
-  if (!j) return 0;
-  const t = new Date(Date.UTC(j, m - 1, d));
-  const dag = (t.getUTCDay() + 6) % 7;
-  t.setUTCDate(t.getUTCDate() - dag + 3); // donderdag van deze week
-  const eersteDo = new Date(Date.UTC(t.getUTCFullYear(), 0, 4));
-  const ed = (eersteDo.getUTCDay() + 6) % 7;
-  eersteDo.setUTCDate(eersteDo.getUTCDate() - ed + 3);
-  return 1 + Math.round((t.getTime() - eersteDo.getTime()) / (7 * 24 * 3600 * 1000));
-}
-function vsWeekBereik(maandagISO: string): string {
-  const ma = new Date(maandagISO + "T00:00:00");
-  if (isNaN(ma.getTime())) return "";
-  const zo = new Date(ma); zo.setDate(zo.getDate() + 6);
-  return `${ma.toLocaleDateString("nl-NL", { day: "numeric", month: "short" })} – ${zo.toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" })}`;
-}
 
 // "Open" = nog geen foto toegevoegd (deze vragen nog aandacht).
 const vsZonderFoto = (v: Voorschouw) => !v.fotos || v.fotos.length === 0;
@@ -287,17 +257,14 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
     } catch { return "open"; }
   });
   const [teVerwijderenMap, setTeVerwijderenMap] = useState<{ id: string; naam: string; aantal: number } | null>(null);
-  const [tab, setTab] = useState<"overzicht" | "stedin">("overzicht");
+  const [tab, setTab] = useState<"overzicht" | "stedin" | "archief">("overzicht");
   const [alleenOpen, setAlleenOpen] = useState(false); // alleen adressen zónder foto tonen
-  const [perWeek, setPerWeek] = useState(false); // week-navigator (één week tegelijk) i.p.v. alles op gebied
-  const [weekISO, setWeekISO] = useState(() => vsWeekStart(new Date().toISOString())); // maandag van de gekozen week
   const [teVersturenMap, setTeVersturenMap] = useState<VoorschouwMap | null>(null); // bevestiging vóór versturen
   const [mapDetailId, setMapDetailId] = useState<string | null>(initieelMap ?? null); // geopende map-detailpagina (ook via "Mijn werk")
   const [naamZoek, setNaamZoek] = useState(""); // zoekterm voor het toewijzen-op-naam-veld
   const [naamBewerk, setNaamBewerk] = useState(false); // mapnaam in bewerk-modus (alleen via het potlood)
   const [vraagToewijzingWeg, setVraagToewijzingWeg] = useState(false); // bevestiging vóór toewijzing verwijderen
   const [vraagArchief, setVraagArchief] = useState(false); // bevestiging vóór mappen archiveren
-  const [archiefOpen, setArchiefOpen] = useState(false);
   const [mapSelectie, setMapSelectie] = useState<Set<string>>(new Set()); // geselecteerde mappen (ook lege)
   useEffect(() => { try { localStorage.setItem("vs-mapSort", sorteerModus); } catch { /* opslag niet beschikbaar */ } }, [sorteerModus]);
   // Kwam je via "Mijn werk" recht op jóuw map? Die staat al open; scroll er meteen naartoe.
@@ -513,10 +480,6 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
   // een adres matcht (dan alleen die adressen in de body). Puur cosmetisch — raakt de bulk-selectie niet.
   const q = mapZoek.trim().toLowerCase();
   const itemMatch = (v: Voorschouw) => `${v.straatnaam} ${v.postcode} ${v.plaats}`.toLowerCase().includes(q);
-  const weekVanGroep = (g: { items: Voorschouw[] }) => {
-    const ds = g.items.map((v) => v.aangemaakt).filter(Boolean).sort();
-    return ds.length ? vsWeekStart(ds[ds.length - 1]) : "";
-  };
   const weergave = groepen
     .map((g) => {
       const naamMatch = q === "" || (g.map?.naam ?? "zonder map").toLowerCase().includes(q);
@@ -526,13 +489,7 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
       return { map: g.map, items: g.items, body, toon: zoekOk && (!alleenOpen || body.length > 0) };
     })
     .filter((g) => g.toon);
-  // Per week: alleen de mappen van de gekozen week (mappen zonder datum tonen we in de huidige week).
-  const huidigeWeekISO = vsWeekStart(new Date().toISOString());
-  const weergaveGetoond = perWeek
-    ? weergave.filter((g) => { const wk = weekVanGroep(g); return wk ? wk === weekISO : weekISO === huidigeWeekISO; })
-    : weergave;
-  const verschuifWeek = (dagen: number) => { const d = new Date(weekISO + "T00:00:00"); d.setDate(d.getDate() + dagen); setWeekISO(vsWeekStart(d.toISOString())); };
-  const eigenModus = !perWeek && sorteerModus === "eigen" && q === ""; // herordenen alleen in de gebied-weergave
+  const eigenModus = sorteerModus === "eigen" && q === ""; // herordenen kan alleen in je eigen volgorde
 
   // Eén adres-rij (in de lijst, binnen een map-groep).
   const rij = (v: Voorschouw) => {
@@ -582,6 +539,47 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
       </Card>
     );
   };
+
+  // ── Archiefpagina: afgeronde mappen blijven hier bewaard en zijn altijd terug te zetten ──
+  if (tab === "archief" && isLeiding) {
+    return (
+      <div key="archief" className="space-y-6 animate-slide-in-right">
+        <button type="button" onClick={() => setTab("overzicht")} className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-500 hover:text-ink-800"><ArrowLeft className="h-4 w-4" /> Terug naar overzicht</button>
+        <div>
+          <h2 className="text-xl font-bold text-ink-900">Archief</h2>
+          <p className="text-sm text-ink-500">Mappen die je hebt afgerond of gearchiveerd. Ze staan niet meer in het overzicht, maar blijven bewaard — zet ze met één klik terug.</p>
+        </div>
+
+        {gearchiveerdeMappen.length === 0 ? (
+          <Card className="p-10 text-center">
+            <FolderArchive className="mx-auto h-10 w-10 text-ink-300" />
+            <p className="mt-3 text-sm text-ink-500">Nog niets gearchiveerd. Selecteer in het overzicht een map en kies <span className="font-semibold">"Archiveren"</span>.</p>
+          </Card>
+        ) : (
+          <div className="space-y-2">
+            {gearchiveerdeMappen.map((m) => {
+              const n = voorschouwen.filter((v) => v.mapId === m.id).length;
+              return (
+                <Card key={m.id} className="flex flex-wrap items-center gap-3 p-4">
+                  <div className="rounded-lg bg-ink-100 p-2.5 text-ink-500"><FolderArchive className="h-5 w-5" /></div>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-semibold text-ink-900">{m.naam}</div>
+                    <div className="truncate text-xs text-ink-500">
+                      {n} {n === 1 ? "adres" : "adressen"}
+                      {m.gearchiveerdOp ? ` · gearchiveerd op ${new Date(m.gearchiveerdOp).toLocaleDateString("nl-NL", { day: "numeric", month: "long", year: "numeric" })}` : ""}
+                    </div>
+                  </div>
+                  <button type="button" onClick={() => terugUitArchief(m)} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-ink-200 bg-white px-3 py-2 text-xs font-semibold text-ink-700 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700">
+                    <ArrowLeft className="h-3.5 w-3.5" /> Terugzetten
+                  </button>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   // ── Controle-/verstuurpagina "Klaar voor Stedin" ──
   if (tab === "stedin" && isLeiding) {
@@ -791,6 +789,7 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
         <div className="flex gap-1 rounded-xl border border-ink-200 bg-white p-1 shadow-card">
           <button type="button" onClick={() => setTab("overzicht")} className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${tab === "overzicht" ? "bg-brand-600 text-white" : "text-ink-600 hover:bg-ink-50"}`}>Overzicht</button>
           <button type="button" onClick={() => setTab("stedin")} className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${tab === "stedin" ? "bg-brand-600 text-white" : "text-ink-600 hover:bg-ink-50"}`}>Klaar voor Stedin{gereedeMappen.length ? ` (${gereedeMappen.length})` : ""}</button>
+          <button type="button" onClick={() => setTab("archief")} className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${tab === "archief" ? "bg-brand-600 text-white" : "text-ink-600 hover:bg-ink-50"}`}>Archief{gearchiveerdeMappen.length ? ` (${gearchiveerdeMappen.length})` : ""}</button>
         </div>
       )}
 
@@ -916,30 +915,13 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
             </button>
           </div>
 
-          {/* Filters: alles vs alleen open (zonder foto) + gebied vs per week */}
+          {/* Filter: alles vs alleen open (zonder foto). Mappen staan altijd op gebied gegroepeerd. */}
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex gap-1 rounded-lg border border-ink-200 bg-white p-0.5">
               <button type="button" onClick={() => setAlleenOpen(false)} className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${!alleenOpen ? "bg-brand-600 text-white" : "text-ink-600 hover:bg-ink-50"}`}>Alles</button>
               <button type="button" onClick={() => setAlleenOpen(true)} className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${alleenOpen ? "bg-amber-500 text-white" : "text-ink-600 hover:bg-ink-50"}`}><ImageOff className="h-3.5 w-3.5" /> Alleen open (zonder foto)</button>
             </div>
-            <div className="flex gap-1 rounded-lg border border-ink-200 bg-white p-0.5">
-              <button type="button" onClick={() => setPerWeek(false)} className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${!perWeek ? "bg-brand-600 text-white" : "text-ink-600 hover:bg-ink-50"}`}>Op gebied</button>
-              <button type="button" onClick={() => setPerWeek(true)} className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${perWeek ? "bg-brand-600 text-white" : "text-ink-600 hover:bg-ink-50"}`}><Calendar className="h-3.5 w-3.5" /> Per week</button>
-            </div>
           </div>
-
-          {/* Week-navigator — alleen in de "Per week"-weergave: stap per week door je werk */}
-          {perWeek && (
-            <div className="flex flex-wrap items-center gap-2 rounded-xl border border-ink-200 bg-white p-2 shadow-card">
-              <button type="button" onClick={() => verschuifWeek(-7)} className="inline-flex items-center gap-1 rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-50"><ChevronLeft className="h-4 w-4" /> Vorige</button>
-              <div className="flex min-w-0 flex-1 items-center justify-center gap-1.5 px-2 text-center">
-                <Calendar className="h-4 w-4 shrink-0 text-ink-400" />
-                <span className="text-sm font-bold text-ink-900">Week {vsWeekNr(weekISO)} · {vsWeekBereik(weekISO)}</span>
-              </div>
-              <button type="button" onClick={() => verschuifWeek(7)} className="inline-flex items-center gap-1 rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-50">Volgende <ChevronRight className="h-4 w-4" /></button>
-              {weekISO !== huidigeWeekISO && <button type="button" onClick={() => setWeekISO(huidigeWeekISO)} className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700">Deze week</button>}
-            </div>
-          )}
 
           {/* Mappen zoeken/filteren + sorteren — zichtbaar voor iedereen */}
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -980,12 +962,7 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
               <p className="mt-2 text-sm text-ink-500">Geen mappen of adressen gevonden voor “{mapZoek.trim()}”.</p>
               <button type="button" onClick={() => setMapZoek("")} className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-ink-200 bg-white px-3 py-1.5 text-xs font-semibold text-ink-700 hover:bg-ink-50"><X className="h-3.5 w-3.5" /> Zoekopdracht wissen</button>
             </Card>
-          ) : perWeek && weergaveGetoond.length === 0 ? (
-            <Card className="p-8 text-center">
-              <Calendar className="mx-auto h-8 w-8 text-ink-300" />
-              <p className="mt-2 text-sm text-ink-500">Geen mappen in deze week.</p>
-            </Card>
-          ) : weergaveGetoond.map((g) => {
+          ) : weergave.map((g) => {
             const key = g.map?.id ?? "zonder";
             const uitgeklapt = q !== "" ? true : openMappen.has(key);
             const idx = g.map ? eigenVolgordeIds.indexOf(g.map.id) : -1;
@@ -1080,38 +1057,6 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
         />
       )}
 
-
-      {/* Archief: afgeronde mappen blijven bewaard en zijn terug te zetten */}
-      {isLeiding && gearchiveerdeMappen.length > 0 && (
-        <div className="pt-1">
-          <button type="button" onClick={() => setArchiefOpen((o) => !o)} className="flex w-full items-center gap-2 rounded-xl border border-ink-200 bg-white px-4 py-3 text-sm font-semibold text-ink-700 shadow-card hover:bg-ink-50">
-            <FolderArchive className="h-4 w-4 text-ink-500" />
-            Archief — afgeronde mappen
-            <span className="rounded-full bg-ink-200 px-2 py-0.5 text-xs font-bold text-ink-600">{gearchiveerdeMappen.length}</span>
-            <ChevronRight className={`ml-auto h-4 w-4 text-ink-400 transition-transform ${archiefOpen ? "rotate-90" : ""}`} />
-          </button>
-          {archiefOpen && (
-            <div className="mt-3 space-y-2">
-              {gearchiveerdeMappen.map((m) => {
-                const n = voorschouwen.filter((v) => v.mapId === m.id).length;
-                return (
-                  <Card key={m.id} className="flex flex-wrap items-center gap-3 p-3">
-                    <FolderArchive className="h-4 w-4 shrink-0 text-ink-400" />
-                    <span className="text-sm font-semibold text-ink-800">{m.naam}</span>
-                    <span className="text-xs text-ink-500">
-                      {n} {n === 1 ? "adres" : "adressen"}
-                      {m.gearchiveerdOp ? ` · gearchiveerd ${new Date(m.gearchiveerdOp).toLocaleDateString("nl-NL")}` : ""}
-                    </span>
-                    <button type="button" onClick={() => terugUitArchief(m)} className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-3 py-1.5 text-xs font-semibold text-ink-700 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700">
-                      <ArrowLeft className="h-3.5 w-3.5" /> Terugzetten
-                    </button>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
 
       <Bevestig
         open={vraagArchief}

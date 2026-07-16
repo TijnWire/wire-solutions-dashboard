@@ -15,7 +15,7 @@ export function Keuze({ value, onChange, opties, placeholder = "Kies…", disabl
   disabled?: boolean;
   className?: string;
   title?: string;
-  size?: "sm" | "md";
+  size?: "sm" | "md" | "rij"; // "rij" = exact even hoog als de invoervelden in een tabelrij (34px)
   altijdZoeken?: boolean; // toon het zoekveld ook bij een kortere lijst (handig voor projecten/klanten)
 }) {
   const [open, setOpen] = useState(false);
@@ -64,7 +64,7 @@ export function Keuze({ value, onChange, opties, placeholder = "Kies…", disabl
   const gefilterd = zoekbaar && zoek.trim()
     ? opties.filter((o) => o.label.toLowerCase().includes(zoek.trim().toLowerCase()))
     : opties;
-  const maat = size === "sm" ? "px-2 py-1 text-xs" : "px-3 py-2 text-sm";
+  const maat = size === "sm" ? "px-2 py-1 text-xs" : size === "rij" ? "px-2.5 py-1.5 text-sm" : "px-3 py-2 text-sm";
   const basis = `flex w-full items-center justify-between gap-1.5 rounded-lg border border-ink-200 bg-white ${maat} text-ink-800 outline-none transition-colors hover:border-ink-300 focus:border-brand-400 focus:ring-2 focus:ring-brand-100 disabled:cursor-not-allowed disabled:bg-ink-50 disabled:text-ink-400`;
 
   return (
