@@ -16,6 +16,7 @@ import {
   Search,
   Check,
   ChevronDown,
+  ChevronRight,
   ArrowUp,
   ArrowDown,
   AlertTriangle,
@@ -245,8 +246,7 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
   const [voorinvulIds, setVoorinvulIds] = useState<string[]>([]);
   // Voorstel na het aanmaken van een map: adressen waarvan de plaats bij de mapnaam past.
   const [mapVoorstel, setMapVoorstel] = useState<{ mapId: string; naam: string; ids: string[] } | null>(null);
-  const [openMappen, setOpenMappen] = useState<Set<string>>(() => new Set(initieelMap ? [initieelMap] : [])); // standaard dicht; een map die je via "Mijn werk" opent, staat meteen open
-  const [bewerkMapId, setBewerkMapId] = useState<string | null>(null);
+  const [openMappen, setOpenMappen] = useState<Set<string>>(new Set()); // alleen nog voor "Zonder map"; echte mappen openen op een eigen pagina
   const [mapNaamConcept, setMapNaamConcept] = useState("");
   // Mappen zoeken/filteren + sorteren (sorteervoorkeur lokaal per apparaat, NIET in de gesyncte store).
   const [mapZoek, setMapZoek] = useState("");
@@ -343,10 +343,8 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
     const passend = voorschouwen.filter((v) => !gekozen.has(v.id) && v.mapId !== id && mapPastBijPlaats(naam, v.plaats || ""));
     if (passend.length) setMapVoorstel({ mapId: id, naam, ids: passend.map((v) => v.id) });
   };
-  const slaMapNaamOp = () => {
-    if (bewerkMapId && mapNaamConcept.trim()) updateVoorschouwMap(bewerkMapId, { naam: mapNaamConcept.trim() });
-    setBewerkMapId(null);
-  };
+  // Map openen: de hele map krijgt een eigen pagina (naam, toewijzen, adressen).
+  const openMapDetail = (m: VoorschouwMap) => { setMapDetailId(m.id); setMapNaamConcept(m.naam); };
   const verwijderMap = (id: string, naam: string, aantal: number) => setTeVerwijderenMap({ id, naam, aantal });
   const bevestigVerwijderMap = () => {
     if (teVerwijderenMap) deleteVoorschouwMap(teVerwijderenMap.id);
@@ -729,26 +727,16 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
           </Card>
         )}
 
-        {/* Adressen in deze map — klik op een adres om het te openen/bewerken */}
-        <Card className="p-4">
+        {/* Adressen in deze map — dezelfde volledige rijen als in het overzicht (PDF, map wisselen,
+            bewerken, verwijderen), zodat je hier alles kunt wat je in de uitklap ook kon. */}
+        <div>
           <h3 className="mb-2 text-sm font-bold text-ink-900">Adressen in deze map ({items.length})</h3>
           {items.length === 0 ? (
-            <p className="text-sm text-ink-500">Nog geen adressen. Klik op <b>Nieuwe voorschouw in deze map</b> om te beginnen.</p>
+            <Card className="p-4"><p className="text-sm text-ink-500">Nog geen adressen. Klik op <b>Nieuwe voorschouw in deze map</b> om te beginnen.</p></Card>
           ) : (
-            <div className="space-y-1.5">
-              {items.map((v) => (
-                <button key={v.id} type="button" onClick={() => open(v)} title="Openen / bewerken" className="flex w-full items-center gap-2 rounded-lg bg-ink-50/60 px-3 py-2 text-left text-sm hover:bg-ink-100">
-                  <MapPin className="h-4 w-4 shrink-0 text-ink-400" />
-                  <span className="min-w-0 flex-1 truncate text-ink-800">{v.straatnaam || "Onbekend"}{v.postcode || v.plaats ? `, ${[v.postcode, v.plaats].filter(Boolean).join(" ")}` : ""}</span>
-                  {vsZonderFoto(v)
-                    ? <span className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-amber-600"><ImageOff className="h-3.5 w-3.5" /> geen foto</span>
-                    : <span className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-green-600"><CheckCircle2 className="h-3.5 w-3.5" /> {v.fotos.length}</span>}
-                  <Pencil className="h-3.5 w-3.5 shrink-0 text-ink-300" />
-                </button>
-              ))}
-            </div>
+            <div className="space-y-3">{items.map(rij)}</div>
           )}
-        </Card>
+        </div>
 
         <Bevestig
           open={vraagToewijzingWeg}
@@ -964,7 +952,9 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
             </Card>
           ) : weergave.map((g) => {
             const key = g.map?.id ?? "zonder";
-            const uitgeklapt = q !== "" ? true : openMappen.has(key);
+            // Mappen klappen niet meer uit — die openen op een eigen pagina. Alleen "Zonder map" klapt nog
+            // uit, en tijdens het zoeken tonen we de gevonden adressen wél meteen onder de map.
+            const uitgeklapt = q !== "" || (!g.map && openMappen.has(key));
             const idx = g.map ? eigenVolgordeIds.indexOf(g.map.id) : -1;
             const zonderFoto = g.items.filter((v) => !v.fotos || v.fotos.length === 0).length;
             return (
@@ -979,28 +969,14 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
                     aria-label={`Map ${g.map ? g.map.naam : "zonder map"} selecteren`}
                     className="h-5 w-5 shrink-0 accent-brand-600 disabled:opacity-40"
                   />
-                  {g.map && bewerkMapId === g.map.id ? (
+                  {(
                     <>
-                      <Folder className="h-4 w-4 shrink-0 text-brand-600" />
-                      <input
-                        autoFocus
-                        value={mapNaamConcept}
-                        onChange={(e) => setMapNaamConcept(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") { e.preventDefault(); slaMapNaamOp(); }
-                          else if (e.key === "Escape") { e.preventDefault(); setBewerkMapId(null); }
-                        }}
-                        onBlur={slaMapNaamOp}
-                        aria-label="Mapnaam"
-                        className="min-w-0 flex-1 rounded-lg border border-brand-300 px-2.5 py-1.5 text-sm font-bold text-ink-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
-                      />
-                      <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={slaMapNaamOp} title="Opslaan" aria-label="Naam opslaan" className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700"><Check className="h-3.5 w-3.5" /> Opslaan</button>
-                      <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => setBewerkMapId(null)} title="Annuleren" aria-label="Annuleren" className="rounded-lg px-2 py-1.5 text-xs font-medium text-ink-500 hover:bg-ink-100 hover:text-ink-800">Annuleer</button>
-                    </>
-                  ) : (
-                    <>
-                      <button type="button" onClick={() => toggleMap(key)} className="flex min-w-0 flex-1 items-center gap-3 text-left" aria-expanded={uitgeklapt}>
-                        <ChevronDown className={`h-5 w-5 shrink-0 text-ink-400 transition-transform ${uitgeklapt ? "" : "-rotate-90"}`} />
+                      {/* Hele rij is de knop: een map opent op een eigen pagina; "Zonder map" heeft geen
+                          eigen pagina en klapt daarom nog wél uit. */}
+                      <button type="button" onClick={() => (g.map ? openMapDetail(g.map) : toggleMap(key))} title={g.map ? "Map openen" : "Uit-/inklappen"} className="flex min-w-0 flex-1 items-center gap-3 text-left" aria-expanded={g.map ? undefined : uitgeklapt}>
+                        {g.map
+                          ? <ChevronRight className="h-5 w-5 shrink-0 text-ink-400" />
+                          : <ChevronDown className={`h-5 w-5 shrink-0 text-ink-400 transition-transform ${uitgeklapt ? "" : "-rotate-90"}`} />}
                         <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${g.map ? "bg-brand-50 text-brand-600" : "bg-ink-100 text-ink-400"}`}><Folder className="h-5 w-5" /></span>
                         <span className="truncate text-base font-bold text-ink-900">{g.map ? g.map.naam : "Zonder map"}</span>
                         <span className="shrink-0 rounded-full bg-ink-100 px-2.5 py-0.5 text-xs font-medium text-ink-500">{q !== "" && g.body.length !== g.items.length ? `${g.body.length} van ${g.items.length}` : g.items.length}</span>
@@ -1020,7 +996,6 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
                                 <button type="button" onClick={() => verplaatsMap(g.map!.id, "omlaag")} disabled={idx < 0 || idx >= eigenVolgordeIds.length - 1} title="Map omlaag" aria-label="Map omlaag verplaatsen" className="shrink-0 rounded-lg p-2 text-ink-400 hover:bg-ink-100 hover:text-ink-700 disabled:cursor-not-allowed disabled:opacity-30"><ArrowDown className="h-4 w-4" /></button>
                               </>
                             )}
-                            <button type="button" onClick={() => { setMapDetailId(g.map!.id); setMapNaamConcept(g.map!.naam); }} title="Map openen (naam + toewijzen)" aria-label="Map openen" className="shrink-0 rounded-lg p-2 text-ink-400 hover:bg-ink-100 hover:text-brand-600"><Pencil className="h-4 w-4" /></button>
                             <button type="button" onClick={() => verwijderMap(g.map!.id, g.map!.naam, g.items.length)} title="Map verwijderen" aria-label="Map verwijderen" className="shrink-0 rounded-lg p-2 text-red-400 hover:bg-red-50 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
                           </>
                         )}
