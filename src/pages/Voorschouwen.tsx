@@ -283,10 +283,10 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
   const [mapNaamConcept, setMapNaamConcept] = useState("");
   // Mappen zoeken/filteren + sorteren (sorteervoorkeur lokaal per apparaat, NIET in de gesyncte store).
   const [mapZoek, setMapZoek] = useState("");
-  const [sorteerModus, setSorteerModus] = useState<"eigen" | "naam" | "naamOmgekeerd" | "aantal" | "nieuw" | "open">(() => {
+  const [sorteerModus, setSorteerModus] = useState<"eigen" | "naam" | "naamOmgekeerd" | "aantal" | "nieuw" | "oudst" | "open">(() => {
     try {
       const v = localStorage.getItem("vs-mapSort");
-      return v === "eigen" || v === "naam" || v === "naamOmgekeerd" || v === "aantal" || v === "nieuw" || v === "open" ? v : "open";
+      return v === "eigen" || v === "naam" || v === "naamOmgekeerd" || v === "aantal" || v === "nieuw" || v === "oudst" || v === "open" ? v : "open";
     } catch { return "open"; }
   });
   const [teVerwijderenMap, setTeVerwijderenMap] = useState<{ id: string; naam: string; aantal: number } | null>(null);
@@ -299,6 +299,8 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
   const [naamZoek, setNaamZoek] = useState(""); // zoekterm voor het toewijzen-op-naam-veld
   const [naamBewerk, setNaamBewerk] = useState(false); // mapnaam in bewerk-modus (alleen via het potlood)
   const [vraagToewijzingWeg, setVraagToewijzingWeg] = useState(false); // bevestiging vóór toewijzing verwijderen
+  const [vraagArchief, setVraagArchief] = useState(false); // bevestiging vóór mappen archiveren
+  const [archiefOpen, setArchiefOpen] = useState(false);
   useEffect(() => { try { localStorage.setItem("vs-mapSort", sorteerModus); } catch { /* opslag niet beschikbaar */ } }, [sorteerModus]);
   // Kwam je via "Mijn werk" recht op jóuw map? Die staat al open; scroll er meteen naartoe.
   useEffect(() => {
@@ -454,6 +456,16 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
     setTab("stedin");
   };
   const terugUitStedin = (m: VoorschouwMap) => updateVoorschouwMap(m.id, { gereedVoorStedin: false, gereedOp: undefined });
+  // ── Archief: mappen die klaar zijn uit het overzicht halen, maar wél bewaren ──
+  const gearchiveerdeMappen = [...voorschouwMappen.filter((m) => m.gearchiveerd)].sort((a, b) => (b.gearchiveerdOp ?? "").localeCompare(a.gearchiveerdOp ?? ""));
+  const archiveerSelectie = () => {
+    const mapIds = new Set(geselecteerd().map((v) => v.mapId).filter((x): x is string => !!x));
+    const nu = new Date().toISOString();
+    mapIds.forEach((id) => updateVoorschouwMap(id, { gearchiveerd: true, gearchiveerdOp: nu, gereedVoorStedin: false }));
+    wis();
+    setVraagArchief(false);
+  };
+  const terugUitArchief = (m: VoorschouwMap) => updateVoorschouwMap(m.id, { gearchiveerd: false, gearchiveerdOp: undefined });
   const verstuurMapNaarStedin = async (m: VoorschouwMap) => {
     setBezig(true);
     try {
@@ -487,6 +499,8 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
       case "naamOmgekeerd": return opNaam(gb.map, ga.map) || ga.map.id.localeCompare(gb.map.id);
       case "aantal": return gb.items.length - ga.items.length || opNaam(ga.map, gb.map) || ga.map.id.localeCompare(gb.map.id);
       case "nieuw": return (gb.map.aangemaakt ?? "").localeCompare(ga.map.aangemaakt ?? "") || opNaam(ga.map, gb.map) || ga.map.id.localeCompare(gb.map.id);
+      // Oudste eerst = een nieuw aangemaakte map komt onderaan te staan.
+      case "oudst": return (ga.map.aangemaakt ?? "").localeCompare(gb.map.aangemaakt ?? "") || opNaam(ga.map, gb.map) || ga.map.id.localeCompare(gb.map.id);
       case "eigen": return opEigenVolgorde(ga.map, gb.map);
       default: return opNaam(ga.map, gb.map) || ga.map.id.localeCompare(gb.map.id); // "naam" (A–Z)
     }
@@ -835,7 +849,7 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
 
       {/* Selectie- en actiebalk */}
       {zichtbaar.length > 0 && (
-        <div className="sticky top-0 z-10 flex flex-wrap items-center gap-3 rounded-xl border border-ink-200 bg-white p-3 shadow-card">
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-ink-200 bg-white p-3 shadow-card">
           <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-ink-700">
             <input
               type="checkbox"
@@ -868,6 +882,17 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
                 className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-brand-600 px-3.5 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-40 sm:flex-none sm:py-2"
               >
                 <Send className="h-4 w-4" /> Naar Stedin klaarzetten
+              </button>
+            )}
+            {isLeiding && (
+              <button
+                type="button"
+                disabled={!geselecteerd().some((v) => v.mapId && geldigeMapIds.has(v.mapId))}
+                onClick={() => setVraagArchief(true)}
+                title="Zet de mappen van de geselecteerde adressen in het archief (blijven bewaard)"
+                className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-ink-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50 disabled:cursor-not-allowed disabled:opacity-40 sm:flex-none sm:py-2"
+              >
+                <FolderArchive className="h-4 w-4" /> Archiveren
               </button>
             )}
             <button
@@ -948,6 +973,7 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
                     { waarde: "naamOmgekeerd", label: "Naam (Z–A)" },
                     { waarde: "aantal", label: "Meeste adressen" },
                     { waarde: "nieuw", label: "Nieuwste eerst" },
+                    { waarde: "oudst", label: "Nieuwste onderaan" },
                   ]}
                 />
               </div>
@@ -1063,6 +1089,48 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
         />
       )}
 
+
+      {/* Archief: afgeronde mappen blijven bewaard en zijn terug te zetten */}
+      {isLeiding && gearchiveerdeMappen.length > 0 && (
+        <div className="pt-1">
+          <button type="button" onClick={() => setArchiefOpen((o) => !o)} className="flex w-full items-center gap-2 rounded-xl border border-ink-200 bg-white px-4 py-3 text-sm font-semibold text-ink-700 shadow-card hover:bg-ink-50">
+            <FolderArchive className="h-4 w-4 text-ink-500" />
+            Archief — afgeronde mappen
+            <span className="rounded-full bg-ink-200 px-2 py-0.5 text-xs font-bold text-ink-600">{gearchiveerdeMappen.length}</span>
+            <ChevronRight className={`ml-auto h-4 w-4 text-ink-400 transition-transform ${archiefOpen ? "rotate-90" : ""}`} />
+          </button>
+          {archiefOpen && (
+            <div className="mt-3 space-y-2">
+              {gearchiveerdeMappen.map((m) => {
+                const n = voorschouwen.filter((v) => v.mapId === m.id).length;
+                return (
+                  <Card key={m.id} className="flex flex-wrap items-center gap-3 p-3">
+                    <FolderArchive className="h-4 w-4 shrink-0 text-ink-400" />
+                    <span className="text-sm font-semibold text-ink-800">{m.naam}</span>
+                    <span className="text-xs text-ink-500">
+                      {n} {n === 1 ? "adres" : "adressen"}
+                      {m.gearchiveerdOp ? ` · gearchiveerd ${new Date(m.gearchiveerdOp).toLocaleDateString("nl-NL")}` : ""}
+                    </span>
+                    <button type="button" onClick={() => terugUitArchief(m)} className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-3 py-1.5 text-xs font-semibold text-ink-700 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700">
+                      <ArrowLeft className="h-3.5 w-3.5" /> Terugzetten
+                    </button>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      <Bevestig
+        open={vraagArchief}
+        titel="Mappen archiveren"
+        tekst="De mappen van de geselecteerde adressen gaan naar het archief. Ze verdwijnen uit dit overzicht maar blijven bewaard — je kunt ze altijd terugzetten."
+        bevestigLabel="Archiveren"
+        bevestigTone="brand"
+        onBevestig={archiveerSelectie}
+        onAnnuleer={() => setVraagArchief(false)}
+      />
 
       <Bevestig
         open={!!teVerwijderenMap}
