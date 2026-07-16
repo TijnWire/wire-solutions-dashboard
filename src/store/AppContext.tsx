@@ -72,6 +72,7 @@ import {
 } from "../lib/seed";
 import { idbGet, idbSet } from "./db";
 import { mergeCollection, mergeTombstones, type Tombstones } from "../lib/merge";
+import { supabaseAan, sbLeesAlles, sbSchrijf, sbVersies, sbLeesKeys, sbLogin, sbRegistreer, sbLogout, sbSessieEmail, bewaarSyncCred, wisSyncCred, sbHerstelSessie, cloudWsUrl } from "../lib/supabase";
 
 // ── Voorschouwen sharden voor de sync ──────────────────────────────────────────────
 // D1/SQLite weigert een rij groter dan ~2 MB (SQLITE_TOOBIG). Voorschouwen bevatten foto's
@@ -82,7 +83,6 @@ const VS_SHARDS = 16;
 const vsShard = (id: string) => { let h = 0; for (let i = 0; i < id.length; i++) h = (Math.imul(h, 31) + id.charCodeAt(i)) >>> 0; return h % VS_SHARDS; };
 const vsKey = (i: number) => `voorschouwen_${i}`;
 const isVsShard = (key: string) => key.startsWith("voorschouwen_");
-import { supabaseAan, sbLeesAlles, sbSchrijf, sbVersies, sbLeesKeys, sbLogin, sbRegistreer, sbLogout, sbSessieEmail, bewaarSyncCred, wisSyncCred, sbHerstelSessie, cloudWsUrl } from "../lib/supabase";
 
 // Oude browseropslag-sleutels — alleen nog om eenmalig naar IndexedDB te migreren.
 const LS = {
