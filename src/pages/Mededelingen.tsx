@@ -17,7 +17,7 @@ export function Mededelingen() {
         <h3 className="text-sm font-bold text-ink-900">Chat</h3>
         <span className="hidden text-xs text-ink-400 sm:inline">alle mededelingen</span>
       </div>
-      <MededelingenFeed scrollClass="max-h-[70vh] min-h-[320px]" />
+      <MededelingenFeed scrollClass="h-[72vh]" />
     </Card>
   );
 
@@ -33,7 +33,7 @@ export function Mededelingen() {
       </div>
 
       {isLeiding ? (
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(320px,400px)] lg:items-start">
+        <div className="grid gap-5 lg:grid-cols-[minmax(320px,440px)_minmax(0,1fr)] lg:items-start">
           <Card className="overflow-hidden">
             <div className="flex items-center gap-2 border-b border-ink-100 bg-ink-50/60 px-5 py-3.5">
               <Megaphone className="h-5 w-5 text-brand-600" />

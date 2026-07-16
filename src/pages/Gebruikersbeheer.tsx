@@ -514,8 +514,8 @@ export function Gebruikersbeheer() {
                 <button
                   type="button"
                   onClick={() => setReset(u)}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-3 py-1.5 text-sm font-medium text-ink-700 hover:bg-ink-50"
-                  title="Wachtwoord resetten"
+                  className="hidden sm:inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-3 py-1.5 text-sm font-medium text-ink-700 hover:bg-ink-50"
+                  title="Wachtwoord resetten (ook via Bewerken mogelijk)"
                 >
                   <KeyRound className="h-3.5 w-3.5" />
                   Wachtwoord
