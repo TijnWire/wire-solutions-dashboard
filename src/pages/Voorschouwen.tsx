@@ -531,7 +531,7 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
   // ── Controle-/verstuurpagina "Klaar voor Stedin" ──
   if (tab === "stedin" && isLeiding) {
     return (
-      <div className="space-y-6">
+      <div key="stedin" className="space-y-6 animate-slide-in-right">
         <button type="button" onClick={() => setTab("overzicht")} className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-500 hover:text-ink-800"><ArrowLeft className="h-4 w-4" /> Terug naar overzicht</button>
         <div>
           <h2 className="text-xl font-bold text-ink-900">Klaar voor Stedin</h2>
@@ -710,7 +710,7 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
   }
 
   return (
-    <div className="space-y-6">
+    <div key="overzicht" className="space-y-6 animate-slide-in-left">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold text-ink-900">Voorschouwen</h2>

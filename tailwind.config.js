@@ -46,6 +46,20 @@ export default {
         cardhover:
           "0 10px 30px -12px rgb(15 23 42 / 0.18), 0 2px 6px -2px rgb(15 23 42 / 0.08)",
       },
+      keyframes: {
+        slideInRight: {
+          "0%": { transform: "translateX(6%)", opacity: "0" },
+          "100%": { transform: "translateX(0)", opacity: "1" },
+        },
+        slideInLeft: {
+          "0%": { transform: "translateX(-6%)", opacity: "0" },
+          "100%": { transform: "translateX(0)", opacity: "1" },
+        },
+      },
+      animation: {
+        "slide-in-right": "slideInRight 0.28s ease-out both",
+        "slide-in-left": "slideInLeft 0.28s ease-out both",
+      },
     },
   },
   plugins: [],
