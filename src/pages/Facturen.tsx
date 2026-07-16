@@ -309,7 +309,7 @@ function UrenFactuur({ facturenCount, opdrachtgevers, users, urenstaat, onGenere
   facturenCount: number;
   opdrachtgevers: Opdrachtgever[];
   users: { id: string; naam: string }[];
-  urenstaat: { medewerkerId: string; week: string; uren: number[] }[];
+  urenstaat: { medewerkerId: string; datum: string; uren: number }[];
   onGenereer: (concept: Omit<Factuur, "id">) => void;
   onNaarOpdrachtgevers: () => void;
   onKlaar: () => void;
@@ -326,9 +326,8 @@ function UrenFactuur({ facturenCount, opdrachtgevers, users, urenstaat, onGenere
 
   const og = opdrachtgevers.find((o) => o.id === ogId);
   const naamVan = (id: string) => users.find((u) => u.id === id)?.naam ?? "Medewerker";
-  const somUren = (uren?: number[]) => (uren ?? []).reduce((a, b) => a + (Number(b) || 0), 0);
   const uurNet = (n: number) => (Number.isInteger(n) ? String(n) : (Math.round(n * 10) / 10).toString().replace(".", ","));
-  const urenVanPersoon = (userId: string) => urenstaat.filter((x) => x.medewerkerId === userId && x.week >= van && x.week <= tot).reduce((s, x) => s + somUren(x.uren), 0);
+  const urenVanPersoon = (userId: string) => urenstaat.filter((x) => x.medewerkerId === userId && x.datum >= van && x.datum <= tot).reduce((s, x) => s + (Number(x.uren) || 0), 0);
   const fmt = (iso: string) => new Date(iso + "T00:00:00").toLocaleDateString("nl-NL", { day: "numeric", month: "short" });
 
   const regels = (og?.personen ?? []).map((p) => ({ naam: naamVan(p.userId), uren: urenVanPersoon(p.userId), tarief: p.uurtarief }));

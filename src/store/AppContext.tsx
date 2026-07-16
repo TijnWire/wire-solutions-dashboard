@@ -79,6 +79,29 @@ import { supabaseAan, sbLeesAlles, sbSchrijf, sbVersies, sbLeesKeys, sbLogin, sb
 // en groeien makkelijk voorbij die grens. Daarom syncen we ze niet als één blob, maar over
 // meerdere kleine rijen (voorschouwen_0..N), verdeeld op een hash van het id. De rest van de
 // app blijft met één `voorschouwen`-lijst werken; alleen de opslag/sync is opgesplitst.
+// ── Urenstaat-migratie ─────────────────────────────────────────────────────────────
+// Vroeger: één regel per week met `uren: number[7]` (ma–zo). Nu: één regel per gewerkte dag,
+// met begin/eindtijd. Oude regels zetten we om naar losse dagregels (tijden blijven leeg —
+// die zijn nooit vastgelegd). De id's zijn afgeleid van het oude id, dus elk apparaat komt
+// op exact dezelfde regels uit en de samenvoeging levert geen dubbelen op.
+const migreerUren = (lijst: unknown): Urenregel[] => {
+  if (!Array.isArray(lijst)) return [];
+  return lijst.flatMap((r) => {
+    const o = r as Urenregel & { week?: string; uren?: unknown };
+    if (!Array.isArray(o.uren)) return o?.id ? [o as Urenregel] : []; // al nieuw formaat
+    const week = o.week ?? "";
+    if (!week) return [];
+    return (o.uren as number[]).flatMap((u, i) => {
+      const n = Number(u) || 0;
+      if (n <= 0) return [];
+      const d = new Date(week + "T00:00:00");
+      d.setDate(d.getDate() + i);
+      const datum = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      return [{ id: `${o.id}-${i}`, medewerkerId: o.medewerkerId, datum, uren: n, projectId: o.projectId, notitie: o.notitie }];
+    });
+  });
+};
+
 const VS_SHARDS = 16;
 const vsShard = (id: string) => { let h = 0; for (let i = 0; i < id.length; i++) h = (Math.imul(h, 31) + id.charCodeAt(i)) >>> 0; return h % VS_SHARDS; };
 const vsKey = (i: number) => `voorschouwen_${i}`;
@@ -488,7 +511,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setVerlof(verl);
       setSchouwafspraken(sch ?? []);
       setBlancoBrieven(bl ?? []);
-      setUrenstaat(ur ?? []);
+      setUrenstaat(migreerUren(ur));
       setAgendaItems(ai ?? []);
       setTodos(td ?? []);
       setKennis(kn);
@@ -627,7 +650,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     verlof: (v) => setVerlof(v as Verlof[]),
     schouwafspraken: (v) => setSchouwafspraken(v as Schouwafspraak[]),
     blancoBrieven: (v) => setBlancoBrieven(v as BlancoBrief[]),
-    urenstaat: (v) => setUrenstaat(v as Urenregel[]),
+    urenstaat: (v) => setUrenstaat(migreerUren(v)),
     agendaItems: (v) => setAgendaItems(v as AgendaItem[]),
     todos: (v) => setTodos(v as Todo[]),
     kennis: (v) => setKennis(v as KennisArtikel[]),

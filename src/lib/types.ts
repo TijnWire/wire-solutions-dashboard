@@ -289,6 +289,7 @@ export type Bedrijf = {
   iban: string;
   bic?: string;
   factuurPresets?: FactuurPreset[]; // standaard factuurregels (Brieven, Uren, …) met aanpasbare prijs
+  uursoorten?: Uursoort[];          // zelf beheerde uursoorten voor de urenstaat
 };
 
 // Standaard factuurregel-knop (bijv. "Brieven" € 2,20). Prijs is per plek aan te passen bij Facturen → Tarieven.
@@ -402,14 +403,27 @@ export type Verlof = {
   notitie: string;
 };
 
-// ── Urenstaat (per medewerker, per week de gewerkte uren) ──
+// ── Urenstaat: één regel per gewerkte periode (medewerker + dag + tijden) ──
 export type Urenregel = {
   id: string;
   medewerkerId: string;
-  week: string;        // ISO-datum van de maandag van die week (yyyy-mm-dd)
-  projectId?: string;  // aan welk project deze uren besteed zijn; leeg = algemeen (geen specifiek project)
-  uren: number[];      // 7 waarden: maandag t/m zondag
-  notitie?: string;
+  datum: string;        // ISO-dag (yyyy-mm-dd)
+  uursoortId?: string;  // uit de zelf beheerde lijst (zie Bedrijf.uursoorten)
+  objectCode?: string;  // vrij in te vullen (bijv. een Stedin-objectcode)
+  begin?: string;       // "06:30" — leeg bij oude, omgezette regels
+  eind?: string;        // "15:00"
+  pauze?: number;       // minuten
+  uren: number;         // totaal gewerkte uren (uit begin/eind/pauze, of handmatig)
+  reis?: number;        // reisuren
+  projectId?: string;   // onderdeel (Brieven & Routes, Voorschouwen, …); leeg = algemeen
+  notitie?: string;     // "Opmerking"
+};
+
+// Zelf te beheren uursoorten (Instellingen bij de Urenstaat), bijv. "UT35061 · UT Level II Engineer".
+export type Uursoort = {
+  id: string;
+  code: string;   // bijv. "UT35061"
+  label: string;  // bijv. "UT Level II Engineer"
 };
 
 // ── Blanco brieven (buurt/wijk lopen; tik aan welk huisnummer je hebt gehad) ──

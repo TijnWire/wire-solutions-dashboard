@@ -9,7 +9,6 @@ import { werkdagenExclFeestdagen } from "../lib/feestdagen";
 const STANDAARD_VRIJE_DAGEN = 25;
 const STANDAARD_CONTRACT = 40;
 const werkdagenTussen = werkdagenExclFeestdagen; // ma–vr, excl. feestdagen
-const somUren = (uren?: number[]) => (uren ?? []).reduce((a, b) => a + (Number(b) || 0), 0);
 const uurTekst = (n: number) => (Number.isInteger(n) ? String(n) : (Math.round(n * 10) / 10).toString().replace(".", ","));
 const inputCls = "w-full rounded-lg border border-ink-200 bg-white px-2 py-1.5 text-center text-sm font-semibold text-ink-800 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100";
 
@@ -27,10 +26,10 @@ function opgenomenDagen(verlof: Verlof[], userId: string, van: string, tot: stri
       return s + werkdagenTussen(a, b);
     }, 0);
 }
-function urenTussen(urenstaat: { medewerkerId: string; week: string; uren: number[] }[], userId: string, van?: string, tot?: string): number {
+function urenTussen(urenstaat: { medewerkerId: string; datum: string; uren: number }[], userId: string, van?: string, tot?: string): number {
   return urenstaat
-    .filter((x) => x.medewerkerId === userId && (!van || x.week >= van) && (!tot || x.week <= tot))
-    .reduce((s, x) => s + somUren(x.uren), 0);
+    .filter((x) => x.medewerkerId === userId && (!van || x.datum >= van) && (!tot || x.datum <= tot))
+    .reduce((s, x) => s + (Number(x.uren) || 0), 0);
 }
 
 const dagLabel = (iso: string) => new Date(iso + "T00:00:00").toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" });

@@ -11,7 +11,6 @@ const veld = "w-full rounded-lg border border-ink-200 px-3 py-2 text-sm outline-
 const labelCls = "mb-1 block text-xs font-semibold text-ink-600";
 const toISO = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const maandagVan = (d: Date) => { const x = new Date(d); const dow = (x.getDay() + 6) % 7; x.setDate(x.getDate() - dow); x.setHours(0, 0, 0, 0); return x; };
-const somUren = (uren?: number[]) => (uren ?? []).reduce((a, b) => a + (Number(b) || 0), 0);
 const uurTekst = (n: number) => (Number.isInteger(n) ? String(n) : (Math.round(n * 10) / 10).toString().replace(".", ","));
 
 function isoWeek(d: Date): number {
@@ -224,7 +223,7 @@ function LoonstrookGenerator({ startWeek, onKlaar }: { startWeek?: string; onKla
   const label = periodeLabel(periodeType, anker);
 
   const urenVan = (userId: string) =>
-    urenstaat.filter((x) => x.medewerkerId === userId && x.week >= van && x.week <= tot).reduce((s, x) => s + somUren(x.uren), 0);
+    urenstaat.filter((x) => x.medewerkerId === userId && x.datum >= van && x.datum <= tot).reduce((s, x) => s + (Number(x.uren) || 0), 0);
   const alBestaat = (userId: string) => loonstroken.some((l) => l.medewerkerId === userId && l.periodeType === periodeType && l.periode === label);
 
   const rijen = [...users]
