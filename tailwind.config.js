@@ -56,9 +56,13 @@ export default {
           "100%": { transform: "translateX(0)", opacity: "1" },
         },
       },
+      // LET OP: fill-mode is bewust "backwards" en niet "both". Met "both" blijft na afloop
+      // transform: translateX(0) op het element staan, en een element mét transform wordt een
+      // containing block — dan gedraagt position:fixed (modals!) zich als absolute t.o.v. de
+      // pagina i.p.v. het scherm. Met "backwards" is de transform na de animatie weer weg.
       animation: {
-        "slide-in-right": "slideInRight 0.28s ease-out both",
-        "slide-in-left": "slideInLeft 0.28s ease-out both",
+        "slide-in-right": "slideInRight 0.28s ease-out backwards",
+        "slide-in-left": "slideInLeft 0.28s ease-out backwards",
       },
     },
   },
