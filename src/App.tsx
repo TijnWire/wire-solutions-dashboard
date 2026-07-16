@@ -208,7 +208,10 @@ export default function App() {
           onSync={onSync}
         />
         <OfflineBanner />
-        <main className="scrollbar-thin flex-1 overflow-y-auto overflow-x-hidden overscroll-contain p-4 pb-[calc(5rem+env(safe-area-inset-bottom))] md:p-6 md:pb-6">{render()}</main>
+        {/* De key zorgt dat elke nieuwe pagina opnieuw mount, waardoor de schuif-animatie afspeelt. */}
+        <main className="scrollbar-thin flex-1 overflow-y-auto overflow-x-hidden overscroll-contain p-4 pb-[calc(5rem+env(safe-area-inset-bottom))] md:p-6 md:pb-6">
+          <div key={active} className="animate-slide-in-right">{render()}</div>
+        </main>
       </div>
 
       {/* App-achtige onderbalk op mobiel */}
