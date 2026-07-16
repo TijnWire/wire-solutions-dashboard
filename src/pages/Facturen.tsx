@@ -558,7 +558,8 @@ export function Facturen({ initieelFactuur, nieuwFactuurProject }: { initieelFac
   // Bekijken: spring naar het volledige werk om het te bekijken of aan te passen.
   const openProject = (id: string) => navigeer("projecten", { project: id });
   const openBuurt = (id: string) => navigeer("buurtaanpak", { buurtaanpakId: id });
-  const openMap = (rs: Brievenronde[]) => navigeer("brieven", { ronde: rs[0]?.id });
+  // Hele map open (niet één losse ronde) als de rondes uit dezelfde import-map komen.
+  const openMap = (rs: Brievenronde[]) => rs[0]?.mapNaam ? navigeer("brieven", { brievenMap: rs[0].mapNaam }) : navigeer("brieven", { ronde: rs[0]?.id });
 
   // Terugsturen/melding: open de modal; bij terugsturen zet reopen() het werk terug in het veld.
   const startIssue = (naam: string, reopen: () => void, projectId?: string) => { setReden(""); setIssue({ naam, reopen, projectId }); };

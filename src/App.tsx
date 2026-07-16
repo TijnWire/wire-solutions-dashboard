@@ -151,7 +151,7 @@ export default function App() {
       case "schouwafspraken":
         return <Schouwafspraken />;
       case "brieven":
-        return <Brieven key={target?.ronde ?? "lijst"} initieelRonde={target?.ronde} />;
+        return <Brieven key={target?.ronde ?? target?.brievenMap ?? "lijst"} initieelRonde={target?.ronde} initieelMap={target?.brievenMap} />;
       case "afspraken":
         return <Afspraken key={target?.locatie ?? "lijst"} initieelLocatie={target?.locatie} />;
       case "communicatie":

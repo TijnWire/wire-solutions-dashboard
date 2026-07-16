@@ -813,16 +813,61 @@ const isOpenRonde = (r: Brievenronde) => r.status !== "verstuurd";
 const peildatum = (r: Brievenronde) => r.deadline || r.aangemaakt.slice(0, 10);
 const sorteerAdr = (adr: Adres[]) => [...adr].sort((a, b) => a.huisnummer - b.huisnummer || a.toevoeging.localeCompare(b.toevoeging, "nl", { numeric: true }));
 
-// Eén import-map: alle rondes uit hetzelfde bestand. Map-brede acties (naam, PD-nummer, deadline,
-// toewijzen, route, boekhouding) en de adressen per straat in looproute-volgorde.
-function BrievenMap({ naam, rondes, isLeiding, onOpenRonde, startOpen }: { naam: string; rondes: Brievenronde[]; isLeiding: boolean; onOpenRonde: (id: string) => void; startOpen?: boolean }) {
+// Samenvatting van één map. Gedeeld door de maprij in het overzicht en de detailpagina, zodat de
+// tellingen op allebei nooit uit elkaar lopen.
+function mapStats(rondes: Brievenronde[]) {
+  const teBezorgen = rondes.flatMap((r) => r.adressen.filter((a) => !a.ontbreekt));
+  // "Afgegooid" én "Blanco" tellen als afgehandeld (allebei bezorgd; blanco = leeg papiertje gegeven).
+  const afgehandeld = teBezorgen.filter((a) => a.status === "Gegooid" || a.status === "Blanco").length;
+  const openA = teBezorgen.length - afgehandeld;
+  const pd = rondes.find((r) => r.pdNummer)?.pdNummer ?? "";
+  const alAfgerond = rondes.length > 0 && rondes.every((r) => r.status === "verstuurd");
+  return {
+    teBezorgen,
+    openA,
+    pd,
+    alAfgerond,
+    pct: teBezorgen.length ? Math.round((afgehandeld / teBezorgen.length) * 100) : 0,
+    regel: `${rondes.length} ${rondes.length === 1 ? "ronde" : "rondes"} · ${teBezorgen.length} adressen · ${openA} open${pd ? ` · ${pd}` : ""}${alAfgerond ? " · ✓ boekhouding" : ""}`,
+  };
+}
+
+// Eén map in het overzicht: klik erop en de hele map opent op een eigen pagina. Verwijderen kan hier
+// direct, zodat je de map daarvoor niet eerst hoeft te openen.
+function MapRij({ naam, rondes, isLeiding, onOpen }: { naam: string; rondes: Brievenronde[]; isLeiding: boolean; onOpen: () => void }) {
+  const { updateRonde } = useApp();
+  const [vraagVerwijder, setVraagVerwijder] = useState(false);
+  const { teBezorgen, pct, regel } = mapStats(rondes);
+  // Zacht verwijderen: de map uit het overzicht halen, maar de rondes blijven in de database staan.
+  const verwijderMap = () => { const nu = new Date().toISOString(); rondes.forEach((r) => updateRonde(r.id, { verwijderd: true, verwijderdOp: nu })); setVraagVerwijder(false); };
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-card transition-shadow hover:shadow-cardhover">
+      <div className="flex items-center gap-2 px-4 py-3">
+        <button type="button" onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-2 text-left" title="Map openen">
+          <span className="shrink-0 rounded-lg bg-brand-50 p-2.5 text-brand-600"><Folder className="h-5 w-5" /></span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate font-semibold text-ink-900">{naam}</span>
+            <span className="block truncate text-xs text-ink-500">{regel}</span>
+          </span>
+        </button>
+        {isLeiding && <button type="button" onClick={() => setVraagVerwijder(true)} className="shrink-0 rounded-lg p-2 text-ink-400 hover:bg-red-50 hover:text-red-600" title="Map verwijderen"><Trash2 className="h-4 w-4" /></button>}
+        <button type="button" onClick={onOpen} className="shrink-0 rounded-lg p-1 text-ink-300 hover:bg-ink-100 hover:text-ink-600" title="Map openen" aria-label="Map openen"><ChevronRight className="h-5 w-5" /></button>
+      </div>
+      <div className="h-1 bg-ink-100"><div className="h-full bg-green-500" style={{ width: `${pct}%` }} /></div>
+      <Bevestig open={vraagVerwijder} titel="Map verwijderen" tekst={`Weet je het zeker dat je de map "${naam}" (${rondes.length} ${rondes.length === 1 ? "ronde" : "rondes"} · ${teBezorgen.length} adressen) wilt verwijderen? De map verdwijnt uit dit overzicht, maar blijft bewaard in de database — je kunt 'm onderaan bij "Verwijderde mappen" weer terugzetten.`} bevestigLabel="Ja, verwijderen" onBevestig={verwijderMap} onAnnuleer={() => setVraagVerwijder(false)} />
+    </div>
+  );
+}
+
+// De map op een eigen pagina: map-brede acties (naam, PD-nummer, deadline, toewijzen, route,
+// boekhouding) en de adressen per straat in looproute-volgorde.
+function MapDetail({ naam, rondes, isLeiding, onOpenRonde, onTerug }: { naam: string; rondes: Brievenronde[]; isLeiding: boolean; onOpenRonde: (id: string) => void; onTerug: () => void }) {
   const { updateRonde, addRonde, users } = useApp();
-  const [open, setOpen] = useState(startOpen ?? false);
   const [naamBewerk, setNaamBewerk] = useState<string | null>(null);
   const [pdBewerk, setPdBewerk] = useState(false);
   const [routeOpen, setRouteOpen] = useState(false);
   const [vraagBoek, setVraagBoek] = useState(false);
-  const [vraagVerwijder, setVraagVerwijder] = useState(false);
   const [boekKlaar, setBoekKlaar] = useState(0); // >0 → succes-popup met aantal verzonden adressen
   const [sel, setSel] = useState<Set<string>>(new Set()); // geselecteerde adres-id's voor bulk-acties
   const [tikModus, setTikModus] = useState<BriefStatus | null>(null); // null = selecteren; anders zet één tik direct deze status
@@ -836,13 +881,7 @@ function BrievenMap({ naam, rondes, isLeiding, onOpenRonde, startOpen }: { naam:
     if (oa !== ob) return oa - ob;
     return a.straat.localeCompare(b.straat, "nl") || a.postcode.localeCompare(b.postcode);
   });
-  const teBezorgen = rondes.flatMap((r) => r.adressen.filter((a) => !a.ontbreekt));
-  // "Afgegooid" én "Blanco" tellen als afgehandeld (allebei bezorgd; blanco = leeg papiertje gegeven).
-  const afgehandeld = teBezorgen.filter((a) => a.status === "Gegooid" || a.status === "Blanco").length;
-  const openA = teBezorgen.length - afgehandeld;
-  const pct = teBezorgen.length ? Math.round((afgehandeld / teBezorgen.length) * 100) : 0;
-  const alAfgerond = rondes.length > 0 && rondes.every((r) => r.status === "verstuurd");
-  const pd = rondes.find((r) => r.pdNummer)?.pdNummer ?? "";
+  const { teBezorgen, pct, alAfgerond, pd, regel } = mapStats(rondes);
   const deadline = rondes.find((r) => r.deadline)?.deadline ?? "";
   const toegewezen = rondes.find((r) => r.toegewezenAan)?.toegewezenAan ?? "";
 
@@ -861,9 +900,6 @@ function BrievenMap({ naam, rondes, isLeiding, onOpenRonde, startOpen }: { naam:
       : { toegewezenAan: undefined, status: r.status === "toegewezen" ? "nieuw" : r.status, toegewezenOp: undefined },
   ));
   const naarBoekhouding = () => { const n = teBezorgen.length; rondes.forEach((r) => updateRonde(r.id, { status: "verstuurd", verstuurdOp: nu(), boekhouding: "te_factureren", doorgestuurdOp: nu() })); setVraagBoek(false); setBoekKlaar(n); };
-  // Zacht verwijderen: de hele map uit het overzicht halen, maar de rondes blijven in de data (dus in de
-  // database) staan — alleen gemarkeerd als verwijderd, zodat je 'm later kunt terugzetten.
-  const verwijderMap = () => { rondes.forEach((r) => updateRonde(r.id, { verwijderd: true, verwijderdOp: nu() })); setVraagVerwijder(false); };
 
   // ── Adressen selecteren (per stuk / hele straat / alles) en in bulk markeren ──
   const alleIds = straten.flatMap((r) => r.adressen.filter((a) => !a.ontbreekt).map((a) => a.id));
@@ -913,24 +949,24 @@ function BrievenMap({ naam, rondes, isLeiding, onOpenRonde, startOpen }: { naam:
   };
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-card">
-      <div className="flex items-center gap-2 px-4 py-3">
-        <button type="button" onClick={() => setOpen((o) => !o)} className="shrink-0 rounded-lg bg-brand-50 p-2.5 text-brand-600 hover:bg-brand-100" title="Uit-/inklappen"><Folder className="h-5 w-5" /></button>
-        <div className="min-w-0 flex-1">
-          {naamBewerk !== null ? (
-            <input autoFocus aria-label="Mapnaam" value={naamBewerk} onChange={(e) => setNaamBewerk(e.target.value)} onBlur={() => hernoem(naamBewerk)} onKeyDown={(e) => { if (e.key === "Enter") hernoem(naamBewerk); if (e.key === "Escape") setNaamBewerk(null); }} className="w-full rounded border border-ink-300 px-2 py-1 text-sm font-semibold outline-none focus:border-brand-400" />
-          ) : (
-            <button type="button" onClick={() => setOpen((o) => !o)} className="block w-full truncate text-left font-semibold text-ink-900">{naam}</button>
-          )}
-          <div className="truncate text-xs text-ink-500">{rondes.length} {rondes.length === 1 ? "ronde" : "rondes"} · {teBezorgen.length} adressen · {openA} open{pd ? ` · ${pd}` : ""}{alAfgerond ? " · ✓ boekhouding" : ""}</div>
-        </div>
-        {isLeiding && naamBewerk === null && <button type="button" onClick={() => setNaamBewerk(naam)} className="shrink-0 rounded-lg p-2 text-ink-400 hover:bg-ink-100" title="Naam wijzigen"><Pencil className="h-4 w-4" /></button>}
-        {isLeiding && naamBewerk === null && <button type="button" onClick={() => setVraagVerwijder(true)} className="shrink-0 rounded-lg p-2 text-ink-400 hover:bg-red-50 hover:text-red-600" title="Map verwijderen"><Trash2 className="h-4 w-4" /></button>}
-        <button type="button" onClick={() => setOpen((o) => !o)} className="shrink-0 rounded-lg p-1 text-ink-400" title="Uit-/inklappen"><ChevronDown className={`h-5 w-5 transition-transform ${open ? "rotate-180" : ""}`} /></button>
-      </div>
-      <div className="h-1 bg-ink-100"><div className="h-full bg-green-500" style={{ width: `${pct}%` }} /></div>
+    <div className="space-y-4">
+      <button type="button" onClick={onTerug} className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-500 hover:text-ink-800"><ArrowLeft className="h-4 w-4" /> Terug naar overzicht</button>
 
-      {open && (
+      <div className="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-card">
+        <div className="flex items-center gap-2 px-4 py-3">
+          <span className="shrink-0 rounded-lg bg-brand-50 p-2.5 text-brand-600"><Folder className="h-5 w-5" /></span>
+          <div className="min-w-0 flex-1">
+            {naamBewerk !== null ? (
+              <input autoFocus aria-label="Mapnaam" value={naamBewerk} onChange={(e) => setNaamBewerk(e.target.value)} onBlur={() => hernoem(naamBewerk)} onKeyDown={(e) => { if (e.key === "Enter") hernoem(naamBewerk); if (e.key === "Escape") setNaamBewerk(null); }} className="w-full rounded border border-ink-300 px-2 py-1 text-base font-bold outline-none focus:border-brand-400" />
+            ) : (
+              <div className="truncate text-base font-bold text-ink-900">{naam}</div>
+            )}
+            <div className="truncate text-xs text-ink-500">{regel}</div>
+          </div>
+          {isLeiding && naamBewerk === null && <button type="button" onClick={() => setNaamBewerk(naam)} className="shrink-0 rounded-lg p-2 text-ink-400 hover:bg-ink-100 hover:text-brand-600" title="Naam wijzigen" aria-label="Naam wijzigen"><Pencil className="h-4 w-4" /></button>}
+        </div>
+        <div className="h-1 bg-ink-100"><div className="h-full bg-green-500" style={{ width: `${pct}%` }} /></div>
+
         <div className="space-y-4 border-t border-ink-100 p-4">
           {isLeiding && (
             <div className="flex flex-wrap items-end gap-3">
@@ -1075,9 +1111,8 @@ function BrievenMap({ naam, rondes, isLeiding, onOpenRonde, startOpen }: { naam:
             </div>
           )}
         </div>
-      )}
+      </div>
       <Bevestig open={vraagBoek} titel="Hele map naar de boekhouding?" tekst={`Alle ${rondes.length} rondes (${teBezorgen.length} adressen) van "${naam}" worden afgerond en doorgestuurd naar de boekhouding.`} bevestigLabel="Naar boekhouding" bevestigTone="brand" onBevestig={naarBoekhouding} onAnnuleer={() => setVraagBoek(false)} />
-      <Bevestig open={vraagVerwijder} titel="Map verwijderen" tekst={`Weet je het zeker dat je de map "${naam}" (${rondes.length} ${rondes.length === 1 ? "ronde" : "rondes"} · ${teBezorgen.length} adressen) wilt verwijderen? De map verdwijnt uit dit overzicht, maar blijft bewaard in de database — je kunt 'm onderaan bij "Verwijderde mappen" weer terugzetten.`} bevestigLabel="Ja, verwijderen" onBevestig={verwijderMap} onAnnuleer={() => setVraagVerwijder(false)} />
 
       {/* Succes-melding ná het doorsturen */}
       {boekKlaar > 0 && (
@@ -1095,9 +1130,10 @@ function BrievenMap({ naam, rondes, isLeiding, onOpenRonde, startOpen }: { naam:
   );
 }
 
-export function Brieven({ initieelRonde }: { initieelRonde?: string }) {
+export function Brieven({ initieelRonde, initieelMap }: { initieelRonde?: string; initieelMap?: string }) {
   const { rondes, currentUser, updateRonde } = useApp();
   const [openId, setOpenId] = useState<string | null>(initieelRonde ?? null);
+  const [mapDetail, setMapDetail] = useState<string | null>(initieelMap ?? null); // geopende map-detailpagina
   const [nieuw, setNieuw] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
   const [prullenOpen, setPrullenOpen] = useState(false);
@@ -1125,6 +1161,13 @@ export function Brieven({ initieelRonde }: { initieelRonde?: string }) {
 
   const open = zichtbaar.find((r) => r.id === openId);
   if (open) return <RondeDetail ronde={open} onTerug={() => setOpenId(null)} />;
+
+  // Map-detailpagina: de hele map op een eigen pagina, in plaats van uitklappen in het overzicht.
+  // Open je van daaruit een straat, dan valt de RondeDetail hierboven ervoor — en "terug" brengt je
+  // vanzelf weer in de map, want mapDetail blijft staan.
+  const mapRondes = mapDetail ? zichtbaar.filter((r) => r.mapNaam === mapDetail) : [];
+  if (mapDetail && mapRondes.length > 0)
+    return <MapDetail naam={mapDetail} rondes={mapRondes} isLeiding={isLeiding} onOpenRonde={setOpenId} onTerug={() => setMapDetail(null)} />;
 
   // Samenvatting + groeperen per week (zelfde layout als TAUW)
   const vandaag = vandaagISO();
@@ -1161,10 +1204,6 @@ export function Brieven({ initieelRonde }: { initieelRonde?: string }) {
     if (oa !== ob) return oa - ob;
     return a.key === "zonder" ? 1 : b.key === "zonder" ? -1 : a.key.localeCompare(b.key);
   });
-  // De eerste map met open werk (in weergavevolgorde) klapt automatisch open zodat je meteen bij het werk zit.
-  let eersteOpenMap = "";
-  for (const w of weken) { const m = w.mappen.find((x) => x.items.some(isOpenRonde)); if (m) { eersteOpenMap = m.naam; break; } }
-
   // Eén ronde-kaart (hergebruikt in de import-mappen én in de week-groepen).
   const rondeKaart = (r: Brievenronde) => {
     const teBezorgen = r.adressen.filter((a) => !a.ontbreekt);
@@ -1256,7 +1295,7 @@ export function Brieven({ initieelRonde }: { initieelRonde?: string }) {
                 </div>
                 <div className="space-y-3">
                   {g.mappen.map((m) => (
-                    <BrievenMap key={`map-${m.naam}`} naam={m.naam} rondes={m.items} isLeiding={isLeiding} onOpenRonde={setOpenId} startOpen={m.naam === eersteOpenMap} />
+                    <MapRij key={`map-${m.naam}`} naam={m.naam} rondes={m.items} isLeiding={isLeiding} onOpen={() => setMapDetail(m.naam)} />
                   ))}
                   {g.rondes.length > 0 && (
                     <div className="grid gap-3 sm:grid-cols-2">
