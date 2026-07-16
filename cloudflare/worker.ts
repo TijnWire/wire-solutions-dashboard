@@ -20,6 +20,7 @@
 //   POST /audit                  { actie, door_email, ... }         -> { ok }
 //   POST /admin/reset-wachtwoord { doelEmail, nieuwWachtwoord }     -> { ok }             (eigenaar of beheer)
 //   POST /admin/wijzig-email     { oudEmail, nieuwEmail }           -> { ok }             (eigenaar of beheer)
+//   POST /admin/verwijder-account { doelEmail }                     -> { ok }             (eigenaar of beheer)
 //
 // SECRET (verplicht):  wrangler secret put JWT_SECRET    (willekeurige lange string)
 // BINDING (wrangler.toml): D1 als env.DB
@@ -354,6 +355,23 @@ export default {
         await env.DB.prepare(
           "insert into admin_audit (gemaakt_op, actie, door_email, doel_email, details) values (?1, 'email_gewijzigd', ?2, ?3, ?4)"
         ).bind(nuISO, ikEmail, oud, JSON.stringify({ nieuw })).run();
+        return json({ ok: true });
+      }
+      // Haalt het inlog-account weg. Zonder dit blijft een verwijderde medewerker gewoon inloggen op de
+      // Worker (en dus alle teamdata lezen), want /auth/login kijkt alleen naar users_auth.
+      if (path === "/admin/verwijder-account" && req.method === "POST") {
+        const rol = await rolVan(env, ikEmail);
+        if (rol?.rol !== "eigenaar" && rol?.rol !== "beheer") return json({ error: "Alleen een beheerder mag dit uitvoeren." }, 403);
+        const doel = String(body.doelEmail ?? "").trim().toLowerCase();
+        if (!doel.includes("@")) return json({ error: "Ongeldige invoer." }, 400);
+        if (doel === ikEmail) return json({ error: "Je kunt je eigen account niet verwijderen." }, 400);
+        await env.DB.batch([
+          env.DB.prepare("delete from users_auth where email = ?").bind(doel),
+          env.DB.prepare("delete from app_roles where email = ?").bind(doel),
+        ]);
+        await env.DB.prepare(
+          "insert into admin_audit (gemaakt_op, actie, door_email, doel_email, details) values (?1, 'account_verwijderd', ?2, ?3, ?4)"
+        ).bind(nuISO, ikEmail, doel, JSON.stringify({ via: "worker" })).run();
         return json({ ok: true });
       }
 

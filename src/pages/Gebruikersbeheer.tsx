@@ -17,6 +17,7 @@ import {
   KeyRound,
   Copy,
   Check,
+  AlertTriangle,
 } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { useNav } from "../store/NavContext";
@@ -24,8 +25,8 @@ import { Card, Badge } from "../components/ui";
 import { hashWachtwoord, genereerWachtwoord } from "../lib/auth";
 import { ROL_LABEL, BEHEER_GEBIEDEN, type Role, type User } from "../lib/types";
 import { magBoekhouding } from "../lib/rechten";
-import { supabaseAan } from "../lib/supabase";
-import { logAudit, syncAppRole, verwijderAppRole, resetAuthWachtwoord, wijzigAuthEmail } from "../lib/adminAccount";
+import { supabaseAan, bewaarSyncCred } from "../lib/supabase";
+import { logAudit, syncAppRole, resetAuthWachtwoord, wijzigAuthEmail, verwijderAuthAccount } from "../lib/adminAccount";
 
 const ROLLEN: Role[] = ["eigenaar", "beheer", "hr", "monteur"];
 const rolTone: Record<Role, string> = { eigenaar: "green", beheer: "amber", hr: "indigo", monteur: "slate" };
@@ -64,6 +65,8 @@ function GebruikerEditor({
   const [rechten, setRechten] = useState<Set<string>>(new Set(gebruiker?.beheerRechten ?? BEHEER_GEBIEDEN.map((g) => g.key)));
   const [functie, setFunctie] = useState(gebruiker?.functie ?? "");
   const [toonPw, setToonPw] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [vraagVerwijder, setVraagVerwijder] = useState(false);
 
   const toggleRol = (token: string) => {
     if (!magRol) return;
@@ -118,6 +121,7 @@ function GebruikerEditor({
     );
     if (dubbel) return setFout("Dit e-mailadres is al in gebruik.");
     if (!gebruiker && !wachtwoord.trim()) return setFout("Stel een wachtwoord in voor het nieuwe account.");
+    if (!gebruiker && wachtwoord.trim().length < 8) return setFout("Kies een wachtwoord van minimaal 8 tekens.");
 
     const isEigenaar = selRoles.has("eigenaar");
     const isHr = selRoles.has("hr");
@@ -148,15 +152,21 @@ function GebruikerEditor({
           const r = await wijzigAuthEmail(gebruiker.email, basis.email);
           if (!r.ok) { setFout(`E-mail wijzigen in de inlog is niet gelukt: ${r.error}. Wijziging niet opgeslagen.`); setBezig(false); return; }
         }
-        // Wachtwoord alleen bijwerken als er een nieuw is ingevuld; anders blijft het bestaande hash staan.
-        const cred = wachtwoord.trim() ? await hashWachtwoord(wachtwoord.trim()) : {};
-        updateUser(gebruiker.id, { ...basis, ...cred });
+        // Het wachtwoord wijzig je hier niet meer: dat loopt via de knop "Wachtwoord wijzigen", zodat het
+        // altijd óók bij Cloudflare wordt gezet (anders werkt de nieuwe inlog alleen op dit apparaat).
+        updateUser(gebruiker.id, basis);
         pasProjectenToe(gebruiker.id);
         void syncAppRole(basis.email, rol, boekhouding);
         if (emailGewijzigd) void logAudit("email_gewijzigd", actor, { userId: gebruiker.id, email: basis.email, naam: basis.naam }, { oud: gebruiker.email, nieuw: basis.email });
         if (gebruiker.rol !== rol) void logAudit("rol_gewijzigd", actor, { userId: gebruiker.id, email: basis.email, naam: basis.naam }, { oud: gebruiker.rol, nieuw: rol });
         void logAudit("account_bewerkt", actor, { userId: gebruiker.id, email: basis.email, naam: basis.naam });
       } else {
+        // Eerst het inlog-account bij Cloudflare zetten. Lukt dat niet, dan kan de medewerker alleen op dít
+        // apparaat inloggen — dan liever niets aanmaken dan een half account.
+        if (supabaseAan) {
+          const r = await resetAuthWachtwoord(basis.email, wachtwoord.trim());
+          if (!r.ok) { setFout(`Account aanmaken in de centrale database is niet gelukt: ${r.error}. Er is niets opgeslagen.`); setBezig(false); return; }
+        }
         const cred = await hashWachtwoord(wachtwoord.trim());
         const id = addUser({ ...basis, ...cred });
         pasProjectenToe(id);
@@ -172,17 +182,37 @@ function GebruikerEditor({
     else onSluit();
   };
 
-  const verwijder = () => {
+  // Verwijderen gaat in twee stappen: eerst de blokkades checken, dan pas de waarschuwing tonen — zo
+  // krijg je geen "weet je het zeker?" voor iets dat tóch niet mag.
+  const vraagVerwijderen = () => {
     if (!gebruiker) return;
     if (gebruiker.id === currentUser?.id) return setFout("Je kunt je eigen account niet verwijderen.");
     const eigenaren = users.filter((u) => u.rol === "eigenaar");
     if (gebruiker.rol === "eigenaar" && eigenaren.length <= 1)
       return setFout("Er moet minimaal één eigenaar blijven.");
-    if (confirm(`${gebruiker.naam} verwijderen?`)) {
+    setFout("");
+    setVraagVerwijder(true);
+  };
+
+  const doeVerwijderen = async () => {
+    if (!gebruiker || bezig) return;
+    setBezig(true);
+    try {
+      // Eerst de inlog bij Cloudflare weghalen. Lukt dat niet, dan stoppen we: het account lokaal wissen
+      // terwijl de inlog blijft bestaan, betekent dat de medewerker onzichtbaar toegang houdt tot de data.
+      if (supabaseAan) {
+        const r = await verwijderAuthAccount(gebruiker.email);
+        if (!r.ok) {
+          setVraagVerwijder(false);
+          setFout(`Verwijderen is niet gelukt: ${r.error}. Het account is niet verwijderd — probeer het opnieuw als de verbinding er weer is.`);
+          return;
+        }
+      }
       deleteUser(gebruiker.id);
-      void verwijderAppRole(gebruiker.email);
       void logAudit("account_verwijderd", { email: currentUser?.email ?? "onbekend", naam: currentUser?.naam ?? "onbekend" }, { userId: gebruiker.id, email: gebruiker.email, naam: gebruiker.naam });
       onSluit();
+    } finally {
+      setBezig(false);
     }
   };
 
@@ -213,40 +243,52 @@ function GebruikerEditor({
           <span className="mb-1.5 block text-sm font-medium text-ink-700">E-mailadres (inlog)</span>
           <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="naam@wiresolutions.nl" className={inputCls} />
         </label>
-        <label className="block">
-          <span className="mb-1.5 block text-sm font-medium text-ink-700">
-            {gebruiker ? "Nieuw wachtwoord" : "Wachtwoord"}
-          </span>
-          <div className="flex gap-2">
-            <div className="relative flex-1">
-              <input
-                type={toonPw ? "text" : "password"}
-                value={wachtwoord}
-                onChange={(e) => setWachtwoord(e.target.value)}
-                placeholder={gebruiker ? "Leeg laten = ongewijzigd" : "Wachtwoord"}
-                autoComplete="new-password"
-                className={inputCls + " pr-10"}
-              />
-              <button
-                type="button"
-                onClick={() => setToonPw((t) => !t)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-ink-400 hover:text-ink-700"
-                title={toonPw ? "Verberg" : "Toon"}
-              >
-                {toonPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
-            </div>
+        {gebruiker ? (
+          <div className="block">
+            <span className="mb-1.5 block text-sm font-medium text-ink-700">Wachtwoord</span>
             <button
               type="button"
-              onClick={() => { setWachtwoord(genereerWachtwoord()); setToonPw(true); }}
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-ink-200 px-3 py-2.5 text-sm font-medium text-ink-700 hover:bg-ink-50"
-              title="Genereer een sterk wachtwoord"
+              onClick={() => setResetOpen(true)}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-ink-200 px-3 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50"
             >
-              <Wand2 className="h-4 w-4" /> Genereer
+              <KeyRound className="h-4 w-4" /> Wachtwoord wijzigen
             </button>
+            <p className="mt-1 text-xs text-ink-400">Stelt een nieuw wachtwoord in dat meteen werkt — ook op de centrale database. Je ziet het daarna éénmalig en kunt het direct mailen.</p>
           </div>
-          <p className="mt-1 text-xs text-ink-400">Wordt versleuteld opgeslagen. Noteer het wachtwoord nu — het is later niet meer leesbaar.</p>
-        </label>
+        ) : (
+          <label className="block">
+            <span className="mb-1.5 block text-sm font-medium text-ink-700">Wachtwoord</span>
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <input
+                  type={toonPw ? "text" : "password"}
+                  value={wachtwoord}
+                  onChange={(e) => setWachtwoord(e.target.value)}
+                  placeholder="Minimaal 8 tekens"
+                  autoComplete="new-password"
+                  className={inputCls + " pr-10"}
+                />
+                <button
+                  type="button"
+                  onClick={() => setToonPw((t) => !t)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-ink-400 hover:text-ink-700"
+                  title={toonPw ? "Verberg" : "Toon"}
+                >
+                  {toonPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setWachtwoord(genereerWachtwoord()); setToonPw(true); }}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-ink-200 px-3 py-2.5 text-sm font-medium text-ink-700 hover:bg-ink-50"
+                title="Genereer een sterk wachtwoord"
+              >
+                <Wand2 className="h-4 w-4" /> Genereer
+              </button>
+            </div>
+            <p className="mt-1 text-xs text-ink-400">Wordt versleuteld opgeslagen. Noteer het wachtwoord nu — het is later niet meer leesbaar.</p>
+          </label>
+        )}
       </div>
 
       {/* Rol */}
@@ -349,7 +391,7 @@ function GebruikerEditor({
         {gebruiker && (
           <button
             type="button"
-            onClick={verwijder}
+            onClick={vraagVerwijderen}
             className="ml-auto inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-50"
           >
             <Trash2 className="h-4 w-4" />
@@ -357,7 +399,82 @@ function GebruikerEditor({
           </button>
         )}
       </div>
+
+      {gebruiker && resetOpen && <WachtwoordResetModal gebruiker={gebruiker} onSluit={() => setResetOpen(false)} />}
+      {gebruiker && vraagVerwijder && (
+        <VerwijderWaarschuwing
+          gebruiker={gebruiker}
+          projecten={projects.filter((p) => p.toegewezenAan.includes(gebruiker.id)).length}
+          bezig={bezig}
+          onBevestig={doeVerwijderen}
+          onSluit={() => setVraagVerwijder(false)}
+        />
+      )}
     </Card>
+  );
+}
+
+// Waarschuwing vóór het verwijderen van een account. Bewust een eigen venster in plaats van het kale
+// confirm() van de browser: verwijderen is niet terug te draaien, dus je hoort te zien wát er weggaat.
+function VerwijderWaarschuwing({
+  gebruiker,
+  projecten,
+  bezig,
+  onBevestig,
+  onSluit,
+}: {
+  gebruiker: User;
+  projecten: number;
+  bezig: boolean;
+  onBevestig: () => void;
+  onSluit: () => void;
+}) {
+  const voornaam = gebruiker.naam.trim().split(/\s+/)[0] || "deze medewerker";
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onSluit}>
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-cardhover" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-4 flex items-center gap-3">
+          <div className="rounded-xl bg-red-50 p-2.5 text-red-600"><AlertTriangle className="h-6 w-6" /></div>
+          <div>
+            <h3 className="text-base font-bold text-ink-900">Weet je het zeker?</h3>
+            <p className="text-sm text-ink-500">{gebruiker.naam} · {gebruiker.email}</p>
+          </div>
+        </div>
+
+        <p className="text-sm text-ink-600">Je staat op het punt dit account te verwijderen. Dit kun je niet ongedaan maken.</p>
+        <ul className="mt-3 space-y-1.5 text-sm text-ink-600">
+          <li className="flex gap-2"><span className="text-ink-300">•</span> {voornaam} kan niet meer inloggen — op geen enkel apparaat.</li>
+          <li className="flex gap-2"><span className="text-ink-300">•</span> Het account verdwijnt bij iedereen in het team, ook op de centrale database.</li>
+          <li className="flex gap-2">
+            <span className="text-ink-300">•</span>
+            {projecten === 0
+              ? "Er staan geen projecten op deze medewerker."
+              : `De medewerker wordt van ${projecten} ${projecten === 1 ? "project" : "projecten"} afgehaald.`}
+          </li>
+        </ul>
+        <p className="mt-3 rounded-lg bg-ink-50 px-3 py-2 text-xs text-ink-500">
+          Gaat iemand uit dienst maar wil je de gegevens houden? Zet de rol dan op Werknemer en haal de projecten weg — dan blijft alles bewaard.
+        </p>
+
+        <div className="mt-5 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onBevestig}
+            disabled={bezig}
+            className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-red-700 disabled:opacity-60"
+          >
+            <Trash2 className="h-4 w-4" /> {bezig ? "Verwijderen…" : "Ja, verwijder definitief"}
+          </button>
+          <button
+            type="button"
+            onClick={onSluit}
+            className="rounded-lg border border-ink-200 bg-white px-5 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50"
+          >
+            Annuleren
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -369,24 +486,28 @@ function WachtwoordResetModal({ gebruiker, onSluit }: { gebruiker: User; onSluit
   const [fase, setFase] = useState<"bevestig" | "klaar">("bevestig");
   const [bezig, setBezig] = useState(false);
   const [temp, setTemp] = useState("");
-  const [waarschuwing, setWaarschuwing] = useState("");
+  const [fout, setFout] = useState("");
   const [gekopieerd, setGekopieerd] = useState(false);
 
   const doeReset = async () => {
     setBezig(true);
+    setFout("");
     try {
       const nieuw = genereerWachtwoord();
-      let authOk = true, authErr = "";
+      // Eerst bij Cloudflare zetten. Lukt dat niet, dan laten we ook de lokale hash met rust: anders lopen
+      // de twee uit elkaar en werkt het nieuwe wachtwoord alleen op dit apparaat.
       if (supabaseAan) {
         const r = await resetAuthWachtwoord(gebruiker.email, nieuw);
-        authOk = r.ok; authErr = r.error ?? "";
+        if (!r.ok) { setFout(`Het wachtwoord is niet gewijzigd: ${r.error}. Het oude wachtwoord werkt nog — probeer het opnieuw zodra de verbinding er weer is.`); return; }
       }
       // Lokale hash bijwerken: het nieuwe wachtwoord werkt meteen om mee in te loggen (geen gedwongen wissel).
       const cred = await hashWachtwoord(nieuw);
       updateUser(gebruiker.id, { ...cred, moetWachtwoordWijzigen: false });
-      void logAudit("wachtwoord_reset", { email: currentUser?.email ?? "onbekend", naam: currentUser?.naam ?? "onbekend" }, { userId: gebruiker.id, email: gebruiker.email, naam: gebruiker.naam }, { echteAuth: authOk });
+      // Wijzig je je eigen wachtwoord? Dan moeten de lokaal bewaarde inloggegevens mee, anders koppelt dit
+      // apparaat na een herstart niet meer aan de centrale database.
+      if (gebruiker.id === currentUser?.id) bewaarSyncCred(gebruiker.email, nieuw);
+      void logAudit("wachtwoord_reset", { email: currentUser?.email ?? "onbekend", naam: currentUser?.naam ?? "onbekend" }, { userId: gebruiker.id, email: gebruiker.email, naam: gebruiker.naam });
       setTemp(nieuw);
-      setWaarschuwing(authOk || !supabaseAan ? "" : `Let op: het inlog-wachtwoord in Supabase Auth is niet bijgewerkt (${authErr}). De medewerker kan wél inloggen; deploy de Edge Function 'admin-account' voor volledige werking.`);
       setFase("klaar");
     } finally { setBezig(false); }
   };
@@ -422,14 +543,15 @@ function WachtwoordResetModal({ gebruiker, onSluit }: { gebruiker: User; onSluit
         <div className="mb-4 flex items-center gap-3">
           <div className="rounded-xl bg-brand-50 p-2.5 text-brand-600"><KeyRound className="h-6 w-6" /></div>
           <div>
-            <h3 className="text-base font-bold text-ink-900">Wachtwoord resetten</h3>
+            <h3 className="text-base font-bold text-ink-900">Wachtwoord wijzigen</h3>
             <p className="text-sm text-ink-500">{gebruiker.naam} · {gebruiker.email}</p>
           </div>
         </div>
 
         {fase === "bevestig" ? (
           <div className="space-y-4">
-            <p className="text-sm text-ink-600">Er wordt een nieuw wachtwoord ingesteld dat meteen werkt om mee in te loggen. Daarna kun je het in één klik naar de medewerker mailen. Je ziet het wachtwoord hierna éénmalig.</p>
+            <p className="text-sm text-ink-600">Er wordt een nieuw wachtwoord ingesteld dat meteen werkt om mee in te loggen — op elk apparaat. Daarna kun je het in één klik naar de medewerker mailen. Je ziet het wachtwoord hierna éénmalig.</p>
+            {fout && <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{fout}</div>}
             <div className="flex items-center gap-2">
               <button type="button" onClick={doeReset} disabled={bezig} className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-brand-700 disabled:opacity-60"><KeyRound className="h-4 w-4" /> {bezig ? "Bezig…" : "Nieuw wachtwoord instellen"}</button>
               <button type="button" onClick={onSluit} className="rounded-lg border border-ink-200 bg-white px-5 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50">Annuleren</button>
@@ -446,7 +568,6 @@ function WachtwoordResetModal({ gebruiker, onSluit }: { gebruiker: User; onSluit
               <button type="button" onClick={mailNaar} className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-brand-700"><Mail className="h-4 w-4" /> Mail naar {gebruiker.email}</button>
               <p className="mt-1.5 text-xs text-ink-400">Dit wachtwoord werkt meteen om mee in te loggen. Het is hierna niet meer op te vragen — mail of noteer het nu. De medewerker kan het later zelf wijzigen.</p>
             </div>
-            {waarschuwing && <div className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">{waarschuwing}</div>}
             <button type="button" onClick={onSluit} className="inline-flex items-center gap-2 rounded-lg border border-ink-200 bg-white px-5 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50">Klaar</button>
           </div>
         )}
@@ -458,7 +579,6 @@ function WachtwoordResetModal({ gebruiker, onSluit }: { gebruiker: User; onSluit
 export function Gebruikersbeheer() {
   const { users, projects, currentUser } = useApp();
   const [open, setOpen] = useState<string | null>(null); // user id, "nieuw", of null
-  const [reset, setReset] = useState<User | null>(null);
 
   if (!currentUser) return null;
   const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr";
@@ -535,15 +655,6 @@ export function Gebruikersbeheer() {
 
                 <button
                   type="button"
-                  onClick={() => setReset(u)}
-                  className="hidden sm:inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-3 py-1.5 text-sm font-medium text-ink-700 hover:bg-ink-50"
-                  title="Wachtwoord resetten (ook via Bewerken mogelijk)"
-                >
-                  <KeyRound className="h-3.5 w-3.5" />
-                  Wachtwoord
-                </button>
-                <button
-                  type="button"
                   onClick={() => setOpen(u.id)}
                   className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-3 py-1.5 text-sm font-medium text-ink-700 hover:bg-ink-50"
                 >
@@ -572,8 +683,6 @@ export function Gebruikersbeheer() {
           );
         })}
       </div>
-
-      {reset && <WachtwoordResetModal gebruiker={reset} onSluit={() => setReset(null)} />}
     </div>
   );
 }
