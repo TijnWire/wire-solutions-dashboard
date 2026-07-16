@@ -301,6 +301,7 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
   const [vraagToewijzingWeg, setVraagToewijzingWeg] = useState(false); // bevestiging vóór toewijzing verwijderen
   const [vraagArchief, setVraagArchief] = useState(false); // bevestiging vóór mappen archiveren
   const [archiefOpen, setArchiefOpen] = useState(false);
+  const [mapSelectie, setMapSelectie] = useState<Set<string>>(new Set()); // geselecteerde mappen (ook lege)
   useEffect(() => { try { localStorage.setItem("vs-mapSort", sorteerModus); } catch { /* opslag niet beschikbaar */ } }, [sorteerModus]);
   // Kwam je via "Mijn werk" recht op jóuw map? Die staat al open; scroll er meteen naartoe.
   useEffect(() => {
@@ -358,7 +359,7 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
   const alleGeselecteerd = zichtbaar.length > 0 && zichtbaar.every((v) => selectie.has(v.id));
   const toggleAlle = () =>
     setSelectie(alleGeselecteerd ? new Set() : new Set(zichtbaar.map((v) => v.id)));
-  const wis = () => setSelectie(new Set());
+  const wis = () => { setSelectie(new Set()); setMapSelectie(new Set()); };
 
   const geselecteerd = () => zichtbaar.filter((v) => selectie.has(v.id));
 
@@ -423,14 +424,17 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
   };
   // Map in-/uitklappen + een hele map in één keer selecteren of downloaden.
   const toggleMap = (key: string) => setOpenMappen((p) => { const n = new Set(p); n.has(key) ? n.delete(key) : n.add(key); return n; });
-  const mapGeselecteerd = (items: Voorschouw[]) => items.length > 0 && items.every((v) => selectie.has(v.id));
-  const mapDeels = (items: Voorschouw[]) => items.some((v) => selectie.has(v.id)) && !mapGeselecteerd(items);
-  const toggleMapSelectie = (items: Voorschouw[]) => setSelectie((p) => {
-    const n = new Set(p);
-    if (items.length > 0 && items.every((v) => n.has(v.id))) items.forEach((v) => n.delete(v.id));
-    else items.forEach((v) => n.add(v.id));
-    return n;
-  });
+  // Een map is geselecteerd als het map-vinkje aanstaat (werkt óók bij een lege map);
+  // voor "Zonder map" vallen we terug op de adressen, want die groep heeft geen map-id.
+  const mapGeselecteerd = (m: VoorschouwMap | null, items: Voorschouw[]) =>
+    m ? mapSelectie.has(m.id) : items.length > 0 && items.every((v) => selectie.has(v.id));
+  const mapDeels = (m: VoorschouwMap | null, items: Voorschouw[]) =>
+    !mapGeselecteerd(m, items) && items.some((v) => selectie.has(v.id));
+  const toggleMapSelectie = (m: VoorschouwMap | null, items: Voorschouw[]) => {
+    const aan = mapGeselecteerd(m, items);
+    if (m) setMapSelectie((p) => { const n = new Set(p); if (aan) n.delete(m.id); else n.add(m.id); return n; });
+    setSelectie((p) => { const n = new Set(p); items.forEach((v) => (aan ? n.delete(v.id) : n.add(v.id))); return n; });
+  };
   const downloadMap = async (items: Voorschouw[]) => {
     if (!items.length) return;
     setBezig(true);
@@ -458,8 +462,14 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
   const terugUitStedin = (m: VoorschouwMap) => updateVoorschouwMap(m.id, { gereedVoorStedin: false, gereedOp: undefined });
   // ── Archief: mappen die klaar zijn uit het overzicht halen, maar wél bewaren ──
   const gearchiveerdeMappen = [...voorschouwMappen.filter((m) => m.gearchiveerd)].sort((a, b) => (b.gearchiveerdOp ?? "").localeCompare(a.gearchiveerdOp ?? ""));
+  // Te archiveren: expliciet aangevinkte mappen (ook lege) + de mappen van geselecteerde adressen.
+  const teArchiverenMapIds = () => {
+    const ids = new Set<string>([...mapSelectie].filter((id) => geldigeMapIds.has(id)));
+    geselecteerd().forEach((v) => { if (v.mapId && geldigeMapIds.has(v.mapId)) ids.add(v.mapId); });
+    return ids;
+  };
   const archiveerSelectie = () => {
-    const mapIds = new Set(geselecteerd().map((v) => v.mapId).filter((x): x is string => !!x));
+    const mapIds = teArchiverenMapIds();
     const nu = new Date().toISOString();
     mapIds.forEach((id) => updateVoorschouwMap(id, { gearchiveerd: true, gearchiveerdOp: nu, gereedVoorStedin: false }));
     wis();
@@ -887,7 +897,7 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
             {isLeiding && (
               <button
                 type="button"
-                disabled={!geselecteerd().some((v) => v.mapId && geldigeMapIds.has(v.mapId))}
+                disabled={teArchiverenMapIds().size === 0}
                 onClick={() => setVraagArchief(true)}
                 title="Zet de mappen van de geselecteerde adressen in het archief (blijven bewaard)"
                 className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-ink-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50 disabled:cursor-not-allowed disabled:opacity-40 sm:flex-none sm:py-2"
@@ -1004,10 +1014,10 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
                 <div className="flex flex-wrap items-center gap-3 px-4 py-4">
                   <input
                     type="checkbox"
-                    checked={mapGeselecteerd(g.body)}
-                    ref={(el) => { if (el) el.indeterminate = mapDeels(g.body); }}
-                    onChange={() => toggleMapSelectie(g.body)}
-                    disabled={g.body.length === 0}
+                    checked={mapGeselecteerd(g.map, g.body)}
+                    ref={(el) => { if (el) el.indeterminate = mapDeels(g.map, g.body); }}
+                    onChange={() => toggleMapSelectie(g.map, g.body)}
+                    disabled={!g.map && g.body.length === 0}
                     aria-label={`Map ${g.map ? g.map.naam : "zonder map"} selecteren`}
                     className="h-5 w-5 shrink-0 accent-brand-600 disabled:opacity-40"
                   />
