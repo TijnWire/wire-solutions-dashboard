@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { mapPastBijPlaats } from "../lib/voorschouwGroep";
+import { scrollNaarBoven } from "../lib/scroll";
 import { Card, Badge, Bevestig } from "../components/ui";
 import { VoorschouwForm } from "../components/VoorschouwForm";
 import { Keuze } from "../components/Keuze";
@@ -267,13 +268,9 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
   const [vraagArchief, setVraagArchief] = useState(false); // bevestiging vóór mappen archiveren
   const [mapSelectie, setMapSelectie] = useState<Set<string>>(new Set()); // geselecteerde mappen (ook lege)
   useEffect(() => { try { localStorage.setItem("vs-mapSort", sorteerModus); } catch { /* opslag niet beschikbaar */ } }, [sorteerModus]);
-  // Kwam je via "Mijn werk" recht op jóuw map? Die staat al open; scroll er meteen naartoe.
-  useEffect(() => {
-    if (!initieelMap) return;
-    const el = document.getElementById(`vsmap-${initieelMap}`);
-    el?.scrollIntoView({ behavior: "smooth", block: "start" });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Een map opent op een eigen pagina: begin bovenaan. Anders blijft de kolom staan op de plek waar je
+  // in de lijst stond en land je middenin de map.
+  useEffect(() => { if (mapDetailId) scrollNaarBoven(); }, [mapDetailId]);
 
   if (!currentUser) return null;
   const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr";

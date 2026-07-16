@@ -1,4 +1,4 @@
-import { useState, Fragment } from "react";
+import { useState, useEffect, Fragment } from "react";
 import {
   Plus,
   ArrowLeft,
@@ -32,6 +32,7 @@ import { WerknemerKiezer } from "../components/WerknemerKiezer";
 import { BestandScanModal } from "../components/BestandScanModal";
 import { DatumKiezer } from "../components/DatumKiezer";
 import { afleidRegio } from "../lib/regio";
+import { scrollNaarBoven } from "../lib/scroll";
 import { bevestigingsMail, maakConceptFactuurVanRonde } from "../lib/brievenFlow";
 import {
   looproute,
@@ -864,6 +865,8 @@ function MapRij({ naam, rondes, isLeiding, onOpen }: { naam: string; rondes: Bri
 // boekhouding) en de adressen per straat in looproute-volgorde.
 function MapDetail({ naam, rondes, isLeiding, onOpenRonde, onTerug }: { naam: string; rondes: Brievenronde[]; isLeiding: boolean; onOpenRonde: (id: string) => void; onTerug: () => void }) {
   const { updateRonde, addRonde, users } = useApp();
+  // Begin bovenaan: anders blijf je hangen op de scrollpositie van het overzicht.
+  useEffect(() => { scrollNaarBoven(); }, []);
   const [naamBewerk, setNaamBewerk] = useState<string | null>(null);
   const [pdBewerk, setPdBewerk] = useState(false);
   const [routeOpen, setRouteOpen] = useState(false);

@@ -40,6 +40,7 @@ import { Module } from "./pages/Module";
 import { AiAssistent } from "./components/AiAssistent";
 import { OfflineBanner } from "./components/OfflineBanner";
 import { NAV, magZien } from "./lib/nav";
+import { HOOFDINHOUD_ID } from "./lib/scroll";
 import { useApp } from "./store/AppContext";
 import { NavContext, type NavTarget } from "./store/NavContext";
 
@@ -222,7 +223,8 @@ export default function App() {
         />
         <OfflineBanner />
         {/* De key zorgt dat elke nieuwe pagina opnieuw mount, waardoor de schuif-animatie afspeelt. */}
-        <main className="scrollbar-thin flex-1 overflow-y-auto overflow-x-hidden overscroll-contain p-4 pb-[calc(5rem+env(safe-area-inset-bottom))] md:p-6 md:pb-6">
+        {/* id: deze kolom is wat er scrollt — zie lib/scroll.ts (detailpagina's beginnen bovenaan). */}
+        <main id={HOOFDINHOUD_ID} className="scrollbar-thin flex-1 overflow-y-auto overflow-x-hidden overscroll-contain p-4 pb-[calc(5rem+env(safe-area-inset-bottom))] md:p-6 md:pb-6">
           <div key={active} className="animate-slide-in-right">{render()}</div>
         </main>
       </div>
