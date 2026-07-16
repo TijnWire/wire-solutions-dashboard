@@ -2,6 +2,7 @@ import {
   createContext,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -71,6 +72,16 @@ import {
 } from "../lib/seed";
 import { idbGet, idbSet } from "./db";
 import { mergeCollection, mergeTombstones, type Tombstones } from "../lib/merge";
+
+// ── Voorschouwen sharden voor de sync ──────────────────────────────────────────────
+// D1/SQLite weigert een rij groter dan ~2 MB (SQLITE_TOOBIG). Voorschouwen bevatten foto's
+// en groeien makkelijk voorbij die grens. Daarom syncen we ze niet als één blob, maar over
+// meerdere kleine rijen (voorschouwen_0..N), verdeeld op een hash van het id. De rest van de
+// app blijft met één `voorschouwen`-lijst werken; alleen de opslag/sync is opgesplitst.
+const VS_SHARDS = 16;
+const vsShard = (id: string) => { let h = 0; for (let i = 0; i < id.length; i++) h = (Math.imul(h, 31) + id.charCodeAt(i)) >>> 0; return h % VS_SHARDS; };
+const vsKey = (i: number) => `voorschouwen_${i}`;
+const isVsShard = (key: string) => key.startsWith("voorschouwen_");
 import { supabaseAan, sbLeesAlles, sbSchrijf, sbVersies, sbLeesKeys, sbLogin, sbRegistreer, sbLogout, sbSessieEmail, bewaarSyncCred, wisSyncCred, sbHerstelSessie, cloudWsUrl } from "../lib/supabase";
 
 // Oude browseropslag-sleutels — alleen nog om eenmalig naar IndexedDB te migreren.
@@ -584,6 +595,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (hydrated) void idbSet("deletes", deletes);
   }, [deletes, hydrated]);
 
+  // Voorschouwen verdeeld over de sync-shards (zie VS_SHARDS). Gememoiseerd zodat ongewijzigde
+  // shards dezelfde referentie houden en niet onnodig opnieuw geserialiseerd/gepusht worden.
+  const vsShards = useMemo(() => {
+    const arr: Voorschouw[][] = Array.from({ length: VS_SHARDS }, () => []);
+    for (const v of voorschouwen) arr[vsShard(v.id)].push(v);
+    return arr;
+  }, [voorschouwen]);
+
   // ── Centrale database (Supabase) — alle onderdelen synchroniseren tussen apparaten ──
   // Per onderdeel: een setter (om binnenkomende data toe te passen) en de huidige waarde (om te pushen).
   const setters: Record<string, (v: unknown) => void> = {
@@ -595,7 +614,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     saneringen: (v) => setSaneringen(v as Sanering[]),
     buurtaanpak: (v) => setBuurtaanpak(v as Buurtaanpak[]),
     tauw: (v) => setTauwOpdrachten(v as TauwOpdracht[]),
-    voorschouwen: (v) => setVoorschouwen(v as Voorschouw[]),
     voorschouwMappen: (v) => setVoorschouwMappen(v as VoorschouwMap[]),
     mededelingen: (v) => setMededelingen(v as Mededeling[]),
     rondes: (v) => setRondes((v as Brievenronde[]).map((o) => ({ ...o, plaats: netjesPlaats(o.plaats) }))),
@@ -617,12 +635,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     klanten: (v) => setKlanten(v as Klant[]),
     deletes: (v) => setDeletes((prev) => mergeTombstones(prev, v as Tombstones)),
   };
+  // Voorschouwen: één setter per shard; elke setter vervangt alléén de records van zijn eigen shard.
+  for (let i = 0; i < VS_SHARDS; i++) {
+    const idx = i;
+    setters[vsKey(idx)] = (v) => setVoorschouwen((prev) => [...prev.filter((x) => vsShard(x.id) !== idx), ...(v as Voorschouw[])]);
+  }
   const waarden: Record<string, unknown> = {
     users, projects, taken, projectPosts, planningen, saneringen, tauw: tauwOpdrachten,
-    voorschouwen, voorschouwMappen, mededelingen, rondes, afspraken, facturen, bedrijf,
+    voorschouwMappen, mededelingen, rondes, afspraken, facturen, bedrijf,
     loonstroken, boetes, comm, verlof, schouwafspraken, blancoBrieven, urenstaat, agendaItems, todos, kennis, instellingen, klanten, opdrachtgevers, buurtaanpak,
     deletes,
   };
+  // Voorschouwen per shard toevoegen aan de te-pushen waarden (los van de rest).
+  for (let i = 0; i < VS_SHARDS; i++) waarden[vsKey(i)] = vsShards[i];
   // Altijd de NIEUWSTE lokale waarden beschikbaar in de sync-effecten (die niet bij elke data-wijziging
   // opnieuw opgebouwd worden). Nodig voor de wipe-bescherming hieronder.
   const waardenRef = useRef(waarden);
@@ -634,9 +659,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // De overige onderdelen (bedrijf, comm, instellingen) zijn losse objecten: daar wint de laatste versie.
   const COLLECTIONS = new Set([
     "users", "projects", "taken", "projectPosts", "planningen", "saneringen", "buurtaanpak", "tauw",
-    "voorschouwen", "voorschouwMappen", "mededelingen", "rondes", "afspraken", "facturen",
+    "voorschouwMappen", "mededelingen", "rondes", "afspraken", "facturen",
     "opdrachtgevers", "loonstroken", "boetes", "verlof", "schouwafspraken", "blancoBrieven", "urenstaat", "agendaItems", "todos", "kennis", "klanten",
   ]);
+  for (let i = 0; i < VS_SHARDS; i++) COLLECTIONS.add(vsKey(i));
 
   // Past binnenkomende centrale data toe: lijsten worden per record samengevoegd met wat er lokaal staat
   // (zo verdwijnt een record nooit), verwijderde records blijven verwijderd. Losse objecten: laatste wint.
@@ -653,7 +679,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const merged = mergeCollection(
         waardenRef.current[key] as { id: string }[] | undefined,
         val as { id: string }[] | undefined,
-        deletesRef.current[key]
+        deletesRef.current[isVsShard(key) ? "voorschouwen" : key]
       );
       setters[key](merged);
     } else {
