@@ -164,38 +164,53 @@ function MapSelect({ value, mappen, onKies }: {
   onKies: (waarde: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [zoek, setZoek] = useState("");
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const btnRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const zoekRef = useRef<HTMLInputElement | null>(null);
   const breedte = 224; // px (w-56)
+  const zoekbaar = mappen.length > 4; // bij een paar mappen heeft zoeken geen zin
 
   const openMenu = () => {
+    setZoek("");
     const r = btnRef.current?.getBoundingClientRect();
     if (r) setPos({ top: r.bottom + 6, left: Math.max(8, r.right - breedte) });
     setOpen(true);
   };
   useEffect(() => {
     if (!open) return;
+    if (zoekbaar) setTimeout(() => zoekRef.current?.focus(), 0); // meteen kunnen typen
     const buiten = (e: MouseEvent) => {
       if (btnRef.current?.contains(e.target as Node) || menuRef.current?.contains(e.target as Node)) return;
       setOpen(false);
     };
     const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
-    const dicht = () => setOpen(false); // bij scrollen/resizen sluiten (positie zou anders verlopen)
+    // Bij scrollen/resizen het menu MEEVERPLAATSEN (niet sluiten). Alleen sluiten als de knop
+    // helemaal uit beeld raakt — anders zou het menu los in beeld blijven zweven.
+    const volg = (e?: Event) => {
+      if (e && menuRef.current?.contains(e.target as Node)) return; // scrollen ín het menu zelf: niets doen
+      const r = btnRef.current?.getBoundingClientRect();
+      if (!r) return;
+      if (r.bottom < 0 || r.top > window.innerHeight) { setOpen(false); return; }
+      setPos({ top: r.bottom + 6, left: Math.max(8, r.right - breedte) });
+    };
     document.addEventListener("mousedown", buiten);
     document.addEventListener("keydown", esc);
-    window.addEventListener("scroll", dicht, true);
-    window.addEventListener("resize", dicht);
+    window.addEventListener("scroll", volg, true);
+    window.addEventListener("resize", volg);
     return () => {
       document.removeEventListener("mousedown", buiten);
       document.removeEventListener("keydown", esc);
-      window.removeEventListener("scroll", dicht, true);
-      window.removeEventListener("resize", dicht);
+      window.removeEventListener("scroll", volg, true);
+      window.removeEventListener("resize", volg);
     };
-  }, [open]);
+  }, [open, zoekbaar]);
 
   const huidig = mappen.find((m) => m.id === value);
-  const kies = (w: string) => { onKies(w); setOpen(false); };
+  const kies = (w: string) => { onKies(w); setOpen(false); setZoek(""); };
+  const q = zoek.trim().toLowerCase();
+  const gefilterd = q ? mappen.filter((m) => m.naam.toLowerCase().includes(q)) : mappen;
 
   return (
     <>
@@ -205,26 +220,44 @@ function MapSelect({ value, mappen, onKies }: {
         <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-ink-400 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
       {open && pos && createPortal(
-        <div ref={menuRef} style={{ position: "fixed", top: pos.top, left: pos.left, width: breedte }} className="z-50 max-h-72 overflow-auto rounded-xl border border-ink-200 bg-white p-1 shadow-cardhover">
-          <button type="button" onClick={() => kies("")} className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm outline-none focus-visible:bg-ink-50 ${value === "" ? "bg-brand-50 font-semibold text-brand-700" : "text-ink-600 hover:bg-ink-50"}`}>
-            <span className="flex-1">Geen map</span>
-            {value === "" && <Check className="h-4 w-4 shrink-0 text-brand-600" />}
-          </button>
-          {mappen.map((m) => {
-            const actief = m.id === value;
-            return (
-              <button key={m.id} type="button" onClick={() => kies(m.id)} className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm outline-none focus-visible:bg-ink-50 ${actief ? "bg-brand-50 font-semibold text-brand-700" : "text-ink-700 hover:bg-ink-50"}`}>
-                <Folder className={`h-4 w-4 shrink-0 ${actief ? "text-brand-600" : "text-ink-400"}`} />
-                <span className="flex-1 truncate">{m.naam}</span>
-                {actief && <Check className="h-4 w-4 shrink-0 text-brand-600" />}
-              </button>
-            );
-          })}
-          <div className="my-1 border-t border-ink-100" />
-          <button type="button" onClick={() => kies("__nieuw__")} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold text-brand-700 outline-none hover:bg-brand-50 focus-visible:bg-brand-50">
-            <FolderPlus className="h-4 w-4 shrink-0" />
-            <span className="flex-1">Nieuwe map…</span>
-          </button>
+        <div ref={menuRef} style={{ position: "fixed", top: pos.top, left: pos.left, width: breedte }} className="z-50 overflow-hidden rounded-xl border border-ink-200 bg-white shadow-cardhover">
+          {zoekbaar && (
+            <div className="flex items-center gap-1.5 border-b border-ink-100 px-2.5 py-2">
+              <Search className="h-4 w-4 shrink-0 text-ink-400" />
+              <input
+                ref={zoekRef}
+                value={zoek}
+                onChange={(e) => setZoek(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && gefilterd[0]) { e.preventDefault(); kies(gefilterd[0].id); } }}
+                placeholder="Zoek een map…"
+                aria-label="Map zoeken"
+                className="w-full bg-transparent text-sm text-ink-800 outline-none placeholder:text-ink-400"
+              />
+            </div>
+          )}
+          <div className="max-h-72 overflow-auto p-1">
+            <button type="button" onClick={() => kies("")} className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm outline-none focus-visible:bg-ink-50 ${value === "" ? "bg-brand-50 font-semibold text-brand-700" : "text-ink-600 hover:bg-ink-50"}`}>
+              <span className="flex-1">Geen map</span>
+              {value === "" && <Check className="h-4 w-4 shrink-0 text-brand-600" />}
+            </button>
+            {q && gefilterd.length === 0 ? (
+              <div className="px-3 py-4 text-center text-sm text-ink-400">Geen map gevonden</div>
+            ) : gefilterd.map((m) => {
+              const actief = m.id === value;
+              return (
+                <button key={m.id} type="button" onClick={() => kies(m.id)} className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm outline-none focus-visible:bg-ink-50 ${actief ? "bg-brand-50 font-semibold text-brand-700" : "text-ink-700 hover:bg-ink-50"}`}>
+                  <Folder className={`h-4 w-4 shrink-0 ${actief ? "text-brand-600" : "text-ink-400"}`} />
+                  <span className="flex-1 truncate">{m.naam}</span>
+                  {actief && <Check className="h-4 w-4 shrink-0 text-brand-600" />}
+                </button>
+              );
+            })}
+            <div className="my-1 border-t border-ink-100" />
+            <button type="button" onClick={() => kies("__nieuw__")} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold text-brand-700 outline-none hover:bg-brand-50 focus-visible:bg-brand-50">
+              <FolderPlus className="h-4 w-4 shrink-0" />
+              <span className="flex-1">Nieuwe map…</span>
+            </button>
+          </div>
         </div>,
         document.body
       )}
