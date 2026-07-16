@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { Plus, ArrowLeft, Download, Pencil, Trash2, Receipt, X, FileSpreadsheet, Users, Search, Mail, Clock, ArrowDownToLine, SlidersHorizontal, Save } from "lucide-react";
+import { Plus, ArrowLeft, Download, Pencil, Trash2, Receipt, X, FileSpreadsheet, Users, Search, Mail, Clock, ArrowDownToLine, SlidersHorizontal, Save, Eye, Undo2 } from "lucide-react";
 import { useApp } from "../store/AppContext";
+import { useNav } from "../store/NavContext";
 import { DatumKiezer } from "../components/DatumKiezer";
 import { Keuze } from "../components/Keuze";
 import { Card, Badge, Bevestig } from "../components/ui";
@@ -457,7 +458,8 @@ function TarievenBeheer({ bedrijf, updateBedrijf, onKlaar }: { bedrijf: Bedrijf;
 }
 
 export function Facturen({ initieelFactuur, nieuwFactuurProject }: { initieelFactuur?: string; nieuwFactuurProject?: string }) {
-  const { facturen, bedrijf, updateBedrijf, deleteFactuur, projects, updateProject, opdrachtgevers, buurtaanpak, updateBuurtaanpak, rondes, updateRonde, users, urenstaat } = useApp();
+  const { facturen, bedrijf, updateBedrijf, deleteFactuur, projects, updateProject, opdrachtgevers, buurtaanpak, updateBuurtaanpak, rondes, updateRonde, users, urenstaat, currentUser, addMededeling } = useApp();
+  const { navigeer } = useNav();
   const teFactureren = projects.filter((p) => p.boekhouding === "te_factureren");
   const teFacturerenBuurt = buurtaanpak.filter((b) => b.boekhouding === "te_factureren");
   const teFacturerenRondes = rondes.filter((r) => r.boekhouding === "te_factureren");
@@ -492,6 +494,9 @@ export function Facturen({ initieelFactuur, nieuwFactuurProject }: { initieelFac
   const [periode, setPeriode] = useState<Periode>("week");
   const [anker, setAnker] = useState(() => new Date().toISOString().slice(0, 10));
   const [statusFilter, setStatusFilter] = useState<"" | FactuurStatus>("");
+  // Boekhouder-actie op inkomend werk: terugsturen naar het veld en/of een melding plaatsen.
+  const [issue, setIssue] = useState<null | { naam: string; projectId?: string; reopen: () => void }>(null);
+  const [reden, setReden] = useState("");
 
   // Maakt automatisch een concept-factuur op basis van een doorgeschakeld project:
   // klantgegevens van de Stedin-opdrachtgever + PD-nummer + wijk als regel. Aantal/tarief vul je nog in.
@@ -549,6 +554,24 @@ export function Facturen({ initieelFactuur, nieuwFactuurProject }: { initieelFac
     setNieuwVan(maakConceptVan(groep.pd ?? "", `Brieven & route — ${groep.naam}`, groep.gegooid || 1, brievenTarief));
     setBron(() => () => groep.rondes.forEach((r) => updateRonde(r.id, { boekhouding: "gefactureerd", gefactureerdOp: nu() })));
     setModus("formulier");
+  };
+
+  // Bekijken: spring naar het volledige werk om het te bekijken of aan te passen.
+  const openProject = (id: string) => navigeer("projecten", { project: id });
+  const openBuurt = (id: string) => navigeer("buurtaanpak", { buurtaanpakId: id });
+  const openMap = (rs: Brievenronde[]) => navigeer("brieven", { ronde: rs[0]?.id });
+
+  // Terugsturen/melding: open de modal; bij terugsturen zet reopen() het werk terug in het veld.
+  const startIssue = (naam: string, reopen: () => void, projectId?: string) => { setReden(""); setIssue({ naam, reopen, projectId }); };
+  const verwerkIssue = (terugsturen: boolean) => {
+    if (!issue) return;
+    const r = reden.trim();
+    if (currentUser && (r || terugsturen)) {
+      const prefix = terugsturen ? "⚠️ Teruggestuurd door de boekhouding" : "📌 Opmerking van de boekhouding";
+      addMededeling({ auteurId: currentUser.id, tekst: `${prefix} — ${issue.naam}${r ? `: ${r}` : ""}`, belangrijk: true, projectId: issue.projectId });
+    }
+    if (terugsturen) issue.reopen();
+    setIssue(null); setReden("");
   };
 
   // Deep-link: open meteen de factuur die vanuit een andere flow is aangemaakt.
@@ -681,7 +704,11 @@ export function Facturen({ initieelFactuur, nieuwFactuurProject }: { initieelFac
                   </div>
                   <div className="text-xs text-ink-500">{[p.wijk, p.doorgestuurdOp ? `doorgeschakeld ${datumKort(p.doorgestuurdOp)}` : ""].filter(Boolean).join(" · ")}</div>
                 </div>
-                <button type="button" onClick={() => nieuweVanProject(p)} className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700 sm:w-auto"><Plus className="h-4 w-4" /> Factuur maken</button>
+                <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+                  <button type="button" onClick={() => openProject(p.id)} className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-3 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-50"><Eye className="h-4 w-4" /> Bekijken</button>
+                  <button type="button" onClick={() => startIssue([p.pdNummer, p.naam].filter(Boolean).join(" · "), () => updateProject(p.id, { boekhouding: undefined, doorgestuurdOp: undefined, afgerondOp: undefined }), p.id)} className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-100"><Undo2 className="h-4 w-4" /> Terugsturen</button>
+                  <button type="button" onClick={() => nieuweVanProject(p)} className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700"><Plus className="h-4 w-4" /> Factuur maken</button>
+                </div>
               </div>
             ))}
             {teFacturerenBuurt.map((b) => (
@@ -694,7 +721,11 @@ export function Facturen({ initieelFactuur, nieuwFactuurProject }: { initieelFac
                   </div>
                   <div className="text-xs text-ink-500">{[b.regio, b.doorgestuurdOp ? `doorgeschakeld ${datumKort(b.doorgestuurdOp)}` : ""].filter(Boolean).join(" · ")}</div>
                 </div>
-                <button type="button" onClick={() => nieuweVanBuurt(b)} className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700 sm:w-auto"><Plus className="h-4 w-4" /> Factuur maken</button>
+                <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+                  <button type="button" onClick={() => openBuurt(b.id)} className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-3 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-50"><Eye className="h-4 w-4" /> Bekijken</button>
+                  <button type="button" onClick={() => startIssue([b.pdNummer, b.naam].filter(Boolean).join(" · "), () => updateBuurtaanpak(b.id, { boekhouding: undefined, doorgestuurdOp: undefined }))} className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-100"><Undo2 className="h-4 w-4" /> Terugsturen</button>
+                  <button type="button" onClick={() => nieuweVanBuurt(b)} className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700"><Plus className="h-4 w-4" /> Factuur maken</button>
+                </div>
               </div>
             ))}
             {teFacturerenMappen.map((m) => (
@@ -707,7 +738,11 @@ export function Facturen({ initieelFactuur, nieuwFactuurProject }: { initieelFac
                   </div>
                   <div className="text-xs text-ink-500">{[m.plaats, `${m.rondes.length} ${m.rondes.length === 1 ? "straat" : "straten"}`, `${m.gegooid} gegooid`, m.doorgestuurd ? `afgerond ${datumKort(m.doorgestuurd)}` : ""].filter(Boolean).join(" · ")}</div>
                 </div>
-                <button type="button" onClick={() => nieuweVanMap(m)} className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700 sm:w-auto"><Plus className="h-4 w-4" /> Factuur maken</button>
+                <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+                  <button type="button" onClick={() => openMap(m.rondes)} className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-3 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-50"><Eye className="h-4 w-4" /> Bekijken</button>
+                  <button type="button" onClick={() => startIssue([m.pd, m.naam].filter(Boolean).join(" · "), () => m.rondes.forEach((r) => updateRonde(r.id, { boekhouding: undefined, doorgestuurdOp: undefined, status: "toegewezen", verstuurdOp: undefined })))} className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-100"><Undo2 className="h-4 w-4" /> Terugsturen</button>
+                  <button type="button" onClick={() => nieuweVanMap(m)} className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700"><Plus className="h-4 w-4" /> Factuur maken</button>
+                </div>
               </div>
             ))}
           </div>
@@ -807,6 +842,25 @@ export function Facturen({ initieelFactuur, nieuwFactuurProject }: { initieelFac
         }}
         onAnnuleer={() => setVerwijder(null)}
       />
+
+      {issue && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setIssue(null)}>
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-cardhover" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-1 flex items-center gap-2">
+              <Undo2 className="h-5 w-5 text-amber-600" />
+              <h3 className="text-base font-bold text-ink-900">Terugsturen of melding maken</h3>
+            </div>
+            <p className="text-sm text-ink-500">{issue.naam}</p>
+            <textarea value={reden} onChange={(e) => setReden(e.target.value)} rows={4} autoFocus placeholder="Wat is er aan de hand / wat moet er gebeuren? (bijv. adressen ontbreken, verkeerd PD-nummer, uren kloppen niet…)" className="mt-3 w-full resize-none rounded-lg border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100" />
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button type="button" onClick={() => verwerkIssue(true)} className="inline-flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-amber-700"><Undo2 className="h-4 w-4" /> Terugsturen naar het veld</button>
+              <button type="button" onClick={() => verwerkIssue(false)} disabled={!reden.trim()} className="inline-flex items-center gap-2 rounded-lg border border-ink-200 bg-white px-4 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50 disabled:cursor-not-allowed disabled:opacity-40"><Receipt className="h-4 w-4" /> Alleen melding plaatsen</button>
+              <button type="button" onClick={() => setIssue(null)} className="rounded-lg px-3 py-2.5 text-sm text-ink-500 hover:bg-ink-50">Annuleren</button>
+            </div>
+            <p className="mt-2 text-xs text-ink-400">Terugsturen haalt het werk uit de boekhouding en zet het terug in het veld. Beide opties plaatsen een belangrijke mededeling voor het team.</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
