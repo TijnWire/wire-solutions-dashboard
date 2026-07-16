@@ -2,7 +2,7 @@
 // Strategie: navigaties altijd via netwerk (verse app), gehashte assets cache-first.
 // Let op: verhoog het versienummer bij elke release, dan wist de nieuwe worker de oude cache
 // en laadt iedereen automatisch de nieuwste versie.
-const CACHE = "wire-cache-v115";
+const CACHE = "wire-cache-v116";
 const CORE = ["/", "/index.html", "/manifest.webmanifest", "/logo.svg", "/stedin-header.png"];
 
 self.addEventListener("install", (event) => {

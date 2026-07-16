@@ -18,7 +18,6 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  ScanLine,
   ArrowUp,
   ArrowDown,
   AlertTriangle,
@@ -33,7 +32,6 @@ import { useApp } from "../store/AppContext";
 import { mapPastBijPlaats } from "../lib/voorschouwGroep";
 import { Card, Badge, Bevestig } from "../components/ui";
 import { VoorschouwForm } from "../components/VoorschouwForm";
-import { VoorschouwScanModal } from "../components/VoorschouwScanModal";
 import { Keuze } from "../components/Keuze";
 import {
   downloadVoorschouwPdf,
@@ -270,7 +268,6 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
   const { voorschouwen, voorschouwMappen, users, currentUser, deleteVoorschouw, updateVoorschouw, addVoorschouwMap, updateVoorschouwMap, deleteVoorschouwMap } = useApp();
   const [modus, setModus] = useState<"lijst" | "formulier">("lijst");
   const [bewerk, setBewerk] = useState<Voorschouw | undefined>(undefined);
-  const [scanOpen, setScanOpen] = useState(false);
   const [voorinvul, setVoorinvul] = useState<Partial<Voorschouw> | undefined>(undefined);
   const [selectie, setSelectie] = useState<Set<string>>(new Set());
   const [bezig, setBezig] = useState(false);
@@ -338,13 +335,6 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
     setModus("formulier");
   };
   // Na het scannen: open een nieuw formulier dat vooraf is ingevuld met de afgelezen velden + foto's.
-  const naScan = (velden: Partial<Voorschouw>, fotos: string[]) => {
-    setScanOpen(false);
-    setBewerk(undefined);
-    setVoorinvul({ ...velden, fotos });
-    setModus("formulier");
-  };
-
   if (modus === "formulier") {
     return <VoorschouwForm bestaande={bewerk} voorinvul={voorinvul} onKlaar={() => setModus("lijst")} />;
   }
@@ -788,14 +778,6 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={() => setScanOpen(true)}
-            className="inline-flex items-center gap-2 rounded-lg border border-ink-200 bg-white px-4 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50"
-          >
-            <ScanLine className="h-4 w-4" />
-            Formulier scannen
-          </button>
-          <button
-            type="button"
             onClick={nieuw}
             className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700"
           >
@@ -804,7 +786,6 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
           </button>
         </div>
       </div>
-      <VoorschouwScanModal open={scanOpen} onSluit={() => setScanOpen(false)} onResultaat={naScan} />
 
       {isLeiding && (
         <div className="flex gap-1 rounded-xl border border-ink-200 bg-white p-1 shadow-card">
