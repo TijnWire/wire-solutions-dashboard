@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Plus, ArrowLeft, Download, Pencil, Trash2, Receipt, X, FileSpreadsheet, Check, Users, Search, CheckSquare, Square, Mail, Clock } from "lucide-react";
+import { Plus, ArrowLeft, Download, Pencil, Trash2, Receipt, X, FileSpreadsheet, Check, Users, Search, Mail, Clock } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { DatumKiezer } from "../components/DatumKiezer";
 import { Keuze } from "../components/Keuze";
@@ -223,32 +223,22 @@ function FactuurForm({ bestaande, initieel, onKlaar }: { bestaande?: Factuur; in
 
 // ── Opdrachtgevers beheren (vaste klantgegevens) ──
 function OpdrachtgeverBeheer({ onKlaar }: { onKlaar: () => void }) {
-  const { opdrachtgevers, addOpdrachtgever, updateOpdrachtgever, deleteOpdrachtgever, users } = useApp();
+  const { opdrachtgevers, addOpdrachtgever, updateOpdrachtgever, deleteOpdrachtgever } = useApp();
   const leeg = { naam: "", afdeling: "", relatienummer: "", adres: "", postcodePlaats: "", email: "", tav: "", personen: [] as { userId: string; uurtarief: number }[] };
   const [bewerkId, setBewerkId] = useState<string | null>(null); // null = dicht, "nieuw" = nieuw, id = bewerken
   const [d, setD] = useState(leeg);
-  const [zoek, setZoek] = useState(""); // zoeken in de medewerkerslijst
   const set = (patch: Partial<typeof d>) => setD((x) => ({ ...x, ...patch }));
   const start = (o?: Opdrachtgever) => {
-    setZoek("");
     if (o) { setBewerkId(o.id); setD({ naam: o.naam, afdeling: o.afdeling ?? "", relatienummer: o.relatienummer, adres: o.adres, postcodePlaats: o.postcodePlaats, email: o.email, tav: o.tav ?? "", personen: o.personen ?? [] }); }
     else { setBewerkId("nieuw"); setD(leeg); }
   };
-  const persoonAan = (userId: string) => d.personen.some((p) => p.userId === userId);
-  const togglePersoon = (userId: string) => set({ personen: persoonAan(userId) ? d.personen.filter((p) => p.userId !== userId) : [...d.personen, { userId, uurtarief: 0 }] });
-  const zetTarief = (userId: string, tarief: number) => set({ personen: d.personen.map((p) => (p.userId === userId ? { ...p, uurtarief: tarief } : p)) });
-  const sluit = () => { setBewerkId(null); setD(leeg); setZoek(""); };
+  const sluit = () => { setBewerkId(null); setD(leeg); };
   const opslaan = () => {
     if (!d.naam.trim()) return;
     if (bewerkId && bewerkId !== "nieuw") updateOpdrachtgever(bewerkId, d);
     else addOpdrachtgever(d);
     sluit();
   };
-  // Aangevinkte medewerkers bovenaan; typen filtert en brengt de juiste persoon naar boven.
-  const q = zoek.trim().toLowerCase();
-  const medewerkerLijst = [...users]
-    .sort((a, b) => (persoonAan(a.id) ? 0 : 1) - (persoonAan(b.id) ? 0 : 1) || a.naam.localeCompare(b.naam, "nl"))
-    .filter((u) => !q || persoonAan(u.id) || u.naam.toLowerCase().includes(q));
 
   return (
     <div className="mx-auto max-w-2xl space-y-5">
@@ -274,45 +264,6 @@ function OpdrachtgeverBeheer({ onKlaar }: { onKlaar: () => void }) {
             <div><label className={labelCls}>Postcode + plaats</label><input value={d.postcodePlaats} onChange={(e) => set({ postcodePlaats: e.target.value })} placeholder="3534 AM Utrecht" className={veld} /></div>
           </div>
 
-          {/* Medewerkers die voor deze opdrachtgever werken + hun uurtarief → basis voor 'Factuur op uren' */}
-          <div>
-            <label className={labelCls}>Medewerkers &amp; uurtarief <span className="font-normal text-ink-400">(voor het automatisch factureren op uren)</span></label>
-            <div className="overflow-hidden rounded-xl border border-ink-200">
-              <div className="flex items-center gap-2 border-b border-ink-100 px-3 py-2">
-                <Search className="h-4 w-4 shrink-0 text-ink-400" />
-                <input value={zoek} onChange={(e) => setZoek(e.target.value)} placeholder="Typ een naam om te zoeken…" className="w-full bg-transparent text-sm text-ink-800 outline-none placeholder:text-ink-400" />
-                {zoek && <button type="button" onClick={() => setZoek("")} className="rounded p-0.5 text-ink-400 hover:text-ink-700" aria-label="Zoekterm wissen"><X className="h-4 w-4" /></button>}
-              </div>
-              <div className="max-h-72 space-y-1 overflow-y-auto p-2">
-                {users.length === 0 ? (
-                  <p className="px-2 py-3 text-sm text-ink-400">Nog geen medewerkers.</p>
-                ) : medewerkerLijst.length === 0 ? (
-                  <p className="px-2 py-3 text-sm text-ink-400">Geen medewerker gevonden.</p>
-                ) : (
-                  medewerkerLijst.map((u) => {
-                    const aan = persoonAan(u.id);
-                    const tarief = d.personen.find((p) => p.userId === u.id)?.uurtarief ?? 0;
-                    return (
-                      <div key={u.id} className={`flex items-center gap-2 rounded-lg px-2 py-1.5 ${aan ? "bg-brand-50" : ""}`}>
-                        <button type="button" onClick={() => togglePersoon(u.id)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
-                          {aan ? <CheckSquare className="h-4 w-4 shrink-0 text-brand-600" /> : <Square className="h-4 w-4 shrink-0 text-ink-300" />}
-                          <span className="truncate text-sm text-ink-800">{u.naam}</span>
-                        </button>
-                        {aan && (
-                          <div className="flex shrink-0 items-center gap-1">
-                            <span className="text-xs text-ink-400">€</span>
-                            <input inputMode="decimal" value={tarief ? String(tarief).replace(".", ",") : ""} onChange={(e) => { const n = parseFloat(e.target.value.replace(",", ".")); zetTarief(u.id, Number.isFinite(n) && n >= 0 ? n : 0); }} placeholder="0,00" aria-label={`Uurtarief ${u.naam}`} className="w-20 rounded-lg border border-ink-200 px-2 py-1 text-right text-sm outline-none focus:border-brand-400" />
-                            <span className="text-xs text-ink-400">/u</span>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-          </div>
-
           <div className="flex gap-2">
             <button type="button" onClick={opslaan} disabled={!d.naam.trim()} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-40">Opslaan</button>
             <button type="button" onClick={sluit} className="rounded-lg px-3 py-2 text-sm text-ink-500 hover:bg-ink-50">Annuleer</button>
@@ -332,7 +283,7 @@ function OpdrachtgeverBeheer({ onKlaar }: { onKlaar: () => void }) {
                   {o.afdeling && <Badge tone="indigo">{o.afdeling}</Badge>}
                   {o.relatienummer && <Badge tone="slate">{o.relatienummer}</Badge>}
                 </div>
-                <div className="truncate text-xs text-ink-500">{[o.tav ? `t.a.v. ${o.tav}` : "", o.adres, o.postcodePlaats, o.email, o.personen?.length ? `${o.personen.length} ${o.personen.length === 1 ? "medewerker" : "medewerkers"}` : ""].filter(Boolean).join(" · ")}</div>
+                <div className="truncate text-xs text-ink-500">{[o.afdeling, o.tav ? `t.a.v. ${o.tav}` : "", o.adres, o.postcodePlaats, o.email].filter(Boolean).join(" · ")}</div>
               </div>
               <div className="flex items-center gap-1">
                 <button type="button" onClick={() => start(o)} className="rounded-lg p-2 text-ink-400 hover:bg-ink-100 hover:text-brand-600" title="Bewerken"><Pencil className="h-4 w-4" /></button>
