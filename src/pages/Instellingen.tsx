@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { Building2, Activity, CheckCircle2, Info, AlertTriangle, RotateCcw, Database, Pencil, Save, Lock, Plug, RefreshCw } from "lucide-react";
+import { Building2, Activity, CheckCircle2, Info, AlertTriangle, Database, Pencil, Save, Lock, Plug, RefreshCw } from "lucide-react";
 import { useApp } from "../store/AppContext";
-import { Card, Bevestig } from "../components/ui";
+import { Card } from "../components/ui";
 import { berekenMeldingen } from "../lib/meldingen";
 import { APP_VERSIE } from "../lib/versie";
 import { ApiSleutels } from "./ApiSleutels";
@@ -91,11 +91,10 @@ function BedrijfTab({ isLeiding }: { isLeiding: boolean }) {
   );
 }
 
-function SysteemTab({ isLeiding }: { isLeiding: boolean }) {
+function SysteemTab() {
   const { bedrijf, instellingen, verlof, projects } = useApp();
   const meldingen = berekenMeldingen(bedrijf, instellingen, verlof, projects);
   const [opslag, setOpslag] = useState<{ used: number; quota: number } | null>(null);
-  const [reset, setReset] = useState(false);
 
   useEffect(() => {
     navigator.storage?.estimate?.().then((e) => setOpslag({ used: e.usage || 0, quota: e.quota || 0 })).catch(() => {});
@@ -103,12 +102,6 @@ function SysteemTab({ isLeiding }: { isLeiding: boolean }) {
 
   const mb = (n: number) => (n / 1024 / 1024).toFixed(1) + " MB";
   const pct = opslag && opslag.quota ? Math.min(100, Math.round((opslag.used / opslag.quota) * 100)) : 0;
-
-  const doeReset = () => {
-    try { indexedDB.deleteDatabase("wire-solutions"); } catch { /* */ }
-    try { localStorage.clear(); } catch { /* */ }
-    location.reload();
-  };
 
   return (
     <div className="space-y-4">
@@ -146,27 +139,11 @@ function SysteemTab({ isLeiding }: { isLeiding: boolean }) {
         )}
       </Card>
 
-      {/* App-info + onderhoud */}
+      {/* App-info */}
       <Card className="p-5">
         <h3 className="mb-3 text-sm font-bold text-ink-900">App</h3>
-        <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-ink-600">
-          <span>Wire Solutions dashboard · V{APP_VERSIE} · live</span>
-          {isLeiding && (
-            <button type="button" onClick={() => setReset(true)} className="inline-flex items-center gap-2 rounded-lg border border-ink-200 px-3 py-2 text-sm font-medium text-ink-700 hover:bg-ink-50">
-              <RotateCcw className="h-4 w-4" /> Voorbeelddata opnieuw instellen
-            </button>
-          )}
-        </div>
+        <div className="text-sm text-ink-600">Wire Solutions dashboard · V{APP_VERSIE} · live</div>
       </Card>
-
-      <Bevestig
-        open={reset}
-        titel="Alles opnieuw instellen?"
-        tekst="Dit verwijdert alle ingevoerde gegevens op dit apparaat en zet de voorbeelddata terug. Dit kan niet ongedaan worden gemaakt."
-        bevestigLabel="Opnieuw instellen"
-        onBevestig={doeReset}
-        onAnnuleer={() => setReset(false)}
-      />
     </div>
   );
 }
@@ -216,7 +193,7 @@ export function Instellingen() {
       {tab === "bedrijf" && <BedrijfTab isLeiding={isLeiding} />}
       {tab === "api" && <ApiSleutels />}
       {tab === "sync" && <SyncBackup />}
-      {tab === "systeem" && <SysteemTab isLeiding={isLeiding} />}
+      {tab === "systeem" && <SysteemTab />}
     </div>
   );
 }
