@@ -39,12 +39,25 @@ export function berekenUren(begin?: string, eind?: string, pauze?: number): numb
 const STANDAARD_UURSOORTEN: Uursoort[] = [
   { id: "regulier", code: "", label: "Regulier" },
   { id: "overwerk", code: "", label: "Overwerk" },
-  { id: "reistijd", code: "", label: "Reistijd" },
 ];
+
+// Op welk onderdeel zijn de uren geboekt (of Algemeen).
+const WERK_CATEGORIEEN: { id: string; naam: string }[] = [
+  { id: "brieven", naam: "Brieven & Routes" },
+  { id: "buurtaanpak", naam: "Buurtaanpak" },
+  { id: "saneren", naam: "Saneren" },
+  { id: "voorschouwen", naam: "Voorschouwen" },
+  { id: "schouwafspraken", naam: "Schouwafspraken" },
+  { id: "tauw", naam: "TAUW" },
+];
+const projectNaam = (id?: string) => WERK_CATEGORIEEN.find((c) => c.id === id)?.naam ?? "Algemeen";
 const uursoortenVan = (b: Bedrijf): Uursoort[] => (b.uursoorten?.length ? b.uursoorten : STANDAARD_UURSOORTEN);
 const uursoortLabel = (u: Uursoort) => [u.code, u.label].filter(Boolean).join(" · ");
 
 const veld = "w-full rounded-lg border border-ink-200 bg-white px-2 py-1.5 text-sm text-ink-800 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100";
+const chip = (aan: boolean) =>
+  "inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors " +
+  (aan ? "bg-brand-600 text-white" : "border border-ink-200 bg-white text-ink-600 hover:bg-ink-50");
 
 // ── Uursoorten beheren (zelf de lijst bepalen, net als de tarieven bij Facturen) ──
 function UursoortBeheer({ bedrijf, updateBedrijf, onKlaar }: { bedrijf: Bedrijf; updateBedrijf: (p: Partial<Bedrijf>) => void; onKlaar: () => void }) {
@@ -88,7 +101,7 @@ export function Urenstaat() {
   const { navigeer } = useNav();
   const [weekISO, setWeekISO] = useState(() => toISO(maandagVan(new Date())));
   const [modus, setModus] = useState<"lijst" | "uursoorten">("lijst");
-  const [filterPersoon, setFilterPersoon] = useState(""); // "" = iedereen
+  const [filterPersoon, setFilterPersoon] = useState(() => [...users].sort((a, b) => a.naam.localeCompare(b.naam, "nl"))[0]?.id ?? ""); // standaard één medewerker; "" = iedereen
 
   if (!currentUser) return null;
   const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr";
@@ -107,13 +120,15 @@ export function Urenstaat() {
   const naamVan = (id: string) => users.find((u) => u.id === id)?.naam ?? "Onbekend";
 
   // Regels van deze week (en eventueel van één medewerker), op datum en dan op begintijd.
+  const weekRegels = useMemo(() => urenstaat.filter((r) => r.datum >= weekISO && r.datum <= weekEindISO), [urenstaat, weekISO, weekEindISO]);
+  const urenVanPersoon = (id: string) => weekRegels.filter((r) => r.medewerkerId === id).reduce((s, r) => s + (Number(r.uren) || 0), 0);
   const rijen = useMemo(
     () =>
-      urenstaat
-        .filter((r) => r.datum >= weekISO && r.datum <= weekEindISO && (!filterPersoon || r.medewerkerId === filterPersoon))
+      weekRegels
+        .filter((r) => !filterPersoon || r.medewerkerId === filterPersoon)
         .sort((a, b) => a.datum.localeCompare(b.datum) || (a.begin ?? "").localeCompare(b.begin ?? "") || naamVan(a.medewerkerId).localeCompare(naamVan(b.medewerkerId), "nl")),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [urenstaat, weekISO, weekEindISO, filterPersoon]
+    [weekRegels, filterPersoon]
   );
   const totaalUren = rijen.reduce((s, r) => s + (Number(r.uren) || 0), 0);
   const totaalReis = rijen.reduce((s, r) => s + (Number(r.reis) || 0), 0);
@@ -133,6 +148,7 @@ export function Urenstaat() {
       medewerkerId: filterPersoon || laatste?.medewerkerId || medewerkers[0]?.id || "",
       datum: laatste?.datum ?? (dezeWeek ? toISO(new Date()) : weekISO),
       uursoortId: laatste?.uursoortId ?? uursoorten[0]?.id,
+      projectId: laatste?.projectId,
       objectCode: laatste?.objectCode ?? "",
       begin: laatste?.begin ?? "07:00",
       eind: laatste?.eind ?? "16:00",
@@ -156,6 +172,7 @@ export function Urenstaat() {
           datum: r.datum,
           dag: DAGNAAM[new Date(r.datum + "T00:00:00").getDay()],
           uursoort: uursoorten.find((x) => x.id === r.uursoortId)?.label ?? "",
+          project: projectNaam(r.projectId),
           objectCode: r.objectCode ?? "",
           begin: r.begin ?? "",
           eind: r.eind ?? "",
@@ -208,15 +225,27 @@ export function Urenstaat() {
           <button type="button" onClick={() => verschuif(7)} className="inline-flex items-center gap-1 rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-50">Volgende <ChevronRight className="h-4 w-4" /></button>
           {!dezeWeek && <button type="button" onClick={() => setWeekISO(toISO(maandagVan(new Date())))} className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700">Deze week</button>}
         </div>
-        <div className="flex flex-wrap items-center gap-2 border-t border-ink-100 pt-3">
-          <span className="text-sm font-semibold text-ink-600">Medewerker:</span>
-          <div className="w-full sm:w-64">
-            <Keuze value={filterPersoon} onChange={setFilterPersoon} altijdZoeken opties={[{ waarde: "", label: "Iedereen" }, ...medewerkers.map((u) => ({ waarde: u.id, label: u.naam }))]} title="Filter op medewerker" />
+        <div className="space-y-2 border-t border-ink-100 pt-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-semibold text-ink-600">Kies een medewerker:</span>
+            <span className="ml-auto text-sm font-semibold text-ink-500">
+              Totaal: <span className="text-ink-900">{uurTekst(totaalUren)} u</span>
+              {totaalReis > 0 && <span className="ml-2 text-ink-400">· reis {uurTekst(totaalReis)} u</span>}
+            </span>
           </div>
-          <span className="ml-auto text-sm font-semibold text-ink-500">
-            Totaal: <span className="text-ink-900">{uurTekst(totaalUren)} u</span>
-            {totaalReis > 0 && <span className="ml-2 text-ink-400">· reis {uurTekst(totaalReis)} u</span>}
-          </span>
+          {/* Klik iemand aan en vul alleen zijn uren in; "Iedereen" toont de hele week. */}
+          <div className="flex flex-wrap gap-1.5">
+            <button type="button" onClick={() => setFilterPersoon("")} className={chip(filterPersoon === "")}>Iedereen</button>
+            {medewerkers.map((u) => {
+              const n = urenVanPersoon(u.id);
+              return (
+                <button key={u.id} type="button" onClick={() => setFilterPersoon(u.id)} className={chip(filterPersoon === u.id)}>
+                  {u.naam}
+                  <span className={filterPersoon === u.id ? "text-white/70" : "text-ink-400"}>{n > 0 ? `${uurTekst(n)} u` : "—"}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </Card>
 
@@ -232,11 +261,12 @@ export function Urenstaat() {
           <p className="px-5 py-10 text-center text-sm text-ink-400">Nog geen uren in week {weekNr(weekDate)}. Voeg hieronder een regel toe.</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1180px] border-collapse text-sm">
+            <table className="w-full min-w-[1320px] border-collapse text-sm">
               <thead>
                 <tr className="border-b border-ink-100 bg-ink-50/40 text-xs font-semibold text-ink-500">
                   <th className="px-3 py-2.5 text-left">Medewerker</th>
                   <th className="px-3 py-2.5 text-left">Uursoort</th>
+                  <th className="px-3 py-2.5 text-left">Project</th>
                   <th className="px-3 py-2.5 text-left">Object code</th>
                   <th className="px-3 py-2.5 text-left">Datum</th>
                   <th className="px-3 py-2.5 text-left">Begintijd</th>
@@ -259,6 +289,9 @@ export function Urenstaat() {
                       </td>
                       <td className="px-3 py-2 w-52">
                         <Keuze value={r.uursoortId ?? ""} onChange={(w) => zet(r, { uursoortId: w || undefined })} altijdZoeken size="sm" opties={[{ waarde: "", label: "—" }, ...uursoorten.map((u) => ({ waarde: u.id, label: uursoortLabel(u) }))]} title="Uursoort" />
+                      </td>
+                      <td className="px-3 py-2 w-44">
+                        <Keuze value={r.projectId ?? ""} onChange={(w) => zet(r, { projectId: w || undefined })} altijdZoeken size="sm" opties={[{ waarde: "", label: "Algemeen" }, ...WERK_CATEGORIEEN.map((c) => ({ waarde: c.id, label: c.naam }))]} title="Project / onderdeel" />
                       </td>
                       <td className="px-3 py-2 w-36">
                         <input value={r.objectCode ?? ""} onChange={(e) => zet(r, { objectCode: e.target.value })} placeholder="Begin met typen…" className={veld} />
@@ -301,7 +334,7 @@ export function Urenstaat() {
               </tbody>
               <tfoot>
                 <tr className="border-t border-ink-200 bg-ink-50/60 text-sm">
-                  <td className="px-3 py-2.5 font-bold text-ink-900" colSpan={7}>Totaal week {weekNr(weekDate)}</td>
+                  <td className="px-3 py-2.5 font-bold text-ink-900" colSpan={8}>Totaal week {weekNr(weekDate)}</td>
                   <td className="px-3 py-2.5 font-bold text-ink-900">{uurTekst(totaalUren)} u</td>
                   <td className="px-3 py-2.5 font-semibold text-ink-600">{totaalReis ? `${uurTekst(totaalReis)} u` : "—"}</td>
                   <td colSpan={2} />
