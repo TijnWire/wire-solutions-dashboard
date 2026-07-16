@@ -72,12 +72,17 @@ export function cloudPost<T = unknown>(path: string, body: unknown): Promise<T> 
 export function cloudDelete<T = unknown>(path: string, body: unknown): Promise<T> { return api<T>(path, { method: "DELETE", body }); }
 
 // ── Gedeelde data: één rij per onderdeel (key) met de inhoud als JSON ──
+// Data-zware calls (voorschouwen met foto's kunnen enkele MB's zijn) krijgen een ruime timeout,
+// anders breekt de upload/download op een trage (mobiele) verbinding af binnen 12s en synct dat
+// onderdeel niet — terwijl kleine onderdelen (mappen) wél doorkomen.
+const DATA_TIMEOUT = 60000;
+
 export async function sbLeesAlles(): Promise<Record<string, unknown>> {
-  return api<Record<string, unknown>>("/state", { method: "GET" });
+  return api<Record<string, unknown>>("/state", { method: "GET", timeoutMs: DATA_TIMEOUT });
 }
 
 export async function sbSchrijf(key: string, data: unknown): Promise<string> {
-  const r = await api<{ updated_at: string }>("/state", { method: "POST", body: { key, data } });
+  const r = await api<{ updated_at: string }>("/state", { method: "POST", body: { key, data }, timeoutMs: DATA_TIMEOUT });
   return r.updated_at; // zodat de aanroeper weet welke versie hij zojuist schreef
 }
 
@@ -89,7 +94,7 @@ export async function sbVersies(): Promise<Record<string, string>> {
 // Haal alleen de data van specifieke onderdelen op (de onderdelen die daadwerkelijk gewijzigd zijn).
 export async function sbLeesKeys(keys: string[]): Promise<Record<string, unknown>> {
   if (!keys.length) return {};
-  return api<Record<string, unknown>>("/state/keys", { method: "POST", body: { keys } });
+  return api<Record<string, unknown>>("/state/keys", { method: "POST", body: { keys }, timeoutMs: DATA_TIMEOUT });
 }
 
 // Race een belofte tegen een timeout — zodat een storing de login/sync NOOIT laat hangen.

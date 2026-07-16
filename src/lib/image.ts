@@ -2,8 +2,8 @@
 // Houdt de opslag (en straks de database) licht — telefoonfoto's zijn anders al snel meerdere MB's.
 export function fileNaarDataUrl(
   file: File,
-  maxZijde = 1200,
-  kwaliteit = 0.7
+  maxZijde = 1000,
+  kwaliteit = 0.6
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
