@@ -1,6 +1,32 @@
 import type { Voorschouw } from "./types";
 import { afleidRegio } from "./regio";
 
+// ── Herkenning: hoort een adres op basis van z'n plaats in een bepaalde map? ──────────
+// Normaliseert voor vergelijking: kleine letters, alles wat geen letter/cijfer is → spatie.
+// Beide kanten (mapnaam én plaats) gaan hier doorheen, dus accenten vallen aan beide kanten
+// hetzelfde uit en de vergelijking blijft kloppen.
+export const normPlaats = (s: string) =>
+  (s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+
+// Past een map met deze naam bij een adres in deze plaats? Exact ("Zwijndrecht"), of de mapnaam
+// begint met de plaats ("Gouda - Geen foto" hoort bij Gouda). Zo blijft het voorspelbaar.
+export function mapPastBijPlaats(mapNaam: string, plaats: string): boolean {
+  const m = normPlaats(mapNaam), p = normPlaats(plaats);
+  if (!m || !p) return false;
+  return m === p || m.startsWith(p + " ");
+}
+
+// De map die bij deze plaats hoort. Alleen bij één duidelijke kandidaat — bij twijfel niets,
+// want fout indelen is vervelender dan handmatig kiezen.
+export function mapVoorPlaats<T extends { id: string; naam: string }>(mappen: T[], plaats: string): T | undefined {
+  if (!normPlaats(plaats)) return undefined;
+  const exact = mappen.filter((m) => normPlaats(m.naam) === normPlaats(plaats));
+  if (exact.length === 1) return exact[0];
+  if (exact.length > 1) return undefined; // meerdere mappen met dezelfde naam → te onzeker
+  const kandidaten = mappen.filter((m) => mapPastBijPlaats(m.naam, plaats));
+  return kandidaten.length === 1 ? kandidaten[0] : undefined;
+}
+
 // Een "map" = alle voorschouwen met dezelfde postcode-prefix (4 cijfers). "Vol" = alles ingediend.
 export type PostcodeMap = {
   prefix: string;

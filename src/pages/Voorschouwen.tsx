@@ -30,6 +30,7 @@ import {
   User,
 } from "lucide-react";
 import { useApp } from "../store/AppContext";
+import { mapPastBijPlaats } from "../lib/voorschouwGroep";
 import { Card, Badge, Bevestig } from "../components/ui";
 import { VoorschouwForm } from "../components/VoorschouwForm";
 import { VoorschouwScanModal } from "../components/VoorschouwScanModal";
@@ -275,6 +276,8 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
   const [bezig, setBezig] = useState(false);
   const [nieuweMapOpen, setNieuweMapOpen] = useState(false);
   const [voorinvulIds, setVoorinvulIds] = useState<string[]>([]);
+  // Voorstel na het aanmaken van een map: adressen waarvan de plaats bij de mapnaam past.
+  const [mapVoorstel, setMapVoorstel] = useState<{ mapId: string; naam: string; ids: string[] } | null>(null);
   const [openMappen, setOpenMappen] = useState<Set<string>>(() => new Set(initieelMap ? [initieelMap] : [])); // standaard dicht; een map die je via "Mijn werk" opent, staat meteen open
   const [bewerkMapId, setBewerkMapId] = useState<string | null>(null);
   const [mapNaamConcept, setMapNaamConcept] = useState("");
@@ -374,6 +377,11 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
     const id = addVoorschouwMap(naam);
     ids.forEach((vid) => updateVoorschouw(vid, { mapId: id }));
     setNieuweMapOpen(false);
+    // Herkenning: adressen wáárvan de plaats bij deze mapnaam past en die er nog niet in zitten
+    // (zonder map óf in een andere map) — aanbieden om ze meteen goed in te delen.
+    const gekozen = new Set(ids);
+    const passend = voorschouwen.filter((v) => !gekozen.has(v.id) && v.mapId !== id && mapPastBijPlaats(naam, v.plaats || ""));
+    if (passend.length) setMapVoorstel({ mapId: id, naam, ids: passend.map((v) => v.id) });
   };
   const slaMapNaamOp = () => {
     if (bewerkMapId && mapNaamConcept.trim()) updateVoorschouwMap(bewerkMapId, { naam: mapNaamConcept.trim() });
@@ -1068,6 +1076,24 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
         bevestigTone="rood"
         onBevestig={bevestigVerwijderMap}
         onAnnuleer={() => setTeVerwijderenMap(null)}
+      />
+
+      {/* Herkenning na het aanmaken van een map: adressen met een passende plaats erin zetten */}
+      <Bevestig
+        open={!!mapVoorstel}
+        titel={mapVoorstel ? `${mapVoorstel.ids.length} adres${mapVoorstel.ids.length === 1 ? "" : "sen"} in ${mapVoorstel.naam} gevonden` : ""}
+        tekst={
+          mapVoorstel
+            ? `Deze ${mapVoorstel.ids.length === 1 ? "staat" : "staan"} nu zonder map of in een andere map. Meteen in “${mapVoorstel.naam}” zetten?`
+            : ""
+        }
+        bevestigLabel="Ja, verplaatsen"
+        bevestigTone="brand"
+        onBevestig={() => {
+          if (mapVoorstel) mapVoorstel.ids.forEach((vid) => updateVoorschouw(vid, { mapId: mapVoorstel.mapId }));
+          setMapVoorstel(null);
+        }}
+        onAnnuleer={() => setMapVoorstel(null)}
       />
     </div>
   );

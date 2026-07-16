@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, X, Save, Send, Folder, FolderPlus, Check, Search, ChevronDown } from "lucide-react";
 import { useApp } from "../store/AppContext";
+import { mapVoorPlaats } from "../lib/voorschouwGroep";
 import { Card } from "./ui";
 import { FotoKnoppen } from "./FotoKnoppen";
 import { AdresBekendHint } from "./AdresBekendHint";
@@ -200,8 +201,18 @@ export function VoorschouwForm({
   const [bezig, setBezig] = useState(false);
   // In welke map komt dit document — vooraf te kiezen (en later nog te wijzigen).
   const [mapId, setMapId] = useState<string | undefined>(bestaande?.mapId ?? voorinvul?.mapId);
+  const [mapHandmatig, setMapHandmatig] = useState(false); // zelf een map gekozen → niet meer automatisch invullen
   const actieveMappen = voorschouwMappen.filter((m) => !m.gearchiveerd);
-  const kiesNieuweMap = (naam: string) => { setMapId(addVoorschouwMap(naam)); };
+  const kiesNieuweMap = (naam: string) => { setMapHandmatig(true); setMapId(addVoorschouwMap(naam)); };
+
+  // Herkenning: bij een nieuw document automatisch de map kiezen die bij de plaats hoort
+  // (alleen zolang je zelf nog niets koos, en alleen bij één duidelijke kandidaat).
+  useEffect(() => {
+    if (bestaande || mapHandmatig || mapId) return;
+    const m = mapVoorPlaats(actieveMappen, data.plaats || "");
+    if (m) setMapId(m.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data.plaats, mapId, mapHandmatig]);
 
   const set = (patch: Partial<typeof data>) => setData((d) => ({ ...d, ...patch }));
 
@@ -264,7 +275,7 @@ export function VoorschouwForm({
           <h3 className="text-sm font-bold uppercase tracking-wide text-brand-700">In welke map?</h3>
           <p className="mt-1 text-xs text-ink-500">Kies eerst waar deze voorschouw bij hoort. Typ om te zoeken of een nieuwe map te maken. Je kunt dit later nog wijzigen.</p>
         </div>
-        <MapKiezer mappen={actieveMappen} value={mapId} onChange={setMapId} onNieuw={kiesNieuweMap} />
+        <MapKiezer mappen={actieveMappen} value={mapId} onChange={(id) => { setMapHandmatig(true); setMapId(id); }} onNieuw={kiesNieuweMap} />
       </Card>
 
       {/* Algemene informatie */}
