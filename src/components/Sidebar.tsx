@@ -8,11 +8,13 @@ export const Sidebar = memo(function Sidebar({
   onSelect,
   currentUser,
   onLogout,
+  badges,
 }: {
   active: string;
   onSelect: (key: string) => void;
   currentUser: User | null;
   onLogout: () => void;
+  badges?: Record<string, number>;
 }) {
   const items = useMemo(() => (currentUser ? NAV.filter((n) => magZien(currentUser, n)) : []), [currentUser]);
   const groups = useMemo(() => GROUPS.filter((g) => items.some((i) => i.group === g)), [items]);
@@ -48,6 +50,16 @@ export const Sidebar = memo(function Sidebar({
                     >
                       <Icon className="h-[18px] w-[18px] shrink-0" />
                       <span className="flex-1 text-left">{item.label}</span>
+                      {!!badges?.[item.key] && (
+                        <span
+                          title={`${badges[item.key]} klaar om te factureren`}
+                          className={`inline-flex min-w-[18px] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
+                            isActive ? "bg-white text-brand-700" : "bg-red-500 text-white"
+                          }`}
+                        >
+                          {badges[item.key]}
+                        </span>
+                      )}
                       {item.badge && (
                         <span
                           className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${

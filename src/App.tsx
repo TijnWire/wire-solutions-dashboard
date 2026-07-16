@@ -80,6 +80,15 @@ export default function App() {
     return zoekResultaten(zoekterm, { afspraken: z.afspraken, rondes: z.rondes, voorschouwen: z.voorschouwen, klanten: z.klanten, facturen: z.facturen, users: z.users, kennis: z.kennis, projects: z.projects }, z.currentUser);
   }, []);
   const navContextValue = useMemo(() => ({ navigeer }), [navigeer]);
+  // Aantal afgerond werk dat naar de boekhouding is gestuurd en nog gefactureerd moet worden → badge op Facturen.
+  const teFactureren = useMemo(
+    () =>
+      projects.filter((p) => p.boekhouding === "te_factureren").length +
+      buurtaanpak.filter((b) => b.boekhouding === "te_factureren").length +
+      rondes.filter((r) => r.boekhouding === "te_factureren").length,
+    [projects, buurtaanpak, rondes]
+  );
+  const sidebarBadges = useMemo<Record<string, number>>(() => ({ facturen: teFactureren }), [teFactureren]);
   const meldingen = useMemo(
     () => (currentUser ? meldingenVoor(currentUser, { taken, rondes, afspraken, voorschouwen, projects, projectPosts, tauwOpdrachten, saneringen, buurtaanpak, users, bedrijf, instellingen, verlof }) : []),
     [currentUser, taken, rondes, afspraken, voorschouwen, projects, projectPosts, tauwOpdrachten, saneringen, buurtaanpak, users, bedrijf, instellingen, verlof]
@@ -165,7 +174,7 @@ export default function App() {
     <div className="flex h-full overflow-hidden bg-ink-100">
       {/* Vaste zijbalk op desktop */}
       <div className="hidden md:flex">
-        <Sidebar active={active} onSelect={ga} currentUser={currentUser} onLogout={onLogout} />
+        <Sidebar active={active} onSelect={ga} currentUser={currentUser} onLogout={onLogout} badges={sidebarBadges} />
       </div>
 
       {/* Uitschuifmenu op mobiel */}
@@ -181,7 +190,7 @@ export default function App() {
             >
               <X className="h-5 w-5" />
             </button>
-            <Sidebar active={active} onSelect={ga} currentUser={currentUser} onLogout={onLogout} />
+            <Sidebar active={active} onSelect={ga} currentUser={currentUser} onLogout={onLogout} badges={sidebarBadges} />
           </div>
         </div>
       )}
@@ -202,7 +211,7 @@ export default function App() {
       </div>
 
       {/* App-achtige onderbalk op mobiel */}
-      <BottomNav active={active} onSelect={ga} onMeer={onMenu} currentUser={currentUser} />
+      <BottomNav active={active} onSelect={ga} onMeer={onMenu} currentUser={currentUser} badges={sidebarBadges} />
 
       <AiAssistent />
       <DevSwitcher />
