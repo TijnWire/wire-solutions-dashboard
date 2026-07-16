@@ -3,10 +3,11 @@ import { Lock, Check, ChevronDown } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { Card, Badge } from "../components/ui";
 import { NAV, GROUPS, WERKNEMER_TOEGANG_KEYS } from "../lib/nav";
+import { magAlles } from "../lib/rechten";
 import type { User } from "../lib/types";
 
 // Per werknemer instellen wat hij in de app ziet — ingedeeld zóals het menu (klikbare groepskoppen).
-// Alleen de eigenaar. De regelbare onderdelen zijn de "werk"-onderdelen (WERKNEMER_TOEGANG); persoonlijke
+// Alleen de eigenaar en HR. De regelbare onderdelen zijn de "werk"-onderdelen (WERKNEMER_TOEGANG); persoonlijke
 // onderdelen (Mijn werk, Mededelingen, Verlof, Loonstroken, Boetes, Kennisbank) ziet iedereen standaard en
 // staan met een slotje (altijd aan). Boekhouding/Klanten/beheer zijn sowieso al leiding-only.
 
@@ -22,7 +23,7 @@ export function Toegang() {
   const [dichteGroepen, setDichteGroepen] = useState<Set<string>>(new Set()); // groepen staan standaard open
 
   if (!currentUser) return null;
-  if (currentUser.rol !== "eigenaar" && currentUser.rol !== "hr") {
+  if (!magAlles(currentUser)) {
     return <Card className="p-8 text-center text-sm text-ink-500">Alleen de eigenaar en HR kunnen de toegang beheren.</Card>;
   }
 

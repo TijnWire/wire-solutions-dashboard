@@ -24,7 +24,7 @@ import { useNav } from "../store/NavContext";
 import { Card, Badge } from "../components/ui";
 import { hashWachtwoord, genereerWachtwoord } from "../lib/auth";
 import { ROL_LABEL, BEHEER_GEBIEDEN, type Role, type User } from "../lib/types";
-import { magBoekhouding } from "../lib/rechten";
+import { magBoekhouding, magAlles } from "../lib/rechten";
 import { supabaseAan, bewaarSyncCred } from "../lib/supabase";
 import { logAudit, syncAppRole, resetAuthWachtwoord, wijzigAuthEmail, verwijderAuthAccount } from "../lib/adminAccount";
 
@@ -48,7 +48,7 @@ function GebruikerEditor({
   const { projects, addUser, updateUser, deleteUser, updateProject, currentUser, users } = useApp();
   const { navigeer } = useNav();
 
-  const magRol = currentUser?.rol === "eigenaar"; // alleen de eigenaar wijst rollen/rechten toe
+  const magRol = magAlles(currentUser); // de eigenaar en HR wijzen rollen/rechten toe
 
   const beginRoles = (): Set<string> => {
     if (!gebruiker) return new Set(["monteur"]);
@@ -311,7 +311,7 @@ function GebruikerEditor({
           })}
         </div>
         <p className="mt-1.5 text-xs text-ink-400">
-          {magRol ? "Eigenaar = alle rechten. Beheer en Werknemer kun je samen aanzetten." : "Alleen de eigenaar kan de rol wijzigen."}
+          {magRol ? "Eigenaar = alle rechten. Beheer en Werknemer kun je samen aanzetten." : "Alleen de eigenaar en HR kunnen de rol wijzigen."}
         </p>
       </div>
 
@@ -320,7 +320,7 @@ function GebruikerEditor({
         <div>
           <span className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-ink-700">
             <ShieldCheck className="h-4 w-4 text-brand-600" /> Mag beheren
-            {!magRol && <span className="text-xs font-normal text-ink-400">(alleen de eigenaar wijst dit toe)</span>}
+            {!magRol && <span className="text-xs font-normal text-ink-400">(alleen de eigenaar en HR wijzen dit toe)</span>}
           </span>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {BEHEER_GEBIEDEN.map((g) => (

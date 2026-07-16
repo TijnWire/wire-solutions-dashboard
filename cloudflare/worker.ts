@@ -15,12 +15,12 @@
 //   POST /state                  { key, data }                      -> { updated_at }
 //   GET  /verlof                                                    -> { rows: [...] }
 //   POST /verlof                 { verlof_id, status, ... }         -> { ok }             (alleen boekhouding)
-//   POST /roles                  { email, rol, boekhouding }        -> { ok }             (alleen eigenaar)
-//   DELETE /roles                { email }                          -> { ok }             (alleen eigenaar)
+//   POST /roles                  { email, rol, boekhouding }        -> { ok }             (eigenaar of HR)
+//   DELETE /roles                { email }                          -> { ok }             (eigenaar of HR)
 //   POST /audit                  { actie, door_email, ... }         -> { ok }
-//   POST /admin/reset-wachtwoord { doelEmail, nieuwWachtwoord }     -> { ok }             (eigenaar of beheer)
-//   POST /admin/wijzig-email     { oudEmail, nieuwEmail }           -> { ok }             (eigenaar of beheer)
-//   POST /admin/verwijder-account { doelEmail }                     -> { ok }             (eigenaar of beheer)
+//   POST /admin/reset-wachtwoord { doelEmail, nieuwWachtwoord }     -> { ok }             (eigenaar, HR of beheer)
+//   POST /admin/wijzig-email     { oudEmail, nieuwEmail }           -> { ok }             (eigenaar, HR of beheer)
+//   POST /admin/verwijder-account { doelEmail }                     -> { ok }             (eigenaar, HR of beheer)
 //
 // SECRET (verplicht):  wrangler secret put JWT_SECRET    (willekeurige lange string)
 // BINDING (wrangler.toml): D1 als env.DB
@@ -157,6 +157,13 @@ async function rolVan(env: Env, email: string): Promise<{ rol: string; boekhoudi
   return r ? { rol: r.rol, boekhouding: !!r.boekhouding } : null;
 }
 
+// HR (personeelszaken) heeft dezelfde rechten als de eigenaar — zelfde regel als magAlles in
+// src/lib/rechten.ts. Zonder dit kan HR in het dashboard wél een rol of wachtwoord wijzigen,
+// maar weigert de Worker de bijbehorende schrijfactie.
+function magAlles(rol: string | null | undefined): boolean {
+  return rol === "eigenaar" || rol === "hr";
+}
+
 // Leidt de rol-spiegel af uit de users-blob (poort van de bootstrap in fase2.sql), zodat is_owner/is_boekhouding
 // meteen kloppen zonder aparte schrijfactie vanuit de frontend.
 async function seedRollenUitUsers(env: Env, users: unknown, nuISO: string): Promise<void> {
@@ -168,7 +175,7 @@ async function seedRollenUitUsers(env: Env, users: unknown, nuISO: string): Prom
     const rol = String(u?.rol ?? "monteur");
     const rechten = Array.isArray(u?.beheerRechten) ? (u.beheerRechten as string[]) : null;
     const boekhouding =
-      rol === "eigenaar" ||
+      magAlles(rol) ||
       (rol === "beheer" && (rechten === null || rechten.some((r) => ["facturen", "loonstroken", "boetes", "medewerkers"].includes(r))));
     stmts.push(
       env.DB.prepare(
@@ -294,10 +301,10 @@ export default {
         return json({ ok: true });
       }
 
-      // ── APP_ROLES (alleen eigenaar schrijft) ──
+      // ── APP_ROLES (eigenaar/HR schrijven) ──
       if (path === "/roles" && req.method === "POST") {
         const rol = await rolVan(env, ikEmail);
-        if (rol?.rol !== "eigenaar") return json({ error: "Alleen de eigenaar mag rollen wijzigen." }, 403);
+        if (!magAlles(rol?.rol)) return json({ error: "Alleen de eigenaar en HR mogen rollen wijzigen." }, 403);
         const email = String(body.email ?? "").trim().toLowerCase();
         if (!email) return json({ error: "email ontbreekt." }, 400);
         await env.DB.prepare(
@@ -307,7 +314,7 @@ export default {
       }
       if (path === "/roles" && req.method === "DELETE") {
         const rol = await rolVan(env, ikEmail);
-        if (rol?.rol !== "eigenaar") return json({ error: "Alleen de eigenaar mag rollen verwijderen." }, 403);
+        if (!magAlles(rol?.rol)) return json({ error: "Alleen de eigenaar en HR mogen rollen verwijderen." }, 403);
         await env.DB.prepare("delete from app_roles where email = ?").bind(String(body.email ?? "").trim().toLowerCase()).run();
         return json({ ok: true });
       }
@@ -324,10 +331,10 @@ export default {
         return json({ ok: true });
       }
 
-      // ── ADMIN-ACTIES (service-role vervanger; alleen eigenaar/beheer) ──
+      // ── ADMIN-ACTIES (service-role vervanger; eigenaar/HR/beheer) ──
       if (path === "/admin/reset-wachtwoord" && req.method === "POST") {
         const rol = await rolVan(env, ikEmail);
-        if (rol?.rol !== "eigenaar" && rol?.rol !== "beheer") return json({ error: "Alleen een beheerder mag dit uitvoeren." }, 403);
+        if (!magAlles(rol?.rol) && rol?.rol !== "beheer") return json({ error: "Alleen een beheerder mag dit uitvoeren." }, 403);
         const doel = String(body.doelEmail ?? "").trim().toLowerCase();
         const nieuw = String(body.nieuwWachtwoord ?? "");
         if (!doel.includes("@") || nieuw.length < 8) return json({ error: "Ongeldige invoer." }, 400);
@@ -341,7 +348,7 @@ export default {
       }
       if (path === "/admin/wijzig-email" && req.method === "POST") {
         const rol = await rolVan(env, ikEmail);
-        if (rol?.rol !== "eigenaar" && rol?.rol !== "beheer") return json({ error: "Alleen een beheerder mag dit uitvoeren." }, 403);
+        if (!magAlles(rol?.rol) && rol?.rol !== "beheer") return json({ error: "Alleen een beheerder mag dit uitvoeren." }, 403);
         const oud = String(body.oudEmail ?? "").trim().toLowerCase();
         const nieuw = String(body.nieuwEmail ?? "").trim().toLowerCase();
         if (!oud || !nieuw.includes("@")) return json({ error: "Ongeldige invoer." }, 400);
@@ -361,7 +368,7 @@ export default {
       // Worker (en dus alle teamdata lezen), want /auth/login kijkt alleen naar users_auth.
       if (path === "/admin/verwijder-account" && req.method === "POST") {
         const rol = await rolVan(env, ikEmail);
-        if (rol?.rol !== "eigenaar" && rol?.rol !== "beheer") return json({ error: "Alleen een beheerder mag dit uitvoeren." }, 403);
+        if (!magAlles(rol?.rol) && rol?.rol !== "beheer") return json({ error: "Alleen een beheerder mag dit uitvoeren." }, 403);
         const doel = String(body.doelEmail ?? "").trim().toLowerCase();
         if (!doel.includes("@")) return json({ error: "Ongeldige invoer." }, 400);
         if (doel === ikEmail) return json({ error: "Je kunt je eigen account niet verwijderen." }, 400);
