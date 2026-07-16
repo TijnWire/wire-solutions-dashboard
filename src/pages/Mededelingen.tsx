@@ -33,7 +33,7 @@ export function Mededelingen() {
       </div>
 
       {isLeiding ? (
-        <div className="grid gap-5 lg:grid-cols-[minmax(320px,440px)_minmax(0,1fr)] lg:items-start">
+        <div className="grid gap-5 lg:grid-cols-2 lg:items-start">
           <Card className="overflow-hidden">
             <div className="flex items-center gap-2 border-b border-ink-100 bg-ink-50/60 px-5 py-3.5">
               <Megaphone className="h-5 w-5 text-brand-600" />
