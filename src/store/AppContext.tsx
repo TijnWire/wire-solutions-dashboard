@@ -316,7 +316,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   // Supabase: actieve sessie + bijhouden wat we al gesynct hebben (tegen terugkaats-lussen).
   const [sbSessie, setSbSessie] = useState(false);
-  const sync = useRef<{ klaar: boolean; gezien: Record<string, string>; bezig: Set<string>; laatsteFout: string; versies: Record<string, string> }>({ klaar: false, gezien: {}, bezig: new Set(), laatsteFout: "", versies: {} });
+  const sync = useRef<{ klaar: boolean; gezien: Record<string, string>; bezig: Set<string>; laatsteFout: string; versies: Record<string, string>; vuil: Set<string> }>({ klaar: false, gezien: {}, bezig: new Set(), laatsteFout: "", versies: {}, vuil: new Set() });
   // Laatst-gepushte referentie per slice — zo serialiseren we alleen de slice die écht wijzigde (niet alle 23 per klik).
   const pushRef = useRef<Record<string, unknown>>({});
 
@@ -854,7 +854,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const heeftData = Array.isArray(lokaal) ? lokaal.length > 0 : !!lokaal;
           if (!heeftData) continue;
           sync.current.bezig.add(key);
-          void sbSchrijf(key, lokaal).then((ua) => { sync.current.versies[key] = ua; }).catch((e) => { sync.current.laatsteFout = String((e as Error)?.message ?? e); }).finally(() => sync.current.bezig.delete(key));
+          void sbSchrijf(key, lokaal).then((ua) => { sync.current.versies[key] = ua; sync.current.vuil.delete(key); }).catch((e) => { sync.current.laatsteFout = String((e as Error)?.message ?? e); sync.current.vuil.add(key); }).finally(() => sync.current.bezig.delete(key));
+        }
+        // Retry-vangnet: onderdelen waarvan de vorige push mislukte (bv. een time-out) opnieuw proberen,
+        // óók als ze al met OUDERE data op de server staan — anders blijft de nieuwe data lokaal hangen.
+        for (const key of [...sync.current.vuil]) {
+          if (sync.current.bezig.has(key)) continue;
+          const lokaal = waardenRef.current[key];
+          const heeftData = Array.isArray(lokaal) ? lokaal.length > 0 : !!lokaal;
+          if (!heeftData) { sync.current.vuil.delete(key); continue; }
+          sync.current.bezig.add(key);
+          void sbSchrijf(key, lokaal).then((ua) => { sync.current.versies[key] = ua; sync.current.gezien[key] = JSON.stringify(lokaal); sync.current.vuil.delete(key); }).catch((e) => { sync.current.laatsteFout = String((e as Error)?.message ?? e); }).finally(() => sync.current.bezig.delete(key));
         }
         sync.current.laatsteFout = "";
       } catch (e) { sync.current.laatsteFout = String((e as Error)?.message ?? e); }
@@ -887,7 +897,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       sync.current.gezien[key] = j;
       sync.current.bezig.add(key); // markeer als 'wordt geschreven' zodat de 5s-pull 'm niet terughaalt
-      void sbSchrijf(key, waarden[key]).then((ua) => { sync.current.versies[key] = ua; }).catch((e) => { sync.current.laatsteFout = String((e as Error)?.message ?? e); }).finally(() => sync.current.bezig.delete(key));
+      void sbSchrijf(key, waarden[key]).then((ua) => { sync.current.versies[key] = ua; sync.current.vuil.delete(key); }).catch((e) => { sync.current.laatsteFout = String((e as Error)?.message ?? e); sync.current.vuil.add(key); }).finally(() => sync.current.bezig.delete(key));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supabaseAan, sbSessie, hydrated, users, projects, taken, projectPosts, planningen, saneringen, tauwOpdrachten, voorschouwen, voorschouwMappen, mededelingen, rondes, afspraken, facturen, bedrijf, loonstroken, boetes, comm, verlof, schouwafspraken, blancoBrieven, urenstaat, agendaItems, todos, kennis, instellingen, klanten, opdrachtgevers, buurtaanpak, deletes]);
