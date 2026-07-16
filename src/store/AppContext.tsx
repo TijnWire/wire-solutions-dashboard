@@ -168,6 +168,9 @@ async function laadSlice<T>(key: string, lsKey: string, seed: T): Promise<T> {
 type AppState = {
   hydrated: boolean;
   synced: boolean; // true zodra dit apparaat een Supabase-sessie heeft (= cross-device sync actief)
+  // true zodra de gedeelde data één keer volledig is opgehaald. Wie uit zichzelf data aanmaakt moet
+  // hierop wachten, anders maakt hij iets aan wat een collega allang had staan (= dubbel).
+  syncKlaar: boolean;
   backupInfo: { tijd: string; totaal: number } | null; // laatste lokale veiligheidskopie
   herstelBackup: () => Promise<boolean>; // zet de gegevens terug vanuit de lokale veiligheidskopie
   users: User[];
@@ -358,6 +361,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   // Supabase: actieve sessie + bijhouden wat we al gesynct hebben (tegen terugkaats-lussen).
   const [sbSessie, setSbSessie] = useState(false);
+  // Eerste volledige ophaal binnen? Alleen dán weet je zeker dat je ziet wat collega's al hebben staan.
+  // Nodig voor acties die uit zichzelf data aanmaken (zie de automatische weekvulling in Urenstaat).
+  const [syncKlaar, setSyncKlaar] = useState(false);
   const sync = useRef<{ klaar: boolean; gezien: Record<string, string>; bezig: Set<string>; laatsteFout: string; versies: Record<string, string>; vuil: Set<string> }>({ klaar: false, gezien: {}, bezig: new Set(), laatsteFout: "", versies: {}, vuil: new Set() });
   // Laatst-gepushte referentie per slice — zo serialiseren we alleen de slice die écht wijzigde (niet alle 23 per klik).
   const pushRef = useRef<Record<string, unknown>>({});
@@ -858,6 +864,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
         try { sync.current.versies = { ...sync.current.versies, ...(await sbVersies()) }; } catch { /* tijdstempels niet kritisch */ }
         sync.current.klaar = true;
+        setSyncKlaar(true);
         sync.current.laatsteFout = "";
       } catch (e) { sync.current.laatsteFout = String((e as Error)?.message ?? e); /* blijf local-first werken */ }
     })();
@@ -938,7 +945,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }, wsStatus.verbonden ? 12000 : 2000);
     };
     planPoll();
-    return () => { actief = false; sync.current.klaar = false; if (pollTimer) clearTimeout(pollTimer); if (wsHerverbind) clearTimeout(wsHerverbind); sluitWs(); };
+    return () => { actief = false; sync.current.klaar = false; setSyncKlaar(false); if (pollTimer) clearTimeout(pollTimer); if (wsHerverbind) clearTimeout(wsHerverbind); sluitWs(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supabaseAan, sbSessie, hydrated]);
 
@@ -1425,6 +1432,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       value={{
         hydrated,
         synced: supabaseAan && sbSessie,
+        syncKlaar: !supabaseAan || syncKlaar, // zonder centrale database is er niets om op te wachten
         backupInfo,
         herstelBackup,
         users,
