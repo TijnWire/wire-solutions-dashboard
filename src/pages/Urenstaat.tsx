@@ -49,6 +49,19 @@ const STANDAARD_BEGIN = "09:00";
 const STANDAARD_EIND = "17:30";
 const STANDAARD_PAUZE = 30;
 const STANDAARD_DAG = 8; // uren per volle werkdag
+// De werkweek loopt standaard van maandag t/m vrijdag; deze twee zet je er zelf bij als het nodig is.
+const WEEKEND = [{ offset: 5, naam: "Zaterdag" }, { offset: 6, naam: "Zondag" }];
+
+// Waar je op kunt filteren. "" = alles; ALGEMEEN staat voor regels zonder project — dat is iets
+// anders dan "alle projecten", vandaar een eigen sleutel in plaats van een lege waarde.
+const ALGEMEEN = "__algemeen";
+const PROJECT_FILTERS = [
+  { id: "", naam: "Alle projecten" },
+  ...WERK_CATEGORIEEN,
+  { id: ALGEMEEN, naam: "Algemeen" },
+];
+const regelPastBijProject = (projectId: string | undefined, filter: string) =>
+  !filter || (filter === ALGEMEEN ? !projectId : projectId === filter);
 // Contracturen per week; staat er niets ingevuld, dan 40 (zelfde afspraak als bij Vrije dagen).
 const STANDAARD_CONTRACT = 40;
 const contractUren = (u: User) => (u.contract?.uren != null ? u.contract.uren : STANDAARD_CONTRACT);
@@ -255,6 +268,7 @@ export function Urenstaat() {
   const [modus, setModus] = useState<"lijst" | "uursoorten">("lijst");
   const [vraagVullen, setVraagVullen] = useState(false); // bevestiging vóór de week volgens contract te vullen
   const [filterPersoon, setFilterPersoon] = useState(() => [...users].sort((a, b) => a.naam.localeCompare(b.naam, "nl"))[0]?.id ?? ""); // standaard één medewerker; "" = iedereen
+  const [filterProject, setFilterProject] = useState(""); // "" = alle projecten
 
   const weekDate = new Date(weekISO + "T00:00:00");
   const weekEinde = new Date(weekDate); weekEinde.setDate(weekEinde.getDate() + 6);
@@ -268,8 +282,9 @@ export function Urenstaat() {
     const naam = (id: string) => users.find((u) => u.id === id)?.naam ?? "Onbekend";
     return weekRegels
       .filter((r) => !filterPersoon || r.medewerkerId === filterPersoon)
+      .filter((r) => regelPastBijProject(r.projectId, filterProject))
       .sort((a, b) => a.datum.localeCompare(b.datum) || (a.begin ?? "").localeCompare(b.begin ?? "") || naam(a.medewerkerId).localeCompare(naam(b.medewerkerId), "nl"));
-  }, [weekRegels, filterPersoon, users]);
+  }, [weekRegels, filterPersoon, filterProject, users]);
 
   if (!currentUser) return null;
   const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr";
@@ -283,6 +298,12 @@ export function Urenstaat() {
   const medewerkers = [...users].sort((a, b) => a.naam.localeCompare(b.naam, "nl"));
   const uursoorten = uursoortenVan(bedrijf);
   const urenVanPersoon = (id: string) => weekRegels.filter((r) => r.medewerkerId === id).reduce((s, r) => s + (Number(r.uren) || 0), 0);
+  // Uren per project, binnen de medewerker die je nu bekijkt (of iedereen).
+  const urenVanProject = (filter: string) =>
+    weekRegels
+      .filter((r) => !filterPersoon || r.medewerkerId === filterPersoon)
+      .filter((r) => regelPastBijProject(r.projectId, filter))
+      .reduce((s, r) => s + (Number(r.uren) || 0), 0);
   const totaalUren = rijen.reduce((s, r) => s + (Number(r.uren) || 0), 0);
   const weekTotaalIedereen = weekRegels.reduce((s, r) => s + (Number(r.uren) || 0), 0);
 
@@ -309,6 +330,7 @@ export function Urenstaat() {
 
   // Vult de week volgens het contract: volle dagen van 8 uur vanaf maandag, de rest op de laatste dag.
   // 40 u → ma t/m vr 09:00–17:30. 32 u → ma t/m do. 36 u → 4 volle dagen + een halve vrijdag.
+  // Bewust alleen ma t/m vr (i < 5): weekendwerk is een uitzondering en zet je er zelf bij.
   const contractRegels = (u: User): Omit<Urenregel, "id">[] => {
     let rest = contractUren(u);
     const uit: Omit<Urenregel, "id">[] = [];
@@ -360,6 +382,22 @@ export function Urenstaat() {
     });
   };
   const dupliceer = (r: Urenregel) => { const { id: _id, ...rest } = r; void _id; addUren({ ...rest }); };
+
+  // Weekend: standaard werken we ma t/m vr, dus zaterdag/zondag zet je er zelf bij als het een keer nodig is.
+  const voegDagToe = (dagOffset: number) => {
+    const d = new Date(weekDate); d.setDate(d.getDate() + dagOffset);
+    addUren({
+      medewerkerId: filterPersoon || medewerkers[0]?.id || "",
+      datum: toISO(d),
+      uursoortId: rijen[rijen.length - 1]?.uursoortId ?? uursoorten[0]?.id,
+      projectId: rijen[rijen.length - 1]?.projectId,
+      begin: STANDAARD_BEGIN,
+      eind: STANDAARD_EIND,
+      pauze: STANDAARD_PAUZE,
+      uren: berekenUren(STANDAARD_BEGIN, STANDAARD_EIND, STANDAARD_PAUZE) ?? 0,
+      notitie: "",
+    });
+  };
 
   const exporteerNaarExcel = () => {
     const personen = medewerkers
@@ -439,6 +477,27 @@ export function Urenstaat() {
             <span className="ml-auto shrink-0 text-sm font-semibold text-ink-500">
               Totaal: <span className="text-ink-900">{uurTekst(totaalUren)} u</span>
             </span>
+          </div>
+
+          {/* Klik een project aan om alleen die uren te zien. De uren van de gekozen medewerker
+              staan er meteen bij, dus je ziet in een oogopslag hoe zijn week verdeeld is. */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="mr-1 shrink-0 text-sm font-semibold text-ink-600">Project:</span>
+            {PROJECT_FILTERS.map((c) => {
+              const aan = filterProject === c.id;
+              const n = urenVanProject(c.id);
+              return (
+                <button
+                  key={c.id || "alle"}
+                  type="button"
+                  onClick={() => setFilterProject(c.id)}
+                  className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors ${aan ? "bg-brand-600 text-white" : "border border-ink-200 bg-white text-ink-600 hover:bg-ink-50"}`}
+                >
+                  {c.naam}
+                  <span className={aan ? "text-white/70" : "text-ink-400"}>{n > 0 ? `${uurTekst(n)} u` : "—"}</span>
+                </button>
+              );
+            })}
           </div>
 
           {/* Overzicht: hoeveel medewerkers heb je al gehad, en hoeveel moeten er nog? */}
@@ -557,9 +616,21 @@ export function Urenstaat() {
           </div>
         )}
 
-        <div className="flex flex-wrap items-center gap-3 border-t border-ink-100 px-5 py-3">
+        <div className="flex flex-wrap items-center gap-2 border-t border-ink-100 px-5 py-3">
           <button type="button" onClick={nieuweRegel} className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-bold text-white hover:bg-brand-700"><Plus className="h-4 w-4" /> Toevoegen</button>
-          <span className="text-xs text-ink-400">Nieuwe regel staat standaard op {STANDAARD_BEGIN}–{STANDAARD_EIND} met {STANDAARD_PAUZE} min pauze; alles blijft aanpasbaar. Wijzigingen worden meteen opgeslagen en gedeeld met het team.</span>
+          {/* Standaard is de week ma t/m vr; een weekenddag zet je er hiermee los bij. */}
+          {WEEKEND.map((w) => (
+            <button
+              key={w.offset}
+              type="button"
+              onClick={() => voegDagToe(w.offset)}
+              title={`Voeg een regel voor ${w.naam.toLowerCase()} toe`}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 bg-white px-3 py-2 text-xs font-semibold text-ink-600 transition-colors hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700"
+            >
+              <Plus className="h-3.5 w-3.5" /> {w.naam}
+            </button>
+          ))}
+          <span className="text-xs text-ink-400">Standaard ma t/m vr, {STANDAARD_BEGIN}–{STANDAARD_EIND} met {STANDAARD_PAUZE} min pauze; alles blijft aanpasbaar. Wijzigingen worden meteen opgeslagen en gedeeld met het team.</span>
         </div>
       </Card>
 

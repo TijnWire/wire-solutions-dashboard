@@ -52,20 +52,33 @@ function Splash() {
   );
 }
 
+const LAATSTE_PAGINA = "wire.laatstePagina"; // waar je gebleven was, zodat verversen je niet terugzet
+
 export default function App() {
   const { currentUser, hydrated, bedrijf, instellingen, verlof, taken, rondes, afspraken, voorschouwen, klanten, facturen, users, kennis, projects, projectPosts, tauwOpdrachten, saneringen, buurtaanpak, logout, synced } = useApp();
   const [active, setActive] = useState("mijnwerk");
   const [target, setTarget] = useState<NavTarget>(null);
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // Bij openen/verversen en (her)inloggen altijd starten op "Mijn werk" (voor iedereen).
+  // Open je de app opnieuw (of ververs je), dan kom je terug op de pagina waar je gebleven was —
+  // anders moet je elke keer weer terugklikken. Mag je die pagina niet (meer) zien, of ken ik hem
+  // niet, dan val je terug op "Mijn werk". Het onthouden zelf gebeurt in navigeer().
   useEffect(() => {
-    setActive("mijnwerk");
-  }, [currentUser?.id]);
+    if (!currentUser) return;
+    let laatste = "";
+    try { laatste = localStorage.getItem(LAATSTE_PAGINA) ?? ""; } catch { /* opslag niet beschikbaar */ }
+    const item = NAV.find((n) => n.key === laatste);
+    setActive(item && magZien(currentUser, item) ? laatste : "mijnwerk");
+  }, [currentUser?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Stabiele callbacks + gememoiseerde afgeleiden, zodat de app-shell (Sidebar/BottomNav/Topbar)
   // en useNav-consumenten NIET hertekenen bij een data-wijziging (bv. een vinkje in Buurtaanpak).
-  const navigeer = useCallback((key: string, t: NavTarget = null) => { setActive(key); setTarget(t); setMenuOpen(false); }, []);
+  const navigeer = useCallback((key: string, t: NavTarget = null) => {
+    setActive(key); setTarget(t); setMenuOpen(false);
+    // Onthouden bij het navigeren zelf (en niet in een effect): zo kan een effect bij het opstarten
+    // de bewaarde pagina nooit overschrijven vóór hij hersteld is.
+    try { localStorage.setItem(LAATSTE_PAGINA, key); } catch { /* opslag niet beschikbaar */ }
+  }, []);
   const ga = useCallback((key: string) => navigeer(key), [navigeer]);
   const onMenu = useCallback(() => setMenuOpen(true), []);
   const onSync = useCallback(() => navigeer("instellingen"), [navigeer]);

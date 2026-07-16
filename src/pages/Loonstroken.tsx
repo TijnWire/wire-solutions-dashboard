@@ -4,7 +4,8 @@ import { useApp } from "../store/AppContext";
 import { DatumKiezer } from "../components/DatumKiezer";
 import { Keuze } from "../components/Keuze";
 import { Card, Badge, Bevestig } from "../components/ui";
-import { PERIODE_TYPES, type Loonstrook, type PeriodeType, type User } from "../lib/types";
+import { PERIODE_TYPES, boeteRest, boeteTermijn, type Loonstrook, type PeriodeType, type User } from "../lib/types";
+import { leesBijlage } from "../lib/bijlage";
 
 const euro = (n: number) => n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
 const veld = "w-full rounded-lg border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100";
@@ -65,9 +66,11 @@ function LoonstrookForm({ bestaande, onKlaar }: { bestaande?: Loonstrook; onKlaa
     }
   );
   const [verreken, setVerreken] = useState<Set<string>>(new Set());
+  const [uploadFout, setUploadFout] = useState("");
   const set = (patch: Partial<typeof d>) => setD((x) => ({ ...x, ...patch }));
 
-  const openBoetes = boetes.filter((b) => b.medewerkerId === d.medewerkerId && b.status === "Open");
+  // Zowel losse open boetes als boetes die in termijnen via het loon lopen.
+  const openBoetes = boetes.filter((b) => b.medewerkerId === d.medewerkerId && (b.status === "Open" || b.status === "Via loon") && boeteRest(b) > 0);
 
   const toggleVerreken = (id: string, bedrag: number) =>
     setVerreken((prev) => {
@@ -79,20 +82,36 @@ function LoonstrookForm({ bestaande, onKlaar }: { bestaande?: Loonstrook; onKlaa
       return next;
     });
 
-  const upload = (file: File | undefined) => {
+  const upload = async (file: File | undefined) => {
     if (!file) return;
-    const r = new FileReader();
-    r.onloadend = () => set({ bestand: r.result as string, bestandsnaam: file.name });
-    r.readAsDataURL(file);
+    setUploadFout("");
+    const r = await leesBijlage(file);
+    if (!r.ok) { setUploadFout(r.fout); return; }
+    set({ bestand: r.dataUrl, bestandsnaam: r.naam });
   };
 
   const opslaan = () => {
     if (!d.medewerkerId || !d.refDatum) return;
-    const compleet = { ...d, periode: periodeLabel(d.periodeType, d.refDatum) };
+    // Leg per aangevinkte boete vast wat er van deze strook af is gegaan, zodat op de loonstrook
+    // terug te zien is waarvóór er is ingehouden (en bij termijnen: de hoeveelste termijn).
+    const regels: NonNullable<Loonstrook["boeteRegels"]> = [];
+    for (const b of openBoetes) {
+      if (!verreken.has(b.id)) continue;
+      const af = boeteTermijn(b);
+      const nuIngehouden = Math.round(((b.ingehouden ?? 0) + af) * 100) / 100;
+      const klaarMee = nuIngehouden + 0.001 >= b.bedrag;
+      const aantal = b.status === "Via loon" && b.termijnBedrag ? Math.ceil(b.bedrag / b.termijnBedrag) : 1;
+      const nummer = b.status === "Via loon" && b.termijnBedrag ? Math.ceil(nuIngehouden / b.termijnBedrag) : 1;
+      regels.push({ boeteId: b.id, omschrijving: b.omschrijving, bedrag: af, termijn: aantal > 1 ? `termijn ${nummer} van ${aantal}` : undefined });
+      updateBoete(b.id, {
+        ingehouden: nuIngehouden,
+        status: klaarMee ? "Betaald" : b.status,
+        notitie: klaarMee ? "Volledig verrekend met loon" : b.notitie,
+      });
+    }
+    const compleet = { ...d, periode: periodeLabel(d.periodeType, d.refDatum), boeteRegels: regels.length ? regels : undefined };
     if (bestaande) updateLoonstrook(bestaande.id, compleet);
     else addLoonstrook(compleet);
-    // Verrekende boetes op betaald zetten
-    verreken.forEach((id) => updateBoete(id, { status: "Betaald", notitie: "Verrekend met loon" }));
     onKlaar();
   };
 
@@ -152,20 +171,29 @@ function LoonstrookForm({ bestaande, onKlaar }: { bestaande?: Loonstrook; onKlaa
           </div>
         </div>
 
-        {/* Openstaande boetes verrekenen */}
+        {/* Openstaande boetes verrekenen. Loopt een boete in termijnen via het loon, dan gaat er
+            precies één termijn af en houdt de boete zelf bij hoeveel er nog te gaan is. */}
         {openBoetes.length > 0 && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
             <div className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-amber-700">
               <AlertTriangle className="h-3.5 w-3.5" /> Openstaande boetes — aanvinken om te verrekenen
             </div>
             <div className="space-y-1.5">
-              {openBoetes.map((b) => (
-                <label key={b.id} className="flex cursor-pointer items-center gap-2 text-sm text-ink-700">
-                  <input type="checkbox" checked={verreken.has(b.id)} onChange={() => toggleVerreken(b.id, b.bedrag)} className="h-4 w-4 accent-brand-600" />
-                  <span className="flex-1">{b.omschrijving} · {new Date(b.datum + "T00:00:00").toLocaleDateString("nl-NL")}</span>
-                  <span className="font-semibold">{euro(b.bedrag)}</span>
-                </label>
-              ))}
+              {openBoetes.map((b) => {
+                const af = boeteTermijn(b);
+                const termijnen = b.status === "Via loon" && b.termijnBedrag ? Math.ceil(b.bedrag / b.termijnBedrag) : 0;
+                const nummer = b.status === "Via loon" && b.termijnBedrag ? Math.floor((b.ingehouden ?? 0) / b.termijnBedrag) + 1 : 0;
+                return (
+                  <label key={b.id} className="flex cursor-pointer items-center gap-2 text-sm text-ink-700">
+                    <input type="checkbox" checked={verreken.has(b.id)} onChange={() => toggleVerreken(b.id, af)} className="h-4 w-4 accent-brand-600" />
+                    <span className="min-w-0 flex-1">
+                      {b.omschrijving} · {new Date(b.datum + "T00:00:00").toLocaleDateString("nl-NL")}
+                      {termijnen > 1 && <span className="text-amber-700"> · termijn {nummer} van {termijnen} (nog {euro(boeteRest(b))})</span>}
+                    </span>
+                    <span className="shrink-0 font-semibold">{euro(af)}</span>
+                  </label>
+                );
+              })}
             </div>
           </div>
         )}
@@ -186,8 +214,9 @@ function LoonstrookForm({ bestaande, onKlaar }: { bestaande?: Loonstrook; onKlaa
           <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-ink-300 px-3 py-2.5 text-sm text-ink-600 hover:border-brand-400 hover:bg-brand-50">
             <Upload className="h-4 w-4" />
             {d.bestandsnaam ? d.bestandsnaam : "Bestand kiezen…"}
-            <input type="file" accept="application/pdf,image/*" className="hidden" onChange={(e) => upload(e.target.files?.[0])} />
+            <input type="file" accept="application/pdf,image/*" className="hidden" onChange={(e) => void upload(e.target.files?.[0])} />
           </label>
+          {uploadFout && <p className="mt-1.5 text-xs font-semibold text-red-600">{uploadFout}</p>}
         </div>
       </Card>
 
@@ -452,6 +481,19 @@ export function Loonstroken({ loonWeek }: { loonWeek?: string }) {
                   {l.bijtelling > 0 && <span className="inline-flex items-center gap-1"><Car className="h-3.5 w-3.5" />{euro(l.bijtelling)}</span>}
                   {l.boetes > 0 && <span className="inline-flex items-center gap-1 text-red-500"><AlertTriangle className="h-3.5 w-3.5" />−{euro(l.boetes)}</span>}
                 </div>
+                {/* Waarvóór er is ingehouden — ook voor de medewerker zelf zichtbaar. */}
+                {l.boeteRegels && l.boeteRegels.length > 0 && (
+                  <ul className="mt-1 space-y-0.5">
+                    {l.boeteRegels.map((r) => (
+                      <li key={r.boeteId} className="flex flex-wrap items-center gap-1.5 text-xs text-ink-500">
+                        <AlertTriangle className="h-3 w-3 shrink-0 text-amber-500" />
+                        <span className="min-w-0 truncate">{r.omschrijving}</span>
+                        {r.termijn && <span className="rounded-full bg-amber-50 px-1.5 py-0.5 font-semibold text-amber-700">{r.termijn}</span>}
+                        <span className="font-semibold text-red-500">−{euro(r.bedrag)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
               <div className="text-right text-sm">
                 <div className="font-bold text-ink-900">{euro(uitbetaald(l))}</div>

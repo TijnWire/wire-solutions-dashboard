@@ -355,6 +355,9 @@ export type Loonstrook = {
   bijtelling: number; // bijtelling auto
   netto: number;
   boetes: number; // ingehouden boetes (€)
+  // Welke boetes er precies zijn ingehouden, zodat op de loonstrook terug te zien is waarvoor
+  // het geld is ingehouden (en bij termijnen: de hoeveelste termijn het was).
+  boeteRegels?: { boeteId: string; omschrijving: string; bedrag: number; termijn?: string }[];
   uren: number;
   notitie: string;
   bestand?: string; // data-URL van geüploade loonstrook (PDF/afbeelding)
@@ -362,8 +365,10 @@ export type Loonstrook = {
 };
 
 // ── Boetes ──
-export type BoeteStatus = "Open" | "Betaald" | "Kwijtgescholden";
-export const BOETE_STATUSSEN: BoeteStatus[] = ["Open", "Betaald", "Kwijtgescholden"];
+// "Via loon" = in termijnen inhouden op de loonstrook. Bij elke loonstrook gaat er een termijn af;
+// zodra het hele bedrag binnen is, springt de boete vanzelf op "Betaald".
+export type BoeteStatus = "Open" | "Via loon" | "Betaald" | "Kwijtgescholden";
+export const BOETE_STATUSSEN: BoeteStatus[] = ["Open", "Via loon", "Betaald", "Kwijtgescholden"];
 
 export type Boete = {
   id: string;
@@ -372,7 +377,21 @@ export type Boete = {
   omschrijving: string;
   bedrag: number;
   status: BoeteStatus;
+  termijnBedrag?: number; // bij "Via loon": hoeveel er per loonstrook wordt ingehouden
+  ingehouden?: number;    // hoeveel er al via loonstroken is ingehouden
   notitie: string;
+  bestand?: string;       // data-URL van de binnengekomen boete (PDF/foto)
+  bestandsnaam?: string;
+};
+
+// Wat er nog openstaat van een boete.
+export const boeteRest = (b: Boete) => Math.max(0, Math.round((b.bedrag - (b.ingehouden ?? 0)) * 100) / 100);
+// Hoeveel er bij de eerstvolgende loonstrook afgaat: bij "Via loon" één termijn, anders de hele rest.
+export const boeteTermijn = (b: Boete) => {
+  const rest = boeteRest(b);
+  if (b.status !== "Via loon") return rest;
+  const t = b.termijnBedrag && b.termijnBedrag > 0 ? b.termijnBedrag : rest;
+  return Math.min(t, rest);
 };
 
 // ── Communicatie ──
