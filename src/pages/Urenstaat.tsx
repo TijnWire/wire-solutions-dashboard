@@ -25,6 +25,17 @@ const weekNr = (d: Date) => {
   return 1 + Math.round((t.getTime() - eersteDonderdag.getTime()) / (7 * 24 * 3600 * 1000));
 };
 const uurTekst = (n: number) => (Number.isInteger(n) ? String(n) : (Math.round(n * 100) / 100).toString().replace(".", ","));
+// Het dagbereik van een week: "13 – 19 jul 2026", of "29 jun – 5 jul 2026" als de week over de
+// maandgrens loopt. De maand niet twee keer noemen scheelt ruimte in de weekkeuze.
+const weekBereik = (maandagISO: string) => {
+  const ma = new Date(maandagISO + "T00:00:00");
+  const zo = new Date(ma); zo.setDate(zo.getDate() + 6);
+  const eind = zo.toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" });
+  const begin = ma.getMonth() === zo.getMonth()
+    ? String(ma.getDate())
+    : ma.toLocaleDateString("nl-NL", { day: "numeric", month: "short" });
+  return `${begin} – ${eind}`;
+};
 const klok = (n: number) => `${String(Math.floor(n)).padStart(2, "0")}:${String(Math.round((n % 1) * 60)).padStart(2, "0")}`;
 
 // Totaal = eindtijd − begintijd − pauze. Loopt de eindtijd over middernacht, dan telt de nachtdienst door.
@@ -295,6 +306,31 @@ export function Urenstaat() {
   const dezeWeek = toISO(maandagVan(new Date())) === weekISO;
   const weekLabel = `${weekDate.toLocaleDateString("nl-NL", { day: "numeric", month: "short" })} – ${weekEinde.toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" })}`;
 
+  // Alle weken om uit te kiezen: elke week waar uren in staan, plus deze week, plus een halfjaar terug
+  // en een maand vooruit — zo kun je ook naar een week springen waar nog niets in staat. Nieuwste
+  // bovenaan, met het totaal erbij zodat je in één oogopslag ziet waar nog werk ligt. Niet te ver
+  // vooruit: dan staat de lopende week (waar je meestal moet zijn) meteen bovenaan in beeld.
+  const weekOpties = useMemo(() => {
+    const nu = toISO(maandagVan(new Date()));
+    const perWeek = new Map<string, number>();
+    for (const r of urenstaat) {
+      if (!r.datum) continue;
+      const w = toISO(maandagVan(new Date(r.datum + "T00:00:00")));
+      perWeek.set(w, (perWeek.get(w) ?? 0) + (Number(r.uren) || 0));
+    }
+    const weken = new Set<string>([nu, weekISO, ...perWeek.keys()]);
+    for (let i = -26; i <= 4; i++) {
+      const d = new Date(nu + "T00:00:00"); d.setDate(d.getDate() + i * 7);
+      weken.add(toISO(d));
+    }
+    return [...weken].sort().reverse().map((w) => {
+      const u = perWeek.get(w) ?? 0;
+      const d = new Date(w + "T00:00:00");
+      const extra = [u > 0 ? `${uurTekst(u)} u` : "leeg", w === nu ? "deze week" : ""].filter(Boolean).join(" · ");
+      return { waarde: w, label: `Week ${weekNr(d)} · ${weekBereik(w)} · ${extra}` };
+    });
+  }, [urenstaat, weekISO]);
+
   const medewerkers = [...users].sort((a, b) => a.naam.localeCompare(b.naam, "nl"));
   const uursoorten = uursoortenVan(bedrijf);
   const urenVanPersoon = (id: string) => weekRegels.filter((r) => r.medewerkerId === id).reduce((s, r) => s + (Number(r.uren) || 0), 0);
@@ -474,8 +510,18 @@ export function Urenstaat() {
       <Card className="space-y-3 p-3">
         <div className="flex flex-wrap items-center gap-2">
           <button type="button" onClick={() => verschuif(-7)} className="inline-flex items-center gap-1 rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-50"><ChevronLeft className="h-4 w-4" /> Vorige</button>
+          {/* Klik op de week → alle weken op een rij (met zoekveld: typ "29" of "jul"). */}
           <div className="flex min-w-0 flex-1 flex-col items-center px-2 text-center">
-            <span className="text-sm font-bold text-ink-900">Week {weekNr(weekDate)} · {weekDate.getFullYear()}</span>
+            <Keuze
+              value={weekISO}
+              onChange={setWeekISO}
+              opties={weekOpties}
+              knopLabel={`Week ${weekNr(weekDate)} · ${weekDate.getFullYear()}`}
+              altijdZoeken
+              menuMin={380}
+              title="Kies een week"
+              className="!w-auto !gap-1 !border-transparent !bg-transparent !px-2 !py-0.5 !font-bold !text-ink-900 hover:!bg-ink-100"
+            />
             <span className="text-xs text-ink-500">{weekLabel}</span>
           </div>
           <button type="button" onClick={() => verschuif(7)} className="inline-flex items-center gap-1 rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-50">Volgende <ChevronRight className="h-4 w-4" /></button>

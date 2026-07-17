@@ -7,7 +7,7 @@ export type KeuzeOptie = { waarde: string; label: string; kleur?: string };
 // Afgeronde keuzelijst die de native <select> vervangt. Het menu wordt via een portal getoond
 // (position: fixed) zodat het nooit wordt afgeknipt door een overflow-hidden kaart, en het is
 // even breed als de knop. Bij veel opties verschijnt bovenaan automatisch een zoekveld.
-export function Keuze({ value, onChange, opties, placeholder = "Kies…", disabled = false, className = "", title, size = "md", altijdZoeken = false }: {
+export function Keuze({ value, onChange, opties, placeholder = "Kies…", disabled = false, className = "", title, size = "md", altijdZoeken = false, knopLabel, menuMin }: {
   value: string;
   onChange: (waarde: string) => void;
   opties: KeuzeOptie[];
@@ -17,6 +17,8 @@ export function Keuze({ value, onChange, opties, placeholder = "Kies…", disabl
   title?: string;
   size?: "sm" | "md" | "rij"; // "rij" = exact even hoog als de invoervelden in een tabelrij (34px)
   altijdZoeken?: boolean; // toon het zoekveld ook bij een kortere lijst (handig voor projecten/klanten)
+  knopLabel?: string; // korter label voor óp de knop; de lijst blijft de volledige labels tonen
+  menuMin?: number; // minimale menubreedte in px — voor een smalle knop met lange regels in de lijst
 }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
@@ -34,7 +36,11 @@ export function Keuze({ value, onChange, opties, placeholder = "Kies…", disabl
     if (r) {
       let top = r.bottom + 4;
       if (top + hoogte > window.innerHeight - 8) top = Math.max(8, r.top - hoogte - 4);
-      setPos({ top, left: r.left, width: r.width });
+      // Het menu is normaal even breed als de knop. Bij een smalle knop met lange regels zou dat de
+      // tekst afknippen; menuMin geeft dan een ondergrens, en we schuiven 'm terug het scherm in.
+      const breedte = Math.max(r.width, menuMin ?? 0);
+      const left = Math.max(8, Math.min(r.left, window.innerWidth - breedte - 8));
+      setPos({ top, left, width: breedte });
     }
     setOpen(true);
   };
@@ -72,7 +78,7 @@ export function Keuze({ value, onChange, opties, placeholder = "Kies…", disabl
       <button ref={btnRef} type="button" disabled={disabled} title={title} aria-haspopup="listbox" aria-expanded={open} onClick={() => (open ? setOpen(false) : openen())} className={`${basis} ${className}`}>
         <span className={`flex min-w-0 flex-1 items-center gap-2 truncate ${huidig ? "" : "text-ink-400"}`}>
           {huidig?.kleur && <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${huidig.kleur}`} />}
-          <span className="truncate">{huidig ? huidig.label : placeholder}</span>
+          <span className="truncate">{huidig ? (knopLabel ?? huidig.label) : placeholder}</span>
         </span>
         <ChevronDown className={`h-4 w-4 shrink-0 text-ink-400 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
@@ -101,6 +107,8 @@ export function Keuze({ value, onChange, opties, placeholder = "Kies…", disabl
                   <button
                     key={o.waarde || "__leeg"}
                     type="button"
+                    // Bij een lange lijst begin je bij wat nu gekozen is, in plaats van bovenaan.
+                    ref={actief ? (el) => el?.scrollIntoView({ block: "nearest" }) : undefined}
                     onClick={() => kies(o.waarde)}
                     className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm outline-none focus-visible:bg-ink-50 ${actief ? "bg-brand-50 font-semibold text-brand-700" : "text-ink-700 hover:bg-ink-50"}`}
                   >
