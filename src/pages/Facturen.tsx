@@ -476,7 +476,9 @@ export function Facturen({ initieelFactuur, nieuwFactuurProject }: { initieelFac
       naam: rs[0].mapNaam || rs[0].straat,
       plaats: rs[0].plaats,
       rondes: rs,
-      gegooid: rs.reduce((s, r) => s + r.adressen.filter((a) => !a.ontbreekt && a.status === "Gegooid").length, 0),
+      // Alles wat bezorgd is telt mee: afgegooid, blanco én niet-thuis. Alleen ontbrekende
+      // huisnummers vallen af — die bestaan niet en zijn al aan Stedin gemeld.
+      gegooid: rs.reduce((s, r) => s + r.adressen.filter((a) => !a.ontbreekt && a.status !== "Te doen").length, 0),
       pd: rs.find((r) => r.pdNummer)?.pdNummer,
       doorgestuurd: rs.map((r) => r.doorgestuurdOp).filter(Boolean).sort()[0],
     }));

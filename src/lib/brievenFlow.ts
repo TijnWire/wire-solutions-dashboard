@@ -51,7 +51,8 @@ export function bevestigingsMail(r: Brievenronde): string {
   return `mailto:?subject=${encodeURIComponent(onderwerp)}&body=${encodeURIComponent(lijnen.join("\n"))}`;
 }
 
-// Maakt een concept-factuur op basis van het aantal gegooide brieven.
+// Maakt een concept-factuur op basis van het aantal bezorgde brieven (afgegooid, blanco én
+// niet-thuis tellen mee — alleen ontbrekende huisnummers en nog-te-doen adressen vallen af).
 export function maakConceptFactuurVanRonde(r: Brievenronde, nummer: string, datumISO: string, prijsPerBrief = 0.85): Omit<Factuur, "id"> {
   const t = rondeTellingen(r);
   return {
@@ -63,7 +64,7 @@ export function maakConceptFactuurVanRonde(r: Brievenronde, nummer: string, datu
     regels: [
       {
         omschrijving: `Brieven bezorgd — ${r.straat}${r.plaats ? ", " + r.plaats : ""}`,
-        aantal: t.gegooid,
+        aantal: t.totaal - t.teDoen,
         prijs: prijsPerBrief,
       },
     ],

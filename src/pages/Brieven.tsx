@@ -235,7 +235,9 @@ function RondeDetail({ ronde, onTerug }: { ronde: Brievenronde; onTerug: () => v
   const terugNaarWerknemer = () => updateRonde(ronde.id, { status: "toegewezen", gecontroleerdDoor: undefined, gecontroleerdOp: undefined, verstuurdOp: undefined, boekhouding: undefined, doorgestuurdOp: undefined, gefactureerdOp: undefined });
   const goedkeuren = () => updateRonde(ronde.id, { status: "gecontroleerd", gecontroleerdDoor: currentUser?.id, gecontroleerdOp: nu() });
   // Afronden = klaar → meteen door naar de boekhouding (verschijnt bij Facturen + als melding).
-  const afronden = () => updateRonde(ronde.id, { status: "verstuurd", verstuurdOp: nu(), boekhouding: "te_factureren", doorgestuurdOp: nu() });
+  // Wat nog op "Te doen" staat wordt meteen afgegooid: de ronde is klaar, dus alle huisnummers
+  // tellen mee voor de factuur — je hoeft ze niet eerst allemaal zelf aan te tikken.
+  const afronden = () => updateRonde(ronde.id, { adressen: alsGedaan(ronde.adressen), status: "verstuurd", verstuurdOp: nu(), boekhouding: "te_factureren", doorgestuurdOp: nu() });
 
   // Concept-factuur aanmaken op basis van het aantal gegooide brieven (behoud van de oude werkstroom-stap).
   const maakFactuur = () => {
@@ -809,6 +811,9 @@ function weekLabel(maandagISO: string): string {
   return `Week van ${d} ${NL_MAANDEN[mnd - 1]} ${j}`;
 }
 const teGooien = (r: Brievenronde) => r.adressen.filter((a) => !a.ontbreekt && a.status !== "Gegooid").length;
+// Bij afronden/doorsturen: alles wat nog op "Te doen" staat gaat op "Gegooid". Blanco en niet-thuis
+// blijven staan (dat is bewust vastgelegd werk) en ontbrekende huisnummers blijven ontbrekend.
+const alsGedaan = (adr: Adres[]) => adr.map((a) => (!a.ontbreekt && a.status === "Te doen" ? { ...a, status: "Gegooid" as const } : a));
 const isOpenRonde = (r: Brievenronde) => r.status !== "verstuurd";
 // Peildatum voor sortering/groepering: deadline → aanmaakdatum.
 const peildatum = (r: Brievenronde) => r.deadline || r.aangemaakt.slice(0, 10);
@@ -884,7 +889,7 @@ function MapDetail({ naam, rondes, isLeiding, onOpenRonde, onTerug }: { naam: st
     if (oa !== ob) return oa - ob;
     return a.straat.localeCompare(b.straat, "nl") || a.postcode.localeCompare(b.postcode);
   });
-  const { teBezorgen, pct, alAfgerond, pd, regel } = mapStats(rondes);
+  const { teBezorgen, openA, pct, alAfgerond, pd, regel } = mapStats(rondes);
   const deadline = rondes.find((r) => r.deadline)?.deadline ?? "";
   const toegewezen = rondes.find((r) => r.toegewezenAan)?.toegewezenAan ?? "";
 
@@ -902,7 +907,9 @@ function MapDetail({ naam, rondes, isLeiding, onOpenRonde, onTerug }: { naam: st
       // (anders blijft 'ie in "toegewezen" hangen zonder monteur en kan niemand 'm meer oppakken).
       : { toegewezenAan: undefined, status: r.status === "toegewezen" ? "nieuw" : r.status, toegewezenOp: undefined },
   ));
-  const naarBoekhouding = () => { const n = teBezorgen.length; rondes.forEach((r) => updateRonde(r.id, { status: "verstuurd", verstuurdOp: nu(), boekhouding: "te_factureren", doorgestuurdOp: nu() })); setVraagBoek(false); setBoekKlaar(n); };
+  // De hele map afronden: alles wat nog op "Te doen" staat wordt meteen afgegooid, zodat álle
+  // huisnummers als gedaan geregistreerd staan voor de factuur. Selecteren is dus niet nodig.
+  const naarBoekhouding = () => { const n = teBezorgen.length; rondes.forEach((r) => updateRonde(r.id, { adressen: alsGedaan(r.adressen), status: "verstuurd", verstuurdOp: nu(), boekhouding: "te_factureren", doorgestuurdOp: nu() })); setVraagBoek(false); setBoekKlaar(n); };
 
   // ── Adressen selecteren (per stuk / hele straat / alles) en in bulk markeren ──
   const alleIds = straten.flatMap((r) => r.adressen.filter((a) => !a.ontbreekt).map((a) => a.id));
@@ -1115,7 +1122,7 @@ function MapDetail({ naam, rondes, isLeiding, onOpenRonde, onTerug }: { naam: st
           )}
         </div>
       </div>
-      <Bevestig open={vraagBoek} titel="Hele map naar de boekhouding?" tekst={`Alle ${rondes.length} rondes (${teBezorgen.length} adressen) van "${naam}" worden afgerond en doorgestuurd naar de boekhouding.`} bevestigLabel="Naar boekhouding" bevestigTone="brand" onBevestig={naarBoekhouding} onAnnuleer={() => setVraagBoek(false)} />
+      <Bevestig open={vraagBoek} titel="Hele map naar de boekhouding?" tekst={`Alle ${rondes.length} rondes (${teBezorgen.length} adressen) van "${naam}" worden afgerond en doorgestuurd naar de boekhouding.${openA > 0 ? ` De ${openA} adres${openA === 1 ? "" : "sen"} die nog op "Te doen" ${openA === 1 ? "staat" : "staan"} worden meteen afgevinkt, zodat alle ${teBezorgen.length} huisnummers op de factuur komen.` : ` Alle ${teBezorgen.length} huisnummers komen op de factuur.`}`} bevestigLabel="Naar boekhouding" bevestigTone="brand" onBevestig={naarBoekhouding} onAnnuleer={() => setVraagBoek(false)} />
 
       {/* Succes-melding ná het doorsturen */}
       {boekKlaar > 0 && (
