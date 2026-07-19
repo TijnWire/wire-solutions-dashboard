@@ -1215,14 +1215,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
   const addVoorschouwMap: AppState["addVoorschouwMap"] = (naam) => {
     const id = nextId("vmap");
+    const nu = new Date().toISOString();
     setVoorschouwMappen((prev) => {
       const maxVolgorde = prev.reduce((m, x) => Math.max(m, x.volgorde ?? -1), -1);
-      return [...prev, { id, naam: naam.trim() || "Nieuwe map", volgorde: maxVolgorde + 1, aangemaakt: new Date().toISOString() }];
+      return [...prev, { id, naam: naam.trim() || "Nieuwe map", volgorde: maxVolgorde + 1, aangemaakt: nu, bijgewerktOp: nu }];
     });
     return id;
   };
+  // bijgewerktOp bij ELKE wijziging meestempelen: zo wint deze wijziging (archiveren, hernoemen, toewijzen)
+  // bij het samenvoegen van een ietsje oudere versie op de centrale database. Zie mergeCollection.
   const updateVoorschouwMap: AppState["updateVoorschouwMap"] = (id, patch) =>
-    setVoorschouwMappen((prev) => prev.map((m) => (m.id === id ? { ...m, ...patch, naam: (patch.naam ?? m.naam).trim() || m.naam } : m)));
+    setVoorschouwMappen((prev) => prev.map((m) => (m.id === id ? { ...m, ...patch, naam: (patch.naam ?? m.naam).trim() || m.naam, bijgewerktOp: new Date().toISOString() } : m)));
   const deleteVoorschouwMap: AppState["deleteVoorschouwMap"] = (id) => {
     setVoorschouwMappen((prev) => prev.filter((m) => m.id !== id));
     tomb("voorschouwMappen", id);

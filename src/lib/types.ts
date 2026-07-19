@@ -142,6 +142,10 @@ export type VoorschouwMap = {
   gereedVoorStedin?: boolean; // klaargezet op de controle-/verstuurpagina "Klaar voor Stedin"
   gereedOp?: string; // ISO
   verzondenOp?: string; // ISO — wanneer daadwerkelijk naar Stedin verstuurd
+  // Tijdstip van de laatste wijziging (archiveren, hernoemen, toewijzen …). Nodig voor de sync: bij het
+  // samenvoegen wint de nieuwste versie, zodat een net gearchiveerde map niet terugkomt doordat een ander
+  // apparaat een ietsje oudere lijst terugschrijft. Zie mergeCollection in lib/merge.ts.
+  bijgewerktOp?: string; // ISO
 };
 
 export type Voorschouw = {

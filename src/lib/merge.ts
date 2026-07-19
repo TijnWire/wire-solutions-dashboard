@@ -11,11 +11,23 @@
 // Tombstones: per onderdeel (slice) een map van verwijderd-record-id → tijdstip van verwijderen.
 export type Tombstones = Record<string, Record<string, string>>;
 
-type MetId = { id: string };
+type MetId = { id: string; bijgewerktOp?: string };
+
+// Heeft de lokale versie een nieuwere `bijgewerktOp` dan de centrale? Dan is dit apparaat de bron van de
+// meest recente wijziging en moet die blijven staan. Zonder tijdstempel (oude records / onderdelen die er
+// niet mee werken) valt het terug op het oude gedrag: dan wint de centrale versie.
+function lokaalIsNieuwer(lokaal: MetId, centraal: MetId): boolean {
+  const l = lokaal.bijgewerktOp;
+  if (!l) return false;
+  const c = centraal.bijgewerktOp;
+  return !c || l > c;
+}
 
 // Voeg twee lijsten samen op `id`. Niets gaat verloren: elk id dat in local óf incoming zit blijft,
-// behalve verwijderde ids (tombstones). Bij een gedeeld id wint de centrale (incoming) versie, zodat
-// wijzigingen van collega's doorkomen. Volgorde: lokaal-only toevoegingen bovenaan (een net toegevoegd
+// behalve verwijderde ids (tombstones). Bij een gedeeld id wint normaal de centrale (incoming) versie,
+// zodat wijzigingen van collega's doorkomen — MAAR een lokaal record met een nieuwere `bijgewerktOp` wint,
+// zodat een net gemaakte wijziging (bv. archiveren) niet wordt teruggedraaid doordat een ander apparaat nog
+// een ietsje oudere lijst terugschrijft. Volgorde: lokaal-only toevoegingen bovenaan (een net toegevoegd
 // record blijft zichtbaar), daarna de centrale volgorde — deterministisch, dus de apparaten komen samen.
 export function mergeCollection<T extends MetId>(
   local: T[] | undefined,
@@ -27,6 +39,8 @@ export function mergeCollection<T extends MetId>(
   const dood = (id: string) => !!(tomb && tomb[id]);
   const inIds = new Set<string>();
   for (const it of I) if (it && it.id != null) inIds.add(it.id);
+  const lokaalById = new Map<string, T>();
+  for (const it of L) if (it && it.id != null) lokaalById.set(it.id, it);
 
   const out: T[] = [];
   const seen = new Set<string>();
@@ -37,12 +51,14 @@ export function mergeCollection<T extends MetId>(
     seen.add(it.id);
     out.push(it);
   }
-  // 2) Daarna de centrale volgorde; de centrale versie wint bij een gedeeld id.
+  // 2) Daarna de centrale volgorde; de centrale versie wint bij een gedeeld id — tenzij de lokale versie
+  //    aantoonbaar nieuwer is (nieuwere bijgewerktOp), dan houden we die.
   for (const it of I) {
     if (!it || it.id == null) continue;
     if (dood(it.id) || seen.has(it.id)) continue;
     seen.add(it.id);
-    out.push(it);
+    const lokaal = lokaalById.get(it.id);
+    out.push(lokaal && lokaalIsNieuwer(lokaal, it) ? lokaal : it);
   }
   return out;
 }
