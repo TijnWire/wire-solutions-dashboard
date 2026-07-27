@@ -72,7 +72,7 @@ import {
 } from "../lib/seed";
 import { idbGet, idbSet } from "./db";
 import { mergeCollection, mergeTombstones, type Tombstones } from "../lib/merge";
-import { supabaseAan, sbLeesAlles, sbSchrijf, sbVersies, sbLeesKeys, sbLogin, sbLoginUitkomst, sbRegistreer, sbLogout, sbSessieEmail, bewaarSyncCred, wisSyncCred, sbHerstelSessie, cloudWsUrl, wisSessieGeweigerd, type LoginUitkomst } from "../lib/supabase";
+import { supabaseAan, sbLeesAlles, sbSchrijf, sbVersies, sbLeesKeys, sbLogin, sbLoginUitkomst, sbRegistreer, sbLogout, sbSessieEmail, bewaarSyncCred, wisSyncCred, sbHerstelSessie, cloudWsUrl, wisSessieGeweigerd, sbMijnRechten, type LoginUitkomst } from "../lib/supabase";
 
 // Uitkomst van een inlogpoging. Bewust géén kale boolean meer: de gebruiker moet het verschil zien tussen
 // een verkeerd wachtwoord en een database die even niet bereikbaar is.
@@ -374,7 +374,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     versies: Record<string, string>; vuil: Set<string>;
     laatsteOk: number;                       // wanneer de server voor het laatst écht antwoordde
     wachtrij: Map<string, unknown>;          // per onderdeel de laatste waarde die nog weg moet
-  }>({ klaar: false, gezien: {}, bezig: new Set(), laatsteFout: "", versies: {}, vuil: new Set(), laatsteOk: 0, wachtrij: new Map() });
+    afgeschermd: Set<string>;                // onderdelen waar dit account niet bij mag (server bepaalt dit)
+  }>({ klaar: false, gezien: {}, bezig: new Set(), laatsteFout: "", versies: {}, vuil: new Set(), laatsteOk: 0, wachtrij: new Map(), afgeschermd: new Set() });
   // Laatst-gepushte referentie per slice — zo serialiseren we alleen de slice die écht wijzigde (niet alle 23 per klik).
   const pushRef = useRef<Record<string, unknown>>({});
 
@@ -744,6 +745,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // iedereen 2 en merkt niemand het. Nu geldt per onderdeel: loopt er al een schrijfactie, dan onthouden we
   // alleen de LAATSTE waarde en sturen die zodra de vorige klaar is.
   const schrijfKey = (key: string, waarde: unknown): void => {
+    // Onderdelen waar dit account niet bij mag, nooit terugsturen: de server weigert ze toch (403) en
+    // anders zou een verouderde lokale kopie de echte gegevens kunnen overschrijven.
+    if (sync.current.afgeschermd.has(key)) return;
     if (sync.current.bezig.has(key)) { sync.current.wachtrij.set(key, waarde); return; }
     sync.current.bezig.add(key);
     void sbSchrijf(key, waarde)
@@ -883,6 +887,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // met oplopende pauzes, en vallen we terug op per-onderdeel ophalen (kleine stukjes) zodat de sync
     // altijd op gang komt.
     const eersteLees = async (): Promise<boolean> => {
+      // Eerst vragen wat dit account mag zien. Doen we dat later, dan zou de eerste ronde de
+      // boekhoud-onderdelen nog als "ontbrekend" zien en de lokale kopie uploaden.
+      const rechten = await sbMijnRechten();
+      if (!actief) return false;
+      if (rechten) {
+        sync.current.afgeschermd = new Set(rechten.afgeschermd);
+        // Staat er nog oude boekhoud-data op dit toestel van vóór de afscherming? Die hoort hier niet meer
+        // en wordt lokaal opgeruimd. De centrale database houdt het origineel — we sturen dus niets terug.
+        //
+        // ALLEEN LIJSTEN. Een los object (bedrijf, instellingen, comm) op leeg zetten is levensgevaarlijk:
+        // die waarde belandt via het opslag-effect in IndexedDB, en bij de volgende start leest de hydratie
+        // hem terug in plaats van de standaardwaarde. Een `null` laat `Object.entries(...)` in de hydratie
+        // klappen, waardoor `hydrated` nooit true wordt en de gebruiker voorgoed op het laadscherm blijft
+        // hangen — niet eens meer uit te loggen. Zo'n onderdeel afschermen kan alleen samen met een
+        // null-veilige hydratie; tot die tijd slaan we het hier bewust over.
+        for (const key of sync.current.afgeschermd) {
+          if (!(key in setters)) continue;
+          const lokaal = waardenRef.current[key];
+          if (!Array.isArray(lokaal) || lokaal.length === 0) continue;
+          sync.current.gezien[key] = "[]";
+          setters[key]([]);
+        }
+      }
       let remote: Record<string, unknown>;
       try {
         remote = await sbLeesAlles();
@@ -914,10 +941,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         applyRemote(key, val);
       }
       for (const key of Object.keys(setters)) {
-        if (!(key in remote)) {
-          sync.current.gezien[key] = JSON.stringify(waardenRef.current[key]);
-          schrijfKey(key, waardenRef.current[key]);
-        }
+        if (key in remote || sync.current.afgeschermd.has(key)) continue;
+        sync.current.gezien[key] = JSON.stringify(waardenRef.current[key]);
+        schrijfKey(key, waardenRef.current[key]);
       }
       const email = await sbSessieEmail();
       if (actief && email) {
@@ -963,7 +989,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         try {
           const msg = JSON.parse(String(ev.data));
           if (msg?.type === "changed" && Array.isArray(msg.keys)) {
-            const teHalen = (msg.keys as string[]).filter((k) => k in setters && !sync.current.bezig.has(k));
+            const teHalen = (msg.keys as string[]).filter((k) => k in setters && !sync.current.bezig.has(k) && !sync.current.afgeschermd.has(k));
             if (teHalen.length) void sbLeesKeys(teHalen).then((d) => { if (actief) pasToe(d); }).catch(() => { /* de poll vangt het op */ });
           }
         } catch { /* onbekend bericht — negeren */ }
@@ -982,7 +1008,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         const versies = await sbVersies();
         if (!actief) return;
-        const gewijzigd = Object.keys(versies).filter((k) => k in setters && !sync.current.bezig.has(k) && versies[k] !== sync.current.versies[k]);
+        const gewijzigd = Object.keys(versies).filter((k) => k in setters && !sync.current.bezig.has(k) && !sync.current.afgeschermd.has(k) && versies[k] !== sync.current.versies[k]);
         if (gewijzigd.length) {
           const data = await sbLeesKeys(gewijzigd);
           if (!actief) return;
@@ -992,7 +1018,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         // Veiligheidsnet: lokale onderdelen die data hebben maar nog NIET in de centrale database staan,
         // worden vanzelf geüpload (geen handmatige actie nodig). Eenmaal geüpload staan ze in 'versies'.
         for (const key of Object.keys(setters)) {
-          if (key in versies || sync.current.bezig.has(key)) continue;
+          if (key in versies || sync.current.bezig.has(key) || sync.current.afgeschermd.has(key)) continue;
           const lokaal = waardenRef.current[key];
           const heeftData = Array.isArray(lokaal) ? lokaal.length > 0 : !!lokaal;
           if (!heeftData) continue;
@@ -1002,6 +1028,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         // óók als ze al met OUDERE data op de server staan — anders blijft de nieuwe data lokaal hangen.
         for (const key of [...sync.current.vuil]) {
           if (sync.current.bezig.has(key)) continue;
+          if (sync.current.afgeschermd.has(key)) { sync.current.vuil.delete(key); continue; }
           const lokaal = waardenRef.current[key];
           const heeftData = Array.isArray(lokaal) ? lokaal.length > 0 : !!lokaal;
           if (!heeftData) { sync.current.vuil.delete(key); continue; }

@@ -227,11 +227,30 @@ async function zeefRollen(env: Env, binnen: unknown): Promise<unknown> {
   });
 }
 
-// NOG OPEN (bewust, zie het verslag): /state kent geen rechten PER ONDERDEEL. Een ingelogde monteur kan
-// dus rechtstreeks bij de Worker 'loonstroken' of 'facturen' opvragen, ook al verbergt de app die schermen.
-// Dat afschermen kan niet zomaar hier: de app haalt álle onderdelen op en voegt ze samen, dus een geweigerd
-// of ontbrekend onderdeel zou de sync in de war sturen en data kunnen wissen. Dat vraagt een aanpassing aan
-// beide kanten tegelijk — apart uitvoeren, niet tussendoor.
+// ── RECHTEN PER ONDERDEEL ──
+// De app verbergt de boekhoud-schermen al voor een monteur, maar dat is alleen de etalage: met zijn eigen
+// token kon hij 'loonstroken' of 'facturen' gewoon rechtstreeks bij de Worker opvragen. Hier dwingen we het
+// echt af.
+//
+// LET OP hoe dit samenwerkt met de sync, anders gaat er data verloren:
+//   • GET /state en POST /state/keys LATEN afgeschermde onderdelen WEG uit het antwoord.
+//   • GET /state/versions NOEMT ze wel (met hun tijdstempel). Dat is essentieel: de app uploadt namelijk
+//     automatisch elk onderdeel dat zij lokaal heeft maar níét in de versielijst ziet staan. Zouden we ze
+//     hier weglaten, dan zou de telefoon van een monteur zijn oude kopie van de loonstroken over de echte
+//     heen schrijven.
+//   • POST /state weigert ze met 403.
+// De app haalt de lijst op via GET /rechten en laat die onderdelen daarna met rust (en ruimt ze lokaal op).
+// LET OP: hier mogen alleen onderdelen in die in de app een LIJST zijn. Losse objecten (bedrijf,
+// instellingen, comm) afschermen breekt de app aan de clientkant — zie de uitleg bij het opruimen in
+// src/store/AppContext.tsx. Uitgezocht op 2026-07-27: klanten, verlof, bedrijf en instellingen zijn
+// bewust NIET afgeschermd omdat monteur-schermen ze nodig hebben.
+const BOEKHOUD_ONDERDELEN = ["loonstroken", "facturen", "boetes"];
+
+function afgeschermdVoor(rol: { rol: string; boekhouding: boolean } | null): Set<string> {
+  if (magAlles(rol?.rol)) return new Set();              // eigenaar en HR mogen alles
+  if (rol?.boekhouding) return new Set();                // beheerder mét boekhoud-rechten ook
+  return new Set(BOEKHOUD_ONDERDELEN);
+}
 
 // Leidt de rol-spiegel af uit de users-blob (poort van de bootstrap in fase2.sql), zodat is_owner/is_boekhouding
 // meteen kloppen zonder aparte schrijfactie vanuit de frontend.
@@ -338,20 +357,33 @@ export default {
         return json({ ok: true });
       }
 
-      // ── STATE (gedeelde JSON-store; elke ingelogde gebruiker mag lezen/schrijven, net als is_team) ──
+      // ── STATE (gedeelde JSON-store) ── met rechten per onderdeel, zie afgeschermdVoor().
+      // Eén keer de rol ophalen en hergebruiken; elke route hieronder rekent ermee.
+      const mijnRechten = await rolVan(env, ikEmail).catch(() => null);
+      const afgeschermd = afgeschermdVoor(mijnRechten);
+
+      // Welke onderdelen mag ik niet zien? De app vraagt dit op zodat zij ze niet probeert te uploaden
+      // en haar eigen (mogelijk oude) kopie lokaal opruimt.
+      if (path === "/rechten" && req.method === "GET") {
+        return json({ rol: mijnRechten?.rol ?? "monteur", boekhouding: !!mijnRechten?.boekhouding, afgeschermd: [...afgeschermd] });
+      }
+
       if (path === "/state" && req.method === "GET") {
         try {
           const { results } = await env.DB.prepare("select key, data from wire_state").all<{ key: string; data: string }>();
           const out: Record<string, unknown> = {};
           // Eén kapotte rij mag niet de héle lees laten mislukken — dan synct er niets meer.
-          for (const r of results ?? []) { try { out[r.key] = JSON.parse(r.data); } catch { /* rij overslaan */ } }
+          for (const r of results ?? []) {
+            if (afgeschermd.has(r.key)) continue;
+            try { out[r.key] = JSON.parse(r.data); } catch { /* rij overslaan */ }
+          }
           return json(out);
         } catch (e) {
           // D1 hapert → lees uit de Supabase-spiegel zodat het team gewoon doorwerkt.
           const rijen = await spiegelSelect<{ key: string; data: unknown }>(env, "wire_state", "select=key,data");
           if (!rijen) throw e;
           const out: Record<string, unknown> = {};
-          for (const r of rijen) out[r.key] = r.data; // in Supabase is 'data' jsonb → al geparsed
+          for (const r of rijen) { if (!afgeschermd.has(r.key)) out[r.key] = r.data; } // 'data' is jsonb → al geparsed
           return json(out);
         }
       }
@@ -374,13 +406,15 @@ export default {
       if (path === "/state/keys" && req.method === "POST") {
         const keys = Array.isArray(body.keys) ? (body.keys as string[]).filter((k) => typeof k === "string") : [];
         const out: Record<string, unknown> = {};
-        if (keys.length) {
+        // Afgeschermde onderdelen er meteen uit filteren — dan hoeven ze niet eens uit de database.
+        const mag = keys.filter((k) => !afgeschermd.has(k));
+        if (mag.length) {
           try {
-            const ph = keys.map(() => "?").join(",");
-            const { results } = await env.DB.prepare(`select key, data from wire_state where key in (${ph})`).bind(...keys).all<{ key: string; data: string }>();
+            const ph = mag.map(() => "?").join(",");
+            const { results } = await env.DB.prepare(`select key, data from wire_state where key in (${ph})`).bind(...mag).all<{ key: string; data: string }>();
             for (const r of results ?? []) { try { out[r.key] = JSON.parse(r.data); } catch { /* rij overslaan */ } }
           } catch (e) {
-            const lijst = keys.map((k) => `"${k.replace(/"/g, '')}"`).join(",");
+            const lijst = mag.map((k) => `"${k.replace(/"/g, '')}"`).join(",");
             const rijen = await spiegelSelect<{ key: string; data: unknown }>(env, "wire_state", `select=key,data&key=in.(${encodeURIComponent(lijst)})`);
             if (!rijen) throw e;
             for (const r of rijen) out[r.key] = r.data;
@@ -392,14 +426,12 @@ export default {
       if (path === "/state" && req.method === "POST") {
         const key = String(body.key ?? "");
         if (!key) return json({ error: "key ontbreekt." }, 400);
+        if (afgeschermd.has(key)) return json({ error: `Je hebt geen toegang tot '${key}'.` }, 403);
         // De gebruikerslijst bepaalt wie wat mag. Zonder deze zeef kon iedereen met een token zichzelf
         // in die lijst tot eigenaar promoveren en daarna wachtwoorden van collega's resetten.
         // Wie geen eigenaar/HR is, mag alles aan de lijst wijzigen (naam, contract, eigen wachtwoordhash)
         // BEHALVE de rollen — die worden teruggezet op wat er al stond.
-        if (key === "users") {
-          const mijnRol = await rolVan(env, ikEmail);
-          if (!magAlles(mijnRol?.rol)) body.data = await zeefRollen(env, body.data);
-        }
+        if (key === "users" && !magAlles(mijnRechten?.rol)) body.data = await zeefRollen(env, body.data);
         const dataText = JSON.stringify(body.data ?? null);
         await env.DB.prepare(
           "insert into wire_state (key, data, updated_at) values (?1, ?2, ?3) on conflict(key) do update set data = ?2, updated_at = ?3"

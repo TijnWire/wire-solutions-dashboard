@@ -245,6 +245,14 @@ export async function sbAantallen(): Promise<{ ok: boolean; aantallen: Record<st
   }
 }
 
+// Welke onderdelen mag dit account niet inzien? De server bepaalt dat; de app gebruikt het antwoord om
+// die onderdelen niet te uploaden en haar eigen (mogelijk oude) kopie lokaal op te ruimen.
+export type MijnRechten = { rol: string; boekhouding: boolean; afgeschermd: string[] };
+export async function sbMijnRechten(): Promise<MijnRechten | null> {
+  try { return await api<MijnRechten>("/rechten", { timeoutMs: 10000 }); }
+  catch { return null; } // onbekend → app doet niets bijzonders; de server blijft het hoe dan ook afdwingen
+}
+
 // Status van BEIDE databases naast elkaar: Cloudflare (de baas) en de Supabase-spiegel (tweede kopie).
 export type DbStatus = {
   cloudflare: { gezond: boolean; onderdelen: number; accounts: number; fout: string };
