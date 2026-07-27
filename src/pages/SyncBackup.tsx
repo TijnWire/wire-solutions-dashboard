@@ -2,16 +2,19 @@ import { useState } from "react";
 import { CheckCircle2, AlertTriangle, RotateCcw, Database, Lock } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { Card, Bevestig } from "../components/ui";
-import { sbSyncTest, sbAantallen, type SyncTest } from "../lib/supabase";
+import { sbSyncTest, sbAantallen, sbDbStatus, sbHerstelSpiegel, sbKoppelAccounts, type SyncTest, type DbStatus } from "../lib/supabase";
 
 // Aparte pagina: sync-status van dit apparaat + de automatische veiligheidskopie (met herstel).
 export function SyncBackup() {
-  const { currentUser, synced, backupInfo, herstelBackup, buurtaanpak, voorschouwen, saneringen, rondes, afspraken, facturen, projects, taken } = useApp();
+  const { currentUser, users, synced, backupInfo, herstelBackup, buurtaanpak, voorschouwen, saneringen, rondes, afspraken, facturen, projects, taken } = useApp();
   const [herstelVraag, setHerstelVraag] = useState(false);
   const [herstelKlaar, setHerstelKlaar] = useState(false);
   const [test, setTest] = useState<SyncTest | null>(null);
   const [centraal, setCentraal] = useState<Record<string, number> | null>(null);
   const [testBezig, setTestBezig] = useState(false);
+  const [dbs, setDbs] = useState<DbStatus | { fout: string } | null>(null);
+  const [dbsBezig, setDbsBezig] = useState(false);
+  const [spiegelMelding, setSpiegelMelding] = useState("");
 
   if (!currentUser) return null;
   const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr";
@@ -34,6 +37,36 @@ export function SyncBackup() {
       setCentraal(a.ok ? a.aantallen : null);
     } finally { setTestBezig(false); }
   };
+  const dbsOphalen = async () => {
+    setDbsBezig(true);
+    setSpiegelMelding("");
+    try { setDbs(await sbDbStatus()); } finally { setDbsBezig(false); }
+  };
+  const spiegelHerstellen = async () => {
+    setDbsBezig(true);
+    setSpiegelMelding("");
+    try {
+      const r = await sbHerstelSpiegel();
+      setSpiegelMelding(r.ok
+        ? `Klaar — ${r.onderdelen ?? 0} onderdelen, ${r.accounts ?? 0} inlogaccounts en ${r.rollen ?? 0} rollen naar Supabase gekopieerd.`
+        : `Niet gelukt: ${r.error ?? "onbekende fout"}`);
+      setDbs(await sbDbStatus());
+    } finally { setDbsBezig(false); }
+  };
+  const accountsKoppelen = async () => {
+    setDbsBezig(true);
+    setSpiegelMelding("");
+    try {
+      const r = await sbKoppelAccounts();
+      setSpiegelMelding(r.ok
+        ? `${r.gekoppeld ?? 0} medewerkers hebben nu een inlogaccount in de centrale database (${r.aanwezig ?? 0} hadden er al een).` +
+          (r.overgeslagen?.length ? ` Overgeslagen (geen wachtwoord bekend): ${r.overgeslagen.join(", ")}.` : "")
+        : `Niet gelukt: ${r.error ?? "onbekende fout"}`);
+      setDbs(await sbDbStatus());
+    } finally { setDbsBezig(false); }
+  };
+  const isEigenaarOfHr = currentUser.rol === "eigenaar" || currentUser.rol === "hr";
+
   const vergelijk = [
     { label: "Buurtaanpak", key: "buurtaanpak", lokaal: buurtaanpak.length },
     { label: "Voorschouwen", key: "voorschouwen", lokaal: voorschouwen.length },
@@ -98,6 +131,84 @@ export function SyncBackup() {
             </div>
           </div>
         )}
+      </Card>
+
+      {/* De twee databases naast elkaar: Cloudflare is de baas, Supabase is de tweede kopie. */}
+      <Card className="p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="text-sm font-bold text-ink-900">De twee databases</div>
+            <div className="text-xs text-ink-500">
+              Cloudflare is de hoofddatabase. Supabase houdt een tweede kopie bij en springt in als Cloudflare hapert.
+            </div>
+          </div>
+          <button type="button" onClick={() => void dbsOphalen()} disabled={dbsBezig} className="shrink-0 rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-50 disabled:opacity-50">
+            {dbsBezig ? "Bezig…" : "Controleren"}
+          </button>
+        </div>
+
+        {dbs && "fout" in dbs && (
+          <div className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">Kon de status niet ophalen: {dbs.fout}</div>
+        )}
+
+        {dbs && !("fout" in dbs) && (
+          <>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <div className={`rounded-lg border p-3 ${dbs.cloudflare.gezond ? "border-green-300 bg-green-50/60" : "border-red-300 bg-red-50/60"}`}>
+                <div className="flex items-center gap-2 text-sm font-bold text-ink-900">
+                  <Database className="h-4 w-4" /> Cloudflare {dbs.cloudflare.gezond ? "✓" : "✗"}
+                </div>
+                <div className="mt-1 text-xs text-ink-600">
+                  {dbs.cloudflare.gezond
+                    ? `${dbs.cloudflare.onderdelen} onderdelen · ${dbs.cloudflare.accounts} inlogaccounts`
+                    : dbs.cloudflare.fout || "Niet bereikbaar"}
+                </div>
+              </div>
+              <div className={`rounded-lg border p-3 ${!dbs.supabase.aan ? "border-ink-200 bg-ink-50" : dbs.supabase.gezond ? "border-green-300 bg-green-50/60" : "border-amber-300 bg-amber-50/60"}`}>
+                <div className="flex items-center gap-2 text-sm font-bold text-ink-900">
+                  <Database className="h-4 w-4" /> Supabase {!dbs.supabase.aan ? "—" : dbs.supabase.gezond ? "✓" : "✗"}
+                </div>
+                <div className="mt-1 text-xs text-ink-600">
+                  {dbs.supabase.gezond
+                    ? `${dbs.supabase.onderdelen ?? 0} onderdelen · ${dbs.supabase.accounts ?? 0} inlogaccounts`
+                    : dbs.supabase.melding}
+                </div>
+              </div>
+            </div>
+
+            <div className={`mt-2 rounded-lg px-3 py-2 text-xs ${dbs.gelijk ? "bg-green-100 text-green-800" : "bg-amber-50 text-amber-800"}`}>
+              {dbs.gelijk
+                ? "Beide databases lopen gelijk — er staat overal hetzelfde in."
+                : "De twee databases lopen nog niet gelijk. Voor het werken maakt dat niets uit (Cloudflare is leidend), maar de reservekopie is dan niet compleet."}
+            </div>
+
+            {/* Niet elk teamlid heeft automatisch een inlogaccount in de centrale database: wie er nog een
+                van vóór de centrale login heeft, kan alleen inloggen op een apparaat waar de teamlijst al
+                staat. Deze knop maakt die accounts alsnog aan uit de bestaande wachtwoorden. */}
+            {isEigenaarOfHr && dbs.cloudflare.gezond && dbs.cloudflare.accounts < users.length && (
+              <div className="mt-2 rounded-lg border border-amber-300 bg-amber-50 p-3">
+                <div className="text-xs font-semibold text-amber-900">
+                  {users.length - dbs.cloudflare.accounts} van de {users.length} medewerkers kan nog niet op een nieuw apparaat inloggen
+                </div>
+                <div className="mt-0.5 text-xs text-amber-800">
+                  Hun account bestaat alleen op hun eigen telefoon. Met onderstaande knop krijgen ze allemaal een
+                  echt inlogaccount — met hun huidige wachtwoord, niemand hoeft iets te wijzigen.
+                </div>
+                <button type="button" onClick={() => void accountsKoppelen()} disabled={dbsBezig} className="mt-2 inline-flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-60">
+                  <Database className="h-4 w-4" /> Alle accounts koppelen
+                </button>
+              </div>
+            )}
+
+            {isEigenaarOfHr && dbs.supabase.aan && !dbs.gelijk && (
+              <button type="button" onClick={() => void spiegelHerstellen()} disabled={dbsBezig} className="mt-2 inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">
+                <RotateCcw className="h-4 w-4" /> Reservekopie bijwerken
+              </button>
+            )}
+          </>
+        )}
+
+        {spiegelMelding && <div className="mt-2 rounded-lg bg-ink-50 px-3 py-2 text-xs text-ink-700">{spiegelMelding}</div>}
       </Card>
 
       {/* Automatische veiligheidskopie */}

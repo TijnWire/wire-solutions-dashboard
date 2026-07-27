@@ -72,7 +72,11 @@ import {
 } from "../lib/seed";
 import { idbGet, idbSet } from "./db";
 import { mergeCollection, mergeTombstones, type Tombstones } from "../lib/merge";
-import { supabaseAan, sbLeesAlles, sbSchrijf, sbVersies, sbLeesKeys, sbLogin, sbRegistreer, sbLogout, sbSessieEmail, bewaarSyncCred, wisSyncCred, sbHerstelSessie, cloudWsUrl } from "../lib/supabase";
+import { supabaseAan, sbLeesAlles, sbSchrijf, sbVersies, sbLeesKeys, sbLogin, sbLoginUitkomst, sbRegistreer, sbLogout, sbSessieEmail, bewaarSyncCred, wisSyncCred, sbHerstelSessie, cloudWsUrl, wisSessieGeweigerd, type LoginUitkomst } from "../lib/supabase";
+
+// Uitkomst van een inlogpoging. Bewust géén kale boolean meer: de gebruiker moet het verschil zien tussen
+// een verkeerd wachtwoord en een database die even niet bereikbaar is.
+export type LoginResultaat = { ok: true } | { ok: false; melding: string };
 
 // ── Voorschouwen sharden voor de sync ──────────────────────────────────────────────
 // D1/SQLite weigert een rij groter dan ~2 MB (SQLITE_TOOBIG). Voorschouwen bevatten foto's
@@ -203,7 +207,7 @@ type AppState = {
   klanten: Klant[];
   currentUser: User | null;
 
-  login: (email: string, wachtwoord: string) => Promise<boolean>;
+  login: (email: string, wachtwoord: string) => Promise<LoginResultaat>;
   logout: () => void;
   wisselGebruiker: (id: string) => void; // dev/demo: direct van account wisselen zonder wachtwoord
 
@@ -364,7 +368,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Eerste volledige ophaal binnen? Alleen dán weet je zeker dat je ziet wat collega's al hebben staan.
   // Nodig voor acties die uit zichzelf data aanmaken (zie de automatische weekvulling in Urenstaat).
   const [syncKlaar, setSyncKlaar] = useState(false);
-  const sync = useRef<{ klaar: boolean; gezien: Record<string, string>; bezig: Set<string>; laatsteFout: string; versies: Record<string, string>; vuil: Set<string> }>({ klaar: false, gezien: {}, bezig: new Set(), laatsteFout: "", versies: {}, vuil: new Set() });
+  const [syncGezond, setSyncGezond] = useState(false);
+  const sync = useRef<{
+    klaar: boolean; gezien: Record<string, string>; bezig: Set<string>; laatsteFout: string;
+    versies: Record<string, string>; vuil: Set<string>;
+    laatsteOk: number;                       // wanneer de server voor het laatst écht antwoordde
+    wachtrij: Map<string, unknown>;          // per onderdeel de laatste waarde die nog weg moet
+  }>({ klaar: false, gezien: {}, bezig: new Set(), laatsteFout: "", versies: {}, vuil: new Set(), laatsteOk: 0, wachtrij: new Map() });
   // Laatst-gepushte referentie per slice — zo serialiseren we alleen de slice die écht wijzigde (niet alle 23 per klik).
   const pushRef = useRef<Record<string, unknown>>({});
 
@@ -728,6 +738,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // ── Schrijven naar de centrale database, één tegelijk per onderdeel ──
+  // Vroeger ging elke wijziging meteen als losse POST de deur uit. Typ je '24' in een urenveld, dan zijn dat
+  // twee POSTs met de héle lijst; landt de trage eerste ('2') als laatste in de database, dan staat er voor
+  // iedereen 2 en merkt niemand het. Nu geldt per onderdeel: loopt er al een schrijfactie, dan onthouden we
+  // alleen de LAATSTE waarde en sturen die zodra de vorige klaar is.
+  const schrijfKey = (key: string, waarde: unknown): void => {
+    if (sync.current.bezig.has(key)) { sync.current.wachtrij.set(key, waarde); return; }
+    sync.current.bezig.add(key);
+    void sbSchrijf(key, waarde)
+      .then((ua) => {
+        sync.current.versies[key] = ua;
+        sync.current.vuil.delete(key);
+        sync.current.laatsteOk = Date.now();
+        sync.current.laatsteFout = "";
+      })
+      .catch((e) => {
+        sync.current.laatsteFout = String((e as Error)?.message ?? e);
+        sync.current.vuil.add(key); // retry-vangnet in de poll pakt 'm op
+      })
+      .finally(() => {
+        sync.current.bezig.delete(key);
+        // Is er ondertussen iets nieuwers binnengekomen voor dit onderdeel? Dan dat alsnog versturen.
+        if (sync.current.wachtrij.has(key)) {
+          const volgende = sync.current.wachtrij.get(key);
+          sync.current.wachtrij.delete(key);
+          sync.current.gezien[key] = JSON.stringify(volgende);
+          schrijfKey(key, volgende);
+        }
+      });
+  };
+
   // Onthoud dat records verwijderd zijn, zodat een samenvoeging (van dit of een ander apparaat) ze niet terugbrengt.
   const tomb = (slice: string, ...ids: string[]) => {
     if (!ids.length) return;
@@ -834,39 +875,73 @@ export function AppProvider({ children }: { children: ReactNode }) {
         applyRemote(key, val); // lijsten worden samengevoegd → een gevulde lokale lijst raakt nooit records kwijt
       }
     };
-    const onthoudVersie = (key: string) => (ua: string) => { sync.current.versies[key] = ua; };
     void maakSnapshotRef.current(); // veiligheidskopie vóór we remote data toepassen
-    (async () => {
+
+    // De eerste volledige lees. Mislukt die (op 4G is /state al snel tientallen MB's door de
+    // voorschouwfoto's), dan bleef `klaar` op false staan — en dan pushte dit apparaat de RÉST VAN DE DAG
+    // niets meer, terwijl de topbalk vrolijk "Gesynchroniseerd" bleef melden. Nu proberen we het opnieuw
+    // met oplopende pauzes, en vallen we terug op per-onderdeel ophalen (kleine stukjes) zodat de sync
+    // altijd op gang komt.
+    const eersteLees = async (): Promise<boolean> => {
+      let remote: Record<string, unknown>;
       try {
-        const remote = await sbLeesAlles();
-        if (!actief) return;
-        // Tombstones eerst, zodat verwijderde records niet via de samenvoeging terugkomen.
-        if ("deletes" in remote) { sync.current.gezien.deletes = JSON.stringify(remote.deletes); applyRemote("deletes", remote.deletes); }
-        for (const [key, val] of Object.entries(remote)) {
-          if (key === "deletes" || !(key in setters)) continue;
-          // Lokaal + centraal per record samenvoegen: een gevulde lokale lijst raakt nooit records kwijt,
-          // en records die alleen centraal staan komen erbij. Push (stap 3) stuurt de samenvoeging terug.
-          sync.current.gezien[key] = JSON.stringify(val);
-          applyRemote(key, val);
-        }
-        for (const key of Object.keys(setters)) {
-          if (!(key in remote)) {
-            sync.current.gezien[key] = JSON.stringify(waardenRef.current[key]);
-            sync.current.bezig.add(key);
-            void sbSchrijf(key, waardenRef.current[key]).then(onthoudVersie(key)).catch((e) => { sync.current.laatsteFout = String((e as Error)?.message ?? e); }).finally(() => sync.current.bezig.delete(key));
+        remote = await sbLeesAlles();
+      } catch (e) {
+        sync.current.laatsteFout = String((e as Error)?.message ?? e);
+        // Plan B: alleen de versielijst (piepklein) en daarna de onderdelen stuk voor stuk.
+        try {
+          const versies = await sbVersies();
+          if (!actief) return false;
+          remote = {};
+          for (const key of Object.keys(versies)) {
+            if (!(key in setters) && key !== "deletes") continue;
+            try {
+              const stuk = await sbLeesKeys([key]);
+              if (!actief) return false;
+              Object.assign(remote, stuk);
+            } catch { /* dit onderdeel later; de poll haalt het alsnog op */ }
           }
+        } catch { return false; }
+      }
+      if (!actief) return false;
+      // Tombstones eerst, zodat verwijderde records niet via de samenvoeging terugkomen.
+      if ("deletes" in remote) { sync.current.gezien.deletes = JSON.stringify(remote.deletes); applyRemote("deletes", remote.deletes); }
+      for (const [key, val] of Object.entries(remote)) {
+        if (key === "deletes" || !(key in setters)) continue;
+        // Lokaal + centraal per record samenvoegen: een gevulde lokale lijst raakt nooit records kwijt,
+        // en records die alleen centraal staan komen erbij. Push (stap 3) stuurt de samenvoeging terug.
+        sync.current.gezien[key] = JSON.stringify(val);
+        applyRemote(key, val);
+      }
+      for (const key of Object.keys(setters)) {
+        if (!(key in remote)) {
+          sync.current.gezien[key] = JSON.stringify(waardenRef.current[key]);
+          schrijfKey(key, waardenRef.current[key]);
         }
-        const email = await sbSessieEmail();
-        if (actief && email) {
-          const lijst = (remote.users as User[] | undefined) ?? users;
-          const ik = lijst.find((u) => u.email.toLowerCase() === email.toLowerCase());
-          if (ik) setCurrentUserId(ik.id);
-        }
-        try { sync.current.versies = { ...sync.current.versies, ...(await sbVersies()) }; } catch { /* tijdstempels niet kritisch */ }
-        sync.current.klaar = true;
-        setSyncKlaar(true);
-        sync.current.laatsteFout = "";
-      } catch (e) { sync.current.laatsteFout = String((e as Error)?.message ?? e); /* blijf local-first werken */ }
+      }
+      const email = await sbSessieEmail();
+      if (actief && email) {
+        const lijst = (remote.users as User[] | undefined) ?? users;
+        const ik = lijst.find((u) => u.email.toLowerCase() === email.toLowerCase());
+        if (ik) setCurrentUserId(ik.id);
+      }
+      try { sync.current.versies = { ...sync.current.versies, ...(await sbVersies()) }; } catch { /* tijdstempels niet kritisch */ }
+      sync.current.klaar = true;
+      sync.current.laatsteOk = Date.now();
+      setSyncKlaar(true);
+      sync.current.laatsteFout = "";
+      return true;
+    };
+
+    // Blijven proberen tot de eerste lees lukt: 2s, 4s, 8s, … maximaal 30s ertussen.
+    (async () => {
+      let pauze = 2000;
+      while (actief && !sync.current.klaar) {
+        if (await eersteLees()) break;
+        if (!actief) return;
+        await new Promise((r) => setTimeout(r, pauze));
+        pauze = Math.min(pauze * 2, 30000);
+      }
     })();
     // ── Realtime via WebSocket (Durable Object) ── directe push: zodra iemand iets wijzigt, krijgen álle
     // apparaten binnen een fractie van een seconde bericht en halen ze precies dat onderdeel op.
@@ -921,8 +996,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const lokaal = waardenRef.current[key];
           const heeftData = Array.isArray(lokaal) ? lokaal.length > 0 : !!lokaal;
           if (!heeftData) continue;
-          sync.current.bezig.add(key);
-          void sbSchrijf(key, lokaal).then((ua) => { sync.current.versies[key] = ua; sync.current.vuil.delete(key); }).catch((e) => { sync.current.laatsteFout = String((e as Error)?.message ?? e); sync.current.vuil.add(key); }).finally(() => sync.current.bezig.delete(key));
+          schrijfKey(key, lokaal);
         }
         // Retry-vangnet: onderdelen waarvan de vorige push mislukte (bv. een time-out) opnieuw proberen,
         // óók als ze al met OUDERE data op de server staan — anders blijft de nieuwe data lokaal hangen.
@@ -931,9 +1005,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const lokaal = waardenRef.current[key];
           const heeftData = Array.isArray(lokaal) ? lokaal.length > 0 : !!lokaal;
           if (!heeftData) { sync.current.vuil.delete(key); continue; }
-          sync.current.bezig.add(key);
-          void sbSchrijf(key, lokaal).then((ua) => { sync.current.versies[key] = ua; sync.current.gezien[key] = JSON.stringify(lokaal); sync.current.vuil.delete(key); }).catch((e) => { sync.current.laatsteFout = String((e as Error)?.message ?? e); }).finally(() => sync.current.bezig.delete(key));
+          sync.current.gezien[key] = JSON.stringify(lokaal);
+          schrijfKey(key, lokaal);
         }
+        sync.current.laatsteOk = Date.now(); // de server heeft geantwoord → de sync leeft
         sync.current.laatsteFout = "";
       } catch (e) { sync.current.laatsteFout = String((e as Error)?.message ?? e); }
     };
@@ -950,6 +1025,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [supabaseAan, sbSessie, hydrated]);
 
   // 3) Push elke lokale wijziging naar de cloud (alleen ná de eerste synchronisatie).
+  //    LET OP de `syncKlaar` in de dep-lijst hieronder: dat is state, `sync.current.klaar` is een ref.
+  //    Zonder die state draaide dit effect NIET opnieuw op het moment dat de eerste lees klaar was, en bleef
+  //    de allereerste samenvoeging (bv. 12 's avonds offline ingevulde adressen) voorgoed lokaal staan.
   useEffect(() => {
     if (!supabaseAan || !sbSessie || !hydrated || !sync.current.klaar) return;
     for (const key of Object.keys(setters)) {
@@ -964,32 +1042,79 @@ export function AppProvider({ children }: { children: ReactNode }) {
         continue;
       }
       sync.current.gezien[key] = j;
-      sync.current.bezig.add(key); // markeer als 'wordt geschreven' zodat de 5s-pull 'm niet terughaalt
-      void sbSchrijf(key, waarden[key]).then((ua) => { sync.current.versies[key] = ua; sync.current.vuil.delete(key); }).catch((e) => { sync.current.laatsteFout = String((e as Error)?.message ?? e); sync.current.vuil.add(key); }).finally(() => sync.current.bezig.delete(key));
+      schrijfKey(key, waarden[key]); // wachtrij: nooit twee schrijfacties tegelijk op hetzelfde onderdeel
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supabaseAan, sbSessie, hydrated, users, projects, taken, projectPosts, planningen, saneringen, tauwOpdrachten, voorschouwen, voorschouwMappen, mededelingen, rondes, afspraken, facturen, bedrijf, loonstroken, boetes, comm, verlof, schouwafspraken, blancoBrieven, urenstaat, agendaItems, todos, kennis, instellingen, klanten, opdrachtgevers, buurtaanpak, deletes]);
+  }, [supabaseAan, sbSessie, hydrated, syncKlaar, users, projects, taken, projectPosts, planningen, saneringen, tauwOpdrachten, voorschouwen, voorschouwMappen, mededelingen, rondes, afspraken, facturen, bedrijf, loonstroken, boetes, comm, verlof, schouwafspraken, blancoBrieven, urenstaat, agendaItems, todos, kennis, instellingen, klanten, opdrachtgevers, buurtaanpak, deletes]);
+
+  // Bewaakt of de sync écht loopt. `sbSessie` betekende alleen "we hebben ooit een token gekregen" — dat
+  // bolletje stond dus groen terwijl er in werkelijkheid uren niets meer heen en weer ging (verlopen token,
+  // klok van het apparaat verkeerd, eerste lees mislukt). Nu telt: sessie + eerste lees gelukt + de server
+  // heeft in de afgelopen minuut geantwoord.
+  useEffect(() => {
+    if (!supabaseAan) return;
+    const meet = () => {
+      const gezond = sbSessie && sync.current.klaar && Date.now() - sync.current.laatsteOk < 60000;
+      setSyncGezond((was) => (was === gezond ? was : gezond));
+    };
+    meet();
+    const iv = setInterval(meet, 5000);
+    return () => clearInterval(iv);
+  }, [sbSessie, syncKlaar]);
 
   const currentUser = users.find((u) => u.id === currentUserId) ?? null;
 
+  // Is dit account uit de teamlijst verdwenen (beheerder heeft het verwijderd), dan koppelt dit apparaat
+  // zichzelf los: bewaarde inloggegevens weg, sessie weg, terug naar het inlogscherm. Zonder dit bleef de
+  // telefoon van een vertrokken medewerker gewoon meedraaien tot zijn token verliep.
+  // Bewust pas ná een geslaagde synchronisatie én met een gevulde lijst, zodat een half geladen app
+  // niemand ten onrechte uitlogt.
+  useEffect(() => {
+    if (!syncKlaar || !currentUserId || users.length === 0) return;
+    if (users.some((u) => u.id === currentUserId)) return;
+    if (supabaseAan) { void sbLogout(); wisSyncCred(); setSbSessie(false); }
+    setCurrentUserId(null);
+  }, [syncKlaar, currentUserId, users]);
+
   const login: AppState["login"] = async (email, wachtwoord) => {
     const e = email.trim().toLowerCase();
-    // Eerst via Supabase (centrale database). Lukt dat, dan is er meteen een sessie en synct dit apparaat.
+    // Eerst via de centrale database. Lukt dat, dan is er meteen een sessie en synct dit apparaat.
+    let cloud: LoginUitkomst = "onbereikbaar";
     if (supabaseAan) {
-      try {
-        if (await sbLogin(e, wachtwoord)) {
-          const u = users.find((x) => x.email.toLowerCase() === e);
-          if (u) setCurrentUserId(u.id);
-          setSbSessie(true);
-          bewaarSyncCred(e, wachtwoord); // lokaal bewaren → blijft vanzelf gekoppeld na heropenen
-          return true;
+      cloud = await sbLoginUitkomst(e, wachtwoord);
+      if (cloud === "ok") {
+        setSbSessie(true);
+        wisSessieGeweigerd();
+        bewaarSyncCred(e, wachtwoord); // lokaal bewaren → blijft vanzelf gekoppeld na heropenen
+        let u = users.find((x) => x.email.toLowerCase() === e);
+        // Nieuw apparaat: de teamlijst staat er lokaal nog niet, dus hoort deze persoon "nergens bij".
+        // Haal alleen die lijst even op (klein en snel) in plaats van te wachten op de volledige lees —
+        // die kan tientallen MB's zijn en duurt op 4G soms minuten.
+        if (!u) {
+          try {
+            const d = await sbLeesKeys(["users"]);
+            const lijst = d.users as User[] | undefined;
+            if (Array.isArray(lijst) && lijst.length) {
+              applyRemote("users", lijst);
+              sync.current.gezien.users = JSON.stringify(lijst);
+              u = lijst.find((x) => x.email.toLowerCase() === e);
+            }
+          } catch { /* lukt niet? dan valt hij hieronder in de duidelijke melding */ }
         }
-      } catch { /* val terug op de lokale controle */ }
+        if (u) { setCurrentUserId(u.id); return { ok: true }; }
+        return { ok: false, melding: "Je inloggegevens kloppen, maar je staat nog niet in de teamlijst. Vraag de beheerder om je account af te ronden." };
+      }
     }
     const u = users.find((x) => x.email.toLowerCase() === e);
-    if (!u) return false;
+    // Kent dit apparaat de persoon niet én kon de centrale database niets bevestigen, dan is dat een
+    // verbindingsprobleem — geen verkeerd wachtwoord. Dat verschil moet de gebruiker te zien krijgen.
+    if (!u) {
+      return cloud === "fout"
+        ? { ok: false, melding: "E-mailadres of wachtwoord klopt niet." }
+        : { ok: false, melding: "Geen verbinding met de centrale database. Probeer het zo nog eens — op dit apparaat staan nog geen gegevens om op terug te vallen." };
+    }
     const ok = await verifieerWachtwoord(wachtwoord, u);
-    if (!ok) return false;
+    if (!ok) return { ok: false, melding: "E-mailadres of wachtwoord klopt niet." };
     // Lokaal correct → METEEN inloggen. Nooit wachten op Supabase: ligt de database eruit of reageert hij
     // traag, dan mag dat de login niet blokkeren (de app is local-first).
     setCurrentUserId(u.id);
@@ -998,23 +1123,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // gewoon lokaal door en probeert hij het later opnieuw (bij online/zichtbaar worden).
     if (supabaseAan) {
       bewaarSyncCred(e, wachtwoord); // lokaal bewaren → automatisch herstellen bij volgende start/online
+      // sbRegistreer is hier nog steeds goed: het maakt het inlog-account aan voor iemand die wél in de
+      // teamlijst staat maar nog nooit bij de centrale database is geweest (de oorspronkelijke medewerkers).
+      // De Worker weigert nu onbekende e-mailadressen, dus dit kan geen vreemde accounts meer opleveren.
       void (async () => { try { await sbRegistreer(e, wachtwoord); if (await sbLogin(e, wachtwoord)) setSbSessie(true); } catch { /* lokaal blijven werken */ } })();
     }
-    return true;
+    return { ok: true };
   };
 
   const logout = () => { if (supabaseAan) { void sbLogout(); wisSyncCred(); setSbSessie(false); } setCurrentUserId(null); };
   // Demo-switcher: direct als een ander account verdergaan (alle data is gedeeld in dezelfde store).
   const wisselGebruiker: AppState["wisselGebruiker"] = (id) => { if (users.some((u) => u.id === id)) setCurrentUserId(id); };
 
+  // Elke wijziging aan een account krijgt een tijdstempel mee. Daarmee kan het samenvoegen zien welke
+  // versie de nieuwste is; zonder stempel won bij een gedeeld id altijd de centrale versie en kon een
+  // apparaat met een iets oudere lijst een net gewijzigd wachtwoord of een nieuwe rol terugdraaien.
   const addUser: AppState["addUser"] = (u) => {
     const id = nextId("u");
-    setUsers((prev) => [...prev, { ...u, id }]);
+    setUsers((prev) => [...prev, { ...u, id, bijgewerktOp: new Date().toISOString() }]);
     return id;
   };
 
   const updateUser: AppState["updateUser"] = (id, patch) =>
-    setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, ...patch } : u)));
+    setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, ...patch, bijgewerktOp: new Date().toISOString() } : u)));
 
   const deleteUser: AppState["deleteUser"] = (id) => {
     setUsers((prev) => prev.filter((u) => u.id !== id));
@@ -1434,7 +1565,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     <AppCtx.Provider
       value={{
         hydrated,
-        synced: supabaseAan && sbSessie,
+        synced: supabaseAan && sbSessie && syncGezond,
         syncKlaar: !supabaseAan || syncKlaar, // zonder centrale database is er niets om op te wachten
         backupInfo,
         herstelBackup,

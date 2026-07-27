@@ -6,16 +6,19 @@ export function Login() {
   const { login } = useApp();
   const [email, setEmail] = useState("");
   const [wachtwoord, setWachtwoord] = useState("");
-  const [fout, setFout] = useState(false);
+  const [fout, setFout] = useState("");
   const [bezig, setBezig] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (bezig) return;
     setBezig(true);
-    const ok = await login(email, wachtwoord);
+    setFout("");
+    const r = await login(email, wachtwoord);
     setBezig(false);
-    if (!ok) setFout(true);
+    // Een mislukte inlog heeft nu een eigen uitleg: "wachtwoord klopt niet" is iets heel anders dan
+    // "geen verbinding met de centrale database" — vroeger kreeg je in beide gevallen hetzelfde te zien.
+    if (!r.ok) setFout(r.melding);
   };
 
   return (
@@ -59,7 +62,7 @@ export function Login() {
                 value={email}
                 onChange={(e) => {
                   setEmail(e.target.value);
-                  setFout(false);
+                  setFout("");
                 }}
                 placeholder="naam@wiresolutions.nl"
                 className="w-full rounded-lg border border-ink-200 px-4 py-3 text-sm outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
@@ -72,7 +75,7 @@ export function Login() {
                 value={wachtwoord}
                 onChange={(e) => {
                   setWachtwoord(e.target.value);
-                  setFout(false);
+                  setFout("");
                 }}
                 placeholder="••••••••"
                 className="w-full rounded-lg border border-ink-200 px-4 py-3 text-sm outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
@@ -80,9 +83,9 @@ export function Login() {
             </div>
 
             {fout && (
-              <div className="flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-                <AlertCircle className="h-4 w-4 shrink-0" />
-                E-mailadres of wachtwoord klopt niet.
+              <div className="flex items-start gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>{fout}</span>
               </div>
             )}
 

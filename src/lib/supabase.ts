@@ -35,6 +35,12 @@ function tokenGeldig(): boolean {
   return !!(p?.email && p.exp && p.exp > Math.floor(Date.now() / 1000));
 }
 
+// Fout waarbij de server onze sessie weigert (401). Apart herkenbaar, zodat de app het verschil weet
+// tussen "geen verbinding" (later opnieuw proberen) en "je mag hier niet meer bij" (opnieuw inloggen).
+export class SessieFout extends Error {
+  constructor(melding = "Geen geldige sessie.") { super(melding); this.name = "SessieFout"; }
+}
+
 // ── Basis fetch naar de Worker (met bearer-token + timeout) ──
 type ApiOpts = { method?: string; body?: unknown; auth?: boolean; timeoutMs?: number };
 async function api<T = unknown>(path: string, opts: ApiOpts = {}): Promise<T> {
@@ -51,6 +57,7 @@ async function api<T = unknown>(path: string, opts: ApiOpts = {}): Promise<T> {
       signal: ctrl.signal,
     });
     const data = (await res.json().catch(() => ({}))) as { error?: string } & T;
+    if (res.status === 401 || res.status === 403) throw new SessieFout(data?.error || `HTTP ${res.status}`);
     if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
     return data as T;
   } finally {
@@ -108,18 +115,29 @@ function metTimeout<T>(p: Promise<T>, ms: number, bijTimeout: T): Promise<T> {
 }
 
 // ── Auth ──
-export async function sbLogin(email: string, wachtwoord: string): Promise<boolean> {
-  return metTimeout(
-    (async () => {
+// Drie uitkomsten, want "wachtwoord fout" en "database onbereikbaar" vragen om totaal ander gedrag:
+// bij het eerste moet de gebruiker iets doen, bij het tweede moeten wij het later gewoon nog eens proberen.
+// Vroeger was dit één boolean, waardoor een trage verbinding als "wachtwoord klopt niet" op het scherm kwam.
+export type LoginUitkomst = "ok" | "fout" | "onbereikbaar";
+
+export async function sbLoginUitkomst(email: string, wachtwoord: string): Promise<LoginUitkomst> {
+  return metTimeout<LoginUitkomst>(
+    (async (): Promise<LoginUitkomst> => {
       try {
         const r = await api<{ token?: string }>("/auth/login", { method: "POST", auth: false, body: { email: email.trim().toLowerCase(), wachtwoord } });
-        if (r.token) { bewaarToken(r.token); return true; }
-        return false;
-      } catch { return false; }
+        if (r.token) { bewaarToken(r.token); return "ok"; }
+        return "fout";
+      } catch (e) {
+        return e instanceof SessieFout ? "fout" : "onbereikbaar";
+      }
     })(),
     8000,
-    false,
+    "onbereikbaar",
   );
+}
+
+export async function sbLogin(email: string, wachtwoord: string): Promise<boolean> {
+  return (await sbLoginUitkomst(email, wachtwoord)) === "ok";
 }
 
 // Zorgt dat dit account bestaat (signup is idempotent) — en levert meteen een sessie op.
@@ -166,6 +184,12 @@ function leesSyncCred(): { e: string; w: string } | null {
 
 // Zorgt dat er een geldige sessie is: is de token nog geldig, dan klaar; anders meldt de app zich stil
 // opnieuw aan met de lokaal bewaarde gegevens (self-healing). Geeft true bij een sessie.
+// Is onze bewaarde inlog door de server geweigerd? Dan moet de gebruiker het opnieuw doen; de app leest
+// dit uit om een duidelijke melding te tonen in plaats van eindeloos stil te blijven proberen.
+let sessieGeweigerd = false;
+export function sessieIsGeweigerd(): boolean { return sessieGeweigerd; }
+export function wisSessieGeweigerd(): void { sessieGeweigerd = false; }
+
 export async function sbHerstelSessie(): Promise<boolean> {
   return metTimeout(
     (async () => {
@@ -173,9 +197,13 @@ export async function sbHerstelSessie(): Promise<boolean> {
         if (tokenGeldig()) return true;
         const cred = leesSyncCred();
         if (!cred) return false;
-        if (await sbLogin(cred.e, cred.w)) return true;
-        await sbRegistreer(cred.e, cred.w); // account bestaat nog niet → aanmaken en opnieuw
-        return await sbLogin(cred.e, cred.w);
+        const uitkomst = await sbLoginUitkomst(cred.e, cred.w);
+        if (uitkomst === "ok") { sessieGeweigerd = false; return true; }
+        // BELANGRIJK: hier stond vroeger `sbRegistreer(...)` als noodgreep. Dat maakte een verwijderd
+        // account gewoon opnieuw aan en gaf een apparaat met een INGETROKKEN wachtwoord weer toegang.
+        // Weigert de server onze gegevens, dan gooien we ze weg en laten we de gebruiker opnieuw inloggen.
+        if (uitkomst === "fout") { wisSyncCred(); wisToken(); sessieGeweigerd = true; }
+        return false; // "onbereikbaar" → gegevens bewaren, straks vanzelf opnieuw proberen
       } catch { return false; }
     })(),
     10000,
@@ -215,6 +243,33 @@ export async function sbAantallen(): Promise<{ ok: boolean; aantallen: Record<st
   } catch (e) {
     return { ok: false, aantallen: {}, fout: e instanceof Error ? e.message : String(e) };
   }
+}
+
+// Status van BEIDE databases naast elkaar: Cloudflare (de baas) en de Supabase-spiegel (tweede kopie).
+export type DbStatus = {
+  cloudflare: { gezond: boolean; onderdelen: number; accounts: number; fout: string };
+  supabase: { aan: boolean; gezond: boolean; melding: string; onderdelen?: number; accounts?: number; laatstGespiegeld?: string | null };
+  gelijk: boolean;
+  tijd: string;
+};
+
+export async function sbDbStatus(): Promise<DbStatus | { fout: string }> {
+  try { return await api<DbStatus>("/status", { timeoutMs: 20000 }); }
+  catch (e) { return { fout: e instanceof Error ? e.message : String(e) }; }
+}
+
+// Maakt voor elk teamlid zonder inlogaccount alsnog een account aan, op basis van de wachtwoord-hash die
+// al in de teamlijst staat. Daarna kan iedereen op élk apparaat inloggen met zijn eigen wachtwoord.
+export async function sbKoppelAccounts(): Promise<{ ok: boolean; gekoppeld?: number; aanwezig?: number; overgeslagen?: string[]; error?: string }> {
+  try { return await api("/admin/koppel-accounts", { method: "POST", body: {}, timeoutMs: 60000 }); }
+  catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+}
+
+// Duwt de hele Cloudflare-inhoud opnieuw naar Supabase — na een storing of pauze loopt de spiegel
+// daarmee weer gelijk. Alleen de eigenaar en HR mogen dit.
+export async function sbHerstelSpiegel(): Promise<{ ok: boolean; onderdelen?: number; accounts?: number; rollen?: number; error?: string }> {
+  try { return await api("/spiegel/herstel", { method: "POST", body: {}, timeoutMs: 120000 }); }
+  catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
 }
 
 export async function sbSessieEmail(): Promise<string | null> {

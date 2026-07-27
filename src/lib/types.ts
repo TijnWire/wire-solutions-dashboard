@@ -23,6 +23,11 @@ export type User = {
   contract?: { periodeType?: PeriodeType; bruto?: number; bijtelling?: number; netto?: number; uren?: number };
   // Aantal vrije dagen per jaar (voor het vrije-dagen-overzicht in de Urenstaat). undefined = standaard 25.
   verlofDagenPerJaar?: number;
+  // Tijdstip van de laatste wijziging aan dit account. Cruciaal voor het samenvoegen tussen apparaten:
+  // zonder stempel wint bij een gedeeld id altijd de centrale versie, en kan een net gewijzigd wachtwoord
+  // of een net aangepaste rol worden teruggedraaid door een apparaat dat nog een oudere lijst had.
+  // Zie mergeCollection in lib/merge.ts.
+  bijgewerktOp?: string; // ISO
 };
 
 // Onderdelen die een beheerder van de eigenaar mag beheren

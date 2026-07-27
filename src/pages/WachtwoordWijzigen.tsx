@@ -23,9 +23,17 @@ export function WachtwoordWijzigen() {
     if (nw !== herhaal) return setFout("De twee wachtwoorden zijn niet gelijk.");
     setBezig(true);
     try {
-      // 1) Echt wachtwoord in de centrale database bijwerken (de medewerker heeft een sessie via het tijdelijke wachtwoord).
+      // 1) Eerst het échte wachtwoord in de centrale database. Lukt dat NIET, dan stoppen we hier.
+      //    Vroeger werd een mislukking stilletjes genegeerd en de lokale hash tóch bijgewerkt: dan hield
+      //    de centrale database het oude wachtwoord, kon je op geen enkel ander apparaat meer inloggen,
+      //    en raakte dit apparaat zijn koppeling kwijt zodra het token verliep. Precies het beeld van
+      //    "accounts raken los".
       if (supabaseAan) {
-        try { await sbWijzigWachtwoord(nw); } catch { /* geen sessie? dan blijft de lokale hash leidend */ }
+        const gelukt = await sbWijzigWachtwoord(nw);
+        if (!gelukt) {
+          setFout("Het nieuwe wachtwoord kon niet in de centrale database worden gezet. Er is niets gewijzigd — controleer je verbinding en probeer het opnieuw.");
+          return;
+        }
       }
       // 2) Lokale hash bijwerken + de force-vlag uitzetten.
       const cred = await hashWachtwoord(nw);
