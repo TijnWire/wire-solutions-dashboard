@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft, ArrowRight, Navigation, Phone, Check, X, CalendarDays, Clock,
-  DoorClosed, User, CheckCircle2, ChevronLeft, ListChecks,
+  DoorClosed, User, CheckCircle2, ChevronLeft, ListChecks, Ban, RotateCcw, Trash2, Loader2, ShieldCheck,
 } from "lucide-react";
 import {
   TIJDSLOTS, dagenVanVenster, dagLabel, magAfronden, telefoonGeldig, bezetting, voortgangVan,
   slotActief, slotMax,
 } from "../lib/bodemonderzoek";
-import type { TauwAdres, TauwOpdracht, TauwSlot } from "../lib/types";
+import { UITKOMST_LABEL, type AdresUitkomst, type TauwAdres, type TauwOpdracht, type TauwSlot } from "../lib/types";
+import { sbBodemAfspraak, sbBodemBezoek, type BodemUitkomst } from "../lib/supabase";
 
 // De ronde langs de deuren voor het bodemonderzoek (TAUW / Van der Helm).
 // ─────────────────────────────────────────────────────────────────────────────
@@ -161,7 +162,10 @@ export function DeurRonde({ opdracht, adressen, onOpslaan, onTerug }: {
   const [melding, setMelding] = useState("");
   // Zegt de bewoner "ja", dan gaan we naar een eigen stap voor dag + tijdslot. Op een telefoon wordt het
   // formulier anders veel te lang: adresgegevens, naam, telefoon én een raster met 15 dagen × 8 blokken.
-  const [stap, setStap] = useState<"deur" | "tijdslot">("deur");
+  const [stap, setStap] = useState<"deur" | "tijdslot" | "bevestigen">("deur");
+  const [bezig, setBezig] = useState(false);           // bezig met vastleggen op de server
+  const [andersOpen, setAndersOpen] = useState(false); // het menu met de andere uitkomsten
+  const [notitie, setNotitie] = useState("");          // notitie bij "later terugkomen"
   const bovenkant = useRef<HTMLDivElement | null>(null);
 
   // Dezelfde regels als de beheerder heeft ingesteld: periode, werkdagen en feestdagen.
@@ -192,22 +196,133 @@ export function DeurRonde({ opdracht, adressen, onOpslaan, onTerug }: {
   const controle = magAfronden(adres);
   const laatste = index >= adressen.length - 1;
 
-  const rond = () => {
-    // Zegt de bewoner ja maar is er nog geen moment geprikt? Dan eerst door naar die stap, in plaats van
-    // een foutmelding tonen — dat is precies wat er hierna moet gebeuren.
+  const volgende = () => { if (!laatste) setIndex((i) => i + 1); else onTerug(); };
+
+  // Doorlopen naar de volgende stap; het echte vastleggen gebeurt op het bevestigingsscherm.
+  const verder = () => {
     if (adres.aanwezig === "ja" && stap === "deur" && (!adres.datum || !adres.tijdslot)) { setStap("tijdslot"); return; }
     if (!controle.ok) { setMelding(controle.reden); return; }
-    zet({ afgerond: true, afgerondOp: new Date().toISOString(), geenGehoor: false });
-    if (!laatste) setIndex((i) => i + 1);
-    else onTerug();
+    setStap("bevestigen");
   };
-  const nietThuis = () => {
-    zet({ geenGehoor: true, pogingen: (adres.pogingen ?? 0) + 1, afgerond: false });
-    if (!laatste) setIndex((i) => i + 1);
-    else onTerug();
+
+  // Definitief vastleggen. Bij "ja" gaat de afspraak naar de server, die de capaciteit van het tijdblok
+  // bewaakt: is een collega je net voor geweest, dan krijg je dat hier te zien in plaats van dat je
+  // allebei denkt dat het gelukt is.
+  const legVast = async () => {
+    if (!controle.ok) { setMelding(controle.reden); return; }
+    setBezig(true);
+    setMelding("");
+    try {
+      if (adres.aanwezig === "ja") {
+        const r = await sbBodemAfspraak({
+          projectId: opdracht.id, adresId: adres.id,
+          datum: adres.datum, tijdslot: adres.tijdslot!,
+          naam: adres.bewoner, telefoon: adres.telefoon, email: adres.email ?? "", notitie: adres.notitie,
+        });
+        if (!r.ok) {
+          // Blok vol of dag niet toegestaan → terug naar de tijdslotkeuze met de reden erbij.
+          setMelding(r.error ?? "De afspraak kon niet worden vastgelegd.");
+          setStap("tijdslot");
+          return;
+        }
+      }
+      zet({ uitkomst: "afgerond", afgerond: true, afgerondOp: new Date().toISOString(), geenGehoor: false });
+      volgende();
+    } finally {
+      setBezig(false);
+    }
+  };
+
+  // De uitkomsten waarbij er géén afspraak komt. De server houdt de geschiedenis bij (1e/2e/3e poging),
+  // maar dat mag het doorlopen nooit ophouden — lukt het niet, dan staat het lokaal en synct het later.
+  const sluitAf = (uitkomst: AdresUitkomst) => {
+    const isNietThuis = uitkomst === "niet_thuis";
+    zet({
+      uitkomst,
+      afgerond: uitkomst === "weigert" || uitkomst === "ongeldig",
+      geenGehoor: isNietThuis,
+      pogingen: isNietThuis ? (adres.pogingen ?? 0) + 1 : adres.pogingen,
+      notitie: notitie.trim() ? [adres.notitie, notitie.trim()].filter(Boolean).join(" · ") : adres.notitie,
+    });
+    void sbBodemBezoek({ projectId: opdracht.id, adresId: adres.id, uitkomst: uitkomst as BodemUitkomst, notitie: notitie.trim() });
+    setNotitie("");
+    setAndersOpen(false);
+    volgende();
   };
 
   const navUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${adresRegel(adres)}, ${plaatsRegel(adres)}`)}`;
+
+  // ── Laatste stap: alles op een rij ── zodat niemand per ongeluk een adres afsluit met een typefout
+  // in het telefoonnummer of op de verkeerde dag.
+  if (stap === "bevestigen") {
+    return (
+      <div ref={bovenkant} className="mx-auto max-w-2xl pb-28">
+        <div className="sticky top-0 z-20 -mx-4 border-b border-ink-100 bg-white/95 px-4 py-2.5 backdrop-blur sm:mx-0 sm:rounded-b-xl">
+          <div className="flex items-center gap-3">
+            <button type="button" onClick={() => setStap(adres.aanwezig === "ja" ? "tijdslot" : "deur")} aria-label="Terug" className="rounded-lg p-1.5 text-ink-500 hover:bg-ink-100">
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-bold text-ink-900">Klopt dit?</div>
+              <div className="truncate text-xs text-ink-500">Controleer het even voordat je afrondt</div>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-sm">
+          {[
+            { label: "Adres", waarde: `${adresRegel(adres)}, ${plaatsRegel(adres)}` },
+            { label: "Bewoner", waarde: adres.bewoner || "\u2014" },
+            { label: "Telefoon", waarde: adres.telefoon || "\u2014" },
+            ...(adres.email ? [{ label: "E-mail", waarde: adres.email }] : []),
+            { label: "Wil erbij zijn", waarde: adres.aanwezig === "ja" ? "Ja" : "Nee" },
+            ...(adres.aanwezig === "ja"
+              ? [{ label: "Afspraak", waarde: `${dagLabel(adres.datum)} \u00b7 ${adres.tijdslot?.replace("-", " \u2013 ")}` }]
+              : [{ label: "Toestemming tuin", waarde: adres.toestemmingTuin ? "Gegeven" : "Nog niet aangevinkt" }]),
+          ].map((r, i) => (
+            <div key={r.label} className={`flex items-start justify-between gap-3 px-4 py-3 ${i ? "border-t border-ink-100" : ""}`}>
+              <span className="text-sm text-ink-500">{r.label}</span>
+              <span className="text-right text-sm font-semibold text-ink-900">{r.waarde}</span>
+            </div>
+          ))}
+        </div>
+
+        {adres.aanwezig === "nee" && !adres.toestemmingTuin && (
+          <label className="mt-3 flex items-start gap-3 rounded-2xl border-2 border-amber-300 bg-amber-50 px-4 py-3">
+            <input
+              type="checkbox"
+              checked={!!adres.toestemmingTuin}
+              onChange={(e) => zet({ toestemmingTuin: e.target.checked })}
+              className="mt-0.5 h-5 w-5 shrink-0"
+            />
+            <span className="text-sm text-amber-900">
+              <span className="block font-semibold">Bewoner geeft toestemming voor toegang tot de tuin</span>
+              <span className="block text-xs text-amber-800">Nodig omdat de aannemer er zonder de bewoner aan de slag gaat.</span>
+            </span>
+          </label>
+        )}
+
+        {melding && <div className="mt-3 rounded-xl bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{melding}</div>}
+
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-ink-200 bg-white/95 px-4 py-3 backdrop-blur">
+          <div className="mx-auto flex max-w-2xl items-center gap-2">
+            <button type="button" onClick={() => setStap(adres.aanwezig === "ja" ? "tijdslot" : "deur")} className="rounded-xl border border-ink-200 px-4 py-3 text-sm font-semibold text-ink-700 hover:bg-ink-50">
+              Aanpassen
+            </button>
+            <button
+              type="button"
+              onClick={() => void legVast()}
+              disabled={bezig || (adres.aanwezig === "nee" && !adres.toestemmingTuin)}
+              className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 py-3 text-sm font-bold text-white hover:bg-brand-700 disabled:bg-ink-300"
+            >
+              {bezig ? <Loader2 className="h-5 w-5 animate-spin" /> : <ShieldCheck className="h-5 w-5" />}
+              {adres.aanwezig === "ja" ? "Afspraak vastleggen" : "Adres afronden"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // ── Stap 2: het moment prikken ── een eigen scherm, alleen voor bewoners die erbij willen zijn.
   if (stap === "tijdslot") {
@@ -255,7 +370,7 @@ export function DeurRonde({ opdracht, adressen, onOpslaan, onTerug }: {
             </button>
             <button
               type="button"
-              onClick={rond}
+              onClick={verder}
               className={`inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white ${compleet ? "bg-brand-600 hover:bg-brand-700" : "bg-ink-300"}`}
             >
               <Check className="h-5 w-5" />
@@ -348,6 +463,18 @@ export function DeurRonde({ opdracht, adressen, onOpslaan, onTerug }: {
             <span className="mt-1 block text-xs text-amber-700">Dit lijkt geen Nederlands telefoonnummer.</span>
           )}
         </label>
+        <label className="block">
+          <span className="mb-1.5 block text-sm font-semibold text-ink-700">E-mailadres <span className="font-normal text-ink-400">(mag leeg)</span></span>
+          <input
+            value={adres.email ?? ""}
+            onChange={(e) => zet({ email: e.target.value })}
+            placeholder="naam@voorbeeld.nl"
+            type="email"
+            inputMode="email"
+            autoComplete="off"
+            className={veld}
+          />
+        </label>
       </div>
 
       {/* De vraag die de splitsing maakt */}
@@ -398,6 +525,47 @@ export function DeurRonde({ opdracht, adressen, onOpslaan, onTerug }: {
         <div className="mt-3 rounded-xl bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{melding}</div>
       )}
 
+      {/* Geen afspraak: waarom niet? Elk adres krijgt een eigen reden, zodat er niets zoekraakt. */}
+      {andersOpen && (
+        <div className="fixed inset-0 z-40 flex items-end bg-black/40" onClick={() => setAndersOpen(false)}>
+          <div className="w-full rounded-t-2xl bg-white p-4 pb-6" onClick={(e) => e.stopPropagation()}>
+            <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-ink-200" />
+            <h3 className="mb-1 text-base font-bold text-ink-900">Geen afspraak gemaakt</h3>
+            <p className="mb-3 text-sm text-ink-500">Wat is er aan de hand bij {adresRegel(adres)}?</p>
+            <input
+              value={notitie}
+              onChange={(e) => setNotitie(e.target.value)}
+              placeholder="Notitie (bijv. 'na 18:00 terugkomen')"
+              className="mb-3 w-full rounded-xl border border-ink-200 px-4 py-3 text-base outline-none focus:border-brand-400"
+            />
+            <div className="space-y-2">
+              {([
+                ["niet_thuis", <DoorClosed key="a" className="h-5 w-5" />, "Niemand thuis, ik kom terug"],
+                ["later", <RotateCcw key="b" className="h-5 w-5" />, "Later terugkomen (afgesproken moment)"],
+                ["weigert", <Ban key="c" className="h-5 w-5" />, "Bewoner wil niet meewerken"],
+                ["ongeldig", <Trash2 key="d" className="h-5 w-5" />, "Adres bestaat niet / leegstand"],
+              ] as [AdresUitkomst, React.ReactNode, string][]).map(([u, icoon, uitleg]) => (
+                <button
+                  key={u}
+                  type="button"
+                  onClick={() => sluitAf(u)}
+                  className="flex w-full items-center gap-3 rounded-xl border border-ink-200 px-4 py-3 text-left hover:bg-ink-50"
+                >
+                  <span className="text-ink-500">{icoon}</span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-bold text-ink-900">{UITKOMST_LABEL[u]}</span>
+                    <span className="block text-xs text-ink-500">{uitleg}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+            <button type="button" onClick={() => setAndersOpen(false)} className="mt-3 w-full rounded-xl px-4 py-3 text-sm font-semibold text-ink-500 hover:bg-ink-50">
+              Annuleren
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Vaste balk onderin — binnen duimbereik */}
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-ink-200 bg-white/95 px-4 py-3 backdrop-blur">
         <div className="mx-auto flex max-w-2xl items-center gap-2">
@@ -412,14 +580,14 @@ export function DeurRonde({ opdracht, adressen, onOpslaan, onTerug }: {
           </button>
           <button
             type="button"
-            onClick={nietThuis}
+            onClick={() => setAndersOpen(true)}
             className="inline-flex items-center gap-1.5 rounded-xl border border-ink-200 px-3 py-3 text-sm font-semibold text-ink-700 hover:bg-ink-50"
           >
-            <DoorClosed className="h-4 w-4" /> Niet thuis
+            <DoorClosed className="h-4 w-4" /> Geen afspraak
           </button>
           <button
             type="button"
-            onClick={rond}
+            onClick={verder}
             className={`inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white ${
               controle.ok ? "bg-brand-600 hover:bg-brand-700" : "bg-ink-300"
             }`}

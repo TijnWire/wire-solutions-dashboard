@@ -745,6 +745,23 @@ export type Buurtaanpak = {
 // "nee" → de aannemer mag zonder de bewoner aan de slag; naam en telefoonnummer volstaan.
 export type BewonerKeuze = "" | "ja" | "nee";
 
+// Hoe een adres is afgesloten. Niet elke deur levert een afspraak op, en die uitkomsten moeten
+// zichtbaar blijven zodat er niets tussen wal en schip valt.
+export type AdresUitkomst =
+  | "afgerond"    // bewoner gesproken, keuze vastgelegd
+  | "niet_thuis"  // niemand thuis; de pogingteller loopt op
+  | "weigert"     // bewoner wil niet meewerken
+  | "later"       // terugkomen op een ander moment (met notitie)
+  | "ongeldig";   // adres bestaat niet, leegstand, sloop
+
+export const UITKOMST_LABEL: Record<AdresUitkomst, string> = {
+  afgerond: "Afgerond",
+  niet_thuis: "Niet thuis",
+  weigert: "Weigert",
+  later: "Later terugkomen",
+  ongeldig: "Adres ongeldig",
+};
+
 export type TauwAdres = {
   id: string;
   straat: string;
@@ -767,6 +784,9 @@ export type TauwAdres = {
   afgerondDoor?: string; // user id
   wijk?: string;        // wijk of buurt, uit het aanleverbestand — om op te filteren bij het verdelen
   perceel?: string;     // perceelnummer, uit het aanleverbestand
+  email?: string;           // optioneel e-mailadres van de bewoner
+  uitkomst?: AdresUitkomst; // hoe dit adres is afgesloten
+  toestemmingTuin?: boolean; // bewoner geeft toestemming voor toegang tot de tuin (bij "nee")
   geenGehoor?: boolean; // niemand thuis — komt terug in de lijst "nog langs"
   pogingen?: number; // hoe vaak er is aangebeld zonder resultaat
   bijgewerktOp?: string; // ISO — voor het samenvoegen tussen apparaten

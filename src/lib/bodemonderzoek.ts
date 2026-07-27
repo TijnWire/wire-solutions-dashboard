@@ -180,18 +180,32 @@ export function verdeelOverTeam(
 }
 
 // ── Voortgang ──
-export type Voortgang = { totaal: number; afgerond: number; ja: number; nee: number; geenGehoor: number; open: number };
+export type Voortgang = {
+  totaal: number; afgerond: number; ja: number; nee: number;
+  geenGehoor: number; weigert: number; later: number; ongeldig: number;
+  open: number;      // nog helemaal niet aan de deur geweest
+  behandeld: number; // alles wat een uitkomst heeft (voor de voortgangsbalk)
+};
 
 export function voortgangVan(adressen: TauwAdres[]): Voortgang {
-  const v: Voortgang = { totaal: adressen.length, afgerond: 0, ja: 0, nee: 0, geenGehoor: 0, open: 0 };
+  const v: Voortgang = { totaal: adressen.length, afgerond: 0, ja: 0, nee: 0, geenGehoor: 0, weigert: 0, later: 0, ongeldig: 0, open: 0, behandeld: 0 };
   for (const a of adressen) {
-    if (a.afgerond) {
-      v.afgerond++;
-      if (a.aanwezig === "ja") v.ja++;
-      else if (a.aanwezig === "nee") v.nee++;
-    } else if (a.geenGehoor) v.geenGehoor++;
-    else v.open++;
+    // `uitkomst` is leidend; `afgerond`/`geenGehoor` blijven werken voor adressen van vóór deze versie.
+    const u = a.uitkomst ?? (a.afgerond ? "afgerond" : a.geenGehoor ? "niet_thuis" : undefined);
+    switch (u) {
+      case "afgerond":
+        v.afgerond++;
+        if (a.aanwezig === "ja") v.ja++; else if (a.aanwezig === "nee") v.nee++;
+        break;
+      case "niet_thuis": v.geenGehoor++; break;
+      case "weigert": v.weigert++; break;
+      case "later": v.later++; break;
+      case "ongeldig": v.ongeldig++; break;
+      default: v.open++;
+    }
   }
+  // Niet-thuis en "later terugkomen" horen nog langs, dus die tellen niet als klaar.
+  v.behandeld = v.afgerond + v.weigert + v.ongeldig;
   return v;
 }
 
