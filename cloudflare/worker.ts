@@ -576,6 +576,131 @@ export default {
         return json({ ok: true });
       }
 
+      // ═══ BODEMONDERZOEK — afspraken met tijdslot ═══
+      // De adreslijsten zitten in de JSON-opslag (werkt zonder bereik), maar een afspraak met een
+      // bewoner mag nooit verloren gaan doordat een collega toevallig later opslaat. Daarom worden
+      // afspraken hier als echte rijen bewaard, met de capaciteitscontrole in de database zelf.
+
+      // Spelregels van een project opslaan (periode, werkdagen, tijdsloten + capaciteit).
+      if (path === "/bodem/project" && req.method === "POST") {
+        if (!magAlles(mijnRechten?.rol) && mijnRechten?.rol !== "beheer") {
+          return json({ error: "Alleen een beheerder mag de planning instellen." }, 403);
+        }
+        const projectId = String(body.projectId ?? "");
+        if (!projectId) return json({ error: "projectId ontbreekt." }, 400);
+        const config = JSON.stringify(body.config ?? {});
+        await env.DB.prepare(
+          "insert into bodem_projecten (project_id, config, bijgewerkt_op) values (?1, ?2, ?3) " +
+          "on conflict(project_id) do update set config = ?2, bijgewerkt_op = ?3"
+        ).bind(projectId, config, nuISO).run();
+        spiegelUpsert(env, ctx, "bodem_projecten", [{ project_id: projectId, config: body.config ?? {}, bijgewerkt_op: nuISO }], "project_id");
+        return json({ ok: true });
+      }
+
+      // Alles wat de app van een project nodig heeft: de spelregels, de afspraken en hoe vol elk blok zit.
+      if (path === "/bodem/project" && req.method === "GET") {
+        const projectId = url.searchParams.get("id") ?? "";
+        if (!projectId) return json({ error: "id ontbreekt." }, 400);
+        const cfg = await env.DB.prepare("select config from bodem_projecten where project_id = ?").bind(projectId).first<{ config: string }>();
+        const { results: afspraken } = await env.DB.prepare(
+          "select adres_id, datum, tijdslot, naam, telefoon, email, notitie, ingevuld_door, ingevuld_op from bodem_afspraken where project_id = ? order by datum, tijdslot"
+        ).bind(projectId).all();
+        const { results: bezet } = await env.DB.prepare(
+          "select datum, tijdslot, count(*) as n from bodem_afspraken where project_id = ? group by datum, tijdslot"
+        ).bind(projectId).all<{ datum: string; tijdslot: string; n: number }>();
+        let config: unknown = null;
+        if (cfg) { try { config = JSON.parse(cfg.config); } catch { config = null; } }
+        return json({ config, afspraken: afspraken ?? [], bezetting: bezet ?? [] });
+      }
+
+      // ── Een afspraak vastleggen of verplaatsen ──
+      // De capaciteitscontrole zit IN de insert: de rij wordt alleen weggeschreven als er op dat moment
+      // nog plek is. Twee telefoons die tegelijk het laatste blok pakken, kunnen elkaar dus niet
+      // overschrijven — de tweede krijgt netjes "blok is vol" terug in plaats van stilzwijgend te winnen.
+      if (path === "/bodem/afspraak" && req.method === "POST") {
+        const projectId = String(body.projectId ?? "");
+        const adresId = String(body.adresId ?? "");
+        const datum = String(body.datum ?? "");
+        const tijdslot = String(body.tijdslot ?? "");
+        if (!projectId || !adresId) return json({ error: "projectId en adresId zijn verplicht." }, 400);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(datum)) return json({ error: "Ongeldige datum." }, 400);
+        if (!/^\d{2}:\d{2}-\d{2}:\d{2}$/.test(tijdslot)) return json({ error: "Ongeldig tijdslot." }, 400);
+
+        // Spelregels ophalen en toetsen. Zonder ingestelde planning laten we de boeking door (dan is er
+        // nog niets ingesteld en mag het werk niet stilvallen), maar mét planning is de server leidend.
+        const cfgRij = await env.DB.prepare("select config from bodem_projecten where project_id = ?").bind(projectId).first<{ config: string }>();
+        let max = Number.MAX_SAFE_INTEGER;
+        if (cfgRij) {
+          let cfg: { periodeStart?: string; periodeEind?: string; werkdagen?: number[]; sloten?: { slot: string; actief?: boolean; max?: number }[] } = {};
+          try { cfg = JSON.parse(cfgRij.config); } catch { /* onleesbare config → geen extra eisen */ }
+          if (cfg.periodeStart && datum < cfg.periodeStart) return json({ error: "Deze dag valt vóór de afgesproken periode." }, 409);
+          if (cfg.periodeEind && datum > cfg.periodeEind) return json({ error: "Deze dag valt ná de afgesproken periode." }, 409);
+          if (Array.isArray(cfg.werkdagen) && cfg.werkdagen.length) {
+            // 0 = zondag … 6 = zaterdag, berekend zonder tijdzone-verschuiving.
+            const [j, m, d] = datum.split("-").map(Number);
+            const dag = new Date(Date.UTC(j, m - 1, d)).getUTCDay();
+            if (!cfg.werkdagen.includes(dag)) return json({ error: "Op deze dag wordt niet gewerkt." }, 409);
+          }
+          const slot = cfg.sloten?.find((s) => s.slot === tijdslot);
+          if (slot && slot.actief === false) return json({ error: "Dit tijdblok staat uit." }, 409);
+          if (slot && typeof slot.max === "number" && slot.max >= 0) max = slot.max;
+        }
+
+        // Eén ondeelbare opdracht: tellen én wegschrijven. Het eigen adres telt niet mee, zodat een
+        // bestaande afspraak verplaatsen binnen hetzelfde blok blijft werken.
+        const res = await env.DB.prepare(
+          "insert into bodem_afspraken (adres_id, project_id, datum, tijdslot, naam, telefoon, email, notitie, ingevuld_door, ingevuld_op) " +
+          "select ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10 " +
+          "where (select count(*) from bodem_afspraken where project_id = ?2 and datum = ?3 and tijdslot = ?4 and adres_id <> ?1) < ?11 " +
+          "on conflict(adres_id) do update set project_id = ?2, datum = ?3, tijdslot = ?4, naam = ?5, telefoon = ?6, email = ?7, notitie = ?8, ingevuld_door = ?9, ingevuld_op = ?10"
+        ).bind(
+          adresId, projectId, datum, tijdslot,
+          String(body.naam ?? ""), String(body.telefoon ?? ""), String(body.email ?? ""), String(body.notitie ?? ""),
+          ikEmail, nuISO, max,
+        ).run();
+
+        if (!res.meta.changes) {
+          const vol = await env.DB.prepare("select count(*) as n from bodem_afspraken where project_id = ? and datum = ? and tijdslot = ?")
+            .bind(projectId, datum, tijdslot).first<{ n: number }>();
+          return json({ error: "Dit tijdblok is inmiddels vol.", bezet: vol?.n ?? 0, max }, 409);
+        }
+        spiegelUpsert(env, ctx, "bodem_afspraken", [{
+          adres_id: adresId, project_id: projectId, datum, tijdslot,
+          naam: String(body.naam ?? ""), telefoon: String(body.telefoon ?? ""), email: String(body.email ?? ""),
+          notitie: String(body.notitie ?? ""), ingevuld_door: ikEmail, ingevuld_op: nuISO,
+        }], "adres_id");
+        return json({ ok: true, datum, tijdslot });
+      }
+
+      // Afspraak intrekken (bewoner belt af, of de medewerker koos per ongeluk het verkeerde adres).
+      if (path === "/bodem/afspraak" && req.method === "DELETE") {
+        const adresId = String(body.adresId ?? "");
+        if (!adresId) return json({ error: "adresId ontbreekt." }, 400);
+        await env.DB.prepare("delete from bodem_afspraken where adres_id = ?").bind(adresId).run();
+        spiegelVerwijder(env, ctx, "bodem_afspraken", "adres_id", adresId);
+        return json({ ok: true });
+      }
+
+      // Een bezoek zonder afspraak vastleggen (niet thuis, weigert, later terugkomen, adres ongeldig).
+      if (path === "/bodem/bezoek" && req.method === "POST") {
+        const projectId = String(body.projectId ?? "");
+        const adresId = String(body.adresId ?? "");
+        const uitkomst = String(body.uitkomst ?? "");
+        if (!projectId || !adresId) return json({ error: "projectId en adresId zijn verplicht." }, 400);
+        if (!["niet_thuis", "weigert", "later", "ongeldig"].includes(uitkomst)) return json({ error: "Onbekende uitkomst." }, 400);
+        const eerder = await env.DB.prepare("select count(*) as n from bodem_bezoeken where project_id = ? and adres_id = ?")
+          .bind(projectId, adresId).first<{ n: number }>();
+        const poging = (eerder?.n ?? 0) + 1;
+        await env.DB.prepare(
+          "insert into bodem_bezoeken (project_id, adres_id, poging, uitkomst, notitie, door, tijdstip) values (?1, ?2, ?3, ?4, ?5, ?6, ?7)"
+        ).bind(projectId, adresId, poging, uitkomst, String(body.notitie ?? ""), ikEmail, nuISO).run();
+        spiegelInsert(env, ctx, "bodem_bezoeken", {
+          project_id: projectId, adres_id: adresId, poging, uitkomst,
+          notitie: String(body.notitie ?? ""), door: ikEmail, tijdstip: nuISO,
+        });
+        return json({ ok: true, poging });
+      }
+
       // ── ACCOUNTS KOPPELEN ──
       // De app bewaart per medewerker een eigen PBKDF2-hash in de teamlijst (van vóór de centrale login).
       // Iemand die nog geen rij in users_auth heeft, kan daardoor alleen inloggen op een apparaat waar die

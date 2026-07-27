@@ -44,6 +44,54 @@ create or replace view public.wire_state_versies as
   from public.wire_state;
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- 4) CONTROLE — draai deze los om te zien of de spiegel gevuld is:
+-- 4) BODEMONDERZOEK — spiegel van de afsprakentabellen in D1.
+--    De capaciteitsbewaking gebeurt in D1 (dat is de baas); dit is puur de tweede kopie.
+create table if not exists public.bodem_projecten (
+  project_id    text primary key,
+  config        jsonb not null default '{}'::jsonb,
+  bijgewerkt_op timestamptz not null default now(),
+  gespiegeld_op timestamptz
+);
+
+create table if not exists public.bodem_afspraken (
+  adres_id      text primary key,
+  project_id    text not null,
+  datum         date not null,
+  tijdslot      text not null,
+  naam          text not null default '',
+  telefoon      text not null default '',
+  email         text not null default '',
+  notitie       text not null default '',
+  ingevuld_door text not null default '',
+  ingevuld_op   timestamptz not null default now(),
+  gespiegeld_op timestamptz
+);
+create index if not exists bodem_afspraken_slot_idx on public.bodem_afspraken (project_id, datum, tijdslot);
+
+create table if not exists public.bodem_bezoeken (
+  id         bigint generated always as identity primary key,
+  project_id text not null,
+  adres_id   text not null,
+  poging     integer not null default 1,
+  uitkomst   text not null,
+  notitie    text not null default '',
+  door       text not null default '',
+  tijdstip   timestamptz not null default now()
+);
+create index if not exists bodem_bezoeken_adres_idx on public.bodem_bezoeken (project_id, adres_id);
+
+alter table public.bodem_projecten enable row level security;
+alter table public.bodem_afspraken enable row level security;
+alter table public.bodem_bezoeken  enable row level security;
+drop policy if exists bodem_projecten_select on public.bodem_projecten;
+create policy bodem_projecten_select on public.bodem_projecten for select using (public.is_team());
+drop policy if exists bodem_afspraken_select on public.bodem_afspraken;
+create policy bodem_afspraken_select on public.bodem_afspraken for select using (public.is_team());
+drop policy if exists bodem_bezoeken_select on public.bodem_bezoeken;
+create policy bodem_bezoeken_select on public.bodem_bezoeken for select using (public.is_team());
+-- Schrijven doet alleen de Worker met de service_role-key (die slaat RLS over).
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 5) CONTROLE — draai deze los om te zien of de spiegel gevuld is:
 --     select key, updated_at, gespiegeld_op, bytes from public.wire_state_versies order by updated_at desc;
 --     select count(*) as inlogaccounts from public.users_auth;

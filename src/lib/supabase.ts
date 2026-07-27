@@ -245,6 +245,59 @@ export async function sbAantallen(): Promise<{ ok: boolean; aantallen: Record<st
   }
 }
 
+// ── Bodemonderzoek: afspraken met tijdslot ──
+// Deze lopen NIET via de gewone JSON-sync maar via eigen routes, omdat de server de capaciteit per
+// tijdblok moet bewaken. Twee medewerkers die tegelijk het laatste blok pakken, kunnen elkaar zo niet
+// overschrijven: de tweede krijgt "blok is vol" terug in plaats van stilzwijgend te winnen.
+export type BodemSlot = { slot: string; actief?: boolean; max?: number };
+export type BodemConfig = {
+  periodeStart?: string;
+  periodeEind?: string;
+  werkdagen?: number[]; // 0 = zondag … 6 = zaterdag
+  sloten?: BodemSlot[];
+};
+export type BodemAfspraak = {
+  adres_id: string; datum: string; tijdslot: string;
+  naam: string; telefoon: string; email: string; notitie: string;
+  ingevuld_door: string; ingevuld_op: string;
+};
+export type BodemProject = {
+  config: BodemConfig | null;
+  afspraken: BodemAfspraak[];
+  bezetting: { datum: string; tijdslot: string; n: number }[];
+};
+
+export async function sbBodemProject(projectId: string): Promise<BodemProject | null> {
+  try { return await cloudGet<BodemProject>(`/bodem/project?id=${encodeURIComponent(projectId)}`); }
+  catch { return null; }
+}
+
+export async function sbBodemPlanning(projectId: string, config: BodemConfig): Promise<{ ok: boolean; error?: string }> {
+  try { await cloudPost("/bodem/project", { projectId, config }); return { ok: true }; }
+  catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+}
+
+// Geeft ok:false met een leesbare reden als het blok vol is of de dag niet mag — de app toont die
+// melding rechtstreeks aan de medewerker die voor de deur staat.
+export async function sbBodemAfspraak(v: {
+  projectId: string; adresId: string; datum: string; tijdslot: string;
+  naam?: string; telefoon?: string; email?: string; notitie?: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  try { await cloudPost("/bodem/afspraak", v); return { ok: true }; }
+  catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+}
+
+export async function sbBodemAfspraakWeg(adresId: string): Promise<{ ok: boolean; error?: string }> {
+  try { await cloudDelete("/bodem/afspraak", { adresId }); return { ok: true }; }
+  catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+}
+
+export type BodemUitkomst = "niet_thuis" | "weigert" | "later" | "ongeldig";
+export async function sbBodemBezoek(v: { projectId: string; adresId: string; uitkomst: BodemUitkomst; notitie?: string }): Promise<{ ok: boolean; poging?: number; error?: string }> {
+  try { return { ok: true, ...(await cloudPost<{ poging: number }>("/bodem/bezoek", v)) }; }
+  catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+}
+
 // Welke onderdelen mag dit account niet inzien? De server bepaalt dat; de app gebruikt het antwoord om
 // die onderdelen niet te uploaden en haar eigen (mogelijk oude) kopie lokaal op te ruimen.
 export type MijnRechten = { rol: string; boekhouding: boolean; afgeschermd: string[] };
