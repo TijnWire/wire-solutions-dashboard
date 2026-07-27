@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
-import { Users, Wand2, CalendarRange, MapPin, RotateCcw, Check } from "lucide-react";
+import { Users, Wand2, CalendarRange, MapPin, RotateCcw, Check, Clock, Loader2 } from "lucide-react";
 import { Card } from "./ui";
-import { verdeelOverTeam, vensterDagen, dagLabel, voortgangVan, sorteerRoute } from "../lib/bodemonderzoek";
-import type { TauwAdres, TauwOpdracht, User } from "../lib/types";
+import { verdeelOverTeam, dagenVanVenster, dagLabel, voortgangVan, sorteerRoute, TIJDSLOTS, STANDAARD_WERKDAGEN, DAGNAMEN } from "../lib/bodemonderzoek";
+import { sbBodemPlanning } from "../lib/supabase";
+import type { TauwAdres, TauwOpdracht, TauwSlot, User } from "../lib/types";
 
 // Voorbereiding van een bodemonderzoek-ronde, voor de beheerder.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -90,10 +91,30 @@ export function BodemPlanning({ opdracht, users, onWijzig }: {
   const [maxPer, setMaxPer] = useState<string>("");
   const [locaties, setLocaties] = useState<Set<string>>(new Set()); // leeg = alle locaties
   const [melding, setMelding] = useState("");
+  const [serverBezig, setServerBezig] = useState(false);
+  const [serverFout, setServerFout] = useState("");
 
   const team = opdracht.team ?? [];
   const venster = opdracht.venster;
-  const dagen = useMemo(() => (venster ? vensterDagen(venster.start, venster.weken) : []), [venster]);
+  const dagen = useMemo(() => dagenVanVenster(venster), [venster]);
+  const werkdagen = venster?.werkdagen?.length ? venster.werkdagen : STANDAARD_WERKDAGEN;
+  const sloten: TauwSlot[] = venster?.sloten?.length ? venster.sloten : TIJDSLOTS.map((slot): TauwSlot => ({ slot, actief: true }));
+
+  // Elke wijziging aan de planning gaat óók naar de server: die bewaakt bij het boeken de capaciteit,
+  // en mag daarvoor niet afgaan op wat een telefoon meestuurt.
+  const zetVenster = (patch: Partial<NonNullable<TauwOpdracht["venster"]>>) => {
+    const v = { start: venster?.start ?? "", weken: venster?.weken ?? 2, ...venster, ...patch };
+    onWijzig({ venster: v });
+    setServerBezig(true);
+    void sbBodemPlanning(opdracht.id, {
+      periodeStart: v.start || undefined,
+      periodeEind: v.eind || (dagenVanVenster(v).slice(-1)[0] ?? undefined),
+      werkdagen: v.werkdagen?.length ? v.werkdagen : STANDAARD_WERKDAGEN,
+      sloten: (v.sloten?.length ? v.sloten : TIJDSLOTS.map((slot): TauwSlot => ({ slot, actief: true }))).map((x) => ({ slot: x.slot, actief: x.actief !== false, max: x.max })),
+    }).then((r) => { setServerFout(r.ok ? "" : (r.error ?? "onbekende fout")); }).finally(() => setServerBezig(false));
+  };
+  const zetSlot = (slot: string, patch: Partial<TauwSlot>) =>
+    zetVenster({ sloten: sloten.map((x) => (x.slot === slot ? { ...x, ...patch } : x)) });
 
   // Beschikbare locaties (plaats) met aantallen — hiermee kun je de ronde beperken tot één plaats.
   const perPlaats = useMemo(() => {
@@ -152,31 +173,124 @@ export function BodemPlanning({ opdracht, users, onWijzig }: {
           <CalendarRange className="h-4 w-4 text-ink-400" /> Afsprakenperiode
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <input
-            type="date"
-            value={venster?.start ?? ""}
-            onChange={(e) => onWijzig({ venster: { start: e.target.value, weken: venster?.weken ?? 2 } })}
-            aria-label="Eerste dag"
-            className="rounded-lg border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
-          />
+          <label className="flex items-center gap-1.5 text-sm text-ink-600">
+            van
+            <input
+              type="date"
+              value={venster?.start ?? ""}
+              onChange={(e) => zetVenster({ start: e.target.value })}
+              aria-label="Eerste dag"
+              className="rounded-lg border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+            />
+          </label>
+          <label className="flex items-center gap-1.5 text-sm text-ink-600">
+            t/m
+            <input
+              type="date"
+              value={venster?.eind ?? (dagen.length ? dagen[dagen.length - 1] : "")}
+              min={venster?.start || undefined}
+              onChange={(e) => zetVenster({ eind: e.target.value })}
+              aria-label="Laatste dag"
+              className="rounded-lg border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+            />
+          </label>
+        </div>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <span className="text-xs text-ink-500">of snel:</span>
           {([1, 2, 3] as const).map((w) => (
             <button
               key={w}
               type="button"
-              onClick={() => onWijzig({ venster: { start: venster?.start ?? "", weken: w } })}
-              className={`rounded-lg border-2 px-3.5 py-2 text-sm font-semibold transition-colors ${
-                venster?.weken === w ? "border-brand-500 bg-brand-50 text-brand-800" : "border-ink-200 bg-white text-ink-700 hover:bg-ink-50"
+              onClick={() => zetVenster({ weken: w, eind: undefined })}
+              className={`rounded-lg border-2 px-3.5 py-1.5 text-sm font-semibold transition-colors ${
+                venster?.weken === w && !venster?.eind ? "border-brand-500 bg-brand-50 text-brand-800" : "border-ink-200 bg-white text-ink-700 hover:bg-ink-50"
               }`}
             >
               {w} {w === 1 ? "week" : "weken"}
             </button>
           ))}
         </div>
+
+        {/* Werkdagen — standaard ma t/m vr; weekend aan te zetten als er ook zaterdag gelopen wordt */}
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          <span className="text-xs text-ink-500">werkdagen:</span>
+          {[1, 2, 3, 4, 5, 6, 0].map((d) => {
+            const aan = werkdagen.includes(d);
+            return (
+              <button
+                key={d}
+                type="button"
+                aria-pressed={aan}
+                onClick={() => zetVenster({ werkdagen: aan ? werkdagen.filter((x) => x !== d) : [...werkdagen, d].sort() })}
+                className={`h-9 w-9 rounded-lg border-2 text-xs font-bold uppercase transition-colors ${
+                  aan ? "border-brand-500 bg-brand-50 text-brand-800" : "border-ink-200 bg-white text-ink-400 hover:bg-ink-50"
+                }`}
+              >
+                {DAGNAMEN[d]}
+              </button>
+            );
+          })}
+        </div>
+
         <div className="mt-1.5 text-xs text-ink-500">
           {dagen.length > 0
-            ? `${dagen.length} werkdagen: ${dagLabel(dagen[0])} t/m ${dagLabel(dagen[dagen.length - 1])} · weekend en feestdagen vallen weg.`
+            ? `${dagen.length} dagen: ${dagLabel(dagen[0])} t/m ${dagLabel(dagen[dagen.length - 1])} · feestdagen vallen automatisch weg.`
             : "Kies een eerste dag. Zolang dit leeg is, kan er aan de deur geen moment worden afgesproken."}
         </div>
+      </div>
+
+      {/* Tijdblokken: welke worden aangeboden, en hoeveel afspraken passen erin */}
+      <div>
+        <div className="mb-1.5 flex items-center gap-1.5 text-sm font-semibold text-ink-700">
+          <Clock className="h-4 w-4 text-ink-400" /> Tijdblokken
+          {serverBezig && <Loader2 className="h-3.5 w-3.5 animate-spin text-ink-400" />}
+        </div>
+        <p className="mb-2 text-xs text-ink-500">
+          Zet blokken uit die je niet wilt aanbieden (bijvoorbeeld de lunch). Het aantal is hoeveel
+          afspraken er tegelijk in passen — net zoveel als de aannemer ploegen inzet. Leeg = onbeperkt.
+        </p>
+        <div className="space-y-1.5">
+          {sloten.map((s) => {
+            const aan = s.actief !== false;
+            return (
+              <div key={s.slot} className={`flex items-center gap-2 rounded-lg border px-3 py-2 ${aan ? "border-ink-200 bg-white" : "border-ink-200 bg-ink-50"}`}>
+                <button
+                  type="button"
+                  aria-pressed={aan}
+                  onClick={() => zetSlot(s.slot, { actief: !aan })}
+                  className={`inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${aan ? "bg-brand-500" : "bg-ink-300"}`}
+                  aria-label={`${s.slot} ${aan ? "uitzetten" : "aanzetten"}`}
+                >
+                  <span className={`h-5 w-5 rounded-full bg-white transition-transform ${aan ? "translate-x-[22px]" : "translate-x-0.5"}`} />
+                </button>
+                <span className={`flex-1 text-sm font-semibold ${aan ? "text-ink-800" : "text-ink-400 line-through"}`}>
+                  {s.slot.replace("-", " – ")}
+                </span>
+                <label className="flex items-center gap-1.5 text-xs text-ink-500">
+                  max
+                  <input
+                    value={s.max ?? ""}
+                    onChange={(e) => {
+                      const cijfers = e.target.value.replace(/[^0-9]/g, "");
+                      zetSlot(s.slot, { max: cijfers === "" ? undefined : Math.max(0, Number(cijfers)) });
+                    }}
+                    disabled={!aan}
+                    placeholder="∞"
+                    inputMode="numeric"
+                    aria-label={`Maximum aantal afspraken in ${s.slot}`}
+                    className="w-14 rounded-lg border border-ink-200 px-2 py-1.5 text-center text-sm outline-none focus:border-brand-400 disabled:bg-ink-100"
+                  />
+                </label>
+              </div>
+            );
+          })}
+        </div>
+        {serverFout && (
+          <div className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            De planning staat lokaal goed, maar kon niet naar de server: {serverFout}. Zonder de server
+            wordt de capaciteit per blok niet bewaakt. Probeer het zo nog eens.
+          </div>
+        )}
       </div>
 
       {/* 2. Wie lopen er mee */}

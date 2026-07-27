@@ -778,7 +778,19 @@ export const TAUW_OPDRACHTGEVERS: TauwOpdrachtgever[] = ["TAUW", "Van der Helm"]
 // Het afsprakenvenster: vanaf welke dag, en hoeveel weken vooruit de bewoner mag kiezen.
 // De beheerder zet dit vóórdat het personeel op pad gaat, zodat aan de deur alleen geldige dagen
 // gekozen kunnen worden.
-export type TauwVenster = { start: string; weken: 1 | 2 | 3 }; // start = ISO yyyy-mm-dd (maandag of latere werkdag)
+export type TauwSlot = {
+  slot: string;      // "08:00-09:00"
+  actief?: boolean;  // uit = niet aan te bieden aan de deur (bv. lunchblok). Ontbreekt = aan.
+  max?: number;      // hoeveel afspraken er tegelijk in passen (aantal onderzoeksploegen). Ontbreekt = onbeperkt.
+};
+
+export type TauwVenster = {
+  start: string;          // ISO jjjj-mm-dd
+  weken: 1 | 2 | 3;       // snelkeuze; wordt genegeerd zodra `eind` is ingevuld
+  eind?: string;          // vrije einddatum (ISO); heeft voorrang op `weken`
+  werkdagen?: number[];   // 0 = zondag … 6 = zaterdag. Ontbreekt = ma t/m vr.
+  sloten?: TauwSlot[];    // per tijdblok aan/uit + capaciteit. Ontbreekt = alle blokken aan, onbeperkt.
+};
 
 export type TauwType = "bodemonderzoek" | "bezoekronde";
 export const TAUW_TYPES: TauwType[] = ["bodemonderzoek", "bezoekronde"];

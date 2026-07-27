@@ -41,20 +41,46 @@ export function dagLabel(iso: string): string {
   return `${WEEKDAG[d.getDay()]} ${d.getDate()} ${MAAND[d.getMonth()]}`;
 }
 
-// Alle werkdagen binnen het venster: vanaf de startdatum, `weken` weken lang, zonder weekend en
-// zonder feestdagen. Dit zijn precies de dagen die aan de deur gekozen mogen worden.
-export function vensterDagen(startISO: string, weken: number): string[] {
+// Standaard wordt er van maandag t/m vrijdag gewerkt (0 = zondag … 6 = zaterdag).
+export const STANDAARD_WERKDAGEN = [1, 2, 3, 4, 5];
+export const DAGNAMEN = ["zo", "ma", "di", "wo", "do", "vr", "za"];
+
+// Alle werkbare dagen binnen het venster. De einddatum komt óf uit een vrij ingevulde einddatum, óf
+// uit het aantal weken. Dagen waarop niet gewerkt wordt en feestdagen vallen weg. Dit zijn precies de
+// dagen die aan de deur gekozen mogen worden — de Worker bewaakt dezelfde regels bij het opslaan.
+export function vensterDagen(startISO: string, weken: number, opties?: { eind?: string; werkdagen?: number[] }): string[] {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(startISO)) return [];
+  const werkdagen = opties?.werkdagen?.length ? opties.werkdagen : STANDAARD_WERKDAGEN;
+  const eind = opties?.eind && /^\d{4}-\d{2}-\d{2}$/.test(opties.eind) ? opties.eind : "";
   const dagen: string[] = [];
   const d = parseISO(startISO);
-  const totaal = Math.max(1, Math.min(3, Math.round(weken))) * 7;
-  for (let i = 0; i < totaal; i++) {
+  // Zonder einddatum rekenen we met het aantal weken; met einddatum lopen we tot en met die dag.
+  // De bovengrens van 400 dagen is puur een noodrem tegen een verkeerd ingevulde einddatum.
+  const maxIteraties = eind ? 400 : Math.max(1, Math.min(3, Math.round(weken))) * 7;
+  for (let i = 0; i < maxIteraties; i++) {
     const iso = naarISO(d);
-    const dag = d.getDay();
-    if (dag !== 0 && dag !== 6 && !isFeestdag(iso)) dagen.push(iso);
+    if (eind && iso > eind) break;
+    if (werkdagen.includes(d.getDay()) && !isFeestdag(iso)) dagen.push(iso);
     d.setDate(d.getDate() + 1);
   }
   return dagen;
+}
+
+// Het venster van een opdracht uitrekenen, met alle instellingen erbij.
+export function dagenVanVenster(v?: { start: string; weken: number; eind?: string; werkdagen?: number[] }): string[] {
+  return v ? vensterDagen(v.start, v.weken, { eind: v.eind, werkdagen: v.werkdagen }) : [];
+}
+
+// Staat dit blok aan? Zonder instelling staat elk blok aan.
+export function slotActief(sloten: { slot: string; actief?: boolean }[] | undefined, slot: string): boolean {
+  const s = sloten?.find((x) => x.slot === slot);
+  return !s || s.actief !== false;
+}
+
+// Hoeveel afspraken passen er in dit blok? Zonder instelling onbeperkt.
+export function slotMax(sloten: { slot: string; max?: number }[] | undefined, slot: string): number | null {
+  const s = sloten?.find((x) => x.slot === slot);
+  return s && typeof s.max === "number" && s.max >= 0 ? s.max : null;
 }
 
 // ── Routesortering ──

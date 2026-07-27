@@ -4,9 +4,10 @@ import {
   DoorClosed, User, CheckCircle2, ChevronLeft, ListChecks,
 } from "lucide-react";
 import {
-  TIJDSLOTS, vensterDagen, dagLabel, magAfronden, telefoonGeldig, bezetting, voortgangVan,
+  TIJDSLOTS, dagenVanVenster, dagLabel, magAfronden, telefoonGeldig, bezetting, voortgangVan,
+  slotActief, slotMax,
 } from "../lib/bodemonderzoek";
-import type { TauwAdres, TauwOpdracht } from "../lib/types";
+import type { TauwAdres, TauwOpdracht, TauwSlot } from "../lib/types";
 
 // De ronde langs de deuren voor het bodemonderzoek (TAUW / Van der Helm).
 // ─────────────────────────────────────────────────────────────────────────────
@@ -55,10 +56,11 @@ function KeuzeKnop({ actief, kleur, icoon, titel, uitleg, onKies }: {
 
 // ── Dag + tijdslot kiezen ── alleen de dagen uit het venster van de beheerder, zodat er aan de deur
 // niets buiten de planning gekozen kan worden.
-function TijdslotKiezer({ adres, alleAdressen, dagen, onKies }: {
+function TijdslotKiezer({ adres, alleAdressen, dagen, sloten, onKies }: {
   adres: TauwAdres;
   alleAdressen: TauwAdres[];
   dagen: string[];
+  sloten?: TauwSlot[];
   onKies: (patch: Partial<TauwAdres>) => void;
 }) {
   const dagBalk = useRef<HTMLDivElement | null>(null);
@@ -111,24 +113,32 @@ function TijdslotKiezer({ adres, alleAdressen, dagen, onKies }: {
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {TIJDSLOTS.map((s) => {
               const gekozen = adres.tijdslot === s;
-              // Hoeveel bewoners staan er al in dit blok? Puur informatief — je mag er meer in zetten,
-              // maar je ziet meteen of het al vol loopt.
+              const aan = slotActief(sloten, s);
+              // Hoeveel bewoners staan er al in dit blok, en hoeveel passen er in?
               const al = bezetting(alleAdressen.filter((x) => x.id !== adres.id), adres.datum, s);
+              const max = slotMax(sloten, s);
+              const vol = max !== null && al >= max;
+              // Uitgezette en volle blokken blijven zichtbaar maar zijn niet aan te tikken — anders snapt
+              // de medewerker aan de deur niet waarom een blok ontbreekt.
+              const uit = !aan || (vol && !gekozen);
               return (
                 <button
                   key={s}
                   type="button"
+                  disabled={uit}
                   onClick={() => onKies({ tijdslot: s })}
                   className={`relative rounded-xl border-2 px-2 py-3 text-sm font-semibold transition-colors ${
-                    gekozen ? "border-brand-500 bg-brand-50 text-brand-800" : "border-ink-200 bg-white text-ink-700 hover:bg-ink-50"
+                    gekozen
+                      ? "border-brand-500 bg-brand-50 text-brand-800"
+                      : uit
+                        ? "cursor-not-allowed border-ink-200 bg-ink-100 text-ink-400"
+                        : "border-ink-200 bg-white text-ink-700 hover:bg-ink-50"
                   }`}
                 >
                   {s.replace("-", " – ")}
-                  {al > 0 && (
-                    <span className="absolute right-1 top-1 rounded-full bg-ink-100 px-1.5 text-[10px] font-bold text-ink-500">
-                      {al}
-                    </span>
-                  )}
+                  <span className="mt-0.5 block text-[10px] font-medium">
+                    {!aan ? "niet beschikbaar" : max !== null ? `${al}/${max}${vol ? " · vol" : ""}` : al > 0 ? `${al} gepland` : "vrij"}
+                  </span>
                 </button>
               );
             })}
@@ -154,10 +164,8 @@ export function DeurRonde({ opdracht, adressen, onOpslaan, onTerug }: {
   const [stap, setStap] = useState<"deur" | "tijdslot">("deur");
   const bovenkant = useRef<HTMLDivElement | null>(null);
 
-  const dagen = useMemo(
-    () => (opdracht.venster ? vensterDagen(opdracht.venster.start, opdracht.venster.weken) : []),
-    [opdracht.venster],
-  );
+  // Dezelfde regels als de beheerder heeft ingesteld: periode, werkdagen en feestdagen.
+  const dagen = useMemo(() => dagenVanVenster(opdracht.venster), [opdracht.venster]);
   const voortgang = voortgangVan(adressen);
   const adres = adressen[index];
 
@@ -226,7 +234,7 @@ export function DeurRonde({ opdracht, adressen, onOpslaan, onTerug }: {
         </div>
 
         <div className="mt-3 rounded-2xl border border-ink-200 bg-white p-4 shadow-sm">
-          <TijdslotKiezer adres={adres} alleAdressen={adressen} dagen={dagen} onKies={zet} />
+          <TijdslotKiezer adres={adres} alleAdressen={adressen} dagen={dagen} sloten={opdracht.venster?.sloten} onKies={zet} />
         </div>
 
         {compleet && (
