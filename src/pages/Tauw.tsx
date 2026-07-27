@@ -1,5 +1,5 @@
-import { Fragment, useRef, useState } from "react";
-import { ArrowLeft, Plus, FlaskConical, Trash2, MessageCircle, Phone, Navigation, FileDown, FileUp, Mail, Check, Wand2, ChevronRight, ChevronDown, X, UserPlus, RotateCcw, Footprints, Loader2, Search, CalendarClock, Pencil } from "lucide-react";
+import { Fragment, useState } from "react";
+import { ArrowLeft, Plus, FlaskConical, Trash2, MessageCircle, Phone, Navigation, FileDown, FileUp, Mail, Check, Wand2, ChevronRight, ChevronDown, X, UserPlus, RotateCcw, Footprints, Search, CalendarClock, Pencil } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { WerknemerKiezer } from "../components/WerknemerKiezer";
 import { DatumKiezer } from "../components/DatumKiezer";
@@ -9,8 +9,8 @@ import { afleidRegio } from "../lib/regio";
 import { waUrl } from "../lib/communicatie";
 import { googleMapsRoute, MAX_ROUTE_STOPS } from "../lib/afspraak";
 import { exporteerTauwExcel, mailTauwNaarStedin } from "../lib/tauwExcel";
-import { leesStedinPlanning, type StedinRij } from "../lib/tauwImport";
 import { BodemPlanning, BodemAfspraken } from "../components/BodemPlanning";
+import { BodemImport } from "../components/BodemImport";
 import { DeurRonde } from "./DeurRonde";
 import { sorteerRoute, voortgangVan } from "../lib/bodemonderzoek";
 import {
@@ -28,7 +28,6 @@ const adresId = () => {
   try { return crypto.randomUUID(); } catch { return `ta-${Date.now()}-${Math.round(Math.random() * 1e6)}`; }
 };
 const leegAdres = (): TauwAdres => ({ id: adresId(), straat: "", huisnummer: "", postcode: "", plaats: "", bewoner: "", telefoon: "", datum: "", tijd: "", bevestigd: false, notitie: "" });
-const naarTauwAdres = (r: StedinRij): TauwAdres => ({ id: adresId(), straat: r.straat, huisnummer: r.huisnummer, postcode: r.postcode, plaats: r.plaats, bewoner: r.naam, telefoon: r.telefoon, datum: r.datum, tijd: r.tijd, bevestigd: false, notitie: r.notitie });
 const isISO = (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d);
 const isTijd = (t: string) => /^\d{2}:\d{2}$/.test(t);
 const datumKort = (iso: string) => { const d = iso.slice(0, 10).split("-"); return d.length === 3 ? `${d[2]}-${d[1]}-${d[0]}` : iso; };
@@ -42,7 +41,6 @@ const adresTekst = (a: TauwAdres) => {
 const BEVESTIGD_LABEL: Record<TauwType, string> = { bodemonderzoek: "Afspraak bevestigd", bezoekronde: "Adres bezocht" };
 const VERZAMEL_LABEL: Record<TauwType, string> = { bodemonderzoek: "bevestigd", bezoekronde: "bezocht" };
 
-const wacht = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 // Een adres met enige inhoud (i.t.t. een vers, leeg leegAdres()-rijtje).
 const heeftInhoud = (a: TauwAdres) => !!(a.straat || a.huisnummer || a.postcode || a.plaats || a.bewoner || a.telefoon || a.notitie || a.datum || a.tijd);
 // Zoek-match binnen één map (q = reeds getrimd + lowercase). Leeg = alles.
@@ -69,83 +67,9 @@ function sorteerOpRoute(adressen: TauwAdres[]): TauwAdres[] {
 }
 
 // ── Scan-animatie tijdens het inlezen ──
-type ScanFase = "lezen" | "herkennen" | "sorteren" | "klaar";
-const SCAN_STAPPEN: { key: ScanFase; label: string }[] = [
-  { key: "lezen", label: "Bestand lezen" },
-  { key: "herkennen", label: "Adressen herkennen" },
-  { key: "sorteren", label: "Looproute sorteren" },
-  { key: "klaar", label: "Klaar" },
-];
 
-function ScanOverlay({ fase, aantal }: { fase: ScanFase; aantal: number }) {
-  const idx = SCAN_STAPPEN.findIndex((s) => s.key === fase);
-  const isKlaar = fase === "klaar";
-  const pct = Math.round(((idx + 1) / SCAN_STAPPEN.length) * 100);
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/50 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-cardhover">
-        <div className="relative mx-auto mb-5 h-28 w-24 overflow-hidden rounded-lg border-2 border-ink-200 bg-ink-50">
-          <div className="space-y-1.5 p-3">
-            {[88, 64, 92, 56, 76, 48].map((w, i) => <div key={i} className="h-1.5 rounded-full bg-ink-200" style={{ width: `${w}%` }} />)}
-          </div>
-          {!isKlaar && (
-            <div className="tauw-scan-lijn absolute inset-x-0 top-0">
-              <div className="h-0.5 w-full bg-brand-500 shadow-[0_0_10px_3px] shadow-brand-400/70" />
-            </div>
-          )}
-          {isKlaar && (
-            <div className="absolute inset-0 flex items-center justify-center bg-green-50/85">
-              <Check className="h-10 w-10 text-green-600" />
-            </div>
-          )}
-        </div>
-        <h3 className="text-center text-base font-bold text-ink-900">{isKlaar ? `${aantal} adres${aantal === 1 ? "" : "sen"} ingelezen` : "Het bestand wordt gescand…"}</h3>
-        <ul className="mx-auto mt-4 w-max space-y-2">
-          {SCAN_STAPPEN.map((s, i) => {
-            const gedaan = isKlaar || i < idx;
-            const actief = !isKlaar && i === idx;
-            return (
-              <li key={s.key} className={`flex items-center gap-2.5 text-sm ${gedaan ? "text-ink-500" : actief ? "font-semibold text-ink-900" : "text-ink-300"}`}>
-                <span className="flex h-5 w-5 items-center justify-center">
-                  {gedaan ? <Check className="h-4 w-4 text-green-600" /> : actief ? <Loader2 className="h-4 w-4 animate-spin text-brand-600" /> : <span className="h-1.5 w-1.5 rounded-full bg-ink-300" />}
-                </span>
-                {s.label}
-              </li>
-            );
-          })}
-        </ul>
-        <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-ink-100">
-          <div className="h-full rounded-full bg-brand-500 transition-all duration-300" style={{ width: `${pct}%` }} />
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // Leest een bestand met een staps-gewijze scan-animatie en levert de (op route gesorteerde) adressen.
-function useExcelScan() {
-  const [fase, setFase] = useState<ScanFase | null>(null);
-  const [aantal, setAantal] = useState(0);
-  const [fout, setFout] = useState<string | null>(null);
-  const run = async (file: File, type: TauwType, onKlaar: (adressen: TauwAdres[], week: string) => void) => {
-    setFout(null);
-    setFase("lezen");
-    await wacht(450);
-    const r = await leesStedinPlanning(file, type);
-    if (!r.ok) { setFase(null); setFout(r.fout); return; }
-    setFase("herkennen");
-    await wacht(650);
-    setFase("sorteren");
-    await wacht(550);
-    const adressen = sorteerOpRoute(r.rijen.map(naarTauwAdres));
-    setAantal(adressen.length);
-    setFase("klaar");
-    await wacht(850);
-    setFase(null);
-    onKlaar(adressen, r.week);
-  };
-  return { fase, aantal, fout, setFout, run };
-}
 
 // ── Eén adres = één balk. Datum/tijd altijd zichtbaar; klap uit voor de rest. Alles wordt direct opgeslagen. ──
 const adresLabel = "mb-1 block text-[11px] font-semibold uppercase tracking-wide text-brand-600";
@@ -262,9 +186,7 @@ function TauwIntake({ type, onKlaar }: { type: TauwType; onKlaar: (id?: string) 
   const [referentie, setReferentie] = useState("");
   const [gekozen, setGekozen] = useState<TauwType>(type);
   const [opdrachtgever, setOpdrachtgever] = useState<TauwOpdrachtgever>("TAUW");
-  const [sleept, setSleept] = useState(false);
-  const bestandInput = useRef<HTMLInputElement | null>(null);
-  const scan = useExcelScan();
+  const [importOpen, setImportOpen] = useState(false);
 
   const basis = () => ({
     aangemaakt: new Date().toISOString(),
@@ -277,15 +199,6 @@ function TauwIntake({ type, onKlaar }: { type: TauwType; onKlaar: (id?: string) 
 
   // Zelf invullen: één lege adresregel om mee te beginnen.
   const maakLeeg = () => onKlaar(addTauw({ ...basis(), referentie: referentie.trim(), adressen: [leegAdres()] }));
-
-  // Uit een bestand: de scan haalt de adressen eruit; de weeknaam vult de referentie als je die leeg liet.
-  const maakUitBestand = (file: File) => {
-    void scan.run(file, gekozen, (adressen, week) => {
-      onKlaar(addTauw({ ...basis(), referentie: referentie.trim() || week, adressen }));
-    });
-  };
-
-  const pakBestand = (f?: File | null) => { if (f) maakUitBestand(f); };
 
   return (
     <div className="mx-auto max-w-xl space-y-5">
@@ -330,49 +243,47 @@ function TauwIntake({ type, onKlaar }: { type: TauwType; onKlaar: (id?: string) 
       <div className="space-y-3">
         <h3 className="text-sm font-bold text-ink-900">Hoe komen de adressen erin?</h3>
 
-        <div
-          onDragOver={(e) => { e.preventDefault(); setSleept(true); }}
-          onDragLeave={() => setSleept(false)}
-          onDrop={(e) => { e.preventDefault(); setSleept(false); pakBestand(e.dataTransfer.files?.[0]); }}
-          onClick={() => bestandInput.current?.click()}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); bestandInput.current?.click(); } }}
-          className={`cursor-pointer rounded-2xl border-2 border-dashed px-5 py-8 text-center transition-colors ${
-            sleept ? "border-brand-500 bg-brand-50" : "border-ink-300 bg-white hover:border-brand-400 hover:bg-brand-50/40"
-          }`}
-        >
-          <div className="mx-auto mb-2 inline-flex rounded-full border border-ink-200 bg-white p-2.5 text-ink-500">
-            <FileUp className="h-5 w-5" />
-          </div>
-          <div className="text-sm font-semibold text-ink-800">Sleep je bestand hierheen of klik om te kiezen</div>
-          <div className="mt-0.5 text-xs text-ink-500">Excel of CSV — de adressen worden er automatisch uit gehaald</div>
-        </div>
-        <input
-          ref={bestandInput}
-          type="file"
-          accept=".xlsx,.xls,.csv"
-          aria-label="Bestand inlezen"
-          className="hidden"
-          onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; pakBestand(f); }}
-        />
+        {importOpen ? (
+          <BodemImport
+            bestaand={[]}
+            onAnnuleer={() => setImportOpen(false)}
+            onKlaar={(adressen, bestandsnaam) => {
+              onKlaar(addTauw({ ...basis(), referentie: referentie.trim() || bestandsnaam.replace(/\.[^.]+$/, ""), adressen: sorteerRoute(adressen) }));
+            }}
+          />
+        ) : (
+          <>
+            <button
+              type="button"
+              onClick={() => setImportOpen(true)}
+              className="flex w-full items-center gap-3 rounded-2xl border-2 border-dashed border-ink-300 bg-white px-5 py-6 text-left hover:border-brand-400 hover:bg-brand-50/40"
+            >
+              <span className="rounded-full border border-ink-200 bg-white p-2.5 text-ink-500"><FileUp className="h-5 w-5" /></span>
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold text-ink-800">Bestand inlezen</span>
+                <span className="block text-xs text-ink-500">Excel of CSV — je wijst zelf aan welke kolom wat is</span>
+              </span>
+              <ChevronRight className="ml-auto h-5 w-5 shrink-0 text-ink-400" />
+            </button>
 
-        <div className="flex items-center gap-3 text-xs font-semibold uppercase tracking-wide text-ink-400">
-          <span className="h-px flex-1 bg-ink-200" /> of <span className="h-px flex-1 bg-ink-200" />
-        </div>
+            <div className="flex items-center gap-3 text-xs font-semibold uppercase tracking-wide text-ink-400">
+              <span className="h-px flex-1 bg-ink-200" /> of <span className="h-px flex-1 bg-ink-200" />
+            </div>
 
-        <button
-          type="button"
-          onClick={maakLeeg}
-          className="flex w-full items-center gap-3 rounded-2xl border border-ink-200 bg-white px-5 py-4 text-left hover:border-brand-300 hover:bg-brand-50/40"
-        >
-          <span className="rounded-full border border-ink-200 bg-white p-2.5 text-ink-500"><Pencil className="h-5 w-5" /></span>
-          <span className="min-w-0">
-            <span className="block text-sm font-semibold text-ink-800">Zelf invullen</span>
-            <span className="block text-xs text-ink-500">Begin met een lege lijst en voeg de adressen met de hand toe</span>
-          </span>
-          <ChevronRight className="ml-auto h-5 w-5 shrink-0 text-ink-400" />
-        </button>
+            <button
+              type="button"
+              onClick={maakLeeg}
+              className="flex w-full items-center gap-3 rounded-2xl border border-ink-200 bg-white px-5 py-4 text-left hover:border-brand-300 hover:bg-brand-50/40"
+            >
+              <span className="rounded-full border border-ink-200 bg-white p-2.5 text-ink-500"><Pencil className="h-5 w-5" /></span>
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold text-ink-800">Zelf invullen</span>
+                <span className="block text-xs text-ink-500">Begin met een lege lijst en voeg de adressen met de hand toe</span>
+              </span>
+              <ChevronRight className="ml-auto h-5 w-5 shrink-0 text-ink-400" />
+            </button>
+          </>
+        )}
       </div>
 
     </div>
@@ -385,8 +296,6 @@ function TauwDetail({ opdracht, onTerug }: { opdracht: TauwOpdracht; onTerug: ()
   const [bevestigGereed, setBevestigGereed] = useState(false);
   const [naamBewerken, setNaamBewerken] = useState(false);
   const [naamConcept, setNaamConcept] = useState("");
-  const importInput = useRef<HTMLInputElement | null>(null);
-  const scan = useExcelScan();
   const isLeiding = currentUser?.rol === "eigenaar" || currentUser?.rol === "beheer" || currentUser?.rol === "hr";
   const isToegewezen = !!currentUser && (
     currentUser.id === opdracht.toegewezenAan ||
@@ -400,6 +309,7 @@ function TauwDetail({ opdracht, onTerug }: { opdracht: TauwOpdracht; onTerug: ()
   const controleur = users.find((u) => u.id === opdracht.gecontroleerdDoor);
 
   const [rondeOpen, setRondeOpen] = useState(false); // de gefocuste deur-ronde (bodemonderzoek)
+  const [importOpen, setImportOpen] = useState(false); // de import-wizard in een bestaande map
   const [zoek, setZoek] = useState(""); // zoeken op straat/plaats/bewoner binnen de map
   // Selectie van te-lopen adressen → route over de selectie, geordend op looproute-volgorde.
   const [selectie, setSelectie] = useState<Set<string>>(new Set());
@@ -464,15 +374,6 @@ function TauwDetail({ opdracht, onTerug }: { opdracht: TauwOpdracht; onTerug: ()
   const startNaamBewerken = () => { setNaamConcept(opdracht.referentie); setNaamBewerken(true); };
   const slaNaamOp = () => { updateTauw(opdracht.id, { referentie: naamConcept.trim() }); setNaamBewerken(false); };
 
-  // Stedin-bestand inlezen (met scan-animatie) → adressen toevoegen en de hele lijst op route sorteren.
-  // Alleen écht-lege placeholder-rijen vervallen; deels ingevulde adressen blijven behouden.
-  const importeerStedin = (file: File) => {
-    void scan.run(file, opdracht.type, (adressen) => {
-      const bestaand = opdracht.adressen.filter(heeftInhoud);
-      setAdressen(sorteerOpRoute([...bestaand, ...adressen]));
-    });
-  };
-
   const titel = opdracht.referentie || opdracht.regio || "TAUW-opdracht";
   const huidigIndex = TAUW_STATUS_VOLGORDE.indexOf(status);
 
@@ -487,14 +388,27 @@ function TauwDetail({ opdracht, onTerug }: { opdracht: TauwOpdracht; onTerug: ()
               <button type="button" onClick={() => setAdressen(sorteerOpRoute(opdracht.adressen))} className={knopKlein} title="Adressen op looproute-volgorde zetten"><Footprints className="h-3.5 w-3.5" /> Sorteer op looproute</button>
             )}
             {isLeiding && (
-              <>
-                <button type="button" onClick={() => importInput.current?.click()} className={knopKlein}><FileUp className="h-3.5 w-3.5" /> {opdracht.type === "bodemonderzoek" ? "Planning inlezen" : "Adressen inlezen"}</button>
-                <input ref={importInput} type="file" accept=".xlsx,.xls,.csv" aria-label="Excel inlezen" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) importeerStedin(f); }} />
-              </>
+              <button type="button" onClick={() => setImportOpen((v) => !v)} className={knopKlein}>
+                <FileUp className="h-3.5 w-3.5" /> {importOpen ? "Import sluiten" : "Adressen inlezen"}
+              </button>
             )}
           </div>
         )}
       </div>
+
+      {/* De import-wizard: kolommen zelf toewijzen, alles gecontroleerd, en pas dan in een keer erbij. */}
+      {importOpen && isLeiding && (
+        <BodemImport
+          bestaand={opdracht.adressen}
+          onAnnuleer={() => setImportOpen(false)}
+          onKlaar={(nieuwe) => {
+            // De bestaande lijst blijft heel; de nieuwe adressen komen erbij en alles gaat opnieuw
+            // op looproute. Lege placeholder-regels vallen weg.
+            setAdressen(sorteerRoute([...opdracht.adressen.filter(heeftInhoud), ...nieuwe]));
+            setImportOpen(false);
+          }}
+        />
+      )}
 
       {/* Zoeken binnen de map (snel naar een straat schakelen) */}
       {opdracht.adressen.length > 0 && (
@@ -640,7 +554,6 @@ function TauwDetail({ opdracht, onTerug }: { opdracht: TauwOpdracht; onTerug: ()
         {rondeStart}
         {adressenSectie}
         {gereedDialog}
-        {scan.fase && <ScanOverlay fase={scan.fase} aantal={scan.aantal} />}
       </div>
     );
   }

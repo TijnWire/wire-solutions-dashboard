@@ -765,6 +765,8 @@ export type TauwAdres = {
   afgerond?: boolean; // formulier bij dit adres helemaal ingevuld
   afgerondOp?: string; // ISO
   afgerondDoor?: string; // user id
+  wijk?: string;        // wijk of buurt, uit het aanleverbestand — om op te filteren bij het verdelen
+  perceel?: string;     // perceelnummer, uit het aanleverbestand
   geenGehoor?: boolean; // niemand thuis — komt terug in de lijst "nog langs"
   pogingen?: number; // hoe vaak er is aangebeld zonder resultaat
   bijgewerktOp?: string; // ISO — voor het samenvoegen tussen apparaten
