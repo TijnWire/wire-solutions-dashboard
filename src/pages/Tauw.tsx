@@ -11,6 +11,7 @@ import { googleMapsRoute, MAX_ROUTE_STOPS } from "../lib/afspraak";
 import { exporteerTauwExcel, mailTauwNaarStedin } from "../lib/tauwExcel";
 import { BodemPlanning, BodemAfspraken } from "../components/BodemPlanning";
 import { BodemImport } from "../components/BodemImport";
+import { BodemToewijzen } from "../components/BodemToewijzen";
 import { DeurRonde } from "./DeurRonde";
 import { sorteerRoute, voortgangVan } from "../lib/bodemonderzoek";
 import {
@@ -697,6 +698,14 @@ function TauwDetail({ opdracht, onTerug }: { opdracht: TauwOpdracht; onTerug: ()
           opdracht={opdracht}
           users={users.filter((u) => u.rol === "monteur" || u.werknemer)}
           onWijzig={(patch) => updateTauw(opdracht.id, patch)}
+        />
+      )}
+      {isBodem && (
+        <BodemToewijzen
+          adressen={opdracht.adressen}
+          users={users}
+          team={opdracht.team ?? []}
+          onWijzig={(next) => updateTauw(opdracht.id, { adressen: next })}
         />
       )}
       {isBodem && <BodemAfspraken opdracht={opdracht} users={users} />}
