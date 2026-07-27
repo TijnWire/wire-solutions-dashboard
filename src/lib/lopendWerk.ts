@@ -8,7 +8,7 @@ export const WERK_CATEGORIEEN: { id: string; naam: string }[] = [
   { id: "saneren", naam: "Saneren" },
   { id: "voorschouwen", naam: "Voorschouwen" },
   { id: "schouwafspraken", naam: "Schouwafspraken" },
-  { id: "tauw", naam: "TAUW" },
+  { id: "tauw", naam: "TAUW of Van der Helm" },
 ];
 export const werkCategorieNaam = (id?: string) => WERK_CATEGORIEEN.find((c) => c.id === id)?.naam;
 
@@ -39,7 +39,7 @@ export function lopendeProjectOpties(projects: Project[], rondes: Brievenronde[]
 
   // TAUW: lopende opdrachten (niet verstuurd/gearchiveerd)
   for (const o of tauwOpdrachten.filter((o) => o.status !== "verstuurd" && !o.gearchiveerd).sort((a, b) => (a.referentie || a.regio || "").localeCompare(b.referentie || b.regio || "", "nl"))) {
-    opties.push({ id: `tauw:${o.id}`, naam: `TAUW: ${o.referentie || o.regio || "opdracht"}`, groep: "TAUW" });
+    opties.push({ id: `tauw:${o.id}`, naam: `${o.opdrachtgever ?? "TAUW"}: ${o.referentie || o.regio || "opdracht"}`, groep: "TAUW of Van der Helm" });
   }
 
   return opties;

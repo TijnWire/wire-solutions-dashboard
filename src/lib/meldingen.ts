@@ -130,14 +130,14 @@ export function meldingenVoor(user: User, data: MeldingData): Melding[] {
   // TAUW: aan mij toegewezen mappen — herinnering met openstaande adressen, of een nudge "klaar voor controle"
   for (const o of tauwOpdrachten.filter((t) => t.toegewezenAan === user.id && (t.status === "toegewezen" || t.status === "nieuw"))) {
     const open = o.adressen.filter((a) => !a.bevestigd).length;
-    m.push({ id: "tauw-" + o.id, ernst: "info", titel: `TAUW: ${o.referentie || o.regio || "opdracht"}`, tekst: open > 0 ? `Nog ${open} adres${open === 1 ? "" : "sen"} af te ronden.` : "Klaar om naar controle te sturen.", navKey: "tauw", target: { tauwId: o.id } });
+    m.push({ id: "tauw-" + o.id, ernst: "info", titel: `${o.opdrachtgever ?? "TAUW"}: ${o.referentie || o.regio || "opdracht"}`, tekst: open > 0 ? `Nog ${open} adres${open === 1 ? "" : "sen"} af te ronden.` : "Klaar om naar controle te sturen.", navKey: "tauw", target: { tauwId: o.id } });
   }
 
   // TAUW: klaar voor controle — de beheerder moet checken en doorsturen naar Stedin
   if (isLeiding) {
     const voornaamVan = (id?: string) => users.find((u) => u.id === id)?.naam.split(" ")[0] ?? "een werknemer";
     for (const o of tauwOpdrachten.filter((t) => t.status === "ter_controle")) {
-      m.push({ id: "tauw-ctrl-" + o.id, ernst: "waarschuwing", titel: `TAUW klaar voor controle: ${o.referentie || o.regio || "opdracht"}`, tekst: `Afgerond door ${voornaamVan(o.toegewezenAan)} — controleer en stuur door naar Stedin.`, navKey: "tauw", target: { tauwId: o.id } });
+      m.push({ id: "tauw-ctrl-" + o.id, ernst: "waarschuwing", titel: `${o.opdrachtgever ?? "TAUW"} klaar voor controle: ${o.referentie || o.regio || "opdracht"}`, tekst: `Afgerond door ${voornaamVan(o.toegewezenAan)} — controleer en stuur door naar Stedin.`, navKey: "tauw", target: { tauwId: o.id } });
     }
   }
 

@@ -14,8 +14,8 @@ import { BodemPlanning, BodemAfspraken } from "../components/BodemPlanning";
 import { DeurRonde } from "./DeurRonde";
 import { sorteerRoute, voortgangVan } from "../lib/bodemonderzoek";
 import {
-  TAUW_TYPES, TAUW_TYPE_LABEL, TAUW_STATUS_LABEL, TAUW_STATUS_VOLGORDE,
-  type TauwAdres, type TauwOpdracht, type TauwType, type TauwStatus,
+  TAUW_TYPES, TAUW_TYPE_LABEL, TAUW_STATUS_LABEL, TAUW_STATUS_VOLGORDE, TAUW_OPDRACHTGEVERS,
+  type TauwAdres, type TauwOpdracht, type TauwType, type TauwStatus, type TauwOpdrachtgever,
 } from "../lib/types";
 
 const veld = "w-full min-w-0 rounded-lg border border-ink-200 px-2.5 py-1.5 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100 disabled:bg-ink-50 disabled:text-ink-500";
@@ -261,42 +261,124 @@ function TauwIntake({ type, onKlaar }: { type: TauwType; onKlaar: (id?: string) 
   const { addTauw } = useApp();
   const [referentie, setReferentie] = useState("");
   const [gekozen, setGekozen] = useState<TauwType>(type);
-  const maak = () => {
-    const id = addTauw({
-      aangemaakt: new Date().toISOString(),
-      type: gekozen,
-      status: "nieuw",
-      referentie: referentie.trim(),
-      regio: "",
-      adressen: [leegAdres()],
-      stappen: [],
+  const [opdrachtgever, setOpdrachtgever] = useState<TauwOpdrachtgever>("TAUW");
+  const [sleept, setSleept] = useState(false);
+  const bestandInput = useRef<HTMLInputElement | null>(null);
+  const scan = useExcelScan();
+
+  const basis = () => ({
+    aangemaakt: new Date().toISOString(),
+    type: gekozen,
+    status: "nieuw" as const,
+    regio: "",
+    opdrachtgever,
+    stappen: [],
+  });
+
+  // Zelf invullen: één lege adresregel om mee te beginnen.
+  const maakLeeg = () => onKlaar(addTauw({ ...basis(), referentie: referentie.trim(), adressen: [leegAdres()] }));
+
+  // Uit een bestand: de scan haalt de adressen eruit; de weeknaam vult de referentie als je die leeg liet.
+  const maakUitBestand = (file: File) => {
+    void scan.run(file, gekozen, (adressen, week) => {
+      onKlaar(addTauw({ ...basis(), referentie: referentie.trim() || week, adressen }));
     });
-    onKlaar(id);
   };
+
+  const pakBestand = (f?: File | null) => { if (f) maakUitBestand(f); };
+
   return (
     <div className="mx-auto max-w-xl space-y-5">
       <button type="button" onClick={() => onKlaar()} className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-500 hover:text-ink-800">
         <ArrowLeft className="h-4 w-4" /> Terug
       </button>
-      <h2 className="text-xl font-bold text-ink-900">Nieuwe TAUW-opdracht</h2>
+      <h2 className="text-xl font-bold text-ink-900">Nieuwe opdracht</h2>
+
       <Card className="space-y-4 p-5">
+        {/* Voor wie werk je? */}
+        <div>
+          <span className="mb-1.5 block text-sm font-medium text-ink-700">Voor wie is deze opdracht?</span>
+          <div className="flex gap-2">
+            {TAUW_OPDRACHTGEVERS.map((o) => (
+              <button
+                key={o}
+                type="button"
+                onClick={() => setOpdrachtgever(o)}
+                className={`flex-1 rounded-lg border-2 px-4 py-2.5 text-sm font-semibold transition-colors ${
+                  opdrachtgever === o ? "border-brand-500 bg-brand-50 text-brand-800" : "border-ink-200 bg-white text-ink-700 hover:bg-ink-50"
+                }`}
+              >
+                {o}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div>
           <span className="mb-1.5 block text-sm font-medium text-ink-700">Soort opdracht</span>
           <TypeKiezer waarde={gekozen} onKies={setGekozen} />
-          <p className="mt-1.5 text-xs text-ink-500">{gekozen === "bodemonderzoek" ? "Bewoners contacteren en afspraken bevestigen." : "Adressen bezoeken — regio bepalen en route plannen over lange afstanden."}</p>
+          <p className="mt-1.5 text-xs text-ink-500">{gekozen === "bodemonderzoek" ? "Langs de deuren: bewoners spreken en afspraken inplannen." : "Adressen bezoeken — regio bepalen en route plannen over lange afstanden."}</p>
         </div>
+
         <label className="block">
-          <span className="mb-1.5 block text-sm font-medium text-ink-700">Referentie / opdrachtnaam</span>
+          <span className="mb-1.5 block text-sm font-medium text-ink-700">Referentie / opdrachtnaam <span className="font-normal text-ink-400">(mag leeg)</span></span>
           <input value={referentie} onChange={(e) => setReferentie(e.target.value)} placeholder="bijv. Bodemonderzoek Lindebuurt" className={veld} />
         </label>
-        <p className="text-xs text-ink-500">Je kunt daarna meteen een Excel-bestand inlezen of adressen handmatig toevoegen.</p>
       </Card>
-      <button type="button" onClick={maak} className={knopPrimair}><Plus className="h-4 w-4" /> Opdracht aanmaken</button>
+
+      {/* Hierna kies je zelf hoe de adressen erin komen. */}
+      <div className="space-y-3">
+        <h3 className="text-sm font-bold text-ink-900">Hoe komen de adressen erin?</h3>
+
+        <div
+          onDragOver={(e) => { e.preventDefault(); setSleept(true); }}
+          onDragLeave={() => setSleept(false)}
+          onDrop={(e) => { e.preventDefault(); setSleept(false); pakBestand(e.dataTransfer.files?.[0]); }}
+          onClick={() => bestandInput.current?.click()}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); bestandInput.current?.click(); } }}
+          className={`cursor-pointer rounded-2xl border-2 border-dashed px-5 py-8 text-center transition-colors ${
+            sleept ? "border-brand-500 bg-brand-50" : "border-ink-300 bg-white hover:border-brand-400 hover:bg-brand-50/40"
+          }`}
+        >
+          <div className="mx-auto mb-2 inline-flex rounded-full border border-ink-200 bg-white p-2.5 text-ink-500">
+            <FileUp className="h-5 w-5" />
+          </div>
+          <div className="text-sm font-semibold text-ink-800">Sleep je bestand hierheen of klik om te kiezen</div>
+          <div className="mt-0.5 text-xs text-ink-500">Excel of CSV — de adressen worden er automatisch uit gehaald</div>
+        </div>
+        <input
+          ref={bestandInput}
+          type="file"
+          accept=".xlsx,.xls,.csv"
+          aria-label="Bestand inlezen"
+          className="hidden"
+          onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; pakBestand(f); }}
+        />
+
+        <div className="flex items-center gap-3 text-xs font-semibold uppercase tracking-wide text-ink-400">
+          <span className="h-px flex-1 bg-ink-200" /> of <span className="h-px flex-1 bg-ink-200" />
+        </div>
+
+        <button
+          type="button"
+          onClick={maakLeeg}
+          className="flex w-full items-center gap-3 rounded-2xl border border-ink-200 bg-white px-5 py-4 text-left hover:border-brand-300 hover:bg-brand-50/40"
+        >
+          <span className="rounded-full border border-ink-200 bg-white p-2.5 text-ink-500"><Pencil className="h-5 w-5" /></span>
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold text-ink-800">Zelf invullen</span>
+            <span className="block text-xs text-ink-500">Begin met een lege lijst en voeg de adressen met de hand toe</span>
+          </span>
+          <ChevronRight className="ml-auto h-5 w-5 shrink-0 text-ink-400" />
+        </button>
+      </div>
+
     </div>
   );
 }
 
-// ── Detail: levenscyclus + regio/route + adressen ──
 function TauwDetail({ opdracht, onTerug }: { opdracht: TauwOpdracht; onTerug: () => void }) {
   const { users, currentUser, updateTauw, deleteTauw } = useApp();
   const [verwijder, setVerwijder] = useState(false);
@@ -413,7 +495,6 @@ function TauwDetail({ opdracht, onTerug }: { opdracht: TauwOpdracht; onTerug: ()
           </div>
         )}
       </div>
-      {scan.fout && <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{scan.fout}</div>}
 
       {/* Zoeken binnen de map (snel naar een straat schakelen) */}
       {opdracht.adressen.length > 0 && (
@@ -521,7 +602,7 @@ function TauwDetail({ opdracht, onTerug }: { opdracht: TauwOpdracht; onTerug: ()
                 <h2 className="text-lg font-bold text-ink-900">{titel}</h2>
                 <Badge tone={STATUS_TONE[status]}>{TAUW_STATUS_LABEL[status]}</Badge>
               </div>
-              <p className="text-sm text-ink-500">{[TAUW_TYPE_LABEL[opdracht.type], opdracht.regio, `${totaal} adressen`].filter(Boolean).join(" · ")}</p>
+              <p className="text-sm text-ink-500">{[opdracht.opdrachtgever ?? "TAUW", TAUW_TYPE_LABEL[opdracht.type], opdracht.regio, `${totaal} adressen`].filter(Boolean).join(" · ")}</p>
             </div>
           </div>
 
@@ -675,6 +756,22 @@ function TauwDetail({ opdracht, onTerug }: { opdracht: TauwOpdracht; onTerug: ()
 
       {/* Regio */}
       <Card className="flex flex-wrap items-center gap-x-3 gap-y-2 p-4">
+        <span className="text-sm font-medium text-ink-600">Voor</span>
+        <div className="flex gap-1.5">
+          {TAUW_OPDRACHTGEVERS.map((og) => (
+            <button
+              key={og}
+              type="button"
+              disabled={!bewerkbaar || !isLeiding}
+              onClick={() => updateTauw(opdracht.id, { opdrachtgever: og })}
+              className={`rounded-lg border-2 px-3 py-1.5 text-sm font-semibold transition-colors disabled:opacity-60 ${
+                (opdracht.opdrachtgever ?? "TAUW") === og ? "border-brand-500 bg-brand-50 text-brand-800" : "border-ink-200 bg-white text-ink-600 hover:bg-ink-50"
+              }`}
+            >
+              {og}
+            </button>
+          ))}
+        </div>
         <span className="text-sm font-medium text-ink-600">Regio</span>
         <input value={opdracht.regio} disabled={!bewerkbaar} onChange={(e) => updateTauw(opdracht.id, { regio: e.target.value })} placeholder="Onbekend" className="w-full rounded-lg border border-ink-200 px-2.5 py-1.5 text-sm outline-none focus:border-brand-400 disabled:bg-ink-50 disabled:text-ink-500 sm:w-40" />
         {bewerkbaar && <button type="button" onClick={() => updateTauw(opdracht.id, { regio: afleidRegio(eersteMetPostcode?.postcode ?? "", eersteMetPostcode?.plaats ?? "") })} className={knopKlein}><Wand2 className="h-3.5 w-3.5" /> Auto uit postcode</button>}
@@ -701,7 +798,6 @@ function TauwDetail({ opdracht, onTerug }: { opdracht: TauwOpdracht; onTerug: ()
         onAnnuleer={() => setVerwijder(false)}
       />
       {gereedDialog}
-      {scan.fase && <ScanOverlay fase={scan.fase} aantal={scan.aantal} />}
     </div>
   );
 }
@@ -731,28 +827,13 @@ const isOpenMap = (o: TauwOpdracht) => o.status !== "verstuurd";
 
 // ── Hoofdcomponent ──
 export function Tauw({ initieelTauw }: { initieelTauw?: string }) {
-  const { tauwOpdrachten, currentUser, addTauw } = useApp();
+  const { tauwOpdrachten, currentUser } = useApp();
   const [openId, setOpenId] = useState<string | null>(initieelTauw ?? null);
   const [nieuw, setNieuw] = useState(false);
-  const [nieuwType, setNieuwType] = useState<TauwType>("bodemonderzoek");
-  const importInput = useRef<HTMLInputElement | null>(null);
-  const scan = useExcelScan();
-
-  // Bestand inlezen (met scan-animatie) → maakt automatisch een nieuwe opdracht met de adressen op route.
-  const importeerNieuw = (file: File) => {
-    void scan.run(file, nieuwType, (adressen, week) => {
-      const id = addTauw({
-        aangemaakt: new Date().toISOString(),
-        type: nieuwType,
-        status: "nieuw",
-        referentie: week,
-        regio: "",
-        adressen,
-        stappen: [],
-      });
-      setOpenId(id);
-    });
-  };
+  const [nieuwType] = useState<TauwType>("bodemonderzoek");
+  const [ogFilter, setOgFilter] = useState<"alle" | TauwOpdrachtgever>("alle");
+  // Importeren zit nu in het aanmaakscherm zelf: één knop "Nieuwe opdracht", en daarbinnen kies je of je
+  // een bestand inleest of alles zelf invult.
 
   if (!currentUser) return null;
   const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr";
@@ -763,7 +844,9 @@ export function Tauw({ initieelTauw }: { initieelTauw?: string }) {
     o.toegewezenAan === currentUser.id ||
     (o.team ?? []).includes(currentUser.id) ||
     o.adressen.some((a) => a.toegewezenAan === currentUser.id);
-  const zichtbaar = (isLeiding ? tauwOpdrachten : tauwOpdrachten.filter(hoortBijMij)).filter((o) => !o.gearchiveerd);
+  const metRol = (isLeiding ? tauwOpdrachten : tauwOpdrachten.filter(hoortBijMij)).filter((o) => !o.gearchiveerd);
+  const toonOgFilter = new Set(metRol.map((o) => o.opdrachtgever ?? "TAUW")).size > 1;
+  const zichtbaar = ogFilter === "alle" ? metRol : metRol.filter((o) => (o.opdrachtgever ?? "TAUW") === ogFilter);
 
   if (nieuw) return <TauwIntake type={nieuwType} onKlaar={(id) => { setNieuw(false); if (id) setOpenId(id); }} />;
 
@@ -793,30 +876,44 @@ export function Tauw({ initieelTauw }: { initieelTauw?: string }) {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold text-ink-900">TAUW</h2>
-          <p className="text-sm text-ink-500">Beheerder importeert het bestand → werknemer werkt af → beheerder controleert en stuurt door.</p>
+          <h2 className="text-xl font-bold text-ink-900">TAUW of Van der Helm</h2>
+          <p className="text-sm text-ink-500">Bodemonderzoek en bezoekrondes: adressen erin, langs de deuren, en terug naar de opdrachtgever.</p>
         </div>
         {isLeiding && (
-          <div className="flex flex-wrap items-center gap-2">
-            <TypeKiezer waarde={nieuwType} onKies={setNieuwType} />
-            <button type="button" onClick={() => importInput.current?.click()} className="inline-flex items-center gap-2 rounded-lg border border-ink-200 bg-white px-4 py-2.5 text-sm font-semibold text-ink-700 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700" title="Excel-bestand inlezen als nieuwe opdracht">
-              <FileUp className="h-4 w-4" /> Importeer Excel
-            </button>
-            <input ref={importInput} type="file" accept=".xlsx,.xls,.csv" aria-label="Excel inlezen" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) importeerNieuw(f); }} />
-            <button type="button" onClick={() => setNieuw(true)} className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700"><Plus className="h-4 w-4" /> Nieuwe opdracht</button>
-          </div>
+          <button type="button" onClick={() => setNieuw(true)} className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700">
+            <Plus className="h-4 w-4" /> Nieuwe opdracht
+          </button>
         )}
       </div>
 
-      {isLeiding && <p className="-mt-3 text-xs text-ink-400">Kies de soort ({TAUW_TYPE_LABEL.bodemonderzoek} of {TAUW_TYPE_LABEL.bezoekronde}) vóór je importeert, zodat de scan de juiste kolommen herkent.</p>}
+      {/* Filter op opdrachtgever — zodat je in één oogopslag alleen het werk voor TAUW of voor
+          Van der Helm ziet. Alleen tonen als er ook echt voor allebei werk ligt. */}
+      {toonOgFilter && (
+        <div className="flex flex-wrap gap-1.5">
+          {(["alle", ...TAUW_OPDRACHTGEVERS] as const).map((o) => (
+            <button
+              key={o}
+              type="button"
+              onClick={() => setOgFilter(o)}
+              className={`rounded-lg px-3.5 py-2 text-sm font-semibold transition-colors ${
+                ogFilter === o ? "bg-brand-600 text-white" : "bg-ink-50 text-ink-600 hover:bg-ink-100"
+              }`}
+            >
+              {o === "alle" ? "Alles" : o}
+              <span className={ogFilter === o ? "ml-1.5 text-white/80" : "ml-1.5 text-ink-400"}>
+                {o === "alle" ? metRol.length : metRol.filter((x) => (x.opdrachtgever ?? "TAUW") === o).length}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
 
-      {scan.fout && <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{scan.fout}</div>}
 
       {zichtbaar.length === 0 ? (
         <Card className="p-10 text-center">
           <FlaskConical className="mx-auto h-10 w-10 text-ink-300" />
           <p className="mt-3 text-sm text-ink-500">
-            {isLeiding ? "Nog geen TAUW-opdrachten. Importeer een Excel of klik op " : "Geen TAUW-opdrachten aan jou toegewezen."}
+            {isLeiding ? "Nog geen opdrachten. Klik op " : "Geen opdrachten aan jou toegewezen."}
             {isLeiding && <span className="font-semibold">Nieuwe opdracht</span>}
             {isLeiding && "."}
           </p>
@@ -849,14 +946,14 @@ export function Tauw({ initieelTauw }: { initieelTauw?: string }) {
                     const klaarA = o.adressen.filter((a) => a.bevestigd).length;
                     const openA = totaalA - klaarA;
                     const teLaat = !!o.deadline && o.deadline < vandaag && o.status !== "verstuurd";
-                    const titel = o.referentie || o.regio || "TAUW-opdracht";
+                    const titel = o.referentie || o.regio || "Opdracht";
                     return (
                       <div key={o.id} onClick={() => setOpenId(o.id)} className="cursor-pointer rounded-2xl border border-ink-200 bg-white p-4 text-left shadow-card transition-shadow hover:shadow-cardhover">
                         <div className="flex items-center gap-3">
                           <div className="rounded-lg bg-brand-50 p-2.5 text-brand-600"><FlaskConical className="h-5 w-5" /></div>
                           <div className="min-w-0 flex-1">
                             <div className="truncate font-semibold text-ink-900">{titel}</div>
-                            <div className="truncate text-xs text-ink-500">{[TAUW_TYPE_LABEL[o.type], o.regio, `${o.adressen.length} adressen`].filter(Boolean).join(" · ")}</div>
+                            <div className="truncate text-xs text-ink-500">{[o.opdrachtgever ?? "TAUW", TAUW_TYPE_LABEL[o.type], o.regio, `${o.adressen.length} adressen`].filter(Boolean).join(" · ")}</div>
                           </div>
                           <Badge tone={STATUS_TONE[o.status]}>{TAUW_STATUS_LABEL[o.status]}</Badge>
                           <ChevronRight className="h-5 w-5 shrink-0 text-ink-300" />
@@ -878,7 +975,6 @@ export function Tauw({ initieelTauw }: { initieelTauw?: string }) {
         </div>
       )}
 
-      {scan.fase && <ScanOverlay fase={scan.fase} aantal={scan.aantal} />}
     </div>
   );
 }

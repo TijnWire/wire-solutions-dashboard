@@ -8,7 +8,7 @@ const PRIMAIR = ["overzicht", "mijnwerk", "team", "afspraken", "brieven", "tauw"
 // Korte labels die passen in een smalle tab.
 const KORT: Record<string, string> = {
   overzicht: "Start", mijnwerk: "Werk", team: "Team", afspraken: "Afspraken",
-  brieven: "Brieven", tauw: "TAUW", saneren: "Saneren", klanten: "Klanten",
+  brieven: "Brieven", tauw: "Bodem", saneren: "Saneren", klanten: "Klanten",
   facturen: "Facturen", agenda: "Agenda",
 };
 

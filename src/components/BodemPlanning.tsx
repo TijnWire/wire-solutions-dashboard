@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
-import { Users, Wand2, CalendarRange, MapPin, RotateCcw, Building2, Check } from "lucide-react";
+import { Users, Wand2, CalendarRange, MapPin, RotateCcw, Check } from "lucide-react";
 import { Card } from "./ui";
 import { verdeelOverTeam, vensterDagen, dagLabel, voortgangVan, sorteerRoute } from "../lib/bodemonderzoek";
-import { TAUW_OPDRACHTGEVERS, type TauwAdres, type TauwOpdracht, type TauwOpdrachtgever, type User } from "../lib/types";
+import type { TauwAdres, TauwOpdracht, User } from "../lib/types";
 
 // Voorbereiding van een bodemonderzoek-ronde, voor de beheerder.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -146,28 +146,7 @@ export function BodemPlanning({ opdracht, users, onWijzig }: {
     <Card className="space-y-4 p-4">
       <h3 className="text-sm font-bold text-ink-900">Ronde voorbereiden</h3>
 
-      {/* 1. Opdrachtgever */}
-      <div>
-        <div className="mb-1.5 flex items-center gap-1.5 text-sm font-semibold text-ink-700">
-          <Building2 className="h-4 w-4 text-ink-400" /> Opdrachtgever
-        </div>
-        <div className="flex gap-2">
-          {TAUW_OPDRACHTGEVERS.map((o: TauwOpdrachtgever) => (
-            <button
-              key={o}
-              type="button"
-              onClick={() => onWijzig({ opdrachtgever: o })}
-              className={`rounded-lg border-2 px-4 py-2 text-sm font-semibold transition-colors ${
-                opdracht.opdrachtgever === o ? "border-brand-500 bg-brand-50 text-brand-800" : "border-ink-200 bg-white text-ink-700 hover:bg-ink-50"
-              }`}
-            >
-              {o}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* 2. Afsprakenvenster — bepaalt welke dagen aan de deur gekozen kunnen worden */}
+      {/* 1. Afsprakenvenster — bepaalt welke dagen aan de deur gekozen kunnen worden */}
       <div>
         <div className="mb-1.5 flex items-center gap-1.5 text-sm font-semibold text-ink-700">
           <CalendarRange className="h-4 w-4 text-ink-400" /> Afsprakenperiode
@@ -200,7 +179,7 @@ export function BodemPlanning({ opdracht, users, onWijzig }: {
         </div>
       </div>
 
-      {/* 3. Wie lopen er mee */}
+      {/* 2. Wie lopen er mee */}
       <div>
         <div className="mb-1.5 flex items-center gap-1.5 text-sm font-semibold text-ink-700">
           <Users className="h-4 w-4 text-ink-400" /> Wie lopen er mee
@@ -228,7 +207,7 @@ export function BodemPlanning({ opdracht, users, onWijzig }: {
         </div>
       </div>
 
-      {/* 4. Beperken tot bepaalde locaties */}
+      {/* 3. Beperken tot bepaalde locaties */}
       {perPlaats.length > 1 && (
         <div>
           <div className="mb-1.5 flex items-center gap-1.5 text-sm font-semibold text-ink-700">
@@ -252,7 +231,7 @@ export function BodemPlanning({ opdracht, users, onWijzig }: {
         </div>
       )}
 
-      {/* 5. Verdelen */}
+      {/* 4. Verdelen */}
       <div className="flex flex-wrap items-end gap-2 border-t border-ink-100 pt-3">
         <label className="block">
           <span className="mb-1 block text-xs font-semibold text-ink-600">Max. adressen per persoon</span>
@@ -276,7 +255,7 @@ export function BodemPlanning({ opdracht, users, onWijzig }: {
 
       {melding && <div className="rounded-lg bg-ink-50 px-3 py-2 text-sm text-ink-700">{melding}</div>}
 
-      {/* 6. Wat staat er nu klaar per persoon */}
+      {/* 5. Wat staat er nu klaar per persoon */}
       {team.length > 0 && (
         <div className="overflow-hidden rounded-lg border border-ink-200">
           <div className="grid grid-cols-[1fr_3.25rem_3.25rem_3.25rem] gap-1 bg-ink-50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-ink-500">
