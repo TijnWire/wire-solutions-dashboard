@@ -10,6 +10,9 @@ import { waUrl } from "../lib/communicatie";
 import { googleMapsRoute, MAX_ROUTE_STOPS } from "../lib/afspraak";
 import { exporteerTauwExcel, mailTauwNaarStedin } from "../lib/tauwExcel";
 import { leesStedinPlanning, type StedinRij } from "../lib/tauwImport";
+import { BodemPlanning, BodemAfspraken } from "../components/BodemPlanning";
+import { DeurRonde } from "./DeurRonde";
+import { sorteerRoute, voortgangVan } from "../lib/bodemonderzoek";
 import {
   TAUW_TYPES, TAUW_TYPE_LABEL, TAUW_STATUS_LABEL, TAUW_STATUS_VOLGORDE,
   type TauwAdres, type TauwOpdracht, type TauwType, type TauwStatus,
@@ -303,13 +306,18 @@ function TauwDetail({ opdracht, onTerug }: { opdracht: TauwOpdracht; onTerug: ()
   const importInput = useRef<HTMLInputElement | null>(null);
   const scan = useExcelScan();
   const isLeiding = currentUser?.rol === "eigenaar" || currentUser?.rol === "beheer" || currentUser?.rol === "hr";
-  const isToegewezen = !!currentUser && currentUser.id === opdracht.toegewezenAan;
+  const isToegewezen = !!currentUser && (
+    currentUser.id === opdracht.toegewezenAan ||
+    (opdracht.team ?? []).includes(currentUser.id) ||
+    opdracht.adressen.some((a) => a.toegewezenAan === currentUser.id)
+  );
   const magWerken = isLeiding || isToegewezen;
   const status = opdracht.status;
   const bewerkbaar = magWerken && (status === "nieuw" || status === "toegewezen");
   const monteur = users.find((u) => u.id === opdracht.toegewezenAan);
   const controleur = users.find((u) => u.id === opdracht.gecontroleerdDoor);
 
+  const [rondeOpen, setRondeOpen] = useState(false); // de gefocuste deur-ronde (bodemonderzoek)
   const [zoek, setZoek] = useState(""); // zoeken op straat/plaats/bewoner binnen de map
   // Selectie van te-lopen adressen → route over de selectie, geordend op looproute-volgorde.
   const [selectie, setSelectie] = useState<Set<string>>(new Set());
@@ -322,6 +330,22 @@ function TauwDetail({ opdracht, onTerug }: { opdracht: TauwOpdracht; onTerug: ()
       return opgeschoond.length === prev.size ? prev : new Set(opgeschoond);
     });
   };
+  // Eén adres bijwerken vanuit de deur-ronde. Altijd via de hele lijst, want de sync werkt per onderdeel.
+  const patchAdres = (adresId: string, patch: Partial<TauwAdres>) => {
+    updateTauw(opdracht.id, {
+      adressen: opdracht.adressen.map((a) => (a.id === adresId ? { ...a, ...patch, bijgewerktOp: new Date().toISOString() } : a)),
+    });
+  };
+  // De adressen die deze medewerker zelf moet aflopen, in looproute-volgorde. Is er niets verdeeld, dan
+  // pakt de toegewezen medewerker gewoon de hele map.
+  const eigenAdressen = sorteerRoute(
+    opdracht.adressen.some((a) => a.toegewezenAan)
+      ? opdracht.adressen.filter((a) => a.toegewezenAan === currentUser?.id)
+      : isToegewezen ? opdracht.adressen : []
+  );
+  const isBodem = opdracht.type === "bodemonderzoek";
+  const bodemVoortgang = voortgangVan(eigenAdressen);
+
   const eersteMetPostcode = opdracht.adressen.find((a) => a.postcode.trim());
   const bevestigd = opdracht.adressen.filter((a) => a.bevestigd).length;
   const nu = () => new Date().toISOString();
@@ -442,6 +466,46 @@ function TauwDetail({ opdracht, onTerug }: { opdracht: TauwOpdracht; onTerug: ()
   );
 
   // ── Gefocuste werkomgeving voor de werknemer: alleen de adressen invullen + gereed melden ──
+  // De ronde langs de deuren vult het hele scherm: één adres tegelijk, knoppen onder je duim.
+  if (rondeOpen && isBodem) {
+    return (
+      <DeurRonde
+        opdracht={opdracht}
+        adressen={eigenAdressen}
+        onOpslaan={patchAdres}
+        onTerug={() => setRondeOpen(false)}
+      />
+    );
+  }
+
+  // Startblok voor de ronde — verschijnt zodra er adressen aan deze medewerker zijn toegewezen.
+  const rondeStart = isBodem && eigenAdressen.length > 0 && (
+    <Card className="space-y-3 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="text-sm font-bold text-ink-900">Langs de deuren</h3>
+          <p className="text-sm text-ink-500">
+            {bodemVoortgang.afgerond} van {bodemVoortgang.totaal} adressen gedaan
+            {bodemVoortgang.ja > 0 && ` · ${bodemVoortgang.ja} willen erbij zijn`}
+            {bodemVoortgang.geenGehoor > 0 && ` · ${bodemVoortgang.geenGehoor}× niemand thuis`}
+          </p>
+        </div>
+        <button type="button" onClick={() => setRondeOpen(true)} className={knopPrimair}>
+          <Footprints className="h-4 w-4" />
+          {bodemVoortgang.afgerond === 0 ? "Ronde starten" : bodemVoortgang.afgerond >= bodemVoortgang.totaal ? "Ronde nalopen" : "Verder waar je was"}
+        </button>
+      </div>
+      <div className="h-2.5 overflow-hidden rounded-full bg-ink-100">
+        <div className="h-full rounded-full bg-brand-500 transition-all" style={{ width: `${(bodemVoortgang.afgerond / Math.max(1, bodemVoortgang.totaal)) * 100}%` }} />
+      </div>
+      {!opdracht.venster?.start && (
+        <div className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          Er is nog geen afsprakenperiode ingesteld. Bewoners die erbij willen zijn, kun je nu nog geen moment geven.
+        </div>
+      )}
+    </Card>
+  );
+
   if (werknemerModus) {
     return (
       <div className="space-y-5">
@@ -492,6 +556,7 @@ function TauwDetail({ opdracht, onTerug }: { opdracht: TauwOpdracht; onTerug: ()
           </div>
         </Card>
 
+        {rondeStart}
         {adressenSectie}
         {gereedDialog}
         {scan.fase && <ScanOverlay fase={scan.fase} aantal={scan.aantal} />}
@@ -615,6 +680,17 @@ function TauwDetail({ opdracht, onTerug }: { opdracht: TauwOpdracht; onTerug: ()
         {bewerkbaar && <button type="button" onClick={() => updateTauw(opdracht.id, { regio: afleidRegio(eersteMetPostcode?.postcode ?? "", eersteMetPostcode?.plaats ?? "") })} className={knopKlein}><Wand2 className="h-3.5 w-3.5" /> Auto uit postcode</button>}
       </Card>
 
+      {/* Bodemonderzoek: eerst de ronde voorbereiden (opdrachtgever, periode, team, verdeling), daarna
+          de adressenlijst. Bij een bezoekronde blijft het scherm zoals het was. */}
+      {isBodem && (
+        <BodemPlanning
+          opdracht={opdracht}
+          users={users.filter((u) => u.rol === "monteur" || u.werknemer)}
+          onWijzig={(patch) => updateTauw(opdracht.id, patch)}
+        />
+      )}
+      {isBodem && <BodemAfspraken opdracht={opdracht} users={users} />}
+      {rondeStart}
       {adressenSectie}
 
       <Bevestig
@@ -680,7 +756,14 @@ export function Tauw({ initieelTauw }: { initieelTauw?: string }) {
 
   if (!currentUser) return null;
   const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr";
-  const zichtbaar = (isLeiding ? tauwOpdrachten : tauwOpdrachten.filter((o) => o.toegewezenAan === currentUser.id)).filter((o) => !o.gearchiveerd);
+  // Een bodemonderzoek wordt over meerdere mensen verdeeld. Je ziet de map dus niet alleen als hij als
+  // geheel aan jou is toegewezen, maar ook als je in het team zit of als er adressen op jouw naam staan —
+  // anders werken je collega's in een map die jij niet eens ziet.
+  const hoortBijMij = (o: TauwOpdracht) =>
+    o.toegewezenAan === currentUser.id ||
+    (o.team ?? []).includes(currentUser.id) ||
+    o.adressen.some((a) => a.toegewezenAan === currentUser.id);
+  const zichtbaar = (isLeiding ? tauwOpdrachten : tauwOpdrachten.filter(hoortBijMij)).filter((o) => !o.gearchiveerd);
 
   if (nieuw) return <TauwIntake type={nieuwType} onKlaar={(id) => { setNieuw(false); if (id) setOpenId(id); }} />;
 

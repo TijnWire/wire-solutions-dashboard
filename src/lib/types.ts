@@ -740,6 +740,11 @@ export type Buurtaanpak = {
 };
 
 // ── TAUW (bodemonderzoek): meerdere adressen, route over lange afstanden, Excel-planning ──
+// Wil de bewoner erbij zijn als de aannemer het bodemonderzoek in zijn tuin uitvoert?
+// "" = nog niet aan de deur geweest. "ja" → er moet een datum + tijdslot geprikt worden.
+// "nee" → de aannemer mag zonder de bewoner aan de slag; naam en telefoonnummer volstaan.
+export type BewonerKeuze = "" | "ja" | "nee";
+
 export type TauwAdres = {
   id: string;
   straat: string;
@@ -752,9 +757,29 @@ export type TauwAdres = {
   tijd: string; // afspraaktijd in "HH:MM" (bv. "08:00"); in de Stedin-export getoond als "8.00"
   bevestigd: boolean; // bewoner heeft het bodemonderzoek bevestigd
   notitie: string; // Bijzonderheden
+
+  // ── Bodemonderzoek: de ronde langs de deuren ──
+  toegewezenAan?: string; // user id — wie dit adres langsgaat (los van de map als geheel)
+  aanwezig?: BewonerKeuze; // antwoord van de bewoner
+  tijdslot?: string; // gekozen blok, bv. "08:00-09:00" (alleen bij aanwezig = "ja")
+  afgerond?: boolean; // formulier bij dit adres helemaal ingevuld
+  afgerondOp?: string; // ISO
+  afgerondDoor?: string; // user id
+  geenGehoor?: boolean; // niemand thuis — komt terug in de lijst "nog langs"
+  pogingen?: number; // hoe vaak er is aangebeld zonder resultaat
+  bijgewerktOp?: string; // ISO — voor het samenvoegen tussen apparaten
 };
 
 // Twee soorten TAUW-opdrachten — bepalen de werknemer-stappen én hoe het bestand wordt gescand.
+// De twee partijen die bodemonderzoek laten uitvoeren.
+export type TauwOpdrachtgever = "TAUW" | "Van der Helm";
+export const TAUW_OPDRACHTGEVERS: TauwOpdrachtgever[] = ["TAUW", "Van der Helm"];
+
+// Het afsprakenvenster: vanaf welke dag, en hoeveel weken vooruit de bewoner mag kiezen.
+// De beheerder zet dit vóórdat het personeel op pad gaat, zodat aan de deur alleen geldige dagen
+// gekozen kunnen worden.
+export type TauwVenster = { start: string; weken: 1 | 2 | 3 }; // start = ISO yyyy-mm-dd (maandag of latere werkdag)
+
 export type TauwType = "bodemonderzoek" | "bezoekronde";
 export const TAUW_TYPES: TauwType[] = ["bodemonderzoek", "bezoekronde"];
 export const TAUW_TYPE_LABEL: Record<TauwType, string> = {
@@ -785,6 +810,10 @@ export type TauwOpdracht = {
   deadline?: string; // ISO yyyy-mm-dd — door de beheerder gezet
   adressen: TauwAdres[];
   stappen: FlowStap[];
+  // ── Bodemonderzoek ──
+  opdrachtgever?: TauwOpdrachtgever; // wie het onderzoek laat doen
+  team?: string[]; // user ids die samen deze adressen aflopen (naast het enkele toegewezenAan)
+  venster?: TauwVenster; // binnen welke periode de bewoners een moment mogen kiezen
   gecontroleerdDoor?: string; // user id (beheerder)
   gecontroleerdOp?: string; // ISO
   verstuurdOp?: string; // ISO
