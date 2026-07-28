@@ -310,6 +310,7 @@ function TauwDetail({ opdracht, onTerug }: { opdracht: TauwOpdracht; onTerug: ()
   const controleur = users.find((u) => u.id === opdracht.gecontroleerdDoor);
 
   const [rondeOpen, setRondeOpen] = useState(false); // de gefocuste deur-ronde (bodemonderzoek)
+  const [rondeUser, setRondeUser] = useState<string | null>(null); // wiens ronde staat er open
   const [importOpen, setImportOpen] = useState(false); // de import-wizard in een bestaande map
   // Bodemonderzoek bewaart adressen als losse rijen in de database (lib/bodemAdressen.ts): geen grens
   // meer aan het aantal, en een wijziging aan de deur is een berichtje van tientallen bytes in plaats
@@ -370,11 +371,15 @@ function TauwDetail({ opdracht, onTerug }: { opdracht: TauwOpdracht; onTerug: ()
 
   // De adressen die deze medewerker zelf moet aflopen, in looproute-volgorde. Is er niets verdeeld, dan
   // pakt de toegewezen medewerker gewoon de hele map.
-  const eigenAdressen = sorteerRoute(
+  // Wiens ronde staat er open? Standaard je eigen; een beheerder kan die van een medewerker openen om
+  // mee te kijken of om achteraf in te vullen wat er op papier is genoteerd.
+  const rondeVoor = rondeUser ?? currentUser?.id ?? "";
+  const adressenVan = (uid: string) => sorteerRoute(
     adressen.some((a) => a.toegewezenAan)
-      ? adressen.filter((a) => a.toegewezenAan === currentUser?.id)
+      ? adressen.filter((a) => a.toegewezenAan === uid)
       : isToegewezen ? adressen : []
   );
+  const eigenAdressen = adressenVan(rondeVoor);
   const isBodem = opdracht.type === "bodemonderzoek";
   const bodemVoortgang = voortgangVan(eigenAdressen);
 
@@ -525,12 +530,57 @@ function TauwDetail({ opdracht, onTerug }: { opdracht: TauwOpdracht; onTerug: ()
         opdracht={werkOpdracht}
         adressen={eigenAdressen}
         onOpslaan={bewaarAdres}
-        onTerug={() => setRondeOpen(false)}
+        onTerug={() => { setRondeOpen(false); setRondeUser(null); }}
       />
     );
   }
 
   // Startblok voor de ronde — verschijnt zodra er adressen aan deze medewerker zijn toegewezen.
+  // De leiding ziet iedereen; wie zelf meeloopt ziet alleen zijn eigen ronde.
+  const rondePerPersoon = isBodem && isLeiding && (opdracht.team ?? []).length > 0 && (
+    <Card className="space-y-3 p-4">
+      <h3 className="text-sm font-bold text-ink-900">Rondes van het team</h3>
+      <p className="text-sm text-ink-500">
+        Iedereen loopt zijn eigen adressen af op zijn telefoon. Hier kun je meekijken, of achteraf
+        invullen wat er op papier is genoteerd.
+      </p>
+      <div className="space-y-1.5">
+        {(opdracht.team ?? []).map((uid) => {
+          const eigen = adressenVan(uid);
+          const v = voortgangVan(eigen);
+          const naam = users.find((u) => u.id === uid)?.naam ?? "Onbekend";
+          return (
+            <div key={uid} className="flex flex-wrap items-center gap-3 rounded-lg border border-ink-200 bg-white px-3 py-2">
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-semibold text-ink-800">{naam}</span>
+                <span className="block text-xs text-ink-500">
+                  {v.totaal === 0 ? "geen adressen toegewezen" : `${v.behandeld} van ${v.totaal} gedaan${v.ja ? ` · ${v.ja} willen erbij zijn` : ""}`}
+                </span>
+              </span>
+              <div className="h-2 w-24 shrink-0 overflow-hidden rounded-full bg-ink-100">
+                <div className="h-full rounded-full bg-brand-500" style={{ width: `${v.totaal ? (v.behandeld / v.totaal) * 100 : 0}%` }} />
+              </div>
+              <button
+                type="button"
+                disabled={v.totaal === 0}
+                onClick={() => { setRondeUser(uid); setRondeOpen(true); }}
+                className={knopKlein}
+              >
+                <Footprints className="h-3.5 w-3.5" /> Ronde openen
+              </button>
+            </div>
+          );
+        })}
+      </div>
+      {!opdracht.venster?.start && (
+        <div className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          Er is nog geen afsprakenperiode ingesteld (stap 1). Bewoners die erbij willen zijn, kunnen nu
+          nog geen moment krijgen.
+        </div>
+      )}
+    </Card>
+  );
+
   const rondeStart = isBodem && eigenAdressen.length > 0 && (
     <Card className="space-y-3 p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -766,7 +816,7 @@ function TauwDetail({ opdracht, onTerug }: { opdracht: TauwOpdracht; onTerug: ()
           onWijzig={(patch) => updateTauw(opdracht.id, patch)}
           onAdressen={bewaarLijst}
           adressenSectie={adressenSectie}
-          rondeStart={rondeStart}
+          rondeStart={<>{rondeStart}{rondePerPersoon}</>}
         />
       ) : (
         <>
