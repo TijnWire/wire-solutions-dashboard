@@ -9,10 +9,8 @@ import { afleidRegio } from "../lib/regio";
 import { waUrl } from "../lib/communicatie";
 import { googleMapsRoute, MAX_ROUTE_STOPS } from "../lib/afspraak";
 import { exporteerTauwExcel, mailTauwNaarStedin } from "../lib/tauwExcel";
-import { BodemPlanning, BodemAfspraken } from "../components/BodemPlanning";
 import { BodemImport } from "../components/BodemImport";
-import { BodemToewijzen } from "../components/BodemToewijzen";
-import { BodemOverzicht } from "../components/BodemOverzicht";
+import { BodemFlow } from "../components/BodemFlow";
 import { haalAdressen, zetAdressen, wijzigAdres, verwerkWachtrij, aantalWachtend } from "../lib/bodemAdressen";
 import { DeurRonde } from "./DeurRonde";
 import { sorteerRoute, voortgangVan } from "../lib/bodemonderzoek";
@@ -758,25 +756,23 @@ function TauwDetail({ opdracht, onTerug }: { opdracht: TauwOpdracht; onTerug: ()
             : `${wachtend} wijziging${wachtend === 1 ? "" : "en"} wacht nog op verzending.`}
         </div>
       )}
-      {isBodem && (
-        <BodemPlanning
+
+      {/* Bodemonderzoek loopt via stappen: één ding per scherm in plaats van alles onder elkaar. */}
+      {isBodem ? (
+        <BodemFlow
           opdracht={werkOpdracht}
-          users={users.filter((u) => u.rol === "monteur" || u.werknemer)}
-          onWijzig={(patch) => updateTauw(opdracht.id, patch)}
-        />
-      )}
-      {isBodem && (
-        <BodemToewijzen
-          adressen={adressen}
           users={users}
-          team={opdracht.team ?? []}
-          onWijzig={bewaarLijst}
+          veldwerkers={users.filter((u) => u.rol === "monteur" || u.werknemer)}
+          onWijzig={(patch) => updateTauw(opdracht.id, patch)}
+          onAdressen={bewaarLijst}
+          adressenSectie={adressenSectie}
+          rondeStart={rondeStart}
         />
+      ) : (
+        <>
+          {adressenSectie}
+        </>
       )}
-      {isBodem && <BodemOverzicht opdracht={werkOpdracht} users={users} />}
-      {isBodem && <BodemAfspraken opdracht={werkOpdracht} users={users} />}
-      {rondeStart}
-      {adressenSectie}
 
       <Bevestig
         open={verwijder}

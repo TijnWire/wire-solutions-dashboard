@@ -83,11 +83,16 @@ export function BodemAfspraken({ opdracht, users }: { opdracht: TauwOpdracht; us
   );
 }
 
-export function BodemPlanning({ opdracht, users, onWijzig }: {
+export function BodemPlanning({ opdracht, users, onWijzig, deel = "alles" }: {
   opdracht: TauwOpdracht;
   users: User[];
   onWijzig: (patch: Partial<TauwOpdracht>) => void;
+  // De pagina toont per stap maar één ding: "instellen" is de periode en de tijdblokken,
+  // "verdelen" is het team en de verdeling over de medewerkers.
+  deel?: "alles" | "instellen" | "verdelen";
 }) {
+  const toonInstellen = deel === "alles" || deel === "instellen";
+  const toonVerdelen = deel === "alles" || deel === "verdelen";
   const [maxPer, setMaxPer] = useState<string>("");
   const [locaties, setLocaties] = useState<Set<string>>(new Set()); // leeg = alle locaties
   const [melding, setMelding] = useState("");
@@ -165,8 +170,9 @@ export function BodemPlanning({ opdracht, users, onWijzig }: {
 
   return (
     <Card className="space-y-4 p-4">
-      <h3 className="text-sm font-bold text-ink-900">Ronde voorbereiden</h3>
+      {deel === "alles" && <h3 className="text-sm font-bold text-ink-900">Ronde voorbereiden</h3>}
 
+      {toonInstellen && (<>
       {/* 1. Afsprakenvenster — bepaalt welke dagen aan de deur gekozen kunnen worden */}
       <div>
         <div className="mb-1.5 flex items-center gap-1.5 text-sm font-semibold text-ink-700">
@@ -293,6 +299,9 @@ export function BodemPlanning({ opdracht, users, onWijzig }: {
         )}
       </div>
 
+      </>)}
+
+      {toonVerdelen && (<>
       {/* 2. Wie lopen er mee */}
       <div>
         <div className="mb-1.5 flex items-center gap-1.5 text-sm font-semibold text-ink-700">
@@ -394,6 +403,7 @@ export function BodemPlanning({ opdracht, users, onWijzig }: {
           )}
         </div>
       )}
+      </>)}
     </Card>
   );
 }
