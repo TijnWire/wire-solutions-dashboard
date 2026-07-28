@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Plus, ArrowLeft, ArrowRight, Search, Loader2, AlertCircle, MapPin,
-  Building2, CalendarRange, Clock, FolderOpen, RotateCcw,
+  Building2, CalendarRange, Clock, FolderOpen, RotateCcw, StickyNote,
 } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { DatumKiezer } from "../components/DatumKiezer";
+import { AkkoordFlow } from "../components/AkkoordFlow";
+import { haalTaken, type Taak } from "../lib/akkoordWerk";
 import {
   haalDossiers, bewaarDossier, verwijderDossier, netPd, pdGeldig,
   REGIOS, STATUS_INFO, type Dossier, type Regio,
@@ -197,8 +199,17 @@ export function Bewonersakkoord() {
   const [dossiers, setDossiers] = useState<Dossier[] | null>(null);
   const [nieuw, setNieuw] = useState(false);
   const [zoek, setZoek] = useState("");
+  // Welk dossier staat open? Eén tegelijk — daarbinnen loopt de stappenflow.
+  const [open, setOpen] = useState<string | null>(null);
+  // Openstaande posters over alle dossiers heen. Een poster die te laat hangt, haalt de
+  // aankondigingstermijn niet — dat moet je zien zodra je de module opent, niet pas als je toevallig
+  // in het juiste dossier klikt.
+  const [posters, setPosters] = useState<Taak[]>([]);
 
-  const laad = () => { void haalDossiers().then(setDossiers); };
+  const laad = () => {
+    void haalDossiers().then(setDossiers);
+    void haalTaken().then(setPosters);
+  };
   useEffect(laad, []);
 
   const isLeiding = currentUser?.rol === "eigenaar" || currentUser?.rol === "beheer" || currentUser?.rol === "hr";
@@ -210,7 +221,8 @@ export function Bewonersakkoord() {
       `${d.pd_nummer} ${d.opdrachtgever} ${d.gebouw} ${d.omschrijving} ${d.regio}`.toLowerCase().includes(q));
   }, [dossiers, zoek]);
 
-  if (nieuw) return <NieuwDossier onAnnuleer={() => setNieuw(false)} onKlaar={() => { setNieuw(false); laad(); }} />;
+  if (nieuw) return <NieuwDossier onAnnuleer={() => setNieuw(false)} onKlaar={(pd) => { setNieuw(false); laad(); setOpen(pd); }} />;
+  if (open) return <AkkoordFlow pd={open} onTerug={() => { setOpen(null); laad(); }} />;
 
   return (
     <div className="space-y-5">
@@ -227,6 +239,28 @@ export function Bewonersakkoord() {
           </button>
         )}
       </div>
+
+      {posters.length > 0 && (() => {
+        const vandaag = new Date().toISOString().slice(0, 10);
+        const teLaat = posters.filter((t) => t.deadline && t.deadline < vandaag);
+        const binnenkort = posters.filter((t) => t.deadline >= vandaag).slice(0, 3);
+        return (
+          <div className={`rounded-2xl border p-4 ${teLaat.length ? "border-red-300 bg-red-50" : "border-amber-200 bg-amber-50"}`}>
+            <div className={`flex items-center gap-2 font-bold ${teLaat.length ? "text-red-900" : "text-amber-900"}`}>
+              <StickyNote className="h-5 w-5" />
+              {teLaat.length > 0 ? `${teLaat.length} poster(s) hangen te laat` : `${posters.length} poster(s) moeten nog opgehangen worden`}
+            </div>
+            <ul className="mt-1.5 space-y-0.5 text-sm text-ink-700">
+              {[...teLaat, ...binnenkort].slice(0, 4).map((t) => (
+                <li key={t.id}>
+                  {t.gebouw || t.pd_nummer} · {t.cluster_naam || "groep"} — uiterlijk {datumNL(t.deadline)}
+                  {t.deadline < vandaag && <b className="text-red-700"> (verstreken)</b>}
+                </li>
+              ))}
+            </ul>
+          </div>
+        );
+      })()}
 
       {(dossiers?.length ?? 0) > 4 && (
         <div className="relative">
@@ -252,7 +286,12 @@ export function Bewonersakkoord() {
           {zichtbaar.map((d) => {
             const info = STATUS_INFO[d.status] ?? STATUS_INFO.nieuw;
             return (
-              <div key={d.pd_nummer} className="rounded-2xl border border-ink-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md">
+              <button
+                key={d.pd_nummer}
+                type="button"
+                onClick={() => setOpen(d.pd_nummer)}
+                className="rounded-2xl border border-ink-200 bg-white p-4 text-left shadow-sm transition-shadow hover:shadow-md"
+              >
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0">
                     <div className="font-mono text-lg font-bold tracking-wide text-ink-900">{d.pd_nummer}</div>
@@ -280,7 +319,7 @@ export function Bewonersakkoord() {
                   </span>
                   <ArrowRight className="h-5 w-5 shrink-0 text-sky-600" />
                 </div>
-              </div>
+              </button>
             );
           })}
         </div>

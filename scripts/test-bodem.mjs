@@ -16,6 +16,9 @@
 // je gewone werk kunt draaien.
 
 import { spawn } from "node:child_process";
+import { readFileSync, writeFileSync, mkdtempSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 const POORT = 8791;
 const U = `http://127.0.0.1:${POORT}`;
@@ -56,6 +59,18 @@ async function startWorker() {
     } catch { await wacht(1000); }
   }
   throw new Error("De Worker startte niet binnen 40 seconden.");
+}
+
+// src/lib/akkoordRekenen.ts draait in de browser, maar heeft bewust geen imports. Zo kunnen we het
+// hier echt uitvoeren in plaats van de logica na te bouwen — een nagebouwde test bewijst niets.
+async function laadRekenwerk() {
+  const { transform } = await import("esbuild");
+  const bron = readFileSync("src/lib/akkoordRekenen.ts", "utf8");
+  const { code } = await transform(bron, { loader: "ts", format: "esm" });
+  const map = mkdtempSync(join(tmpdir(), "wire-test-"));
+  const pad = join(map, "rekenen.mjs");
+  writeFileSync(pad, code);
+  return import(new URL(`file://${pad.split("\\").join("/")}`).href);
 }
 
 async function main() {
@@ -306,6 +321,46 @@ async function main() {
       check(ex.data.adressen?.length === 4 && (ex.data.log ?? []).length > 0, "de export bevat alle adressen en het wijzigingslog");
       const exMont = await get(`/akkoord/export?pd=${PD2}`, mont);
       check(exMont.status === 403, "een monteur mag geen export van alles trekken");
+    }
+
+    // ── 11. Het rekenwerk in de app zelf ──
+    // De server bewaakt de regel bij het vastleggen, maar aan de deur rekent de app zonder bereik.
+    // Gaat dát mis, dan ziet een monteur een groen vinkje terwijl er niets rond is.
+    console.log("\n11. Bewonersakkoord — rekenwerk zonder bereik");
+    {
+      const { standVan, datumVoorstellen } = await laadRekenwerk();
+      const adr = (n) => ({ id: `a${n}` });
+      const alle = [adr(1), adr(2), adr(3)];
+
+      const bijna = standVan(alle, [
+        { adres_id: "a1", antwoord: "akkoord" },
+        { adres_id: "a2", antwoord: "akkoord" },
+      ]);
+      check(bijna.akkoord === 2 && bijna.rond === false, "twee van de drie akkoord is niet rond");
+
+      const heel = standVan(alle, alle.map((a) => ({ adres_id: a.id, antwoord: "akkoord" })));
+      check(heel.rond === true, "pas bij iedereen akkoord is de groep rond");
+
+      const weigeraar = standVan(alle, [
+        { adres_id: "a1", antwoord: "akkoord" },
+        { adres_id: "a2", antwoord: "akkoord" },
+        { adres_id: "a3", antwoord: "weigert" },
+      ]);
+      check(weigeraar.rond === false && weigeraar.tegen === 1, "één weigeraar houdt de groep tegen");
+      check(standVan([], []).rond === false, "een lege groep telt nooit als rond");
+
+      // 5 oktober 2026 is een maandag; 10 en 11 oktober zijn zaterdag en zondag.
+      const voorstellen = datumVoorstellen(alle, [
+        { adres_id: "a1", datum: "2026-10-06", kan: 1 },
+        { adres_id: "a2", datum: "2026-10-06", kan: 1 },
+        { adres_id: "a3", datum: "2026-10-06", kan: 0 },
+        { adres_id: "a1", datum: "2026-10-07", kan: 1 },
+      ], "2026-10-05", "2026-10-12");
+      check(voorstellen[0].datum === "2026-10-07", "de dag waar niemand tegen is staat bovenaan", voorstellen[0]?.datum);
+      const zesde = voorstellen.find((v) => v.datum === "2026-10-06");
+      check(zesde.haalbaar === false, "een dag met één tegenstem is onhaalbaar, ook met de meeste stemmen");
+      check(!voorstellen.some((v) => v.datum === "2026-10-10" || v.datum === "2026-10-11"), "weekenden worden overgeslagen");
+      check(datumVoorstellen(alle, [], "", "").length === 0, "zonder periode komt er geen voorstel");
     }
 
     console.log(`\n${geslaagd} geslaagd, ${gefaald} gefaald`);

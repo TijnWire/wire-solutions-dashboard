@@ -496,7 +496,11 @@ export async function akkoordUitvoeringRoutes(
     if (Number(gaten?.taken_open ?? 0) > 0) belet.push(`${gaten!.taken_open} poster(s) zijn nog niet opgehangen.`);
 
     if (afboeken && dossier.status !== "afgerond") belet.push("Rond het dossier eerst af voordat je het afboekt.");
-    if (belet.length && body.toch !== true) return json({ error: "Nog niet klaar om af te ronden.", belet, gaten }, 409);
+    // De reden staat ín de melding: de app krijgt bij een fout alleen de tekst mee, en dan moet daar
+    // wel in staan wát er nog openstaat.
+    if (belet.length && body.toch !== true) {
+      return json({ error: `Nog niet klaar om af te ronden. ${belet.join(" ")}`, belet, gaten }, 409);
+    }
 
     if (afboeken) {
       await env.DB.prepare("update akkoord_dossiers set status = 'afgeboekt', afgeboekt_op = ?2, bijgewerkt_op = ?2 where pd_nummer = ?1").bind(pd, nuISO).run();
