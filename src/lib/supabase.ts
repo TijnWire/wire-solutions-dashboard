@@ -310,6 +310,24 @@ export async function sbBodemLog(projectId: string): Promise<BodemLogRegel[]> {
   } catch { return []; }
 }
 
+// ── Bewaartermijn voor persoonsgegevens ──
+export type BodemBewaartermijn = { afgerondOp: string; gewistOp: string; wistOp: string; maanden: number };
+
+export async function sbBodemBewaartermijn(projectId: string): Promise<BodemBewaartermijn | null> {
+  try { return await cloudGet<BodemBewaartermijn>(`/bodem/bewaartermijn?projectId=${encodeURIComponent(projectId)}`); }
+  catch { return null; }
+}
+
+export async function sbBodemAfronden(projectId: string, ongedaan = false): Promise<{ ok: boolean; error?: string }> {
+  try { await cloudPost("/bodem/afronden", { projectId, ongedaan }); return { ok: true }; }
+  catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+}
+
+export async function sbBodemWisGegevens(projectId: string): Promise<{ ok: boolean; adressen?: number; afspraken?: number; error?: string }> {
+  try { return { ok: true, ...(await cloudPost<{ adressen: number; afspraken: number }>("/bodem/wis-persoonsgegevens", { projectId })) }; }
+  catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+}
+
 // Welke onderdelen mag dit account niet inzien? De server bepaalt dat; de app gebruikt het antwoord om
 // die onderdelen niet te uploaden en haar eigen (mogelijk oude) kopie lokaal op te ruimen.
 export type MijnRechten = { rol: string; boekhouding: boolean; afgeschermd: string[] };

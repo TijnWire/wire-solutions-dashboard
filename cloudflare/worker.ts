@@ -199,6 +199,22 @@ async function hoortBijHetTeam(env: Env, email: string): Promise<boolean> {
   );
 }
 
+// Hoeveel maanden bewaren we naam en telefoonnummer na afronding van een project?
+const BEWAARMAANDEN = 6;
+
+// De persoonsgegevens van een project wissen. Adres, uitkomst, datum en tijdblok blijven staan: daarmee
+// kun je verantwoorden wát er is afgesproken, zonder nog te weten wie daar woonde.
+async function wisPersoonsgegevens(env: Env, projectId: string, nuISO: string): Promise<{ adressen: number; afspraken: number }> {
+  const a = await env.DB.prepare(
+    "update bodem_adressen set bewoner = '', telefoon = '', email = '', bijgewerkt_op = ?2 where project_id = ?1 and (bewoner <> '' or telefoon <> '' or email <> '')"
+  ).bind(projectId, nuISO).run();
+  const b = await env.DB.prepare(
+    "update bodem_afspraken set naam = '', telefoon = '', email = '' where project_id = ?1 and (naam <> '' or telefoon <> '' or email <> '')"
+  ).bind(projectId).run();
+  await env.DB.prepare("update bodem_projecten set gewist_op = ?2 where project_id = ?1").bind(projectId, nuISO).run();
+  return { adressen: a.meta.changes ?? 0, afspraken: b.meta.changes ?? 0 };
+}
+
 // Een gebeurtenis vastleggen in het wijzigingslog. Bewust in de achtergrond: het log is belangrijk,
 // maar niet zo belangrijk dat een medewerker aan de deur erop moet wachten of een fout krijgt als het
 // even niet lukt.
@@ -315,6 +331,32 @@ async function seedRollenUitUsers(env: Env, users: unknown, nuISO: string, ctx?:
 }
 
 export default {
+  // Dagelijkse opruiming: projecten die langer dan de bewaartermijn geleden zijn afgerond, verliezen
+  // hun persoonsgegevens. Draait via een cron-trigger (zie wrangler.toml), zodat het ook gebeurt als
+  // er niemand inlogt — een bewaartermijn die afhangt van wie er toevallig het dashboard opent, is er geen.
+  async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    const nuISO = new Date().toISOString();
+    const grens = new Date();
+    grens.setMonth(grens.getMonth() - BEWAARMAANDEN);
+    const grensISO = grens.toISOString();
+    ctx.waitUntil((async () => {
+      try {
+        const { results } = await env.DB.prepare(
+          "select project_id from bodem_projecten where afgerond_op <> '' and afgerond_op < ?1 and gewist_op = ''"
+        ).bind(grensISO).all<{ project_id: string }>();
+        for (const r of results ?? []) {
+          const uit = await wisPersoonsgegevens(env, r.project_id, nuISO);
+          console.log(`[bewaartermijn] ${r.project_id}: ${uit.adressen} adressen, ${uit.afspraken} afspraken gewist`);
+          await env.DB.prepare(
+            "insert into bodem_log (project_id, adres_id, gebeurtenis, oud, nieuw, door, tijdstip) values (?1, '', 'gegevens_gewist', '', ?2, 'automatisch', ?3)"
+          ).bind(r.project_id, `${uit.adressen} adressen, ${uit.afspraken} afspraken`, nuISO).run();
+        }
+      } catch (e) {
+        console.log("[bewaartermijn] opruiming mislukt:", String(e).slice(0, 200));
+      }
+    })());
+  },
+
   async fetch(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
     const nu = Math.floor(Date.now() / 1000);
@@ -774,6 +816,46 @@ export default {
           notitie: String(body.notitie ?? ""), door: ikEmail, tijdstip: nuISO,
         });
         return json({ ok: true, poging });
+      }
+
+      // Een project afronden — vanaf dat moment loopt de bewaartermijn voor de persoonsgegevens.
+      if (path === "/bodem/afronden" && req.method === "POST") {
+        if (!zietAlles) return json({ error: "Alleen een beheerder mag een project afronden." }, 403);
+        const projectId = String(body.projectId ?? "");
+        if (!projectId) return json({ error: "projectId ontbreekt." }, 400);
+        const terug = body.ongedaan === true;
+        await env.DB.prepare(
+          "insert into bodem_projecten (project_id, config, bijgewerkt_op, afgerond_op) values (?1, '{}', ?2, ?3) " +
+          "on conflict(project_id) do update set afgerond_op = ?3, bijgewerkt_op = ?2"
+        ).bind(projectId, nuISO, terug ? "" : nuISO).run();
+        logBodem(env, ctx, { projectId, gebeurtenis: terug ? "heropend" : "afgerond", door: ikEmail, tijd: nuISO });
+        return json({ ok: true, afgerondOp: terug ? "" : nuISO });
+      }
+
+      // Persoonsgegevens nu wissen — bijvoorbeeld op verzoek van een bewoner, of zodra het werk is
+      // opgeleverd. Alleen de eigenaar of HR: dit is onomkeerbaar.
+      if (path === "/bodem/wis-persoonsgegevens" && req.method === "POST") {
+        if (!magAlles(mijnRechten?.rol)) return json({ error: "Alleen de eigenaar en HR mogen persoonsgegevens wissen." }, 403);
+        const projectId = String(body.projectId ?? "");
+        if (!projectId) return json({ error: "projectId ontbreekt." }, 400);
+        const r = await wisPersoonsgegevens(env, projectId, nuISO);
+        logBodem(env, ctx, { projectId, gebeurtenis: "gegevens_gewist", nieuw: `${r.adressen} adressen, ${r.afspraken} afspraken`, door: ikEmail, tijd: nuISO });
+        return json({ ok: true, ...r });
+      }
+
+      // Status van de bewaartermijn: is het project afgerond, en wanneer worden de gegevens gewist?
+      if (path === "/bodem/bewaartermijn" && req.method === "GET") {
+        const projectId = url.searchParams.get("projectId") ?? "";
+        if (!projectId) return json({ error: "projectId ontbreekt." }, 400);
+        const r = await env.DB.prepare("select afgerond_op, gewist_op from bodem_projecten where project_id = ?")
+          .bind(projectId).first<{ afgerond_op: string; gewist_op: string }>();
+        let wistOp = "";
+        if (r?.afgerond_op) {
+          const d = new Date(r.afgerond_op);
+          d.setMonth(d.getMonth() + BEWAARMAANDEN);
+          wistOp = d.toISOString().slice(0, 10);
+        }
+        return json({ afgerondOp: r?.afgerond_op ?? "", gewistOp: r?.gewist_op ?? "", wistOp, maanden: BEWAARMAANDEN });
       }
 
       // Het wijzigingslog uitlezen. Alleen de leiding: er staan e-mailadressen en bewonersgegevens in.

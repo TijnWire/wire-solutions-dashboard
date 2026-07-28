@@ -24,3 +24,8 @@ class_name = "SyncHub"
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["SyncHub"]
+
+# Dagelijkse opruiming van persoonsgegevens waarvan de bewaartermijn is verstreken (03:00 UTC).
+# Zonder deze trigger zou de bewaartermijn afhangen van wie er toevallig inlogt.
+[triggers]
+crons = ["0 3 * * *"]

@@ -3,6 +3,7 @@ import { Check, ChevronRight, ArrowLeft, Settings2, ListPlus, Users, Footprints,
 import { BodemPlanning, BodemAfspraken } from "./BodemPlanning";
 import { BodemToewijzen } from "./BodemToewijzen";
 import { BodemOverzicht } from "./BodemOverzicht";
+import { BodemBewaartermijnKaart } from "./BodemBewaartermijn";
 import { dagenVanVenster, voortgangVan } from "../lib/bodemonderzoek";
 import type { TauwAdres, TauwOpdracht, User } from "../lib/types";
 
@@ -23,10 +24,11 @@ const STAPPEN: { key: StapKey; nr: number; titel: string; uitleg: string; Icon: 
   { key: "resultaat", nr: 5, titel: "Resultaat", uitleg: "Afspraken en export", Icon: ClipboardCheck },
 ];
 
-export function BodemFlow({ opdracht, users, veldwerkers, onWijzig, onAdressen, adressenSectie, rondeStart }: {
+export function BodemFlow({ opdracht, users, veldwerkers, magWissen, onWijzig, onAdressen, adressenSectie, rondeStart }: {
   opdracht: TauwOpdracht;
   users: User[];
   veldwerkers: User[];
+  magWissen: boolean; // alleen de eigenaar en HR mogen persoonsgegevens wissen
   onWijzig: (patch: Partial<TauwOpdracht>) => void;
   onAdressen: (next: TauwAdres[]) => void;
   adressenSectie: ReactNode;   // de bestaande adreslijst met import-knop
@@ -145,6 +147,11 @@ export function BodemFlow({ opdracht, users, veldwerkers, onWijzig, onAdressen, 
         <>
           <BodemAfspraken opdracht={opdracht} users={users} />
           <BodemOverzicht opdracht={opdracht} users={users} />
+          <BodemBewaartermijnKaart
+            projectId={opdracht.id}
+            magWissen={magWissen}
+            aantalMetGegevens={opdracht.adressen.filter((a) => a.bewoner || a.telefoon || a.email).length}
+          />
         </>
       )}
 

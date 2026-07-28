@@ -814,6 +814,7 @@ function TauwDetail({ opdracht, onTerug }: { opdracht: TauwOpdracht; onTerug: ()
           opdracht={werkOpdracht}
           users={users}
           veldwerkers={users.filter((u) => u.rol === "monteur" || u.werknemer)}
+          magWissen={currentUser?.rol === "eigenaar" || currentUser?.rol === "hr"}
           onWijzig={(patch) => updateTauw(opdracht.id, patch)}
           onAdressen={bewaarLijst}
           adressenSectie={adressenSectie}
