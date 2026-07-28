@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Users, Wand2, CalendarRange, MapPin, RotateCcw, Check, Clock, Loader2 } from "lucide-react";
 import { Card } from "./ui";
+import { DatumKiezer } from "./DatumKiezer";
 import { verdeelOverTeam, dagenVanVenster, dagLabel, voortgangVan, sorteerRoute, TIJDSLOTS, STANDAARD_WERKDAGEN, DAGNAMEN } from "../lib/bodemonderzoek";
 import { sbBodemPlanning } from "../lib/supabase";
 import type { TauwAdres, TauwOpdracht, TauwSlot, User } from "../lib/types";
@@ -178,28 +179,21 @@ export function BodemPlanning({ opdracht, users, onWijzig, deel = "alles" }: {
         <div className="mb-1.5 flex items-center gap-1.5 text-sm font-semibold text-ink-700">
           <CalendarRange className="h-4 w-4 text-ink-400" /> Afsprakenperiode
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <label className="flex items-center gap-1.5 text-sm text-ink-600">
-            van
-            <input
-              type="date"
-              value={venster?.start ?? ""}
-              onChange={(e) => zetVenster({ start: e.target.value })}
-              aria-label="Eerste dag"
-              className="rounded-lg border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
-            />
-          </label>
-          <label className="flex items-center gap-1.5 text-sm text-ink-600">
-            t/m
-            <input
-              type="date"
+        {/* Dezelfde kalender als op Afspraken en Agenda — niet de kale browser-picker. */}
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <span className="mb-1 block text-xs font-medium text-ink-500">Eerste dag</span>
+            <DatumKiezer value={venster?.start ?? ""} onChange={(iso) => zetVenster({ start: iso })} placeholder="Kies de startdag" />
+          </div>
+          <span className="pb-2.5 text-sm text-ink-400">t/m</span>
+          <div>
+            <span className="mb-1 block text-xs font-medium text-ink-500">Laatste dag</span>
+            <DatumKiezer
               value={venster?.eind ?? (dagen.length ? dagen[dagen.length - 1] : "")}
-              min={venster?.start || undefined}
-              onChange={(e) => zetVenster({ eind: e.target.value })}
-              aria-label="Laatste dag"
-              className="rounded-lg border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+              onChange={(iso) => zetVenster({ eind: iso })}
+              placeholder="Kies de einddag"
             />
-          </label>
+          </div>
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <span className="text-xs text-ink-500">of snel:</span>
