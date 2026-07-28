@@ -34,7 +34,7 @@ export const VELDEN: { veld: Veld; label: string; verplicht?: boolean }[] = [
 
 // Kolomnamen die we herkennen. Ruim opgezet: aanleverbestanden verschillen per opdrachtgever.
 const HERKEN: Record<Veld, string[]> = {
-  adresVolledig: ["adres", "adresregel", "straatadres", "volledigadres", "locatie"],
+  adresVolledig: ["adres", "adressen", "adresregel", "straatadres", "volledigadres"],
   straat: ["straat", "straatnaam", "street"],
   huisnummer: ["huisnummer", "huisnr", "hnr", "nummer", "nr", "huis", "number"],
   toevoeging: ["toevoeging", "toev", "huisletter", "letter", "achtervoegsel", "suffix"],
@@ -68,35 +68,125 @@ export async function leesRaster(file: File, bladNaam?: string): Promise<{ ok: t
   }
 }
 
-// ── Koprij raden ── de regel met de meeste herkende kolomnamen wint. We kijken door het hele bestand
-// heen en niet alleen naar de eerste regels, zodat een lang titelblok niets meer in de weg zit.
-export function raadKop(raster: Raster): { kopIndex: number; mapping: Mapping } {
-  let besteIndex = 0;
-  let besteScore = -1;
-  let besteMapping: Mapping = {};
+// ── Herkennen wat waar staat ──
+// Alleen op kopnamen afgaan is te zwak gebleken: een bestand met de koppen "Deellocatie" en "Adres(sen)"
+// leverde precies de verkeerde toewijzing op. Daarom kijken we vooral naar wat er ÍN de kolom staat.
+// Een kolom vol "3011 AB" is een postcode, wat de kop er ook boven zet.
 
+const PATRONEN: { veld: Veld; test: (v: string) => boolean; punten: number }[] = [
+  { veld: "postcode", test: (v) => /^\d{4}\s?[a-z]{2}$/i.test(v), punten: 6 },
+  { veld: "telefoon", test: (v) => /^(\+?31|0)\s?[1-9][\d\s-]{7,12}$/.test(v), punten: 5 },
+  // Straat met huisnummer in één cel: letters, dan een nummer, eventueel met toevoeging.
+  { veld: "adresVolledig", test: (v) => /^[a-z][a-z\s.'-]{2,}\s+\d+\s*[a-z]{0,3}$/i.test(v), punten: 6 },
+  // Alleen een straatnaam: letters, geen cijfers, meer dan drie tekens.
+  { veld: "straat", test: (v) => /^[a-z][a-z\s.'-]{3,}$/i.test(v) && !/\d/.test(v), punten: 2 },
+  { veld: "huisnummer", test: (v) => /^\d{1,5}\s?[a-z]{0,3}$/i.test(v), punten: 2 },
+];
+
+// Waarden die niets zeggen: leeg, een streepje, "n.v.t.".
+const leegAchtig = (v: string) => !v || /^[-–—.]+$/.test(v) || /^n\.?v\.?t\.?$/i.test(v);
+
+type Kandidaat = { kolom: number; veld: Veld; score: number };
+
+export function raadKop(raster: Raster): { kopIndex: number; mapping: Mapping } {
+  // 1) Koprij zoeken: de regel met de meeste herkende kopnamen, en waarvan de regels eronder gevuld zijn.
+  let kopIndex = 0;
+  let besteKopScore = -1;
   const grens = Math.min(raster.rijen.length, 60);
   for (let i = 0; i < grens; i++) {
     const rij = raster.rijen[i];
-    const mapping: Mapping = {};
     let score = 0;
-    rij.forEach((cel, c) => {
+    for (const cel of rij) {
       const k = kaal(cel);
-      if (!k) return;
-      for (const [veld, namen] of Object.entries(HERKEN) as [Veld, string[]][]) {
-        if (mapping[veld] !== undefined) continue;
-        // Exacte treffer telt zwaarder dan "bevat", zodat "Adres" niet per ongeluk "Adresregel" kaapt.
-        if (namen.includes(k)) { mapping[veld] = c; score += 2; return; }
-        if (k.length > 3 && namen.some((n) => n.length > 3 && k.includes(n))) { mapping[veld] = c; score += 1; return; }
+      if (!k) continue;
+      for (const namen of Object.values(HERKEN)) {
+        if (namen.includes(k)) { score += 2; break; }
+        if (k.length > 3 && namen.some((n) => n.length > 4 && k.includes(n))) { score += 1; break; }
       }
-    });
-    // Straat + huisnummer apart is de beste uitkomst; een samengevoegde adreskolom telt ook mee.
-    if (mapping.straat !== undefined && mapping.huisnummer !== undefined) score += 3;
-    else if (mapping.adresVolledig !== undefined) score += 2;
-    if (score > besteScore) { besteScore = score; besteIndex = i; besteMapping = mapping; }
+    }
+    // Een koprij hoort gevolgd te worden door data; een losse titelregel niet.
+    const eronder = raster.rijen[i + 1];
+    if (eronder && eronder.filter((c) => c.trim()).length >= 2) score += 1;
+    if (score > besteKopScore) { besteKopScore = score; kopIndex = i; }
   }
-  // Niets herkend? Dan de eerste regel als kop voorstellen — de gebruiker wijst de kolommen zelf aan.
-  return { kopIndex: besteScore > 0 ? besteIndex : 0, mapping: besteScore > 0 ? besteMapping : {} };
+
+  // 2) Per kolom bepalen welk veld het beste past, op kopnaam én op inhoud.
+  const kopRij = raster.rijen[kopIndex] ?? [];
+  const dataRijen = raster.rijen.slice(kopIndex + 1, kopIndex + 41);
+  const aantalKolommen = Math.max(kopRij.length, ...dataRijen.map((r) => r.length), 0);
+
+  const kandidaten: Kandidaat[] = [];
+  for (let c = 0; c < aantalKolommen; c++) {
+    const waarden = dataRijen.map((r) => (r[c] ?? "").trim());
+    const gevuld = waarden.filter((v) => !leegAchtig(v));
+    // Een kolom die vrijwel leeg is (of alleen streepjes) zegt niets — die slaan we over.
+    if (gevuld.length < Math.max(1, Math.min(3, dataRijen.length))) continue;
+
+    const kop = kaal(kopRij[c] ?? "");
+    for (const veld of Object.keys(HERKEN) as Veld[]) {
+      let score = 0;
+      // Kopnaam: exact telt zwaar, "bevat" licht.
+      const namen = HERKEN[veld];
+      if (kop && namen.includes(kop)) score += 5;
+      else if (kop.length > 3 && namen.some((n) => n.length > 4 && kop.includes(n))) score += 2;
+
+      // Inhoud: welk deel van de gevulde waarden past bij dit veld?
+      const patroon = PATRONEN.filter((x) => x.veld === veld);
+      if (patroon.length) {
+        const raak = gevuld.filter((v) => patroon.some((x) => x.test(v))).length / gevuld.length;
+        if (raak > 0.6) score += patroon[0].punten * raak;
+      }
+      if (score > 0) kandidaten.push({ kolom: c, veld, score });
+    }
+  }
+
+  // 3) Toewijzen: hoogste score eerst, elk veld en elke kolom maar één keer. Onder de drempel laten we
+  //    een kolom liever ongebruikt dan dat we er iets van maken — een half raadsel is erger dan niets.
+  const DREMPEL = 2;
+  kandidaten.sort((a, b) => b.score - a.score);
+  const mapping: Mapping = {};
+  const scores: Partial<Record<Veld, number>> = {};
+  const kolomBezet = new Set<number>();
+  for (const k of kandidaten) {
+    if (k.score < DREMPEL || mapping[k.veld] !== undefined || kolomBezet.has(k.kolom)) continue;
+    mapping[k.veld] = k.kolom;
+    scores[k.veld] = k.score;
+    kolomBezet.add(k.kolom);
+  }
+
+  // 4a) Een kolom die "Adres" of "Adresregel" heet maar waar nooit een huisnummer in staat, is in
+  //     werkelijkheid gewoon een straatnaam-kolom. Dat zie je aan de inhoud, niet aan de kop.
+  if (mapping.adresVolledig !== undefined) {
+    const c = mapping.adresVolledig;
+    const waarden = dataRijen.map((r) => (r[c] ?? "").trim()).filter((v) => !leegAchtig(v));
+    const metNummer = waarden.filter((v) => /\d/.test(v)).length / Math.max(1, waarden.length);
+    if (metNummer < 0.3) {
+      delete mapping.adresVolledig;
+      if (mapping.straat === undefined) { mapping.straat = c; scores.straat = scores.adresVolledig; }
+      delete scores.adresVolledig;
+    }
+  }
+
+  // 4b) Staat het adres zowel als één kolom als in losse kolommen? Dan kan er maar één kloppen. Laat de
+  //    sterkste winnen in plaats van er blind één te schrappen: bij een bestand met de koppen
+  //    "Adres(sen)", "Boring" en "Details" werden die laatste twee anders als huisnummer en straat
+  //    aangezien, en verdween de échte adreskolom.
+  if (mapping.adresVolledig !== undefined && (mapping.straat !== undefined || mapping.huisnummer !== undefined)) {
+    const samen = scores.adresVolledig ?? 0;
+    const los = (scores.straat ?? 0) + (scores.huisnummer ?? 0);
+    if (samen >= los) {
+      delete mapping.straat;
+      delete mapping.huisnummer;
+    } else {
+      delete mapping.adresVolledig;
+    }
+  }
+  return { kopIndex, mapping };
+}
+
+// Is de herkenning goed genoeg om zonder tussenkomst te importeren?
+export function herkenningCompleet(mapping: Mapping): boolean {
+  return mapping.adresVolledig !== undefined || (mapping.straat !== undefined && mapping.huisnummer !== undefined);
 }
 
 // ── Adres uit één cel halen ── "Kerkstraat 2a" → straat "Kerkstraat", nummer "2", toevoeging "a".

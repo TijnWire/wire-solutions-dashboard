@@ -1,10 +1,12 @@
 import { useMemo, useRef, useState } from "react";
-import { FileUp, ArrowLeft, ArrowRight, Check, AlertTriangle, Copy, Table2, Loader2 } from "lucide-react";
+import { FileUp, ArrowLeft, ArrowRight, Check, AlertTriangle, Copy, Table2 } from "lucide-react";
 import { Card } from "./ui";
 import {
-  leesRaster, raadKop, bouwRijen, samenvatting, naarAdressen,
+  leesRaster, raadKop, bouwRijen, samenvatting, naarAdressen, herkenningCompleet,
   VELDEN, type Mapping, type Raster, type ImportRij, type Veld,
 } from "../lib/bodemImport";
+import { ImportScan, type ScanStap } from "./ImportScan";
+import { sorteerRoute } from "../lib/bodemonderzoek";
 import type { TauwAdres } from "../lib/types";
 
 // Adressen importeren in drie stappen: bestand kiezen → kolommen kloppend maken → controleren en
@@ -42,7 +44,6 @@ export function BodemImport({ bestaand, onKlaar, onAnnuleer }: {
   onAnnuleer: () => void;
 }) {
   const [stap, setStap] = useState(0);
-  const [bezig, setBezig] = useState(false);
   const [fout, setFout] = useState("");
   const [bestandsnaam, setBestandsnaam] = useState("");
   const [raster, setRaster] = useState<Raster | null>(null);
@@ -50,6 +51,8 @@ export function BodemImport({ bestaand, onKlaar, onAnnuleer }: {
   const [mapping, setMapping] = useState<Mapping>({});
   const [slaDubbeleOver, setSlaDubbeleOver] = useState(true);
   const [sleept, setSleept] = useState(false);
+  const [scan, setScan] = useState<ScanStap | null>(null);
+  const [scanAantal, setScanAantal] = useState(0);
   const invoer = useRef<HTMLInputElement | null>(null);
 
   const rijen: ImportRij[] = useMemo(
@@ -58,22 +61,48 @@ export function BodemImport({ bestaand, onKlaar, onAnnuleer }: {
   );
   const sam = useMemo(() => samenvatting(rijen), [rijen]);
   const teImporteren = useMemo(
-    () => naarAdressen(rijen, { slaDubbeleOver }, nieuwId),
+    () => sorteerRoute(naarAdressen(rijen, { slaDubbeleOver }, nieuwId)),
     [rijen, slaDubbeleOver],
   );
 
+  const wacht = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+  // Bestand inlezen met de stappen in beeld. De pauzes zijn kort en houden gelijke tred met wat er
+  // echt gebeurt; bij een groot bestand duurt het uitlezen vanzelf langer en blijft die stap staan.
   const pak = async (file?: File | null) => {
     if (!file) return;
-    setBezig(true); setFout("");
+    setFout("");
+    setBestandsnaam(file.name);
+    setScan("lezen");
+    await wacht(250);
+
     const r = await leesRaster(file);
-    setBezig(false);
-    if (!r.ok) { setFout(r.fout); return; }
+    if (!r.ok) { setScan(null); setFout(r.fout); return; }
+
+    setScan("herkennen");
+    await wacht(350);
     const gok = raadKop(r.raster);
     setRaster(r.raster);
     setKopIndex(gok.kopIndex);
     setMapping(gok.mapping);
-    setBestandsnaam(file.name);
-    setStap(1);
+
+    // Herkent hij de adressen niet met zekerheid, dan is het eerlijker om het meteen te vragen dan om
+    // een lijst te tonen waar de helft van klopt.
+    if (!herkenningCompleet(gok.mapping)) {
+      setScan(null);
+      setStap(1);
+      setFout("De adreskolom is niet met zekerheid herkend. Wijs hieronder even aan welke kolom wat is.");
+      return;
+    }
+
+    setScan("sorteren");
+    await wacht(400);
+    const rijenNu = bouwRijen(r.raster, gok.kopIndex, gok.mapping, bestaand);
+    setScanAantal(naarAdressen(rijenNu, { slaDubbeleOver: true }, () => "x").length);
+    setScan("klaar");
+    await wacht(1100);
+    setScan(null);
+    setStap(2); // recht naar het resultaat — de kolommentabel is alleen nodig als er iets niet klopt
   };
 
   // Welk veld hangt aan kolom c? (leeg = niet gebruiken)
@@ -98,9 +127,11 @@ export function BodemImport({ bestaand, onKlaar, onAnnuleer }: {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <Stapbalk stap={stap} />
+        {stap === 1 ? <Stapbalk stap={stap} /> : <span className="text-sm font-bold text-ink-900">Adressen inlezen</span>}
         <button type="button" onClick={onAnnuleer} className="text-sm font-medium text-ink-500 hover:text-ink-800">Annuleren</button>
       </div>
+
+      {scan && <ImportScan stap={scan} aantal={scanAantal} bestandsnaam={bestandsnaam} />}
 
       {fout && <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{fout}</div>}
 
@@ -119,7 +150,7 @@ export function BodemImport({ bestaand, onKlaar, onAnnuleer }: {
           }`}
         >
           <div className="mx-auto mb-2 inline-flex rounded-full border border-ink-200 bg-white p-3 text-ink-500">
-            {bezig ? <Loader2 className="h-6 w-6 animate-spin" /> : <FileUp className="h-6 w-6" />}
+            <FileUp className="h-6 w-6" />
           </div>
           <div className="text-sm font-semibold text-ink-800">Sleep het bestand hierheen of klik om te kiezen</div>
           <div className="mt-0.5 text-xs text-ink-500">Excel (.xlsx, .xls) of CSV — je kunt hierna zelf aanwijzen welke kolom wat is</div>
@@ -267,7 +298,7 @@ export function BodemImport({ bestaand, onKlaar, onAnnuleer }: {
 
           <div className="flex flex-wrap items-center justify-between gap-2 border-t border-ink-100 pt-3">
             <button type="button" onClick={() => setStap(1)} className={knopKlein}>
-              <ArrowLeft className="h-3.5 w-3.5" /> Kolommen aanpassen
+              <ArrowLeft className="h-3.5 w-3.5" /> Klopt er iets niet? Kolommen aanpassen
             </button>
             <button
               type="button"
