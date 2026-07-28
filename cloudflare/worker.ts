@@ -701,6 +701,94 @@ export default {
         return json({ ok: true, poging });
       }
 
+      // ═══ BODEMONDERZOEK — adressen als losse rijen ═══
+      // Alle velden van een adres, in de volgorde die de queries hieronder gebruiken.
+      const ADRES_VELDEN = [
+        "id", "project_id", "volgorde", "straat", "huisnummer", "postcode", "plaats", "wijk", "perceel",
+        "bewoner", "telefoon", "email", "notitie", "toegewezen_aan", "aanwezig", "datum", "tijdslot",
+        "toestemming_tuin", "uitkomst", "pogingen", "afgerond", "afgerond_op", "afgerond_door",
+        "verwijderd", "bijgewerkt_op",
+      ] as const;
+
+      // Ophalen. Met ?sinds=<ISO> krijg je alleen wat er daarna is gewijzigd — inclusief de zacht
+      // verwijderde rijen, zodat een verwijdering ook doorkomt op een toestel dat even offline was.
+      if (path === "/bodem/adressen" && req.method === "GET") {
+        const projectId = url.searchParams.get("projectId") ?? "";
+        if (!projectId) return json({ error: "projectId ontbreekt." }, 400);
+        const sinds = url.searchParams.get("sinds") ?? "";
+        const kolommen = ADRES_VELDEN.join(", ");
+        const { results } = sinds
+          ? await env.DB.prepare(`select ${kolommen} from bodem_adressen where project_id = ?1 and bijgewerkt_op > ?2 order by volgorde`).bind(projectId, sinds).all()
+          : await env.DB.prepare(`select ${kolommen} from bodem_adressen where project_id = ?1 and verwijderd = 0 order by volgorde`).bind(projectId).all();
+        return json({ adressen: results ?? [], tijd: nuISO });
+      }
+
+      // In bulk wegschrijven: import en het verdelen over het team. In stukjes van 40, want D1 kent een
+      // maximum aantal parameters per opdracht.
+      if (path === "/bodem/adressen" && req.method === "POST") {
+        const projectId = String(body.projectId ?? "");
+        const lijst = Array.isArray(body.adressen) ? (body.adressen as Record<string, unknown>[]) : [];
+        if (!projectId) return json({ error: "projectId ontbreekt." }, 400);
+        if (!lijst.length) return json({ ok: true, aantal: 0 });
+        if (lijst.length > 5000) return json({ error: "Te veel adressen in één keer (maximaal 5000)." }, 400);
+
+        const plaatsen = ADRES_VELDEN.map((_, i) => `?${i + 1}`).join(", ");
+        const bijwerken = ADRES_VELDEN.filter((v) => v !== "id").map((v, i) => `${v} = ?${i + 2}`).join(", ");
+        const sql = `insert into bodem_adressen (${ADRES_VELDEN.join(", ")}) values (${plaatsen}) on conflict(id) do update set ${bijwerken}`;
+
+        let aantal = 0;
+        for (let i = 0; i < lijst.length; i += 40) {
+          const stuk = lijst.slice(i, i + 40).map((a) =>
+            env.DB.prepare(sql).bind(
+              String(a.id ?? ""), projectId, Number(a.volgorde ?? 0),
+              String(a.straat ?? ""), String(a.huisnummer ?? ""), String(a.postcode ?? ""), String(a.plaats ?? ""),
+              String(a.wijk ?? ""), String(a.perceel ?? ""),
+              String(a.bewoner ?? ""), String(a.telefoon ?? ""), String(a.email ?? ""), String(a.notitie ?? ""),
+              a.toegewezen_aan ? String(a.toegewezen_aan) : null,
+              String(a.aanwezig ?? ""), String(a.datum ?? ""), String(a.tijdslot ?? ""),
+              a.toestemming_tuin ? 1 : 0, String(a.uitkomst ?? ""), Number(a.pogingen ?? 0),
+              a.afgerond ? 1 : 0, String(a.afgerond_op ?? ""), String(a.afgerond_door ?? ""),
+              a.verwijderd ? 1 : 0, nuISO,
+            )
+          );
+          await env.DB.batch(stuk);
+          aantal += stuk.length;
+        }
+        broadcast(env, ctx, { type: "bodem", projectId, updated_at: nuISO });
+        return json({ ok: true, aantal, tijd: nuISO });
+      }
+
+      // Eén adres bijwerken — dit is de weg die de medewerker aan de deur gebruikt. Alleen de velden
+      // die echt veranderen gaan mee, zodat het ook op een matige verbinding een klein berichtje blijft.
+      if (path === "/bodem/adres" && req.method === "POST") {
+        const id = String(body.id ?? "");
+        const projectId = String(body.projectId ?? "");
+        if (!id || !projectId) return json({ error: "id en projectId zijn verplicht." }, 400);
+        const patch = (body.patch ?? {}) as Record<string, unknown>;
+
+        const teZetten = Object.keys(patch).filter((k) => (ADRES_VELDEN as readonly string[]).includes(k) && k !== "id" && k !== "project_id");
+        if (!teZetten.length) return json({ error: "Niets om bij te werken." }, 400);
+
+        // Bestaat de rij nog niet (offline aangemaakt), dan zetten we hem hier alsnog neer.
+        const zet = teZetten.map((k, i) => `${k} = ?${i + 3}`).join(", ");
+        const waarden = teZetten.map((k) => {
+          const v = patch[k];
+          if (k === "toestemming_tuin" || k === "afgerond" || k === "verwijderd") return v ? 1 : 0;
+          if (k === "volgorde" || k === "pogingen") return Number(v ?? 0);
+          if (k === "toegewezen_aan") return v ? String(v) : null;
+          return String(v ?? "");
+        });
+        const res = await env.DB.prepare(`update bodem_adressen set ${zet}, bijgewerkt_op = ?2 where id = ?1`)
+          .bind(id, nuISO, ...waarden).run();
+        if (!res.meta.changes) {
+          await env.DB.prepare("insert into bodem_adressen (id, project_id, bijgewerkt_op) values (?1, ?2, ?3) on conflict(id) do nothing")
+            .bind(id, projectId, nuISO).run();
+          await env.DB.prepare(`update bodem_adressen set ${zet}, bijgewerkt_op = ?2 where id = ?1`).bind(id, nuISO, ...waarden).run();
+        }
+        broadcast(env, ctx, { type: "bodem", projectId, updated_at: nuISO });
+        return json({ ok: true, tijd: nuISO });
+      }
+
       // ── ACCOUNTS KOPPELEN ──
       // De app bewaart per medewerker een eigen PBKDF2-hash in de teamlijst (van vóór de centrale login).
       // Iemand die nog geen rij in users_auth heeft, kan daardoor alleen inloggen op een apparaat waar die
