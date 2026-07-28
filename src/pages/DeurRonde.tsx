@@ -5,10 +5,11 @@ import {
 } from "lucide-react";
 import {
   TIJDSLOTS, dagenVanVenster, dagLabel, magAfronden, telefoonGeldig, bezetting, voortgangVan,
-  slotActief, slotMax,
+  slotActief, slotMax, slotEigenaar,
 } from "../lib/bodemonderzoek";
+import { boekAfspraak } from "../lib/bodemAdressen";
 import { UITKOMST_LABEL, type AdresUitkomst, type TauwAdres, type TauwOpdracht, type TauwSlot } from "../lib/types";
-import { sbBodemAfspraak, sbBodemBezoek, type BodemUitkomst } from "../lib/supabase";
+import { sbBodemBezoek, type BodemUitkomst } from "../lib/supabase";
 
 // De ronde langs de deuren voor het bodemonderzoek (TAUW / Van der Helm).
 // ─────────────────────────────────────────────────────────────────────────────
@@ -57,11 +58,14 @@ function KeuzeKnop({ actief, kleur, icoon, titel, uitleg, onKies }: {
 
 // ── Dag + tijdslot kiezen ── alleen de dagen uit het venster van de beheerder, zodat er aan de deur
 // niets buiten de planning gekozen kan worden.
-function TijdslotKiezer({ adres, alleAdressen, dagen, sloten, onKies }: {
+function TijdslotKiezer({ adres, alleAdressen, dagen, sloten, team, ikId, online, onKies }: {
   adres: TauwAdres;
   alleAdressen: TauwAdres[];
   dagen: string[];
   sloten?: TauwSlot[];
+  team: string[];
+  ikId: string;
+  online: boolean;
   onKies: (patch: Partial<TauwAdres>) => void;
 }) {
   const dagBalk = useRef<HTMLDivElement | null>(null);
@@ -111,17 +115,29 @@ function TijdslotKiezer({ adres, alleAdressen, dagen, sloten, onKies }: {
           <div className="mb-1.5 flex items-center gap-1.5 text-sm font-semibold text-ink-700">
             <Clock className="h-4 w-4 text-ink-400" /> Hoe laat?
           </div>
+          {!online && (
+            <p className="mb-2 rounded-lg bg-ink-100 px-3 py-2 text-xs text-ink-600">
+              Geen bereik. Je kunt nu alleen je eigen tijdblokken geven — zo boek je een collega nooit
+              dubbel. De afspraak wordt bewaard en gaat vanzelf mee zodra je weer bereik hebt.
+            </p>
+          )}
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {TIJDSLOTS.map((s) => {
               const gekozen = adres.tijdslot === s;
               const aan = slotActief(sloten, s);
               // Hoeveel bewoners staan er al in dit blok, en hoeveel passen er in?
               const al = bezetting(alleAdressen.filter((x) => x.id !== adres.id), adres.datum, s);
-              const max = slotMax(sloten, s);
-              const vol = max !== null && al >= max;
+              const max = slotMax(sloten, s) ?? 1; // standaard past er één afspraak in een blok
+              const vol = al >= max;
+              // Elk blok heeft een vaste eigenaar. Zonder bereik kun je niet weten of een collega zijn
+              // blok net heeft gevuld, dus dan mag je alleen je eigen blokken gebruiken. Met bereik
+              // controleert de server het en mag je ook een vrij blok van een ander pakken.
+              const eigenaar = slotEigenaar(team, dagen, adres.datum, s);
+              const vanMij = !eigenaar || eigenaar === ikId;
+              const vanCollega = !vanMij && !online;
               // Uitgezette en volle blokken blijven zichtbaar maar zijn niet aan te tikken — anders snapt
               // de medewerker aan de deur niet waarom een blok ontbreekt.
-              const uit = !aan || (vol && !gekozen);
+              const uit = !aan || vanCollega || (vol && !gekozen);
               return (
                 <button
                   key={s}
@@ -138,7 +154,11 @@ function TijdslotKiezer({ adres, alleAdressen, dagen, sloten, onKies }: {
                 >
                   {s.replace("-", " – ")}
                   <span className="mt-0.5 block text-[10px] font-medium">
-                    {!aan ? "niet beschikbaar" : max !== null ? `${al}/${max}${vol ? " · vol" : ""}` : al > 0 ? `${al} gepland` : "vrij"}
+                    {!aan ? "niet beschikbaar"
+                      : vanCollega ? "van een collega"
+                      : vol ? "vol"
+                      : al > 0 ? `${al}/${max}`
+                      : vanMij ? "vrij" : "vrij · van een ander"}
                   </span>
                 </button>
               );
@@ -150,12 +170,22 @@ function TijdslotKiezer({ adres, alleAdressen, dagen, sloten, onKies }: {
   );
 }
 
-export function DeurRonde({ opdracht, adressen, onOpslaan, onTerug }: {
+export function DeurRonde({ opdracht, adressen, ikId, onOpslaan, onTerug }: {
   opdracht: TauwOpdracht;
   adressen: TauwAdres[]; // alleen de adressen van deze medewerker, in looproute
+  ikId: string;          // wie loopt deze ronde — bepaalt welke tijdblokken van hem zijn
   onOpslaan: (adresId: string, patch: Partial<TauwAdres>) => void;
   onTerug: () => void;
 }) {
+  // Heeft het apparaat bereik? Bepaalt of er ook blokken van een collega gekozen mogen worden.
+  const [online, setOnline] = useState(typeof navigator === "undefined" || navigator.onLine);
+  useEffect(() => {
+    const aan = () => setOnline(true);
+    const uit = () => setOnline(false);
+    window.addEventListener("online", aan);
+    window.addEventListener("offline", uit);
+    return () => { window.removeEventListener("online", aan); window.removeEventListener("offline", uit); };
+  }, []);
   // Begin bij het eerste adres dat nog niet af is; is alles af, dan bij het laatste.
   const eersteOpen = Math.max(0, adressen.findIndex((a) => !a.afgerond));
   const [index, setIndex] = useState(eersteOpen === -1 ? 0 : eersteOpen);
@@ -214,17 +244,20 @@ export function DeurRonde({ opdracht, adressen, onOpslaan, onTerug }: {
     setMelding("");
     try {
       if (adres.aanwezig === "ja") {
-        const r = await sbBodemAfspraak({
+        const r = await boekAfspraak({
           projectId: opdracht.id, adresId: adres.id,
           datum: adres.datum, tijdslot: adres.tijdslot!,
           naam: adres.bewoner, telefoon: adres.telefoon, email: adres.email ?? "", notitie: adres.notitie,
         });
-        if (!r.ok) {
-          // Blok vol of dag niet toegestaan → terug naar de tijdslotkeuze met de reden erbij.
-          setMelding(r.error ?? "De afspraak kon niet worden vastgelegd.");
+        // Alleen bij een blok dat inmiddels vol is gaan we terug: de bewoner staat er nog, dus dan kan
+        // er meteen een ander moment gekozen worden. Geen bereik is géén reden om terug te sturen —
+        // de afspraak staat dan lokaal vast en gaat later vanzelf mee.
+        if (!r.vastgelegd) {
+          setMelding(r.fout ?? "De afspraak kon niet worden vastgelegd.");
           setStap("tijdslot");
           return;
         }
+        zet({ afspraakWacht: r.wacht });
       }
       zet({ uitkomst: "afgerond", afgerond: true, afgerondOp: new Date().toISOString(), geenGehoor: false });
       volgende();
@@ -349,7 +382,8 @@ export function DeurRonde({ opdracht, adressen, onOpslaan, onTerug }: {
         </div>
 
         <div className="mt-3 rounded-2xl border border-ink-200 bg-white p-4 shadow-sm">
-          <TijdslotKiezer adres={adres} alleAdressen={adressen} dagen={dagen} sloten={opdracht.venster?.sloten} onKies={zet} />
+          <TijdslotKiezer adres={adres} alleAdressen={adressen} dagen={dagen} sloten={opdracht.venster?.sloten}
+              team={opdracht.team ?? []} ikId={ikId} online={online} onKies={zet} />
         </div>
 
         {compleet && (

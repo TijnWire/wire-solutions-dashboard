@@ -88,8 +88,15 @@ async function schrijfLokaal(projectId: string, cache: Cache): Promise<void> {
   await idbSet(cacheSleutel(projectId), cache);
 }
 
-// ── Wachtrij voor wijzigingen die nog niet weg konden ──
-type Wachtend = { id: string; projectId: string; patch: Record<string, unknown> };
+// ── Wachtrij voor alles wat nog niet weg kon ──
+// Twee soorten: een gewijzigd adres, en een gemaakte afspraak. Die laatste is de belangrijkste — die
+// mag niet verloren gaan omdat er toevallig geen bereik was toen de bewoner ja zei.
+type WachtendAdres = { soort: "adres"; id: string; projectId: string; patch: Record<string, unknown> };
+type WachtendAfspraak = {
+  soort: "afspraak"; id: string; projectId: string;
+  datum: string; tijdslot: string; naam: string; telefoon: string; email: string; notitie: string;
+};
+type Wachtend = WachtendAdres | WachtendAfspraak;
 const WACHTRIJ = "bodem:wachtrij";
 
 async function leesWachtrij(): Promise<Wachtend[]> {
@@ -97,31 +104,93 @@ async function leesWachtrij(): Promise<Wachtend[]> {
 }
 async function zetInWachtrij(w: Wachtend): Promise<void> {
   const rij = await leesWachtrij();
-  // Per adres maar één regel: latere wijzigingen aan hetzelfde adres worden erin samengevoegd, zodat
-  // de wachtrij niet volloopt als iemand een tijdje geen bereik heeft.
-  const bestaand = rij.find((x) => x.id === w.id);
-  if (bestaand) Object.assign(bestaand.patch, w.patch);
-  else rij.push(w);
+  // Per adres één regel per soort: latere wijzigingen worden erin samengevoegd, zodat de wachtrij niet
+  // volloopt als iemand een tijdje geen bereik heeft. Een nieuwere afspraak vervangt de vorige.
+  const i = rij.findIndex((x) => x.id === w.id && x.soort === w.soort);
+  if (i < 0) rij.push(w);
+  else if (w.soort === "adres" && rij[i].soort === "adres") Object.assign(rij[i].patch, w.patch);
+  else rij[i] = w;
   await idbSet(WACHTRIJ, rij);
 }
 
 // Probeer alles wat nog openstaat alsnog te versturen. Wordt aangeroepen bij het openen van een map,
 // zodra het apparaat weer online komt, en na elke geslaagde wijziging.
-export async function verwerkWachtrij(): Promise<{ verstuurd: number; over: number }> {
+export type WachtrijUitslag = { verstuurd: number; over: number; conflicten: { adresId: string; reden: string }[] };
+
+export async function verwerkWachtrij(): Promise<WachtrijUitslag> {
   const rij = await leesWachtrij();
-  if (!rij.length) return { verstuurd: 0, over: 0 };
+  if (!rij.length) return { verstuurd: 0, over: 0, conflicten: [] };
   const over: Wachtend[] = [];
+  const conflicten: { adresId: string; reden: string }[] = [];
   let verstuurd = 0;
+
   for (const w of rij) {
     try {
-      await cloudPost("/bodem/adres", { id: w.id, projectId: w.projectId, patch: w.patch });
+      if (w.soort === "adres") {
+        await cloudPost("/bodem/adres", { id: w.id, projectId: w.projectId, patch: w.patch });
+      } else {
+        await cloudPost("/bodem/afspraak", {
+          projectId: w.projectId, adresId: w.id, datum: w.datum, tijdslot: w.tijdslot,
+          naam: w.naam, telefoon: w.telefoon, email: w.email, notitie: w.notitie,
+        });
+        // Gelukt: de markering "wacht nog" mag eraf.
+        await zetLokaal(w.projectId, w.id, { afspraakWacht: false, afspraakConflict: undefined });
+        await cloudPost("/bodem/adres", { id: w.id, projectId: w.projectId, patch: { } }).catch(() => undefined);
+      }
       verstuurd++;
-    } catch {
-      over.push(w); // nog steeds geen verbinding — blijft staan
+    } catch (e) {
+      const melding = e instanceof Error ? e.message : String(e);
+      // Een vol blok of een dag buiten de periode lost zich niet vanzelf op: opnieuw proberen heeft
+      // geen zin. De afspraak blijft staan, maar kantoor moet de bewoner bellen om te verzetten.
+      const onherstelbaar = w.soort === "afspraak" && /vol|periode|blok|gewerkt|Ongeldig/i.test(melding);
+      if (onherstelbaar) {
+        conflicten.push({ adresId: w.id, reden: melding });
+        await zetLokaal(w.projectId, w.id, { afspraakWacht: false, afspraakConflict: melding });
+      } else {
+        over.push(w); // geen verbinding — blijft in de wachtrij
+      }
     }
   }
   await idbSet(WACHTRIJ, over);
-  return { verstuurd, over: over.length };
+  return { verstuurd, over: over.length, conflicten };
+}
+
+// Alleen de lokale kopie bijwerken, zonder iets te versturen.
+async function zetLokaal(projectId: string, id: string, patch: Partial<TauwAdres>): Promise<void> {
+  const cache = await leesLokaal(projectId);
+  const i = cache.adressen.findIndex((a) => a.id === id);
+  if (i < 0) return;
+  cache.adressen[i] = { ...cache.adressen[i], ...patch };
+  await schrijfLokaal(projectId, cache);
+}
+
+// ── Een afspraak vastleggen ──
+// Altijd eerst lokaal, zodat de medewerker aan de deur meteen een bevestiging heeft. Daarna naar de
+// server. Geen bereik? Dan de wachtrij in — de afspraak staat er dus hoe dan ook.
+export async function boekAfspraak(v: {
+  projectId: string; adresId: string; datum: string; tijdslot: string;
+  naam: string; telefoon: string; email?: string; notitie?: string;
+}): Promise<{ vastgelegd: boolean; wacht: boolean; fout?: string }> {
+  const gemeen = {
+    datum: v.datum, tijdslot: v.tijdslot, naam: v.naam, telefoon: v.telefoon,
+    email: v.email ?? "", notitie: v.notitie ?? "",
+  };
+  await zetLokaal(v.projectId, v.adresId, { datum: v.datum, tijdslot: v.tijdslot, afspraakWacht: true, afspraakConflict: undefined });
+  try {
+    await cloudPost("/bodem/afspraak", { ...gemeen, projectId: v.projectId, adresId: v.adresId });
+    await zetLokaal(v.projectId, v.adresId, { afspraakWacht: false });
+    return { vastgelegd: true, wacht: false };
+  } catch (e) {
+    const melding = e instanceof Error ? e.message : String(e);
+    // Blok vol of dag niet toegestaan: dat weet de medewerker beter meteen, dan kan hij een ander
+    // moment kiezen terwijl de bewoner er nog staat.
+    if (/vol|periode|blok|gewerkt|Ongeldig/i.test(melding)) {
+      await zetLokaal(v.projectId, v.adresId, { afspraakWacht: false, datum: "", tijdslot: undefined });
+      return { vastgelegd: false, wacht: false, fout: melding };
+    }
+    await zetInWachtrij({ soort: "afspraak", id: v.adresId, projectId: v.projectId, ...gemeen });
+    return { vastgelegd: true, wacht: true };
+  }
 }
 
 export async function aantalWachtend(): Promise<number> {
@@ -165,7 +234,7 @@ export async function wijzigAdres(projectId: string, id: string, patch: Partial<
     await cloudPost("/bodem/adres", { id, projectId, patch: dbPatch });
     return { online: true };
   } catch {
-    await zetInWachtrij({ id, projectId, patch: dbPatch });
+    await zetInWachtrij({ soort: "adres", id, projectId, patch: dbPatch });
     return { online: false };
   }
 }
@@ -194,7 +263,7 @@ export async function verwijderAdressen(projectId: string, ids: string[]): Promi
     await cloudPost("/bodem/adressen", { projectId, adressen: ids.map((id) => ({ id, verwijderd: 1 })) });
     return { online: true };
   } catch {
-    for (const id of ids) await zetInWachtrij({ id, projectId, patch: { verwijderd: 1 } });
+    for (const id of ids) await zetInWachtrij({ soort: "adres", id, projectId, patch: { verwijderd: 1 } });
     return { online: false };
   }
 }

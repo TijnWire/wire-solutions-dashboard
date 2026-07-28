@@ -787,6 +787,11 @@ export type TauwAdres = {
   email?: string;           // optioneel e-mailadres van de bewoner
   uitkomst?: AdresUitkomst; // hoe dit adres is afgesloten
   toestemmingTuin?: boolean; // bewoner geeft toestemming voor toegang tot de tuin (bij "nee")
+  // De afspraak is aan de deur gemaakt maar nog niet door de server bevestigd (geen bereik).
+  afspraakWacht?: boolean;
+  // De server kon de afspraak niet plaatsen (blok inmiddels vol). De afspraak blijft staan, maar
+  // kantoor moet de bewoner bellen om te verzetten — vandaar de reden erbij.
+  afspraakConflict?: string;
   geenGehoor?: boolean; // niemand thuis — komt terug in de lijst "nog langs"
   pogingen?: number; // hoe vaak er is aangebeld zonder resultaat
   bijgewerktOp?: string; // ISO — voor het samenvoegen tussen apparaten

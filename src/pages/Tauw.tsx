@@ -529,6 +529,7 @@ function TauwDetail({ opdracht, onTerug }: { opdracht: TauwOpdracht; onTerug: ()
       <DeurRonde
         opdracht={werkOpdracht}
         adressen={eigenAdressen}
+        ikId={rondeVoor}
         onOpslaan={bewaarAdres}
         onTerug={() => { setRondeOpen(false); setRondeUser(null); }}
       />

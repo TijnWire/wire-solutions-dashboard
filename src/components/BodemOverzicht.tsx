@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { CalendarDays, FileDown, FileText, Users, Loader2 } from "lucide-react";
+import { CalendarDays, FileDown, FileText, Users, Loader2, PhoneCall, CloudOff } from "lucide-react";
 import { Card } from "./ui";
 import { dagLabel, telefoonNet, voortgangVan, TIJDSLOTS } from "../lib/bodemonderzoek";
 import { exporteerBodemExcel, exporteerBodemPdf } from "../lib/bodemExport";
@@ -105,6 +105,51 @@ export function BodemOverzicht({ opdracht, users }: { opdracht: TauwOpdracht; us
           </div>
         </div>
       )}
+
+      {/* Afspraken die aandacht vragen: het blok was al vol toen de telefoon weer bereik kreeg. De
+          bewoner staat dan iets in de agenda dat de aannemer niet kan waarmaken — kantoor moet bellen. */}
+      {(() => {
+        const conflicten = opdracht.adressen.filter((a) => a.afspraakConflict);
+        const wachtend = opdracht.adressen.filter((a) => a.afspraakWacht);
+        if (!conflicten.length && !wachtend.length) return null;
+        return (
+          <div className="space-y-2">
+            {conflicten.length > 0 && (
+              <div className="rounded-xl border border-red-300 bg-red-50 p-3">
+                <div className="flex items-center gap-1.5 text-sm font-bold text-red-800">
+                  <PhoneCall className="h-4 w-4" /> {conflicten.length} afspraak{conflicten.length === 1 ? "" : "en"} om te bevestigen
+                </div>
+                <p className="mt-0.5 text-xs text-red-700">
+                  Het tijdblok was al bezet toen deze afspraak binnenkwam. Bel de bewoner om te verzetten.
+                </p>
+                <div className="mt-2 space-y-1">
+                  {conflicten.map((a) => (
+                    <div key={a.id} className="flex flex-wrap items-baseline gap-x-2 rounded-lg bg-white px-3 py-1.5 text-xs">
+                      <span className="font-semibold text-ink-800">{`${a.straat} ${a.huisnummer}`.trim()}</span>
+                      <span className="text-ink-600">{a.bewoner || "—"}</span>
+                      <a href={`tel:${a.telefoon.replace(/\s/g, "")}`} className="font-semibold text-brand-700 hover:underline">
+                        {telefoonNet(a.telefoon)}
+                      </a>
+                      <span className="text-ink-500">{a.datum ? `${dagLabel(a.datum)} · ${a.tijdslot}` : ""}</span>
+                      <span className="w-full text-red-700">{a.afspraakConflict}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {wachtend.length > 0 && (
+              <div className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                <span className="inline-flex items-center gap-1.5 font-semibold">
+                  <CloudOff className="h-4 w-4" /> {wachtend.length} afspra{wachtend.length === 1 ? "ak" : "ken"} nog niet doorgegeven
+                </span>
+                <span className="block text-xs text-amber-800">
+                  Gemaakt zonder bereik. Ze komen vanzelf binnen zodra dat toestel weer verbinding heeft.
+                </span>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Agenda: wat staat er per dag gepland */}
       <div>

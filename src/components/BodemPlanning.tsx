@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Users, Wand2, CalendarRange, MapPin, RotateCcw, Check, Clock, Loader2 } from "lucide-react";
 import { Card } from "./ui";
 import { DatumKiezer } from "./DatumKiezer";
-import { verdeelOverTeam, dagenVanVenster, dagLabel, voortgangVan, sorteerRoute, TIJDSLOTS, STANDAARD_WERKDAGEN, DAGNAMEN } from "../lib/bodemonderzoek";
+import { verdeelOverTeam, dagenVanVenster, dagLabel, voortgangVan, sorteerRoute, vensterRuimte, TIJDSLOTS, STANDAARD_WERKDAGEN, DAGNAMEN } from "../lib/bodemonderzoek";
 import { sbBodemPlanning } from "../lib/supabase";
 import type { TauwAdres, TauwOpdracht, TauwSlot, User } from "../lib/types";
 
@@ -237,6 +237,27 @@ export function BodemPlanning({ opdracht, users, onWijzig, deel = "alles" }: {
             ? `${dagen.length} dagen: ${dagLabel(dagen[0])} t/m ${dagLabel(dagen[dagen.length - 1])} · feestdagen vallen automatisch weg.`
             : "Kies een eerste dag. Zolang dit leeg is, kan er aan de deur geen moment worden afgesproken."}
         </div>
+
+        {/* Past het werk erin? Dit hoor je te weten vóórdat het personeel op pad gaat, niet halverwege
+            de wijk. Met één afspraak per blok is een venster van twee weken zo vol. */}
+        {dagen.length > 0 && opdracht.adressen.length > 0 && (() => {
+          const r = vensterRuimte(dagen, sloten, opdracht.adressen);
+          return (
+            <div className={`mt-2 rounded-lg px-3 py-2 text-xs ${r.krap ? "bg-amber-50 text-amber-900" : "bg-green-50 text-green-800"}`}>
+              <span className="font-semibold">
+                {r.plaatsen} afspraken passen in dit venster
+              </span>
+              {" · "}{r.adressen} adressen in de lijst
+              {r.gepland > 0 && ` · ${r.gepland} al ingepland`}
+              {r.krap && (
+                <span className="mt-0.5 block">
+                  Dat is krap: ervaring leert dat ongeveer de helft van de bewoners erbij wil zijn.
+                  Verleng de periode, zet meer dagen aan, of verhoog het aantal per tijdblok.
+                </span>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       {/* Tijdblokken: welke worden aangeboden, en hoeveel afspraken passen erin */}

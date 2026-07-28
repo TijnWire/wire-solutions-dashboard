@@ -244,3 +244,56 @@ export function telefoonNet(t: string): string {
 export function bezetting(adressen: TauwAdres[], datum: string, slot: string): number {
   return adressen.filter((a) => a.aanwezig === "ja" && a.datum === datum && a.tijdslot === slot).length;
 }
+
+// ── Wie is eigenaar van welk tijdblok ──
+// Zonder bereik kan een telefoon niet weten of een collega een blok net heeft gepakt. Daarom krijgt
+// elke medewerker vooraf zijn eigen blokken. Dat gebeurt REKENKUNDIG, niet met een tabel: elk apparaat
+// rekent dezelfde verdeling uit op basis van de teamlijst, dus offline is er niets op te halen en kan
+// er niets uit de pas lopen.
+//
+// De blokken gaan om de beurt rond (dag na dag, blok na blok), zodat niemand alleen ochtenden of
+// alleen vrijdagen krijgt.
+//
+// LET OP: verandert het team, dan verschuift het eigendom van nog vrije blokken. Al gemaakte afspraken
+// blijven staan — die zijn immers al vastgelegd.
+export function slotEigenaar(team: string[], dagen: string[], datum: string, tijdslot: string): string | null {
+  if (!team.length) return null;
+  const d = dagen.indexOf(datum);
+  const t = TIJDSLOTS.indexOf(tijdslot as Tijdslot);
+  if (d < 0 || t < 0) return null;
+  return team[(d * TIJDSLOTS.length + t) % team.length];
+}
+
+// Hoeveel blokken heeft deze medewerker in het hele venster?
+export function eigenSlots(team: string[], dagen: string[], userId: string): number {
+  if (!team.length || !dagen.length) return 0;
+  let n = 0;
+  for (let d = 0; d < dagen.length; d++)
+    for (let t = 0; t < TIJDSLOTS.length; t++)
+      if (team[(d * TIJDSLOTS.length + t) % team.length] === userId) n++;
+  return n;
+}
+
+// Past het werk in het venster? Dit laten we de beheerder zien vóórdat het personeel op pad gaat:
+// met een capaciteit van 1 per blok en een venster van twee weken passen er 80 afspraken, en dat is
+// bij een grote lijst zomaar te weinig.
+export type VensterRuimte = { blokken: number; plaatsen: number; adressen: number; gepland: number; krap: boolean };
+export function vensterRuimte(
+  dagen: string[],
+  sloten: { slot: string; actief?: boolean; max?: number }[] | undefined,
+  adressen: TauwAdres[],
+): VensterRuimte {
+  const actief = TIJDSLOTS.filter((s) => slotActief(sloten, s));
+  const perDag = actief.reduce((som, s) => som + (slotMax(sloten, s) ?? 1), 0);
+  const plaatsen = perDag * dagen.length;
+  const gepland = adressen.filter((a) => a.aanwezig === "ja" && a.datum && a.tijdslot).length;
+  // Vuistregel: ongeveer de helft van de bewoners wil erbij zijn. Liever te vroeg waarschuwen dan te laat.
+  const verwacht = Math.round(adressen.length * 0.5);
+  return {
+    blokken: actief.length * dagen.length,
+    plaatsen,
+    adressen: adressen.length,
+    gepland,
+    krap: plaatsen > 0 && verwacht > plaatsen,
+  };
+}
