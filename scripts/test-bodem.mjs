@@ -173,6 +173,31 @@ async function main() {
       check(poging.status === 403, "andermans adres wijzigen wordt geweigerd", `status ${poging.status}`);
     }
 
+    // ── 6. Bewonersakkoord: het dossier ──
+    // Aparte module, maar wel dezelfde suite: één commando dat alles nakijkt is er één.
+    console.log("\n6. Bewonersakkoord — dossier");
+    {
+      const PD = `PD${String(stempel).slice(-7)}`;
+      const a = await post("/akkoord/dossier", baas, {
+        pd_nummer: PD, regio: "Zuid", opdrachtgever: "Stedin", gebouw: "Kerkstraat 1-40",
+        uitvoering_van: "2026-09-01", uitvoering_tot: "2026-09-30",
+      });
+      check(a.status === 200, "dossier aanmaken lukt", a.data.error ?? "");
+
+      const slecht = await post("/akkoord/dossier", baas, { pd_nummer: "P123", regio: "Zuid" });
+      check(slecht.status === 400, "een ongeldig PD-nummer wordt geweigerd");
+
+      const dubbel = await post("/akkoord/dossier", baas, { pd_nummer: PD.toLowerCase(), regio: "Noord" });
+      check(dubbel.status === 409, "hetzelfde nummer in kleine letters is hetzelfde dossier");
+
+      const m = await post("/akkoord/dossier", mont, { pd_nummer: `${PD}9`, regio: "Zuid" });
+      check(m.status === 403, "een monteur mag geen dossier aanmaken");
+
+      await post("/akkoord/dossier/status", baas, { pd_nummer: PD, status: "afgeboekt" });
+      const naAfboeken = await post("/akkoord/dossier/status", baas, { pd_nummer: PD, status: "verdeeld" });
+      check(naAfboeken.status === 409, "een afgeboekt dossier is alleen-lezen");
+    }
+
     console.log(`\n${geslaagd} geslaagd, ${gefaald} gefaald`);
   } finally {
     worker.kill();

@@ -37,6 +37,7 @@ import {
   spiegelAan, spiegelUpsert, spiegelVerwijder, spiegelInsert, spiegelSelect,
   spiegelStatus, herspiegelAlles, type SpiegelEnv,
 } from "./spiegel";
+import { akkoordRoutes } from "./akkoord";
 
 export interface Env extends SpiegelEnv {
   DB: D1Database;
@@ -869,6 +870,24 @@ export default {
           "select id, adres_id, gebeurtenis, oud, nieuw, door, tijdstip from bodem_log where project_id = ? order by id desc limit 500"
         ).bind(projectId).all();
         return json({ regels: results ?? [] });
+      }
+
+      // ── BEWONERSAKKOORD ── aparte module met een eigen flow; zie cloudflare/akkoord.ts.
+      if (path.startsWith("/akkoord/")) {
+        const uit = await akkoordRoutes(path, req.method, url, body, {
+          env, ikEmail, nuISO, json,
+          magBeheren: magAlles(mijnRechten?.rol) || mijnRechten?.rol === "beheer",
+          log: (v) => {
+            ctx.waitUntil(
+              env.DB.prepare(
+                "insert into akkoord_log (pd_nummer, cluster_id, adres_id, gebeurtenis, oud, nieuw, door, tijdstip) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)"
+              ).bind(v.pd, v.clusterId ?? "", v.adresId ?? "", v.gebeurtenis, v.oud ?? "", v.nieuw ?? "", ikEmail, nuISO).run()
+                .then(() => undefined)
+                .catch((e) => console.log("[akkoord-log]", String(e).slice(0, 120))),
+            );
+          },
+        });
+        if (uit) return uit;
       }
 
       // ═══ BODEMONDERZOEK — adressen als losse rijen ═══

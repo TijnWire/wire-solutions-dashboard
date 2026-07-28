@@ -24,6 +24,7 @@ import {
   FlaskConical,
   Cable,
   Briefcase,
+  Handshake,
   type LucideIcon,
 } from "lucide-react";
 import type { Role } from "./types";
@@ -53,6 +54,7 @@ export const WERKNEMER_TOEGANG: { key: string; label: string }[] = [
   { key: "voorschouwen", label: "Voorschouwen" },
   { key: "schouwafspraken", label: "Schouwafspraken" },
   { key: "tauw", label: "TAUW of Van der Helm" },
+  { key: "bewonersakkoord", label: "Bewonersakkoord" },
 ];
 export const WERKNEMER_TOEGANG_KEYS = WERKNEMER_TOEGANG.map((x) => x.key);
 
@@ -67,6 +69,7 @@ export const NAV: NavItem[] = [
   { key: "voorschouwen", label: "Voorschouwen", icon: ClipboardCheck, group: "Projecten", roles: ALLE },
   { key: "schouwafspraken", label: "Schouwafspraken", icon: CalendarClock, group: "Projecten", roles: ALLE },
   { key: "tauw", label: "TAUW of Van der Helm", icon: FlaskConical, group: "Projecten", roles: ALLE },
+  { key: "bewonersakkoord", label: "Bewonersakkoord", icon: Handshake, group: "Projecten", roles: ALLE },
 
   { key: "kennisbank", label: "Kennisbank", icon: BookOpen, group: "Vragen", roles: ALLE },
 
