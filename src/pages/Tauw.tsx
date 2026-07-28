@@ -12,6 +12,7 @@ import { exporteerTauwExcel, mailTauwNaarStedin } from "../lib/tauwExcel";
 import { BodemPlanning, BodemAfspraken } from "../components/BodemPlanning";
 import { BodemImport } from "../components/BodemImport";
 import { BodemToewijzen } from "../components/BodemToewijzen";
+import { BodemOverzicht } from "../components/BodemOverzicht";
 import { DeurRonde } from "./DeurRonde";
 import { sorteerRoute, voortgangVan } from "../lib/bodemonderzoek";
 import {
@@ -708,6 +709,7 @@ function TauwDetail({ opdracht, onTerug }: { opdracht: TauwOpdracht; onTerug: ()
           onWijzig={(next) => updateTauw(opdracht.id, { adressen: next })}
         />
       )}
+      {isBodem && <BodemOverzicht opdracht={opdracht} users={users} />}
       {isBodem && <BodemAfspraken opdracht={opdracht} users={users} />}
       {rondeStart}
       {adressenSectie}
