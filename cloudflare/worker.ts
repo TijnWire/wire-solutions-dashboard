@@ -199,6 +199,21 @@ async function hoortBijHetTeam(env: Env, email: string): Promise<boolean> {
   );
 }
 
+// Van e-mailadres naar het gebruikers-id uit de app. De Worker kent alleen het adres uit de token,
+// maar adressen zijn toegewezen op id. Zonder deze vertaling kan er geen afscherming per medewerker zijn.
+async function mijnUserId(env: Env, email: string): Promise<string | null> {
+  const rij = await env.DB.prepare("select data from wire_state where key = 'users'").first<{ data: string }>();
+  if (!rij) return null;
+  try {
+    const lijst = JSON.parse(rij.data) as Array<Record<string, unknown>>;
+    if (!Array.isArray(lijst)) return null;
+    const ik = lijst.find((u) => String(u?.email ?? "").trim().toLowerCase() === email);
+    return ik ? String(ik.id) : null;
+  } catch {
+    return null;
+  }
+}
+
 // Toegestane rollen — voorkomt dat er via een push een verzonnen rol in app_roles belandt.
 const ROLLEN = new Set(["eigenaar", "hr", "beheer", "monteur"]);
 
@@ -361,6 +376,12 @@ export default {
       // Eén keer de rol ophalen en hergebruiken; elke route hieronder rekent ermee.
       const mijnRechten = await rolVan(env, ikEmail).catch(() => null);
       const afgeschermd = afgeschermdVoor(mijnRechten);
+
+      // AVG: naam en telefoonnummer van bewoners zijn persoonsgegevens. Een medewerker hoort alleen te
+      // zien wat aan hem is toegewezen; de leiding ziet alles. Zonder deze grens kon iedereen met een
+      // token de bewonersgegevens van elk project opvragen.
+      const zietAlles = magAlles(mijnRechten?.rol) || mijnRechten?.rol === "beheer";
+      const mijnId = zietAlles ? null : await mijnUserId(env, ikEmail);
 
       // Welke onderdelen mag ik niet zien? De app vraagt dit op zodat zij ze niet probeert te uploaden
       // en haar eigen (mogelijk oude) kopie lokaal opruimt.
@@ -602,9 +623,18 @@ export default {
         const projectId = url.searchParams.get("id") ?? "";
         if (!projectId) return json({ error: "id ontbreekt." }, 400);
         const cfg = await env.DB.prepare("select config from bodem_projecten where project_id = ?").bind(projectId).first<{ config: string }>();
-        const { results: afspraken } = await env.DB.prepare(
-          "select adres_id, datum, tijdslot, naam, telefoon, email, notitie, ingevuld_door, ingevuld_op from bodem_afspraken where project_id = ? order by datum, tijdslot"
-        ).bind(projectId).all();
+        // De afsprakenlijst bevat namen en telefoonnummers; een medewerker krijgt alleen die van
+        // zijn eigen adressen. De bezetting per blok hieronder is een telling zonder persoonsgegevens
+        // en mag iedereen zien — die heeft hij nodig om te weten welk blok nog vrij is.
+        const { results: afspraken } = zietAlles
+          ? await env.DB.prepare(
+              "select adres_id, datum, tijdslot, naam, telefoon, email, notitie, ingevuld_door, ingevuld_op from bodem_afspraken where project_id = ? order by datum, tijdslot"
+            ).bind(projectId).all()
+          : await env.DB.prepare(
+              "select a.adres_id, a.datum, a.tijdslot, a.naam, a.telefoon, a.email, a.notitie, a.ingevuld_door, a.ingevuld_op " +
+              "from bodem_afspraken a join bodem_adressen d on d.id = a.adres_id " +
+              "where a.project_id = ?1 and d.toegewezen_aan = ?2 order by a.datum, a.tijdslot"
+            ).bind(projectId, mijnId ?? "__geen__").all();
         const { results: bezet } = await env.DB.prepare(
           "select datum, tijdslot, count(*) as n from bodem_afspraken where project_id = ? group by datum, tijdslot"
         ).bind(projectId).all<{ datum: string; tijdslot: string; n: number }>();
@@ -625,6 +655,10 @@ export default {
         if (!projectId || !adresId) return json({ error: "projectId en adresId zijn verplicht." }, 400);
         if (!/^\d{4}-\d{2}-\d{2}$/.test(datum)) return json({ error: "Ongeldige datum." }, 400);
         if (!/^\d{2}:\d{2}-\d{2}:\d{2}$/.test(tijdslot)) return json({ error: "Ongeldig tijdslot." }, 400);
+        if (!zietAlles) {
+          const van = await env.DB.prepare("select toegewezen_aan from bodem_adressen where id = ?").bind(adresId).first<{ toegewezen_aan: string | null }>();
+          if (van && van.toegewezen_aan !== mijnId) return json({ error: "Dit adres is niet aan jou toegewezen." }, 403);
+        }
 
         // Spelregels ophalen en toetsen. Zonder ingestelde planning laten we de boeking door (dan is er
         // nog niets ingesteld en mag het werk niet stilvallen), maar mét planning is de server leidend.
@@ -717,10 +751,16 @@ export default {
         if (!projectId) return json({ error: "projectId ontbreekt." }, 400);
         const sinds = url.searchParams.get("sinds") ?? "";
         const kolommen = ADRES_VELDEN.join(", ");
+        const mij = mijnId ?? "__geen__";
+        // De parameternummers lopen per tak netjes op; een gat erin laat de query mislukken.
         const { results } = sinds
-          ? await env.DB.prepare(`select ${kolommen} from bodem_adressen where project_id = ?1 and bijgewerkt_op > ?2 order by volgorde`).bind(projectId, sinds).all()
-          : await env.DB.prepare(`select ${kolommen} from bodem_adressen where project_id = ?1 and verwijderd = 0 order by volgorde`).bind(projectId).all();
-        return json({ adressen: results ?? [], tijd: nuISO });
+          ? zietAlles
+            ? await env.DB.prepare(`select ${kolommen} from bodem_adressen where project_id = ?1 and bijgewerkt_op > ?2 order by volgorde`).bind(projectId, sinds).all()
+            : await env.DB.prepare(`select ${kolommen} from bodem_adressen where project_id = ?1 and bijgewerkt_op > ?2 and toegewezen_aan = ?3 order by volgorde`).bind(projectId, sinds, mij).all()
+          : zietAlles
+            ? await env.DB.prepare(`select ${kolommen} from bodem_adressen where project_id = ?1 and verwijderd = 0 order by volgorde`).bind(projectId).all()
+            : await env.DB.prepare(`select ${kolommen} from bodem_adressen where project_id = ?1 and verwijderd = 0 and toegewezen_aan = ?2 order by volgorde`).bind(projectId, mij).all();
+        return json({ adressen: results ?? [], tijd: nuISO, alleenEigen: !zietAlles });
       }
 
       // In bulk wegschrijven: import en het verdelen over het team. In stukjes van 40, want D1 kent een
@@ -728,6 +768,7 @@ export default {
       if (path === "/bodem/adressen" && req.method === "POST") {
         const projectId = String(body.projectId ?? "");
         const lijst = Array.isArray(body.adressen) ? (body.adressen as Record<string, unknown>[]) : [];
+        if (!zietAlles) return json({ error: "Alleen een beheerder mag adressen importeren of verdelen." }, 403);
         if (!projectId) return json({ error: "projectId ontbreekt." }, 400);
         if (!lijst.length) return json({ ok: true, aantal: 0 });
         if (lijst.length > 5000) return json({ error: "Te veel adressen in één keer (maximaal 5000)." }, 400);
@@ -780,6 +821,13 @@ export default {
 
         const teZetten = Object.keys(patch).filter((k) => (ADRES_VELDEN as readonly string[]).includes(k) && k !== "id" && k !== "project_id");
         if (!teZetten.length) return json({ error: "Niets om bij te werken." }, 400);
+        // Een medewerker mag alleen aan zijn eigen adressen komen.
+        if (!zietAlles) {
+          const van = await env.DB.prepare("select toegewezen_aan from bodem_adressen where id = ?").bind(id).first<{ toegewezen_aan: string | null }>();
+          if (van && van.toegewezen_aan !== mijnId) return json({ error: "Dit adres is niet aan jou toegewezen." }, 403);
+          // De toewijzing zelf mag hij niet wijzigen — anders kan hij zichzelf adressen toe-eigenen.
+          if ("toegewezen_aan" in patch) return json({ error: "Alleen een beheerder mag adressen toewijzen." }, 403);
+        }
 
         // Bestaat de rij nog niet (offline aangemaakt), dan zetten we hem hier alsnog neer.
         const zet = teZetten.map((k, i) => `${k} = ?${i + 3}`).join(", ");
