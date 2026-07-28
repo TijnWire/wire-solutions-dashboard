@@ -124,6 +124,10 @@ export function AkkoordFlow({ pd, onTerug }: { pd: string; onTerug: () => void }
     );
   }
 
+  // Staat er een groep open, dan is dat het scherm. Geen stappenbalk en geen dossierkop erboven: aan
+  // de deur wil je het adres meteen zien, niet na 450 pixels scrollen.
+  if (cluster) return <AkkoordClusterWerk clusterId={cluster} onTerug={() => { setCluster(null); void laad(); }} />;
+
   return (
     <div className="space-y-4">
       <button type="button" onClick={onTerug} className="inline-flex items-center gap-1.5 text-sm font-semibold text-sky-700">
@@ -181,11 +185,9 @@ export function AkkoordFlow({ pd, onTerug }: { pd: string; onTerug: () => void }
       )}
 
       {actief === "onderweg" && (
-        cluster
-          ? <AkkoordClusterWerk clusterId={cluster} onTerug={() => { setCluster(null); void laad(); }} />
-          : clusters.length === 0
-            ? <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">Maak eerst groepen in stap 2.</p>
-            : (
+        clusters.length === 0
+          ? <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">Maak eerst groepen in stap 2.</p>
+          : (
               <div className="space-y-1.5">
                 {clusters.map((k) => (
                   <button key={k.id} type="button" onClick={() => setCluster(k.id)}
