@@ -1,4 +1,4 @@
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { ArrowLeft, Plus, FlaskConical, Trash2, MessageCircle, Phone, Navigation, FileDown, FileUp, Mail, Check, Wand2, ChevronRight, ChevronDown, X, UserPlus, RotateCcw, Footprints, Search, CalendarClock, Pencil } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { WerknemerKiezer } from "../components/WerknemerKiezer";
@@ -13,6 +13,7 @@ import { BodemPlanning, BodemAfspraken } from "../components/BodemPlanning";
 import { BodemImport } from "../components/BodemImport";
 import { BodemToewijzen } from "../components/BodemToewijzen";
 import { BodemOverzicht } from "../components/BodemOverzicht";
+import { haalAdressen, zetAdressen, wijzigAdres, verwerkWachtrij, aantalWachtend } from "../lib/bodemAdressen";
 import { DeurRonde } from "./DeurRonde";
 import { sorteerRoute, voortgangVan } from "../lib/bodemonderzoek";
 import {
@@ -312,6 +313,12 @@ function TauwDetail({ opdracht, onTerug }: { opdracht: TauwOpdracht; onTerug: ()
 
   const [rondeOpen, setRondeOpen] = useState(false); // de gefocuste deur-ronde (bodemonderzoek)
   const [importOpen, setImportOpen] = useState(false); // de import-wizard in een bestaande map
+  // Bodemonderzoek bewaart adressen als losse rijen in de database (lib/bodemAdressen.ts): geen grens
+  // meer aan het aantal, en een wijziging aan de deur is een berichtje van tientallen bytes in plaats
+  // van de hele lijst. Een bezoekronde blijft werken zoals hij werkte.
+  const [dbAdressen, setDbAdressen] = useState<TauwAdres[] | null>(null);
+  const [offline, setOffline] = useState(false);
+  const [wachtend, setWachtend] = useState(0);
   const [zoek, setZoek] = useState(""); // zoeken op straat/plaats/bewoner binnen de map
   // Selectie van te-lopen adressen → route over de selectie, geordend op looproute-volgorde.
   const [selectie, setSelectie] = useState<Set<string>>(new Set());
@@ -330,15 +337,65 @@ function TauwDetail({ opdracht, onTerug }: { opdracht: TauwOpdracht; onTerug: ()
       adressen: opdracht.adressen.map((a) => (a.id === adresId ? { ...a, ...patch, bijgewerktOp: new Date().toISOString() } : a)),
     });
   };
+  const isBodemMap = opdracht.type === "bodemonderzoek";
+
+  // Ophalen bij openen, en opnieuw zodra het apparaat weer online komt. Wat er nog in de wachtrij
+  // staat (gemaakt zonder bereik) wordt dan meteen alsnog verstuurd.
+  useEffect(() => {
+    if (!isBodemMap) return;
+    let actief = true;
+    const laad = async () => {
+      await verwerkWachtrij();
+      let r = await haalAdressen(opdracht.id);
+      // Eenmalige overzetting: staan de adressen nog in de oude gedeelde lijst en nog niet in de
+      // database, dan gaan ze daar nu heen. Pas als dat gelukt is halen we ze opnieuw op; de oude
+      // lijst blijft staan tot dat is bevestigd, zodat er niets tussen wal en schip valt.
+      if (r.online && r.adressen.length === 0 && opdracht.adressen.filter(heeftInhoud).length > 0) {
+        const over = sorteerRoute(opdracht.adressen.filter(heeftInhoud));
+        const gelukt = await zetAdressen(opdracht.id, over);
+        if (gelukt.ok) r = await haalAdressen(opdracht.id);
+      }
+      if (!actief) return;
+      setDbAdressen(r.adressen);
+      setOffline(!r.online);
+      setWachtend(await aantalWachtend());
+    };
+    void laad();
+    window.addEventListener("online", laad);
+    return () => { actief = false; window.removeEventListener("online", laad); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [opdracht.id, isBodemMap]);
+
+  // De rest van het scherm werkt met één lijst, waar die ook vandaan komt.
+  const adressen = isBodemMap ? (dbAdressen ?? []) : opdracht.adressen;
+  const werkOpdracht: TauwOpdracht = isBodemMap ? { ...opdracht, adressen } : opdracht;
+
   // De adressen die deze medewerker zelf moet aflopen, in looproute-volgorde. Is er niets verdeeld, dan
   // pakt de toegewezen medewerker gewoon de hele map.
   const eigenAdressen = sorteerRoute(
-    opdracht.adressen.some((a) => a.toegewezenAan)
-      ? opdracht.adressen.filter((a) => a.toegewezenAan === currentUser?.id)
-      : isToegewezen ? opdracht.adressen : []
+    adressen.some((a) => a.toegewezenAan)
+      ? adressen.filter((a) => a.toegewezenAan === currentUser?.id)
+      : isToegewezen ? adressen : []
   );
   const isBodem = opdracht.type === "bodemonderzoek";
   const bodemVoortgang = voortgangVan(eigenAdressen);
+
+
+  // Hele lijst wegschrijven (import, verdelen, sorteren).
+  const bewaarLijst = (next: TauwAdres[]) => {
+    if (!isBodemMap) { setAdressen(next); return; }
+    setDbAdressen(next);
+    void zetAdressen(opdracht.id, next).then((r) => setOffline(!r.ok));
+  };
+  // Eén adres bijwerken (de deur-ronde).
+  const bewaarAdres = (adresId: string, patch: Partial<TauwAdres>) => {
+    if (!isBodemMap) { patchAdres(adresId, patch); return; }
+    setDbAdressen((prev) => (prev ?? []).map((a) => (a.id === adresId ? { ...a, ...patch } : a)));
+    void wijzigAdres(opdracht.id, adresId, patch).then(async (r) => {
+      setOffline(!r.online);
+      setWachtend(await aantalWachtend());
+    });
+  };
 
   const eersteMetPostcode = opdracht.adressen.find((a) => a.postcode.trim());
   const bevestigd = opdracht.adressen.filter((a) => a.bevestigd).length;
@@ -401,12 +458,12 @@ function TauwDetail({ opdracht, onTerug }: { opdracht: TauwOpdracht; onTerug: ()
       {/* De import-wizard: kolommen zelf toewijzen, alles gecontroleerd, en pas dan in een keer erbij. */}
       {importOpen && isLeiding && (
         <BodemImport
-          bestaand={opdracht.adressen}
+          bestaand={adressen}
           onAnnuleer={() => setImportOpen(false)}
           onKlaar={(nieuwe) => {
             // De bestaande lijst blijft heel; de nieuwe adressen komen erbij en alles gaat opnieuw
             // op looproute. Lege placeholder-regels vallen weg.
-            setAdressen(sorteerRoute([...opdracht.adressen.filter(heeftInhoud), ...nieuwe]));
+            bewaarLijst(sorteerRoute([...adressen.filter(heeftInhoud), ...nieuwe]));
             setImportOpen(false);
           }}
         />
@@ -467,9 +524,9 @@ function TauwDetail({ opdracht, onTerug }: { opdracht: TauwOpdracht; onTerug: ()
   if (rondeOpen && isBodem) {
     return (
       <DeurRonde
-        opdracht={opdracht}
+        opdracht={werkOpdracht}
         adressen={eigenAdressen}
-        onOpslaan={patchAdres}
+        onOpslaan={bewaarAdres}
         onTerug={() => setRondeOpen(false)}
       />
     );
@@ -694,23 +751,30 @@ function TauwDetail({ opdracht, onTerug }: { opdracht: TauwOpdracht; onTerug: ()
 
       {/* Bodemonderzoek: eerst de ronde voorbereiden (opdrachtgever, periode, team, verdeling), daarna
           de adressenlijst. Bij een bezoekronde blijft het scherm zoals het was. */}
+      {isBodemMap && (offline || wachtend > 0) && (
+        <div className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          {offline
+            ? "Geen verbinding met de centrale database. Je werk wordt lokaal bewaard en gaat vanzelf mee zodra je weer bereik hebt."
+            : `${wachtend} wijziging${wachtend === 1 ? "" : "en"} wacht nog op verzending.`}
+        </div>
+      )}
       {isBodem && (
         <BodemPlanning
-          opdracht={opdracht}
+          opdracht={werkOpdracht}
           users={users.filter((u) => u.rol === "monteur" || u.werknemer)}
           onWijzig={(patch) => updateTauw(opdracht.id, patch)}
         />
       )}
       {isBodem && (
         <BodemToewijzen
-          adressen={opdracht.adressen}
+          adressen={adressen}
           users={users}
           team={opdracht.team ?? []}
-          onWijzig={(next) => updateTauw(opdracht.id, { adressen: next })}
+          onWijzig={bewaarLijst}
         />
       )}
-      {isBodem && <BodemOverzicht opdracht={opdracht} users={users} />}
-      {isBodem && <BodemAfspraken opdracht={opdracht} users={users} />}
+      {isBodem && <BodemOverzicht opdracht={werkOpdracht} users={users} />}
+      {isBodem && <BodemAfspraken opdracht={werkOpdracht} users={users} />}
       {rondeStart}
       {adressenSectie}
 
