@@ -754,6 +754,18 @@ export default {
           await env.DB.batch(stuk);
           aantal += stuk.length;
         }
+        // Tweede kopie naar Supabase (achtergrond; vertraagt of blokkeert deze schrijf nooit).
+        spiegelUpsert(env, ctx, "bodem_adressen", lijst.map((a) => ({
+          id: String(a.id ?? ""), project_id: projectId, volgorde: Number(a.volgorde ?? 0),
+          straat: String(a.straat ?? ""), huisnummer: String(a.huisnummer ?? ""), postcode: String(a.postcode ?? ""),
+          plaats: String(a.plaats ?? ""), wijk: String(a.wijk ?? ""), perceel: String(a.perceel ?? ""),
+          bewoner: String(a.bewoner ?? ""), telefoon: String(a.telefoon ?? ""), email: String(a.email ?? ""),
+          notitie: String(a.notitie ?? ""), toegewezen_aan: a.toegewezen_aan ?? null,
+          aanwezig: String(a.aanwezig ?? ""), datum: String(a.datum ?? ""), tijdslot: String(a.tijdslot ?? ""),
+          toestemming_tuin: !!a.toestemming_tuin, uitkomst: String(a.uitkomst ?? ""), pogingen: Number(a.pogingen ?? 0),
+          afgerond: !!a.afgerond, afgerond_op: String(a.afgerond_op ?? ""), afgerond_door: String(a.afgerond_door ?? ""),
+          verwijderd: !!a.verwijderd, bijgewerkt_op: nuISO,
+        })), "id");
         broadcast(env, ctx, { type: "bodem", projectId, updated_at: nuISO });
         return json({ ok: true, aantal, tijd: nuISO });
       }
@@ -784,6 +796,16 @@ export default {
           await env.DB.prepare("insert into bodem_adressen (id, project_id, bijgewerkt_op) values (?1, ?2, ?3) on conflict(id) do nothing")
             .bind(id, projectId, nuISO).run();
           await env.DB.prepare(`update bodem_adressen set ${zet}, bijgewerkt_op = ?2 where id = ?1`).bind(id, nuISO, ...waarden).run();
+        }
+        if (spiegelAan(env)) {
+          const rij = await env.DB.prepare(`select ${ADRES_VELDEN.join(", ")} from bodem_adressen where id = ?`).bind(id).first();
+          if (rij) {
+            const r = rij as Record<string, unknown>;
+            spiegelUpsert(env, ctx, "bodem_adressen", [{
+              ...r,
+              toestemming_tuin: !!r.toestemming_tuin, afgerond: !!r.afgerond, verwijderd: !!r.verwijderd,
+            }], "id");
+          }
         }
         broadcast(env, ctx, { type: "bodem", projectId, updated_at: nuISO });
         return json({ ok: true, tijd: nuISO });

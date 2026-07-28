@@ -68,6 +68,39 @@ create table if not exists public.bodem_afspraken (
 );
 create index if not exists bodem_afspraken_slot_idx on public.bodem_afspraken (project_id, datum, tijdslot);
 
+create table if not exists public.bodem_adressen (
+  id               text primary key,
+  project_id       text not null,
+  volgorde         integer not null default 0,
+  straat           text not null default '',
+  huisnummer       text not null default '',
+  postcode         text not null default '',
+  plaats           text not null default '',
+  wijk             text not null default '',
+  perceel          text not null default '',
+  bewoner          text not null default '',
+  telefoon         text not null default '',
+  email            text not null default '',
+  notitie          text not null default '',
+  toegewezen_aan   text,
+  aanwezig         text not null default '',
+  datum            text not null default '',
+  tijdslot         text not null default '',
+  toestemming_tuin boolean not null default false,
+  uitkomst         text not null default '',
+  pogingen         integer not null default 0,
+  afgerond         boolean not null default false,
+  afgerond_op      text not null default '',
+  afgerond_door    text not null default '',
+  verwijderd       boolean not null default false,
+  bijgewerkt_op    text not null default '',
+  gespiegeld_op    timestamptz
+);
+create index if not exists bodem_adressen_project_idx on public.bodem_adressen (project_id, volgorde);
+alter table public.bodem_adressen enable row level security;
+drop policy if exists bodem_adressen_select on public.bodem_adressen;
+create policy bodem_adressen_select on public.bodem_adressen for select using (public.is_team());
+
 create table if not exists public.bodem_bezoeken (
   id         bigint generated always as identity primary key,
   project_id text not null,
