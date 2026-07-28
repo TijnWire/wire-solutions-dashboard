@@ -877,6 +877,7 @@ export default {
         const uit = await akkoordRoutes(path, req.method, url, body, {
           env, ikEmail, nuISO, json,
           magBeheren: magAlles(mijnRechten?.rol) || mijnRechten?.rol === "beheer",
+          mijnUserId: mijnId ?? (await mijnUserId(env, ikEmail)),
           log: (v) => {
             ctx.waitUntil(
               env.DB.prepare(
