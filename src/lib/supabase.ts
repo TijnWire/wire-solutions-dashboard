@@ -298,6 +298,18 @@ export async function sbBodemBezoek(v: { projectId: string; adresId: string; uit
   catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
 }
 
+// Het wijzigingslog van een bodemonderzoek-project (alleen voor de leiding).
+export type BodemLogRegel = {
+  id: number; adres_id: string; gebeurtenis: string;
+  oud: string; nieuw: string; door: string; tijdstip: string;
+};
+export async function sbBodemLog(projectId: string): Promise<BodemLogRegel[]> {
+  try {
+    const r = await cloudGet<{ regels: BodemLogRegel[] }>(`/bodem/log?projectId=${encodeURIComponent(projectId)}`);
+    return r.regels ?? [];
+  } catch { return []; }
+}
+
 // Welke onderdelen mag dit account niet inzien? De server bepaalt dat; de app gebruikt het antwoord om
 // die onderdelen niet te uploaden en haar eigen (mogelijk oude) kopie lokaal op te ruimen.
 export type MijnRechten = { rol: string; boekhouding: boolean; afgeschermd: string[] };

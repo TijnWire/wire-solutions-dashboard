@@ -113,6 +113,20 @@ create table if not exists public.bodem_bezoeken (
 );
 create index if not exists bodem_bezoeken_adres_idx on public.bodem_bezoeken (project_id, adres_id);
 
+create table if not exists public.bodem_log (
+  id          bigint generated always as identity primary key,
+  project_id  text not null,
+  adres_id    text not null default '',
+  gebeurtenis text not null,
+  oud         text not null default '',
+  nieuw       text not null default '',
+  door        text not null default '',
+  tijdstip    text not null
+);
+create index if not exists bodem_log_project_idx on public.bodem_log (project_id, tijdstip);
+alter table public.bodem_log enable row level security;
+-- Bewust geen policy: alleen de Worker (service_role) schrijft en leest hier.
+
 alter table public.bodem_projecten enable row level security;
 alter table public.bodem_afspraken enable row level security;
 alter table public.bodem_bezoeken  enable row level security;

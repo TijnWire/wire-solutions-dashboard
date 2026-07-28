@@ -1,12 +1,25 @@
-import { useMemo, useState } from "react";
-import { CalendarDays, FileDown, FileText, Users, Loader2, PhoneCall, CloudOff } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { CalendarDays, FileDown, FileText, Users, Loader2, PhoneCall, CloudOff, History, ChevronDown } from "lucide-react";
 import { Card } from "./ui";
 import { dagLabel, telefoonNet, voortgangVan, TIJDSLOTS } from "../lib/bodemonderzoek";
 import { exporteerBodemExcel, exporteerBodemPdf } from "../lib/bodemExport";
+import { sbBodemLog, type BodemLogRegel } from "../lib/supabase";
 import type { TauwAdres, TauwOpdracht, User } from "../lib/types";
 
 // Wat de beheerder ziet als de ronde loopt: hoe ver het staat, wat er per dag gepland is, en de knop
 // om het naar TAUW of Van der Helm te sturen.
+
+// Nette omschrijvingen voor in het log.
+const LOG_LABEL: Record<string, string> = {
+  afspraak_gemaakt: "Afspraak gemaakt",
+  afspraak_verplaatst: "Afspraak verplaatst",
+  afspraak_ingetrokken: "Afspraak ingetrokken",
+  uitkomst: "Uitkomst gewijzigd",
+  toegewezen: "Toegewezen",
+  verwijderd: "Adres verwijderd",
+  geimporteerd: "Adressen ingelezen",
+  verdeeld: "Adressen verdeeld",
+};
 
 const knop = "inline-flex items-center gap-2 rounded-lg border border-ink-200 bg-white px-3.5 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-50 disabled:opacity-40";
 
@@ -21,6 +34,13 @@ function Tegel({ n, label, kleur }: { n: number; label: string; kleur: string })
 
 export function BodemOverzicht({ opdracht, users }: { opdracht: TauwOpdracht; users: User[] }) {
   const [bezig, setBezig] = useState<"" | "excel" | "pdf">("");
+  const [logOpen, setLogOpen] = useState(false);
+  const [log, setLog] = useState<BodemLogRegel[] | null>(null);
+  // Pas ophalen als je het opent — het log kan lang worden en is zelden nodig.
+  useEffect(() => {
+    if (!logOpen || log) return;
+    void sbBodemLog(opdracht.id).then(setLog);
+  }, [logOpen, log, opdracht.id]);
   const naamVan = (id?: string) => (id ? users.find((u) => u.id === id)?.naam ?? "Onbekend" : "—");
   const v = voortgangVan(opdracht.adressen);
 
@@ -185,6 +205,40 @@ export function BodemOverzicht({ opdracht, users }: { opdracht: TauwOpdracht; us
                 ))}
               </div>
             ))}
+          </div>
+        )}
+      </div>
+      {/* Wijzigingslog — wie heeft wanneer wat gedaan. Ingeklapt, want je hebt het pas nodig als er
+          een vraag over komt. */}
+      <div className="border-t border-ink-100 pt-3">
+        <button
+          type="button"
+          onClick={() => setLogOpen((v) => !v)}
+          className="inline-flex items-center gap-1.5 text-sm font-semibold text-ink-600 hover:text-ink-900"
+        >
+          <History className="h-4 w-4 text-ink-400" /> Wijzigingslog
+          <ChevronDown className={`h-4 w-4 transition-transform ${logOpen ? "rotate-180" : ""}`} />
+        </button>
+        {logOpen && (
+          <div className="mt-2 max-h-72 overflow-auto rounded-lg border border-ink-200">
+            {log === null ? (
+              <p className="p-4 text-center text-sm text-ink-400">Bezig met ophalen…</p>
+            ) : log.length === 0 ? (
+              <p className="p-4 text-center text-sm text-ink-400">Nog niets vastgelegd voor dit project.</p>
+            ) : log.map((r, i) => {
+              const adres = opdracht.adressen.find((a) => a.id === r.adres_id);
+              return (
+                <div key={r.id} className={`flex flex-wrap items-baseline gap-x-2 px-3 py-1.5 text-xs ${i % 2 ? "bg-ink-50/50" : ""}`}>
+                  <span className="w-32 shrink-0 text-ink-400">{r.tijdstip.slice(0, 16).replace("T", " ")}</span>
+                  <span className="font-semibold text-ink-800">{LOG_LABEL[r.gebeurtenis] ?? r.gebeurtenis}</span>
+                  {adres && <span className="text-ink-700">{`${adres.straat} ${adres.huisnummer}`.trim()}</span>}
+                  {(r.oud || r.nieuw) && (
+                    <span className="text-ink-500">{r.oud ? `${r.oud} → ` : ""}{r.nieuw || "—"}</span>
+                  )}
+                  <span className="ml-auto text-ink-400">{r.door}</span>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

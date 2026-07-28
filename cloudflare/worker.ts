@@ -199,6 +199,26 @@ async function hoortBijHetTeam(env: Env, email: string): Promise<boolean> {
   );
 }
 
+// Een gebeurtenis vastleggen in het wijzigingslog. Bewust in de achtergrond: het log is belangrijk,
+// maar niet zo belangrijk dat een medewerker aan de deur erop moet wachten of een fout krijgt als het
+// even niet lukt.
+function logBodem(
+  env: Env, ctx: ExecutionContext,
+  v: { projectId: string; adresId?: string; gebeurtenis: string; oud?: string; nieuw?: string; door: string; tijd: string },
+): void {
+  ctx.waitUntil(
+    env.DB.prepare(
+      "insert into bodem_log (project_id, adres_id, gebeurtenis, oud, nieuw, door, tijdstip) values (?1, ?2, ?3, ?4, ?5, ?6, ?7)"
+    ).bind(v.projectId, v.adresId ?? "", v.gebeurtenis, v.oud ?? "", v.nieuw ?? "", v.door, v.tijd).run()
+      .then(() => undefined)
+      .catch((e) => console.log("[log] wegschrijven mislukt:", String(e).slice(0, 120))),
+  );
+  spiegelInsert(env, ctx, "bodem_log", {
+    project_id: v.projectId, adres_id: v.adresId ?? "", gebeurtenis: v.gebeurtenis,
+    oud: v.oud ?? "", nieuw: v.nieuw ?? "", door: v.door, tijdstip: v.tijd,
+  });
+}
+
 // Van e-mailadres naar het gebruikers-id uit de app. De Worker kent alleen het adres uit de token,
 // maar adressen zijn toegewezen op id. Zonder deze vertaling kan er geen afscherming per medewerker zijn.
 async function mijnUserId(env: Env, email: string): Promise<string | null> {
@@ -680,6 +700,9 @@ export default {
           if (slot && typeof slot.max === "number" && slot.max >= 0) max = slot.max;
         }
 
+        const bestaandeAfspraak = await env.DB.prepare("select datum, tijdslot from bodem_afspraken where adres_id = ?")
+          .bind(adresId).first<{ datum: string; tijdslot: string }>();
+
         // Eén ondeelbare opdracht: tellen én wegschrijven. Het eigen adres telt niet mee, zodat een
         // bestaande afspraak verplaatsen binnen hetzelfde blok blijft werken.
         const res = await env.DB.prepare(
@@ -693,6 +716,16 @@ export default {
           ikEmail, nuISO, max,
         ).run();
 
+        // Stond er al een afspraak? Dan is dit een verplaatsing, en dat is precies wat je later wilt
+        // kunnen navertellen als de bewoner belt dat hij op een ander moment werd verwacht.
+        if (res.meta.changes) {
+          logBodem(env, ctx, {
+            projectId, adresId, door: ikEmail, tijd: nuISO,
+            gebeurtenis: bestaandeAfspraak ? "afspraak_verplaatst" : "afspraak_gemaakt",
+            oud: bestaandeAfspraak ? `${bestaandeAfspraak.datum} ${bestaandeAfspraak.tijdslot}` : "",
+            nieuw: `${datum} ${tijdslot}`,
+          });
+        }
         if (!res.meta.changes) {
           const vol = await env.DB.prepare("select count(*) as n from bodem_afspraken where project_id = ? and datum = ? and tijdslot = ?")
             .bind(projectId, datum, tijdslot).first<{ n: number }>();
@@ -710,8 +743,16 @@ export default {
       if (path === "/bodem/afspraak" && req.method === "DELETE") {
         const adresId = String(body.adresId ?? "");
         if (!adresId) return json({ error: "adresId ontbreekt." }, 400);
+        const weg = await env.DB.prepare("select project_id, datum, tijdslot from bodem_afspraken where adres_id = ?")
+          .bind(adresId).first<{ project_id: string; datum: string; tijdslot: string }>();
         await env.DB.prepare("delete from bodem_afspraken where adres_id = ?").bind(adresId).run();
         spiegelVerwijder(env, ctx, "bodem_afspraken", "adres_id", adresId);
+        if (weg) {
+          logBodem(env, ctx, {
+            projectId: weg.project_id, adresId, gebeurtenis: "afspraak_ingetrokken",
+            oud: `${weg.datum} ${weg.tijdslot}`, door: ikEmail, tijd: nuISO,
+          });
+        }
         return json({ ok: true });
       }
 
@@ -733,6 +774,19 @@ export default {
           notitie: String(body.notitie ?? ""), door: ikEmail, tijdstip: nuISO,
         });
         return json({ ok: true, poging });
+      }
+
+      // Het wijzigingslog uitlezen. Alleen de leiding: er staan e-mailadressen en bewonersgegevens in.
+      if (path === "/bodem/log" && req.method === "GET") {
+        if (!magAlles(mijnRechten?.rol) && mijnRechten?.rol !== "beheer") {
+          return json({ error: "Alleen een beheerder mag het wijzigingslog inzien." }, 403);
+        }
+        const projectId = url.searchParams.get("projectId") ?? "";
+        if (!projectId) return json({ error: "projectId ontbreekt." }, 400);
+        const { results } = await env.DB.prepare(
+          "select id, adres_id, gebeurtenis, oud, nieuw, door, tijdstip from bodem_log where project_id = ? order by id desc limit 500"
+        ).bind(projectId).all();
+        return json({ regels: results ?? [] });
       }
 
       // ═══ BODEMONDERZOEK — adressen als losse rijen ═══
@@ -807,6 +861,11 @@ export default {
           afgerond: !!a.afgerond, afgerond_op: String(a.afgerond_op ?? ""), afgerond_door: String(a.afgerond_door ?? ""),
           verwijderd: !!a.verwijderd, bijgewerkt_op: nuISO,
         })), "id");
+        // Eén regel voor de hele actie — een regel per adres maakt het log onleesbaar.
+        logBodem(env, ctx, {
+          projectId, gebeurtenis: lijst.some((a) => a.toegewezen_aan !== undefined) ? "verdeeld" : "geimporteerd",
+          nieuw: `${aantal} adressen`, door: ikEmail, tijd: nuISO,
+        });
         broadcast(env, ctx, { type: "bodem", projectId, updated_at: nuISO });
         return json({ ok: true, aantal, tijd: nuISO });
       }
@@ -828,6 +887,9 @@ export default {
           // De toewijzing zelf mag hij niet wijzigen — anders kan hij zichzelf adressen toe-eigenen.
           if ("toegewezen_aan" in patch) return json({ error: "Alleen een beheerder mag adressen toewijzen." }, 403);
         }
+
+        const vorige = await env.DB.prepare("select uitkomst, toegewezen_aan, verwijderd from bodem_adressen where id = ?")
+          .bind(id).first();
 
         // Bestaat de rij nog niet (offline aangemaakt), dan zetten we hem hier alsnog neer.
         const zet = teZetten.map((k, i) => `${k} = ?${i + 3}`).join(", ");
@@ -854,6 +916,16 @@ export default {
               toestemming_tuin: !!r.toestemming_tuin, afgerond: !!r.afgerond, verwijderd: !!r.verwijderd,
             }], "id");
           }
+        }
+        // Alleen de wijzigingen vastleggen waar later vragen over komen — niet elk ingevuld veld.
+        const vorigeWaarden = (vorige ?? {}) as Record<string, unknown>;
+        for (const [veld, gebeurtenis] of [["uitkomst", "uitkomst"], ["toegewezen_aan", "toegewezen"], ["verwijderd", "verwijderd"]] as const) {
+          if (!(veld in patch)) continue;
+          logBodem(env, ctx, {
+            projectId, adresId: id, gebeurtenis,
+            oud: String(vorigeWaarden[veld] ?? ""),
+            nieuw: String(patch[veld] ?? ""), door: ikEmail, tijd: nuISO,
+          });
         }
         broadcast(env, ctx, { type: "bodem", projectId, updated_at: nuISO });
         return json({ ok: true, tijd: nuISO });
