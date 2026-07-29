@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Users, AlertTriangle, Loader2, ArrowLeft, Check, CheckCircle2, XCircle, DoorClosed, Ban,
-  CalendarCheck, Scissors, WifiOff, Clock, RefreshCw, ShieldAlert, Phone,
+  CalendarCheck, Scissors, WifiOff, Clock, RefreshCw, ShieldAlert,
 } from "lucide-react";
 import { DatumKiezer } from "./DatumKiezer";
 import { SaneerOnderweg } from "./SaneerOnderweg";
@@ -419,40 +419,15 @@ export function SaneerClusterWerk({ clusterId, onTerug }: { clusterId: string; o
 
       {fout && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{fout}</p>}
 
-      {/* ── Langs de deuren ── route, telefoonnummers en het kaartje in de bus. */}
-      <SaneerOnderweg cluster={cluster} adressen={data.adressen} onWijzig={() => void laad()} />
+      {/* ── Langs de deuren ── één kaart per voordeur: telefoonnummer, de datum en wat je aan die
+          deur bent tegengekomen. Alles op één plek, want aan de deur is dat ook één gesprek. */}
+      <SaneerOnderweg
+        adressen={data.adressen}
+        ronde={ronde}
+        responsen={data.responsen}
+        onWijzig={() => void laad()}
+      />
 
-      {/* Loopt er een ronde over een datum, dan kun je per deur ook het antwoord vastleggen. Dat is
-          een aparte stap: aan de deur haal je meestal alleen het telefoonnummer op, en de datum
-          bespreek je daarna telefonisch. */}
-      {ronde && (
-        <details className="rounded-2xl border border-ink-200 bg-white">
-          <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-ink-800">
-            Antwoord op de voorgestelde datum vastleggen ({stand.akkoord} van de {stand.totaal} akkoord)
-          </summary>
-          <div className="space-y-1.5 border-t border-ink-100 p-3">
-            {data.adressen.map((a) => {
-              const r = perAdres.get(a.id);
-              const info = r ? ANTWOORD_INFO[r.antwoord] : null;
-              return (
-                <button key={a.id} type="button" onClick={() => setDeur(a)}
-                  className="flex w-full items-center justify-between gap-3 rounded-xl border border-ink-200 bg-white px-4 py-2.5 text-left transition-colors hover:bg-ink-50">
-                  <div className="min-w-0">
-                    <div className="truncate font-semibold text-ink-900">{adresTekst(a)}</div>
-                    <div className="truncate text-xs text-ink-500">
-                      {a.bewoner || "naam onbekend"}
-                      {a.telefoon && <span className="ml-2 inline-flex items-center gap-1"><Phone className="h-3 w-3" />{a.telefoon}</span>}
-                    </div>
-                  </div>
-                  {info
-                    ? <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${KLEUR[info.kleur]}`}>{info.kort}</span>
-                    : <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${KLEUR.slate}`}>nog niet</span>}
-                </button>
-              );
-            })}
-          </div>
-        </details>
-      )}
     </div>
   );
 }
