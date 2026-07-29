@@ -27,6 +27,7 @@ import {
   User,
 } from "lucide-react";
 import { useApp } from "../store/AppContext";
+import { useProjectFilter } from "../components/ProjectFilter";
 import { mapPastBijPlaats } from "../lib/voorschouwGroep";
 import { scrollNaarBoven } from "../lib/scroll";
 import { Card, Badge, Bevestig } from "../components/ui";
@@ -394,7 +395,13 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
   };
 
   // Groepeer de zichtbare voorschouwen per eigen map; losse adressen onder "Zonder map".
-  const actieveMappen = voorschouwMappen.filter((m) => !m.gearchiveerd && !m.gereedVoorStedin);
+  const nietGearchiveerd = voorschouwMappen.filter((m) => !m.gearchiveerd && !m.gereedVoorStedin);
+  const filter = useProjectFilter(nietGearchiveerd, {
+    datum: (m) => m.aangemaakt,
+    isOpen: () => true,
+    toonOpenKnop: false,
+  });
+  const actieveMappen = filter.zichtbaar;
   const geldigeMapIds = new Set(actieveMappen.map((m) => m.id));
   // Mappen die klaarstaan voor de controle-/verstuurpagina "Klaar voor Stedin".
   const gereedeMappen = voorschouwMappen.filter((m) => !m.gearchiveerd && m.gereedVoorStedin);
@@ -893,6 +900,8 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
         </Card>
       ) : (
         <div className="space-y-5">
+          {filter.balk}
+
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-sm font-bold text-ink-700">Adressen in mappen</h3>
             <button type="button" onClick={nieuweMap} className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 bg-white px-3 py-1.5 text-xs font-semibold text-ink-700 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700">

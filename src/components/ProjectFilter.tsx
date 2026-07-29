@@ -20,6 +20,9 @@ export type { Periode };
 export function useProjectFilter<T>(items: T[], opties: {
   datum: (x: T) => string | undefined;   // waarop de periode wordt bepaald (ISO)
   isOpen: (x: T) => boolean;             // telt dit nog als lopend werk?
+  // Sommige pagina's hebben zelf al een open/dicht-knop (Voorschouwen: "zonder foto"). Twee knoppen
+  // die bijna hetzelfde doen is verwarrender dan geen, dus die kun je hier uitzetten.
+  toonOpenKnop?: boolean;
 }) {
   const [periode, setPeriode] = useState<Periode>("alles");
   const [anker, setAnker] = useState(() => new Date().toISOString().slice(0, 10));
@@ -55,21 +58,23 @@ export function useProjectFilter<T>(items: T[], opties: {
       anker={anker} setAnker={setAnker}
       alleenOpen={alleenOpen} setAlleenOpen={setAlleenOpen}
       aantalOpen={aantalOpen} aantalTotaal={items.length} aantalZichtbaar={zichtbaar.length}
+      toonOpenKnop={opties.toonOpenKnop !== false}
     />
   );
 
   return { periode, anker, alleenOpen, zichtbaar, aantalOpen, balk };
 }
 
-function ProjectFilterBalk({ periode, setPeriode, anker, setAnker, alleenOpen, setAlleenOpen, aantalOpen, aantalTotaal, aantalZichtbaar }: {
+function ProjectFilterBalk({ periode, setPeriode, anker, setAnker, alleenOpen, setAlleenOpen, aantalOpen, aantalTotaal, aantalZichtbaar, toonOpenKnop }: {
   periode: Periode; setPeriode: (p: Periode) => void;
   anker: string; setAnker: (s: string) => void;
   alleenOpen: boolean; setAlleenOpen: (b: boolean) => void;
   aantalOpen: number; aantalTotaal: number; aantalZichtbaar: number;
+  toonOpenKnop: boolean;
 }) {
   return (
     <div className="space-y-2">
-      <div className="flex flex-wrap items-center gap-2">
+      <div className={`flex flex-wrap items-center gap-2 ${toonOpenKnop ? "" : "hidden"}`}>
         <button
           type="button"
           onClick={() => setAlleenOpen(!alleenOpen)}

@@ -24,6 +24,7 @@ import {
   Receipt,
 } from "lucide-react";
 import { Navigation, ExternalLink, FileUp, Folder, Pencil, Send, CheckCircle2, Archive } from "lucide-react";
+import { useProjectFilter } from "../components/ProjectFilter";
 import { useApp } from "../store/AppContext";
 import { useNav } from "../store/NavContext";
 import { Keuze } from "../components/Keuze";
@@ -1256,11 +1257,18 @@ export function Brieven({ initieelRonde, initieelMap }: { initieelRonde?: string
   if (mapDetail && mapRondes.length > 0)
     return <MapDetail naam={mapDetail} rondes={mapRondes} isLeiding={isLeiding} onOpenRonde={setOpenId} onTerug={() => setMapDetail(null)} />;
 
+  // Dezelfde filterbalk als op de andere projectpagina's. De weekindeling hieronder groepeert
+  // gewoon opnieuw op wat er na het filteren overblijft, dus die twee bijten elkaar niet.
+  const filter = useProjectFilter(zichtbaar, {
+    datum: (r) => peildatum(r) || r.aangemaakt,
+    isOpen: isOpenRonde,
+  });
+
   // Samenvatting + groeperen per week (zelfde layout als TAUW)
   const vandaag = vandaagISO();
   const totOpenRondes = zichtbaar.filter(isOpenRonde).length;
   const totOpenAdr = zichtbaar.filter(isOpenRonde).reduce((s, r) => s + teGooien(r), 0);
-  const gesorteerd = [...zichtbaar].sort((a, b) => {
+  const gesorteerd = [...filter.zichtbaar].sort((a, b) => {
     const pa = peildatum(a), pb = peildatum(b);
     if (pa !== pb) return pa < pb ? -1 : 1;
     return a.straat.localeCompare(b.straat, "nl");
@@ -1495,6 +1503,8 @@ export function Brieven({ initieelRonde, initieelMap }: { initieelRonde?: string
         </Card>
       ) : (
         <div className="space-y-6">
+          {filter.balk}
+
           {/* Eén-oogopslag-samenvatting van wat er openstaat */}
           <div className="flex flex-wrap gap-3">
             <div className="rounded-xl border border-ink-200 bg-white px-4 py-2.5 shadow-card">
