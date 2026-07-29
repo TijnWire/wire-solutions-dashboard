@@ -512,6 +512,38 @@ export default {
         return json(await herstelAllemaal(env, out));
       }
 
+      // ── ONDERHOUD ── weesgeraakte stukken opruimen.
+      // Als het opruimen bij het schrijven faalt, stapelen oude versies van een groot onderdeel zich
+      // op. Deze route ruimt alles op wat niet meer bij de huidige versie hoort. Alleen voor de
+      // leiding, en hij raakt uitsluitend stukken aan — nooit een gewoon onderdeel.
+      if (path === "/state/opruimen" && req.method === "POST") {
+        if (!magAlles(mijnRechten?.rol)) return json({ error: "Alleen de leiding mag opruimen." }, 403);
+        const { results } = await env.DB.prepare("select key, data from wire_state").all<{ key: string; data: string }>();
+        const alles = results ?? [];
+        // Welke generatie hoort er bij elk onderdeel? Dat staat in de hoofdrij.
+        const houden = new Map<string, string>();
+        for (const r of alles) {
+          if (isDeelSleutel(r.key)) continue;
+          try {
+            const m = JSON.parse(r.data) as { __wire_delen?: number; gen?: string };
+            if (m && m.__wire_delen === 1 && m.gen) houden.set(r.key, m.gen);
+          } catch { /* geen markering */ }
+        }
+        const weg = alles.map((r) => r.key).filter((k) => {
+          if (!isDeelSleutel(k)) return false;
+          const basis = k.slice(0, k.indexOf(" deel "));
+          const gen = houden.get(basis);
+          // Hoort dit stuk niet bij de huidige generatie — of is er helemaal geen hoofdrij meer —
+          // dan is het een restant.
+          return !gen || !k.startsWith(`${basis} deel ${gen} `);
+        });
+        for (let i = 0; i < weg.length; i += 20) {
+          await env.DB.batch(weg.slice(i, i + 20).map((k) => env.DB.prepare("delete from wire_state where key = ?").bind(k)));
+        }
+        const na = await env.DB.prepare("select count(*) as n, sum(length(data)) as bytes from wire_state").first<{ n: number; bytes: number }>();
+        return json({ ok: true, verwijderd: weg.length, rijenOver: na?.n ?? 0, tekensOver: na?.bytes ?? 0 });
+      }
+
       if (path === "/state" && req.method === "POST") {
         const key = String(body.key ?? "");
         if (!key) return json({ error: "key ontbreekt." }, 400);
