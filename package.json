@@ -12,7 +12,8 @@
     "cf:tail": "wrangler tail",
     "test": "node scripts/test-bodem.mjs",
     "test:sync": "node scripts/test-sync.mjs",
-    "controleer": "node scripts/controleer-live.mjs"
+    "controleer": "node scripts/controleer-live.mjs",
+    "demo": "node scripts/demo-bestand.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.108.0",

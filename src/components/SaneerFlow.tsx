@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Check, ArrowLeft, ListPlus, Users, Footprints, PhoneCall, StickyNote, FileCheck2,
-  Loader2, AlertTriangle, CalendarCheck, ChevronRight, FileSpreadsheet, FileText, ShieldAlert,
+  Loader2, AlertTriangle, CalendarCheck, ChevronRight, FileSpreadsheet, FileText, ShieldAlert, ClipboardList,
 } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { SaneerImport } from "./SaneerImport";
@@ -12,6 +12,7 @@ import {
   haalExport, BELSTATUS_INFO, type FlowAdres, type Taak,
 } from "../lib/saneerflowWerk";
 import { exporteerSaneerExcel, exporteerSaneerPdf } from "../lib/saneerflowExport";
+import { maakChecklists } from "../lib/saneerChecklist";
 
 // Saneren — één dossier, stap voor stap.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -240,7 +241,7 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
       {actief === "bellen" && <Bellijst pd={pd} onWijzig={() => void laad()} />}
       {actief === "langs" && <LangsDeDeur adressen={langs} clusters={clusters} naamVan={naamVan} onWijzig={() => void laad()} />}
       {actief === "poster" && <Posters taken={taken} naamVan={naamVan} onWijzig={() => void laad()} />}
-      {actief === "afronden" && <Afronden dossier={dossier} clusters={clusters} taken={taken} onWijzig={() => void laad()} />}
+      {actief === "afronden" && <Afronden dossier={dossier} clusters={clusters} adressen={adressen} taken={taken} onWijzig={() => void laad()} />}
     </div>
   );
 }
@@ -443,9 +444,10 @@ function Posters({ taken, naamVan, onWijzig }: { taken: Taak[]; naamVan: (id?: s
 // ── Stap 7 — afronden en afboeken ──
 // De knop is geen meningsuiting: de server rekent na of alles echt klaar is en weigert anders. Wat er
 // nog openstaat, staat er letterlijk bij.
-function Afronden({ dossier, clusters, taken, onWijzig }: {
+function Afronden({ dossier, clusters, adressen, taken, onWijzig }: {
   dossier: Dossier;
   clusters: DossierDetail["clusters"];
+  adressen: FlowAdres[];
   taken: Taak[];
   onWijzig: () => void;
 }) {
@@ -462,6 +464,18 @@ function Afronden({ dossier, clusters, taken, onWijzig }: {
     setBezig("");
     if (!r.ok) { setFout(r.fout ?? "Mislukt."); return; }
     onWijzig();
+  }
+
+  // De Checklist M&A Saneren: het papieren formulier dat de schouwer invult, met de adressen en
+  // telefoonnummers er al in. Eén per groep, want een groep is één postcode en dus één gebouw.
+  async function checklists() {
+    setBezig("checklist"); setFout("");
+    const groepen = clusters
+      .map((k) => ({ cluster: k as unknown as Parameters<typeof maakChecklists>[1][number]["cluster"], adressen: adressen.filter((a) => a.cluster_id === k.id) }))
+      .filter((g) => g.adressen.length > 0);
+    const r = await maakChecklists(dossier, groepen);
+    setBezig("");
+    if (!r.ok) setFout(r.fout ?? "De checklists konden niet gemaakt worden.");
   }
 
   async function exporteer(soort: "xlsx" | "pdf") {
@@ -491,7 +505,10 @@ function Afronden({ dossier, clusters, taken, onWijzig }: {
           {bezig === "xlsx" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />} Excel
         </button>
         <button type="button" onClick={() => void exporteer("pdf")} disabled={!!bezig} className={`${knop} bg-white text-ink-700 ring-1 ring-ink-200 hover:bg-ink-50`}>
-          {bezig === "pdf" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />} PDF
+          {bezig === "pdf" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />} Uitvoeringslijst (PDF)
+        </button>
+        <button type="button" onClick={() => void checklists()} disabled={!!bezig || adressen.length === 0} className={`${knop} bg-white text-ink-700 ring-1 ring-ink-200 hover:bg-ink-50`}>
+          {bezig === "checklist" ? <Loader2 className="h-4 w-4 animate-spin" /> : <ClipboardList className="h-4 w-4" />} Checklists schouwer
         </button>
       </div>
 

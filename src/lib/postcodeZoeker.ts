@@ -127,7 +127,11 @@ export async function zoekPostcodes<T extends Adresvraag>(
       if (!rij) return;
       const t = await zoekPostcode(rij, stop);
       if (t) { onTreffer(rij, t); gevonden++; }
-      onVoortgang?.(++gedaan, lijst.length);
+      // Let op: eerst optellen, dán melden. Bij `onVoortgang?.(++gedaan, ...)` slaat JavaScript het
+      // hele argument over als er geen meldfunctie is meegegeven — dan blijft de teller op nul staan
+      // en klopt de uitkomst niet meer.
+      gedaan++;
+      onVoortgang?.(gedaan, lijst.length);
     }
   };
   await Promise.all(Array.from({ length: Math.min(5, lijst.length) }, werker));

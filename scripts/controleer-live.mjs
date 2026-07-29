@@ -81,6 +81,8 @@ for (const [wat, naald] of [
   ["postcodes opzoeken bij ontbreken", "Postcodes opzoeken"],
   ["aparte pagina langs de deur", "adressen zonder telefoonnummer"],
   ["een man op het hele project", "Wie voert dit werk uit?"],
+  ["checklist voor de schouwer", "Checklists schouwer"],
+  ["tabbalk bij Brieven & Routes", "Klaar voor Stedin"],
 ]) check(code.includes(naald), wat, "zit niet in de uitgerolde bundel");
 
 console.log(`\n${geslaagd} geslaagd, ${gefaald} gefaald`);

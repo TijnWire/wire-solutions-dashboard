@@ -23,7 +23,7 @@ import {
   Mail,
   Receipt,
 } from "lucide-react";
-import { Navigation, ExternalLink, FileUp, Folder, Pencil } from "lucide-react";
+import { Navigation, ExternalLink, FileUp, Folder, Pencil, Send, CheckCircle2, Archive } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { useNav } from "../store/NavContext";
 import { Keuze } from "../components/Keuze";
@@ -1140,6 +1140,29 @@ function MapDetail({ naam, rondes, isLeiding, onOpenRonde, onTerug }: { naam: st
   );
 }
 
+// De balk boven de pagina. Dezelfde als bij Voorschouwen — één plek leren klikken is genoeg.
+function TabBalk({ tab, setTab, klaar, archief }: {
+  tab: "overzicht" | "stedin" | "archief";
+  setTab: (t: "overzicht" | "stedin" | "archief") => void;
+  klaar: number;
+  archief: number;
+}) {
+  const knop = (k: typeof tab, label: string, n?: number) => (
+    <button type="button" onClick={() => setTab(k)}
+      className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
+        tab === k ? "bg-brand-600 text-white" : "text-ink-600 hover:bg-ink-50"}`}>
+      {label}{n ? ` (${n})` : ""}
+    </button>
+  );
+  return (
+    <div className="flex gap-1 rounded-xl border border-ink-200 bg-white p-1 shadow-card">
+      {knop("overzicht", "Overzicht")}
+      {knop("stedin", "Klaar voor Stedin", klaar)}
+      {knop("archief", "Archief", archief)}
+    </div>
+  );
+}
+
 export function Brieven({ initieelRonde, initieelMap }: { initieelRonde?: string; initieelMap?: string }) {
   const { rondes, currentUser, updateRonde } = useApp();
   const [openId, setOpenId] = useState<string | null>(initieelRonde ?? null);
@@ -1147,6 +1170,10 @@ export function Brieven({ initieelRonde, initieelMap }: { initieelRonde?: string
   const [nieuw, setNieuw] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
   const [prullenOpen, setPrullenOpen] = useState(false);
+  // Drie beelden op dezelfde gegevens: waar wordt aan gewerkt, wat kan naar Stedin, en wat is
+  // afgehandeld. Zelfde balk als bij Voorschouwen, zodat je niet per pagina hoeft te leren waar
+  // je moet klikken.
+  const [tab, setTab] = useState<"overzicht" | "stedin" | "archief">("overzicht");
 
   if (!currentUser) return null;
   const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr";
@@ -1166,6 +1193,29 @@ export function Brieven({ initieelRonde, initieelMap }: { initieelRonde?: string
     }
   }
   const herstelMap = (items: Brievenronde[]) => items.forEach((r) => updateRonde(r.id, { verwijderd: false, verwijderdOp: undefined }));
+
+  // Klaar voor Stedin: gecontroleerd of al verstuurd, maar nog niet gearchiveerd. Bewust afgeleid
+  // uit de status die er al is — een apart vinkje erbij zou een extra handeling zijn die uit de pas
+  // kan gaan lopen met waar de ronde echt staat.
+  const klaarRondes = (isLeiding ? rondes : rondes.filter((r) => r.toegewezenAan === currentUser.id))
+    .filter((r) => !r.gearchiveerd && !r.verwijderd && (r.status === "gecontroleerd" || r.status === "verstuurd"));
+  const archiefRondes = (isLeiding ? rondes : rondes.filter((r) => r.toegewezenAan === currentUser.id))
+    .filter((r) => r.gearchiveerd && !r.verwijderd);
+
+  // Rondes uit dezelfde aanlevering horen bij elkaar; los ze anders per straat.
+  const perMap = (lijst: Brievenronde[]) => {
+    const uit: { naam: string; items: Brievenronde[] }[] = [];
+    for (const r of lijst) {
+      const naam = r.mapNaam || r.straat;
+      let m = uit.find((x) => x.naam === naam);
+      if (!m) { m = { naam, items: [] }; uit.push(m); }
+      m.items.push(r);
+    }
+    return uit.sort((a, b) => a.naam.localeCompare(b.naam, "nl"));
+  };
+  const nu = () => new Date().toISOString();
+  const archiveer = (items: Brievenronde[]) => items.forEach((r) => updateRonde(r.id, { gearchiveerd: true, gearchiveerdOp: nu() }));
+  const terugUitArchief = (items: Brievenronde[]) => items.forEach((r) => updateRonde(r.id, { gearchiveerd: false, gearchiveerdOp: undefined }));
 
   if (nieuw) return <NieuweRonde onKlaar={() => setNieuw(false)} />;
 
@@ -1244,8 +1294,103 @@ export function Brieven({ initieelRonde, initieelMap }: { initieelRonde?: string
     );
   };
 
+  // ── Klaar voor Stedin ──
+  if (tab === "stedin") {
+    const groepen = perMap(klaarRondes);
+    return (
+      <div className="space-y-5">
+        <TabBalk tab={tab} setTab={setTab} klaar={klaarRondes.length} archief={archiefRondes.length} />
+        <div>
+          <h2 className="text-xl font-bold text-ink-900">Klaar voor Stedin</h2>
+          <p className="text-sm text-ink-500">Rondes die gecontroleerd zijn. Zodra ze de deur uit zijn, archiveer je ze — dan blijven ze bewaard maar staan ze niet meer in de weg.</p>
+        </div>
+        {groepen.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-ink-300 bg-white p-10 text-center">
+            <Send className="mx-auto h-9 w-9 text-ink-300" />
+            <p className="mt-3 text-sm text-ink-500">Nog niets gecontroleerd. Zodra een ronde op <b>gecontroleerd</b> staat, verschijnt hij hier vanzelf.</p>
+          </div>
+        ) : groepen.map((m) => (
+          <div key={m.naam} className="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-card">
+            <div className="flex flex-wrap items-center gap-3 border-b border-ink-100 p-4">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600"><Folder className="h-5 w-5" /></span>
+              <div className="min-w-0 flex-1">
+                <div className="truncate font-bold text-ink-900">{m.naam}</div>
+                <div className="truncate text-xs text-ink-500">
+                  {m.items.length} {m.items.length === 1 ? "ronde" : "rondes"} · {m.items.reduce((n, r) => n + r.adressen.filter((a) => !a.ontbreekt).length, 0)} adressen
+                  {m.items[0]?.pdNummer ? ` · ${m.items[0].pdNummer}` : ""}
+                </div>
+              </div>
+              <button type="button" onClick={() => archiveer(m.items)}
+                className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700">
+                <CheckCircle2 className="h-4 w-4" /> Verstuurd — archiveren
+              </button>
+            </div>
+            <div className="divide-y divide-ink-50">
+              {m.items.map((r) => (
+                <button key={r.id} type="button" onClick={() => setOpenId(r.id)} className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm hover:bg-ink-50">
+                  <MapPin className="h-4 w-4 shrink-0 text-ink-400" />
+                  <span className="min-w-0 flex-1 truncate text-ink-800">{r.straat}{r.plaats ? `, ${r.plaats}` : ""}</span>
+                  <Badge tone={STATUS_TONE[r.status]}>{STATUS_LABEL[r.status]}</Badge>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-ink-300" />
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  // ── Archief ──
+  if (tab === "archief") {
+    const groepen = perMap(archiefRondes);
+    return (
+      <div className="space-y-5">
+        <TabBalk tab={tab} setTab={setTab} klaar={klaarRondes.length} archief={archiefRondes.length} />
+        <div>
+          <h2 className="text-xl font-bold text-ink-900">Archief</h2>
+          <p className="text-sm text-ink-500">Afgehandeld werk. Alles blijft bewaard in de database — terugzetten kan altijd.</p>
+        </div>
+        {groepen.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-ink-300 bg-white p-10 text-center">
+            <Archive className="mx-auto h-9 w-9 text-ink-300" />
+            <p className="mt-3 text-sm text-ink-500">Nog niets gearchiveerd.</p>
+          </div>
+        ) : groepen.map((m) => (
+          <div key={m.naam} className="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-card">
+            <div className="flex flex-wrap items-center gap-3 border-b border-ink-100 p-4">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-ink-100 text-ink-500"><Archive className="h-5 w-5" /></span>
+              <div className="min-w-0 flex-1">
+                <div className="truncate font-bold text-ink-900">{m.naam}</div>
+                <div className="truncate text-xs text-ink-500">
+                  {m.items.length} {m.items.length === 1 ? "ronde" : "rondes"}
+                  {m.items[0]?.gearchiveerdOp ? ` · gearchiveerd ${datumKort(m.items[0].gearchiveerdOp.slice(0, 10))}` : ""}
+                </div>
+              </div>
+              <button type="button" onClick={() => terugUitArchief(m.items)}
+                className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-ink-200 bg-white px-4 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50">
+                <RotateCcw className="h-4 w-4" /> Terugzetten
+              </button>
+            </div>
+            <div className="divide-y divide-ink-50">
+              {m.items.map((r) => (
+                <button key={r.id} type="button" onClick={() => setOpenId(r.id)} className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm hover:bg-ink-50">
+                  <MapPin className="h-4 w-4 shrink-0 text-ink-400" />
+                  <span className="min-w-0 flex-1 truncate text-ink-800">{r.straat}{r.plaats ? `, ${r.plaats}` : ""}</span>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-ink-300" />
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
+      <TabBalk tab={tab} setTab={setTab} klaar={klaarRondes.length} archief={archiefRondes.length} />
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold text-ink-900">Brieven & Routes</h2>
