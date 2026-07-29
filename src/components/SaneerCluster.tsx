@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Users, AlertTriangle, Loader2, ArrowLeft, Check, CheckCircle2, XCircle, DoorClosed, Ban,
-  CalendarCheck, Scissors, WifiOff, Clock, RefreshCw, ShieldAlert,
+  CalendarCheck, CalendarX2, Scissors, WifiOff, Clock, RefreshCw, ShieldAlert,
 } from "lucide-react";
 import { DatumKiezer } from "./DatumKiezer";
 import { SaneerOnderweg } from "./SaneerOnderweg";
@@ -375,10 +375,49 @@ export function SaneerClusterWerk({ clusterId, onTerug }: { clusterId: string; o
         </div>
       )}
 
+      {/* Zodra één bewoner niet kan, is de dag van tafel. Dat moet je niet hoeven afleiden uit een
+          teller: hier staat het, met de knop die alles in één keer opnieuw zet. */}
+      {ronde && !cluster.definitieve_datum && stand.tegen > 0 && (
+        <div className="rounded-2xl border-2 border-amber-300 bg-amber-50 p-4">
+          <div className="flex items-center gap-2 font-bold text-amber-900">
+            <CalendarX2 className="h-5 w-5" />
+            {datumNL(ronde.voorgestelde_datum)} gaat niet door
+          </div>
+          <p className="mt-1 text-sm text-amber-900">
+            {stand.tegen === 1 ? "Eén bewoner kan" : `${stand.tegen} bewoners kunnen`} niet. Iedereen in deze
+            groep moet op dezelfde dag thuis zijn, dus alle {stand.totaal} adressen moeten opnieuw benaderd
+            worden voor een andere dag.
+          </p>
+          <p className="mt-1 text-xs text-amber-800">
+            Namen, telefoonnummers en wat bewoners over data hebben gezegd blijven staan — die hangen aan
+            het adres, niet aan de ronde. Alleen de antwoorden op déze dag vervallen, en iedereen komt weer
+            op de bellijst.
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span className="text-sm font-semibold text-amber-900">Nieuwe dag voorstellen:</span>
+            {voorstellen.filter((v) => v.haalbaar).slice(0, 3).map((v) => (
+              <button key={v.datum} type="button" onClick={() => void nieuweRonde(v.datum)} disabled={bezig}
+                className={`${knop} bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-60`}>
+                <RefreshCw className="h-4 w-4" /> {datumNL(v.datum)}
+                {v.kan > 0 && <span className="text-xs font-normal opacity-80">({v.kan} kan)</span>}
+              </button>
+            ))}
+            <DatumKiezer value="" onChange={(d) => d && void nieuweRonde(d)} placeholder="Andere dag" />
+          </div>
+        </div>
+      )}
+
       {/* Definitieve datum of een nieuwe ronde */}
       {cluster.definitieve_datum ? (
-        <div className="flex items-center gap-2 rounded-2xl border border-green-300 bg-green-50 px-4 py-3 text-sm font-semibold text-green-900">
-          <CalendarCheck className="h-5 w-5" /> Uitvoering op {datumNL(cluster.definitieve_datum)} — vastgelegd.
+        <div className="rounded-2xl border border-green-300 bg-green-50 px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="inline-flex items-center gap-2 text-sm font-semibold text-green-900">
+              <CalendarCheck className="h-5 w-5" /> Uitvoering op {datumNL(cluster.definitieve_datum)} — vastgelegd.
+            </span>
+            {/* Ook een vastgelegde dag kan sneuvelen: iemand belt af, of er komt iets tussen. Dan moet
+                je terug kunnen zonder dat er gegevens sneuvelen. */}
+            <DatumKiezer value="" onChange={(d) => d && void nieuweRonde(d)} placeholder="Toch een andere dag" />
+          </div>
         </div>
       ) : ronde && (
         <div className="rounded-2xl border border-ink-200 bg-white p-4">

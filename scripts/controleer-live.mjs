@@ -80,6 +80,7 @@ for (const [wat, naald] of [
   ["het sleepvak in de saneerflow", "de kolommen worden zelf herkend"],
   ["postcodes opzoeken bij ontbreken", "Postcodes opzoeken"],
   ["kop met voorbereiden en uitvoeren", "Voorbereiden"],
+  ["hele groep opnieuw bij een afzegging", "gaat niet door"],
   ["een man op het hele project", "Wie voert dit werk uit?"],
   ["checklist voor de schouwer", "Checklists schouwer"],
   ["tabbalk bij Brieven & Routes", "Klaar voor Stedin"],

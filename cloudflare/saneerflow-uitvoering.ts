@@ -283,11 +283,22 @@ export async function saneerUitvoeringRoutes(
     await env.DB.prepare("update saneer_dossiers set status = 'in_uitvoering', bijgewerkt_op = ?2 where pd_nummer = ?1 and status in ('nieuw','geimporteerd','verdeeld')")
       .bind(pd, nuISO).run();
 
-    c.log({ pd, clusterId, gebeurtenis: "ronde_gestart", nieuw: `ronde ${nummer}${datum ? ` — voorstel ${datum}` : ""}` });
+    // Een nieuwe ronde betekent: iedereen in deze groep moet opnieuw. Wie eerder akkoord was, is dat
+    // niet meer — die dag gaat immers niet door. De belstatus gaat daarom terug op leeg, zodat het
+    // adres weer bovenaan de bellijst staat in plaats van groen afgevinkt.
+    //
+    // Wat NIET wordt aangeraakt: naam, telefoonnummer, het kaartje in de bus en wat een bewoner over
+    // data heeft gezegd. Die hangen aan het adres en niet aan de ronde — daarom kan een nieuwe ronde
+    // ze ook niet kwijtraken. Dat is geen zorgvuldigheid maar de indeling zelf.
+    const terug = await env.DB.prepare(
+      "update saneer_adressen set belstatus = '', bijgewerkt_op = ?2 where cluster_id = ?1 and verwijderd = 0 and belstatus <> ''"
+    ).bind(clusterId, nuISO).run();
+
+    c.log({ pd, clusterId, gebeurtenis: "ronde_gestart", nieuw: `ronde ${nummer}${datum ? ` — voorstel ${datum}` : ""}, ${Number(terug.meta?.changes ?? 0)} adressen weer te bellen` });
     // Boven het ingestelde aantal ronden gaat dit cluster naar de leiding. Dat leiden we af uit het
     // rondenummer; een apart vlaggetje in de database zou alleen maar uit de pas kunnen gaan lopen.
     const naarLeiding = nummer > Number(dossier.escalatie_ronden ?? 3);
-    return json({ ok: true, ronde_id: rondeId, nummer, naarLeiding });
+    return json({ ok: true, ronde_id: rondeId, nummer, naarLeiding, opnieuwTeBellen: Number(terug.meta?.changes ?? 0) });
   }
 
   // Het antwoord van één bewoner. Werkt zowel aan de deur als aan de telefoon; het verschil zit in

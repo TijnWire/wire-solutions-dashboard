@@ -306,8 +306,16 @@ async function main() {
       const tegen = await post("/saneer/cluster/datum", mont, { cluster_id: cluster1, datum: "2026-10-07" });
       check(tegen.status === 409, "één bewoner die niet kan blokkeert de datum");
 
+      // Aan de deur was adres 1 al akkoord: die staat groen op de bellijst.
+      await post("/saneer/adres", baas, { id: `${PD2}-a1`, patch: { belstatus: "akkoord" } });
+
       // Nieuwe ronde met een datum die iedereen wél kan.
       const r2 = await post("/saneer/ronde", mont, { cluster_id: cluster1, voorgestelde_datum: "2026-10-08" });
+      check((r2.data.opnieuwTeBellen ?? 0) >= 1, "een nieuwe ronde zet de hele groep weer op te bellen", JSON.stringify(r2.data.opnieuwTeBellen));
+      const naNieuw = await get(`/saneer/bellijst?pd=${PD2}`, baas);
+      const a1 = (naNieuw.data.adressen ?? []).find((a) => a.id === `${PD2}-a1`);
+      check(a1 && a1.belstatus === "", "wie eerder akkoord was staat niet meer groen afgevinkt", a1?.belstatus);
+      check(!!a1?.telefoon, "maar het telefoonnummer is niet aangeraakt", a1?.telefoon);
       check(r2.data.nummer === 2, "ronde 2 gestart");
       const bewaard = await get(`/saneer/cluster?id=${cluster1}`, mont);
       check((bewaard.data.adressen ?? []).some((a) => a.bewoner === "Fam. Jansen"), "namen uit ronde 1 staan er in ronde 2 nog");
