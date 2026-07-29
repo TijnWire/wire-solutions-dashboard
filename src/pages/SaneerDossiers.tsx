@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Plus, ArrowLeft, ArrowRight, Search, Loader2, AlertCircle, MapPin,
-  Building2, CalendarRange, Clock, FolderOpen, RotateCcw,
+  FolderOpen, RotateCcw,
 } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { DatumKiezer } from "../components/DatumKiezer";
@@ -277,32 +277,38 @@ export function SaneerDossiers({ onEerder }: { onEerder: () => void }) {
                 onClick={() => setOpen(d.pd_nummer)}
                 className="rounded-2xl border border-ink-200 bg-white p-4 text-left shadow-sm transition-shadow hover:shadow-md"
               >
-                <div className="flex flex-wrap items-start justify-between gap-2">
+                {/* Eén regel met wie en waar, één regel met de cijfers, en onderaan wat er te doen
+                    staat. De iconen bij elk cijfer maakten het rommelig zonder iets toe te voegen:
+                    een datum en een tijdvak herken je ook zonder klokje ervoor. */}
+                <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="font-mono text-lg font-bold tracking-wide text-ink-900">{d.pd_nummer}</div>
-                    <div className="truncate text-sm text-ink-600">{[d.opdrachtgever, d.gebouw].filter(Boolean).join(" · ") || "—"}</div>
+                    <div className="flex flex-wrap items-baseline gap-x-2.5">
+                      <span className="font-mono text-lg font-bold tracking-wide text-ink-900">{d.pd_nummer}</span>
+                      <span className="truncate text-sm text-ink-500">{[d.opdrachtgever, d.gebouw].filter(Boolean).join(" · ")}</span>
+                    </div>
+                    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-ink-500">
+                      <span className="inline-flex items-center gap-1 font-medium text-ink-600">
+                        <MapPin className="h-3.5 w-3.5" /> {d.regio || "geen regio"}
+                      </span>
+                      {d.uitvoering_van && <><span className="text-ink-300">·</span><span>{datumNL(d.uitvoering_van)}</span></>}
+                      <span className="text-ink-300">·</span>
+                      <span>{d.starttijd || "08:00"}–16:00</span>
+                      {!!d.adressen && (
+                        <>
+                          <span className="text-ink-300">·</span>
+                          <span>{d.adressen} adressen{d.clusters ? ` in ${d.clusters} groepen` : ""}</span>
+                        </>
+                      )}
+                    </div>
                   </div>
                   <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${STATUS_KLEUR[info.kleur]}`}>{info.label}</span>
                 </div>
 
-                <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-500">
-                  <span className="inline-flex items-center gap-1"><MapPin className="h-3.5 w-3.5" /> {d.regio || "geen regio"}</span>
-                  {d.uitvoering_van && (
-                    <span className="inline-flex items-center gap-1">
-                      <CalendarRange className="h-3.5 w-3.5" /> {datumNL(d.uitvoering_van)}
-                    </span>
-                  )}
-                  <span className="inline-flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {d.starttijd || "08:00"}–16:00</span>
-                  {!!d.adressen && <span className="inline-flex items-center gap-1"><Building2 className="h-3.5 w-3.5" /> {d.adressen} adressen{d.clusters ? ` · ${d.clusters} clusters` : ""}</span>}
-                </div>
-
-                {/* De volgende actie — het hele idee van deze module: één dossier, één ding te doen. */}
-                <div className="mt-3 flex items-center justify-between gap-2 rounded-xl bg-brand-50 px-3 py-2">
-                  <span className="min-w-0">
-                    <span className="block text-[11px] font-semibold uppercase tracking-wide text-brand-700">Volgende stap</span>
-                    <span className="block truncate text-sm font-semibold text-brand-900">{info.volgende}</span>
-                  </span>
-                  <ArrowRight className="h-5 w-5 shrink-0 text-brand-600" />
+                {/* De volgende actie — het hele idee van deze module: één dossier, één ding te doen.
+                    Als een dunne regel onderaan, niet als een blok dat om aandacht schreeuwt. */}
+                <div className="mt-3 flex items-center gap-2 border-t border-ink-100 pt-2.5">
+                  <span className="min-w-0 flex-1 truncate text-sm font-semibold text-brand-800">{info.volgende}</span>
+                  <ArrowRight className="h-4 w-4 shrink-0 text-brand-500" />
                 </div>
               </button>
             );
