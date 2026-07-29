@@ -70,6 +70,14 @@ const statusDot: Record<BriefStatus, string> = {
   Blanco: "bg-amber-500",
   "Niet thuis": "bg-red-500",
 };
+// De kleur van de tekst in de keuzelijst. Zelfde betekenis als het bolletje, maar dan leesbaar op
+// afstand: groen is gedaan, oranje is blanco, rood is niemand thuis.
+const statusTekst: Record<BriefStatus, string> = {
+  "Te doen": "text-ink-500",
+  Gegooid: "text-green-700",
+  Blanco: "text-amber-700",
+  "Niet thuis": "text-red-700",
+};
 const statusRand: Record<BriefStatus, string> = {
   "Te doen": "border-l-ink-200",
   Gegooid: "border-l-green-500",
@@ -127,7 +135,7 @@ function AdresRij({
 
         <div className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">
           <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${statusDot[adres.status]}`} />
-          <div className="min-w-0 flex-1 sm:w-32 sm:flex-none"><Keuze value={adres.status} onChange={(w) => onUpdate({ status: w as BriefStatus })} opties={BRIEF_STATUSSEN.map((s) => ({ waarde: s, label: s }))} disabled={vergrendeld} size="sm" title="Status van dit adres" /></div>
+          <div className="min-w-0 flex-1 sm:w-32 sm:flex-none"><Keuze value={adres.status} onChange={(w) => onUpdate({ status: w as BriefStatus })} opties={BRIEF_STATUSSEN.map((s) => ({ waarde: s, label: s, kleur: statusDot[s], tekstKleur: statusTekst[s] }))} disabled={vergrendeld} size="sm" title="Status van dit adres" /></div>
           <a
             href={navigeerUrl}
             target="_blank"
@@ -646,22 +654,31 @@ function RondeDetail({ ronde, onTerug }: { ronde: Brievenronde; onTerug: () => v
 
         {/* Selecteren + in één keer een status zetten */}
         {bewerkbaar && route.length > 0 && (
-          <div className="mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-ink-200 bg-ink-50/60 px-3 py-2">
-            <label className="flex items-center gap-2 text-sm font-medium text-ink-700">
-              <input type="checkbox" checked={allesGeselecteerd} onChange={toggleAlles} className="h-4 w-4 rounded border-ink-300 text-brand-600 focus:ring-brand-200" />
-              Alles selecteren
-            </label>
+          <div className={`mb-2 flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2.5 transition-colors ${
+            selectie.size > 0 ? "border-brand-200 bg-brand-50" : "border-ink-200 bg-white"}`}>
+            <button type="button" onClick={toggleAlles}
+              className={`inline-flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm font-semibold transition-colors ${
+                allesGeselecteerd ? "bg-brand-600 text-white" : "text-ink-700 hover:bg-ink-100"}`}>
+              {allesGeselecteerd ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4 text-ink-400" />}
+              {allesGeselecteerd ? "Alles deselecteren" : "Alles selecteren"}
+            </button>
             {selectie.size > 0 ? (
               <>
-                <span className="text-xs font-medium text-ink-500">{selectie.size} geselecteerd:</span>
-                <button type="button" onClick={() => bulkStatus("Gegooid")} className="rounded-lg bg-green-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-green-700">Gegooid</button>
-                <button type="button" onClick={() => bulkStatus("Blanco")} className="rounded-lg bg-slate-500 px-2.5 py-1 text-xs font-semibold text-white hover:bg-slate-600">Blanco</button>
-                <button type="button" onClick={() => bulkStatus("Niet thuis")} className="rounded-lg bg-amber-500 px-2.5 py-1 text-xs font-semibold text-white hover:bg-amber-600">Niet thuis</button>
-                <button type="button" onClick={() => bulkStatus("Te doen")} className="rounded-lg border border-ink-200 px-2.5 py-1 text-xs font-medium text-ink-500 hover:bg-ink-100">Te doen</button>
-                <button type="button" onClick={() => setSelectie(new Set())} className="ml-auto text-xs font-medium text-ink-400 hover:text-ink-600">wis selectie</button>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-xs font-bold text-brand-800 ring-1 ring-brand-200">
+                  {selectie.size} geselecteerd
+                </span>
+                {/* Dezelfde kleuren als de bolletjes en de keuzelijst: groen is gedaan, oranje blanco,
+                    rood niemand thuis. Eén betekenis per kleur door de hele pagina heen. */}
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button type="button" onClick={() => bulkStatus("Gegooid")} className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-green-700"><span className="h-2 w-2 rounded-full bg-white" /> Gegooid</button>
+                  <button type="button" onClick={() => bulkStatus("Blanco")} className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-600"><span className="h-2 w-2 rounded-full bg-white" /> Blanco</button>
+                  <button type="button" onClick={() => bulkStatus("Niet thuis")} className="inline-flex items-center gap-1.5 rounded-lg bg-red-500 px-3 py-1.5 text-xs font-bold text-white hover:bg-red-600"><span className="h-2 w-2 rounded-full bg-white" /> Niet thuis</button>
+                  <button type="button" onClick={() => bulkStatus("Te doen")} className="rounded-lg border border-ink-200 bg-white px-3 py-1.5 text-xs font-semibold text-ink-600 hover:bg-ink-50">Terug naar te doen</button>
+                </div>
+                <button type="button" onClick={() => setSelectie(new Set())} className="ml-auto rounded-lg px-2 py-1.5 text-xs font-medium text-ink-400 hover:text-ink-700">Wis selectie</button>
               </>
             ) : (
-              <span className="text-xs text-ink-400">Vink adressen aan om ze in één keer op gegooid, blanco of niet thuis te zetten.</span>
+              <span className="text-xs text-ink-500">Vink adressen aan om ze in één keer op gegooid, blanco of niet thuis te zetten.</span>
             )}
           </div>
         )}
@@ -1057,17 +1074,25 @@ function MapDetail({ naam, rondes, isLeiding, onOpenRonde, onTerug }: { naam: st
               {tikModus && <button type="button" onClick={() => kiesTikModus(null)} className="ml-auto rounded-lg px-2.5 py-1.5 text-xs font-semibold text-ink-500 hover:bg-ink-100 hover:text-ink-800">Klaar</button>}
             </div>
 
+            {/* De selectiebalk verandert van gezicht zodra er iets gekozen is: zonder selectie een
+                rustige regel met uitleg, mét selectie oranje met het aantal erin. Dan zie je meteen
+                dat de knoppen ernaast op die selectie slaan en niet op de hele straat. */}
             {tikModus ? (
               <p className="px-1 text-xs text-ink-500">Tik een adres aan om het op <b className="text-ink-700">{tikModusLabel}</b> te zetten (of tik een straatnaam voor de hele straat). Nog een keer tikken zet het terug op te doen.</p>
             ) : (
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl bg-ink-50 px-3 py-2">
-                <button type="button" onClick={selecteerAlles} className="inline-flex items-center gap-1.5 text-xs font-semibold text-ink-700">
-                  {allesGesel ? <CheckSquare className="h-4 w-4 text-brand-600" /> : <Square className="h-4 w-4 text-ink-400" />}
+              <div className={`flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border px-3 py-2.5 transition-colors ${
+                sel.size > 0 ? "border-brand-200 bg-brand-50" : "border-ink-200 bg-white"}`}>
+                <button type="button" onClick={selecteerAlles}
+                  className={`inline-flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm font-semibold transition-colors ${
+                    allesGesel ? "bg-brand-600 text-white" : "text-ink-700 hover:bg-ink-100"}`}>
+                  {allesGesel ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4 text-ink-400" />}
                   {allesGesel ? "Alles deselecteren" : "Alles selecteren"}
                 </button>
                 {sel.size > 0 ? (
                   <>
-                    <span className="text-xs font-medium text-ink-500">{sel.size} geselecteerd</span>
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-xs font-bold text-brand-800 ring-1 ring-brand-200">
+                      {sel.size} geselecteerd
+                    </span>
                     <div className="ml-auto flex flex-wrap items-center gap-2">
                       <button type="button" onClick={() => markeer("Gegooid")} className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-green-700"><Check className="h-3.5 w-3.5" /> Afgegooid ({sel.size})</button>
                       <button type="button" onClick={() => markeer("Blanco")} className="rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-sky-700" title="Bezorgd, maar een blanco papiertje gegeven">Blanco ({sel.size})</button>

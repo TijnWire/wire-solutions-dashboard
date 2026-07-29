@@ -2,7 +2,15 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, Check, Search } from "lucide-react";
 
-export type KeuzeOptie = { waarde: string; label: string; kleur?: string };
+export type KeuzeOptie = {
+  waarde: string;
+  label: string;
+  kleur?: string;       // klasse voor het bolletje, bv. "bg-green-500"
+  // Klasse voor de tekst zelf, bv. "text-green-700". Bij een statuslijst leest een gekleurde regel
+  // sneller dan een rij grijze regels met een bolletje ervoor: je ziet de kleur al vóór je het woord
+  // hebt gelezen. Alleen zetten waar kleur ook echt betekenis heeft.
+  tekstKleur?: string;
+};
 
 // Afgeronde keuzelijst die de native <select> vervangt. Het menu wordt via een portal getoond
 // (position: fixed) zodat het nooit wordt afgeknipt door een overflow-hidden kaart, en het is
@@ -110,7 +118,8 @@ export function Keuze({ value, onChange, opties, placeholder = "Kies…", disabl
                     // Bij een lange lijst begin je bij wat nu gekozen is, in plaats van bovenaan.
                     ref={actief ? (el) => el?.scrollIntoView({ block: "nearest" }) : undefined}
                     onClick={() => kies(o.waarde)}
-                    className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm outline-none focus-visible:bg-ink-50 ${actief ? "bg-brand-50 font-semibold text-brand-700" : "text-ink-700 hover:bg-ink-50"}`}
+                    className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold outline-none focus-visible:bg-ink-50 ${
+                      actief ? "bg-brand-50" : "hover:bg-ink-50"} ${o.tekstKleur ?? (actief ? "text-brand-700" : "text-ink-700")}`}
                   >
                     {o.kleur && <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${o.kleur}`} />}
                     <span className="flex-1 truncate">{o.label}</span>
