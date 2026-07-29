@@ -843,9 +843,17 @@ function mapStats(rondes: Brievenronde[]) {
 function MapRij({ naam, rondes, isLeiding, onOpen }: { naam: string; rondes: Brievenronde[]; isLeiding: boolean; onOpen: () => void }) {
   const { updateRonde } = useApp();
   const [vraagVerwijder, setVraagVerwijder] = useState(false);
-  const { teBezorgen, pct, regel } = mapStats(rondes);
+  const { teBezorgen, openA, pct, regel } = mapStats(rondes);
+  const [vraagBoek, setVraagBoek] = useState(false);
   // Zacht verwijderen: de map uit het overzicht halen, maar de rondes blijven in de database staan.
   const verwijderMap = () => { const nu = new Date().toISOString(); rondes.forEach((r) => updateRonde(r.id, { verwijderd: true, verwijderdOp: nu })); setVraagVerwijder(false); };
+  // Alles afgegooid en nog niet doorgestuurd? Dan is dit de laatste handeling voor deze map.
+  const klaarOmDoorTeSturen = isLeiding && teBezorgen.length > 0 && openA === 0 && rondes.some((r) => !r.boekhouding);
+  const naarBoekhouding = () => {
+    const nu = new Date().toISOString();
+    rondes.forEach((r) => updateRonde(r.id, { status: "verstuurd", verstuurdOp: nu, boekhouding: "te_factureren", doorgestuurdOp: nu }));
+    setVraagBoek(false);
+  };
 
   return (
     <div className="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-card transition-shadow hover:shadow-cardhover">
@@ -857,11 +865,26 @@ function MapRij({ naam, rondes, isLeiding, onOpen }: { naam: string; rondes: Bri
             <span className="block truncate text-xs text-ink-500">{regel}</span>
           </span>
         </button>
+        {klaarOmDoorTeSturen && (
+          <button type="button" onClick={() => setVraagBoek(true)}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-green-600 px-3 py-2 text-xs font-bold text-white hover:bg-green-700">
+            <Send className="h-3.5 w-3.5" /> Naar boekhouding
+          </button>
+        )}
         {isLeiding && <button type="button" onClick={() => setVraagVerwijder(true)} className="shrink-0 rounded-lg p-2 text-ink-400 hover:bg-red-50 hover:text-red-600" title="Map verwijderen"><Trash2 className="h-4 w-4" /></button>}
         <button type="button" onClick={onOpen} className="shrink-0 rounded-lg p-1 text-ink-300 hover:bg-ink-100 hover:text-ink-600" title="Map openen" aria-label="Map openen"><ChevronRight className="h-5 w-5" /></button>
       </div>
       <div className="h-1 bg-ink-100"><div className="h-full bg-green-500" style={{ width: `${pct}%` }} /></div>
-      <Bevestig open={vraagVerwijder} titel="Map verwijderen" tekst={`Weet je het zeker dat je de map "${naam}" (${rondes.length} ${rondes.length === 1 ? "ronde" : "rondes"} · ${teBezorgen.length} adressen) wilt verwijderen? De map verdwijnt uit dit overzicht, maar blijft bewaard in de database — je kunt 'm onderaan bij "Verwijderde mappen" weer terugzetten.`} bevestigLabel="Ja, verwijderen" onBevestig={verwijderMap} onAnnuleer={() => setVraagVerwijder(false)} />
+      <Bevestig
+        open={vraagBoek}
+        titel="Hele map naar de boekhouding?"
+        tekst={`"${naam}" (${rondes.length} ${rondes.length === 1 ? "ronde" : "rondes"} · ${teBezorgen.length} adressen) is helemaal afgegooid. Hij gaat door naar de boekhouding en komt te staan onder "Klaar voor Stedin", waar de administratie hem factureert.`}
+        bevestigLabel="Naar boekhouding"
+        bevestigTone="brand"
+        onBevestig={naarBoekhouding}
+        onAnnuleer={() => setVraagBoek(false)}
+      />
+      <Bevestig open={vraagVerwijder} titel="Map verwijderen" tekst={`Weet je het zeker dat je de map "${naam}" (${rondes.length} ${rondes.length === 1 ? "ronde" : "rondes"} · ${teBezorgen.length} adressen) wilt verwijderen? De map verdwijnt uit dit overzicht, maar blijft bewaard in de database — je kunt 'm onder het tabblad "Archief" weer terugzetten.`} bevestigLabel="Ja, verwijderen" onBevestig={verwijderMap} onAnnuleer={() => setVraagVerwijder(false)} />
     </div>
   );
 }
@@ -1194,11 +1217,11 @@ export function Brieven({ initieelRonde, initieelMap }: { initieelRonde?: string
   }
   const herstelMap = (items: Brievenronde[]) => items.forEach((r) => updateRonde(r.id, { verwijderd: false, verwijderdOp: undefined }));
 
-  // Klaar voor Stedin: gecontroleerd of al verstuurd, maar nog niet gearchiveerd. Bewust afgeleid
-  // uit de status die er al is — een apart vinkje erbij zou een extra handeling zijn die uit de pas
-  // kan gaan lopen met waar de ronde echt staat.
+  // Klaar voor Stedin: mappen die met de knop "Naar boekhouding" zijn doorgestuurd en nog niet
+  // gefactureerd zijn. Dit is dus geen apart vinkje maar precies de stand die die knop al zet —
+  // anders zou je twee dingen bijhouden die uit de pas kunnen gaan lopen.
   const klaarRondes = (isLeiding ? rondes : rondes.filter((r) => r.toegewezenAan === currentUser.id))
-    .filter((r) => !r.gearchiveerd && !r.verwijderd && (r.status === "gecontroleerd" || r.status === "verstuurd"));
+    .filter((r) => !r.gearchiveerd && !r.verwijderd && r.boekhouding === "te_factureren");
   const archiefRondes = (isLeiding ? rondes : rondes.filter((r) => r.toegewezenAan === currentUser.id))
     .filter((r) => r.gearchiveerd && !r.verwijderd);
 
@@ -1215,6 +1238,10 @@ export function Brieven({ initieelRonde, initieelMap }: { initieelRonde?: string
   };
   const nu = () => new Date().toISOString();
   const archiveer = (items: Brievenronde[]) => items.forEach((r) => updateRonde(r.id, { gearchiveerd: true, gearchiveerdOp: nu() }));
+  // Gefactureerd: de map is de deur uit én op de rekening gezet, dus hij mag meteen het archief in.
+  const gefactureerd = (items: Brievenronde[]) => items.forEach((r) => updateRonde(r.id, {
+    boekhouding: "gefactureerd", gefactureerdOp: nu(), gearchiveerd: true, gearchiveerdOp: nu(),
+  }));
   const terugUitArchief = (items: Brievenronde[]) => items.forEach((r) => updateRonde(r.id, { gearchiveerd: false, gearchiveerdOp: undefined }));
 
   if (nieuw) return <NieuweRonde onKlaar={() => setNieuw(false)} />;
@@ -1302,12 +1329,12 @@ export function Brieven({ initieelRonde, initieelMap }: { initieelRonde?: string
         <TabBalk tab={tab} setTab={setTab} klaar={klaarRondes.length} archief={archiefRondes.length} />
         <div>
           <h2 className="text-xl font-bold text-ink-900">Klaar voor Stedin</h2>
-          <p className="text-sm text-ink-500">Rondes die gecontroleerd zijn. Zodra ze de deur uit zijn, archiveer je ze — dan blijven ze bewaard maar staan ze niet meer in de weg.</p>
+          <p className="text-sm text-ink-500">Mappen die volledig zijn afgegooid en naar de boekhouding zijn gestuurd. Hier pakt de administratie ze op: factureren en klaar.</p>
         </div>
         {groepen.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-ink-300 bg-white p-10 text-center">
             <Send className="mx-auto h-9 w-9 text-ink-300" />
-            <p className="mt-3 text-sm text-ink-500">Nog niets gecontroleerd. Zodra een ronde op <b>gecontroleerd</b> staat, verschijnt hij hier vanzelf.</p>
+            <p className="mt-3 text-sm text-ink-500">Nog niets doorgestuurd. Open een map die helemaal is afgegooid en klik op <b>Naar boekhouding</b>; dan komt hij hier vanzelf te staan.</p>
           </div>
         ) : groepen.map((m) => (
           <div key={m.naam} className="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-card">
@@ -1316,14 +1343,21 @@ export function Brieven({ initieelRonde, initieelMap }: { initieelRonde?: string
               <div className="min-w-0 flex-1">
                 <div className="truncate font-bold text-ink-900">{m.naam}</div>
                 <div className="truncate text-xs text-ink-500">
-                  {m.items.length} {m.items.length === 1 ? "ronde" : "rondes"} · {m.items.reduce((n, r) => n + r.adressen.filter((a) => !a.ontbreekt).length, 0)} adressen
+                  {m.items.length} {m.items.length === 1 ? "ronde" : "rondes"} · <b>{m.items.reduce((n, r) => n + r.adressen.filter((a) => !a.ontbreekt).length, 0)} adressen te factureren</b>
                   {m.items[0]?.pdNummer ? ` · ${m.items[0].pdNummer}` : ""}
+                  {m.items[0]?.doorgestuurdOp ? ` · doorgestuurd ${datumKort(m.items[0].doorgestuurdOp.slice(0, 10))}` : ""}
                 </div>
               </div>
-              <button type="button" onClick={() => archiveer(m.items)}
-                className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700">
-                <CheckCircle2 className="h-4 w-4" /> Verstuurd — archiveren
-              </button>
+              <div className="flex shrink-0 flex-wrap gap-2">
+                <button type="button" onClick={() => gefactureerd(m.items)}
+                  className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700">
+                  <Receipt className="h-4 w-4" /> Gefactureerd
+                </button>
+                <button type="button" onClick={() => archiveer(m.items)}
+                  className="inline-flex items-center gap-2 rounded-lg border border-ink-200 bg-white px-4 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50">
+                  <CheckCircle2 className="h-4 w-4" /> Alleen archiveren
+                </button>
+              </div>
             </div>
             <div className="divide-y divide-ink-50">
               {m.items.map((r) => (
@@ -1383,6 +1417,40 @@ export function Brieven({ initieelRonde, initieelMap }: { initieelRonde?: string
             </div>
           </div>
         ))}
+
+        {/* Verwijderde mappen. Ze staan hier en niet op het overzicht: verwijderd werk hoort niet
+            in beeld bij het werk dat nog moet gebeuren. De gegevens blijven gewoon in de database
+            staan, dus terugzetten kan altijd. */}
+      {isLeiding && verwijderdeMappen.length > 0 && (
+        <div className="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-card">
+          <button type="button" onClick={() => setPrullenOpen((o) => !o)} className="flex w-full items-center gap-2 px-4 py-3 text-left hover:bg-ink-50">
+            <span className="shrink-0 rounded-lg bg-ink-100 p-2.5 text-ink-500"><Trash2 className="h-5 w-5" /></span>
+            <div className="min-w-0 flex-1">
+              <div className="font-semibold text-ink-900">Verwijderde mappen</div>
+              <div className="text-xs text-ink-500">{verwijderdeMappen.length} {verwijderdeMappen.length === 1 ? "map" : "mappen"} · bewaard in de database, terug te zetten</div>
+            </div>
+            <ChevronDown className={`h-5 w-5 shrink-0 text-ink-400 transition-transform ${prullenOpen ? "rotate-180" : ""}`} />
+          </button>
+          {prullenOpen && (
+            <div className="space-y-2 border-t border-ink-100 p-4">
+              {verwijderdeMappen.map((m) => {
+                const adr = m.items.flatMap((r) => r.adressen.filter((a) => !a.ontbreekt)).length;
+                const verwOp = m.items.find((r) => r.verwijderdOp)?.verwijderdOp;
+                return (
+                  <div key={m.naam} className="flex flex-wrap items-center gap-2 rounded-xl border border-ink-200 bg-ink-50/50 px-3 py-2.5">
+                    <Folder className="h-4 w-4 shrink-0 text-ink-400" />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-semibold text-ink-800">{m.naam}</div>
+                      <div className="truncate text-xs text-ink-500">{m.items.length} {m.items.length === 1 ? "ronde" : "rondes"} · {adr} adressen{verwOp ? ` · verwijderd op ${datumKort(verwOp)}` : ""}</div>
+                    </div>
+                    <button type="button" onClick={() => herstelMap(m.items)} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-ink-200 bg-white px-3 py-1.5 text-xs font-semibold text-ink-700 hover:bg-ink-50"><RotateCcw className="h-3.5 w-3.5" /> Terugzetten</button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
       </div>
     );
   }
@@ -1464,37 +1532,6 @@ export function Brieven({ initieelRonde, initieelMap }: { initieelRonde?: string
         </div>
       )}
 
-      {/* Verwijderde mappen — bewaard in de database, hier terug te zetten. */}
-      {isLeiding && verwijderdeMappen.length > 0 && (
-        <div className="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-card">
-          <button type="button" onClick={() => setPrullenOpen((o) => !o)} className="flex w-full items-center gap-2 px-4 py-3 text-left hover:bg-ink-50">
-            <span className="shrink-0 rounded-lg bg-ink-100 p-2.5 text-ink-500"><Trash2 className="h-5 w-5" /></span>
-            <div className="min-w-0 flex-1">
-              <div className="font-semibold text-ink-900">Verwijderde mappen</div>
-              <div className="text-xs text-ink-500">{verwijderdeMappen.length} {verwijderdeMappen.length === 1 ? "map" : "mappen"} · bewaard in de database, terug te zetten</div>
-            </div>
-            <ChevronDown className={`h-5 w-5 shrink-0 text-ink-400 transition-transform ${prullenOpen ? "rotate-180" : ""}`} />
-          </button>
-          {prullenOpen && (
-            <div className="space-y-2 border-t border-ink-100 p-4">
-              {verwijderdeMappen.map((m) => {
-                const adr = m.items.flatMap((r) => r.adressen.filter((a) => !a.ontbreekt)).length;
-                const verwOp = m.items.find((r) => r.verwijderdOp)?.verwijderdOp;
-                return (
-                  <div key={m.naam} className="flex flex-wrap items-center gap-2 rounded-xl border border-ink-200 bg-ink-50/50 px-3 py-2.5">
-                    <Folder className="h-4 w-4 shrink-0 text-ink-400" />
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-semibold text-ink-800">{m.naam}</div>
-                      <div className="truncate text-xs text-ink-500">{m.items.length} {m.items.length === 1 ? "ronde" : "rondes"} · {adr} adressen{verwOp ? ` · verwijderd op ${datumKort(verwOp)}` : ""}</div>
-                    </div>
-                    <button type="button" onClick={() => herstelMap(m.items)} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-ink-200 bg-white px-3 py-1.5 text-xs font-semibold text-ink-700 hover:bg-ink-50"><RotateCcw className="h-3.5 w-3.5" /> Terugzetten</button>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }

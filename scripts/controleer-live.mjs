@@ -83,6 +83,7 @@ for (const [wat, naald] of [
   ["een man op het hele project", "Wie voert dit werk uit?"],
   ["checklist voor de schouwer", "Checklists schouwer"],
   ["tabbalk bij Brieven & Routes", "Klaar voor Stedin"],
+  ["map doorsturen naar de boekhouding", "Naar boekhouding"],
 ]) check(code.includes(naald), wat, "zit niet in de uitgerolde bundel");
 
 console.log(`\n${geslaagd} geslaagd, ${gefaald} gefaald`);
