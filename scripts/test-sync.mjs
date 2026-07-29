@@ -102,6 +102,14 @@ async function startWorker() {
   throw new Error("De Worker startte niet binnen 40 seconden.");
 }
 
+// De Worker omleggen zoals bij een uitrol: het oude proces weg, een nieuw proces erbij. De database
+// blijft staan — precies zoals in het echt, waar alleen de code wordt vervangen.
+async function herstartWorker(oud) {
+  try { oud.kill(); process.kill(oud.pid); } catch { /* al weg */ }
+  await wacht(1200);
+  return startWorker();
+}
+
 async function main() {
   console.log(`Doel: ${BASIS}${PROD ? "  (ECHTE Worker — alleen synctest_-sleutels)" : "  (lokale Worker)"}\n`);
   const worker = await startWorker();
@@ -248,13 +256,65 @@ async function main() {
       meet("na terugkeer van bereik komt het weer meteen door", await tijnTel.wachtOp(KEY, vanaf), 3000);
     }
 
-    // ── 7. Een onderdeel dat niet in één rij past ──
+    // ── 8. Doorwerken terwijl wij aan het uitrollen zijn ──
+    // De vraag van Tijn: iemand zit in een map te werken en ondertussen zetten wij een nieuwe versie
+    // live. Blijft alles dan bewaard en blijft het live bijwerken werken?
+    //
+    // Wat er bij een uitrol gebeurt: de Worker wordt vervangen en alle open WebSockets vallen weg.
+    // Verzoeken die op dat moment onderweg zijn, mislukken. Dat mag geen werk kosten. Hier zetten we
+    // dat na: iemand schrijft door terwijl de Worker omvalt en weer opkomt.
+    console.log("\n8. Doorwerken terwijl er wordt uitgerold");
+    {
+      const KEY3 = `synctest_${stempel}_uitrol`;
+      const records = [];
+      const mislukt = [];
+
+      const schrijf = async (n) => {
+        records.push({ id: `r${n}`, naam: `Voorschouw ${n}`, bijgewerktOp: new Date().toISOString() });
+        try {
+          const r = await post("/state", tijnTel.token, { key: KEY3, data: [...records] });
+          if (r.status !== 200) mislukt.push(n);
+        } catch { mislukt.push(n); }        // net als in de app: onthouden en later opnieuw
+      };
+
+      for (let n = 1; n <= 4; n++) await schrijf(n);
+      const voorUitrol = (await post("/state/keys", remon.token, { keys: [KEY3] })).data[KEY3] ?? [];
+      check(voorUitrol.length === 4, "vier stukjes werk staan erin voordat we uitrollen", `${voorUitrol.length}`);
+
+      // ── De uitrol ──
+      const opnieuw = await herstartWorker(worker);
+      // Tijdens en vlak na de herstart blijft de medewerker gewoon typen.
+      for (let n = 5; n <= 8; n++) await schrijf(n);
+      // Wat toen mislukte, gaat er alsnog heen — dat doet de app ook (de 'vuil'-lijst).
+      if (mislukt.length) await schrijf(records.length);
+      check(true, `tijdens de uitrol mislukten ${mislukt.length} van de 8 schrijfacties`);
+
+      const na = (await post("/state/keys", remon.token, { keys: [KEY3] })).data[KEY3] ?? [];
+      check(na.length >= 8, "na de uitrol staat al het werk er nog", `${na.length} van de 8`);
+      check(na.every((x, i) => x.naam === `Voorschouw ${i + 1}`), "en in de goede volgorde, zonder gaten");
+
+      // ── Blijft live meekijken werken? ──
+      // De verbindingen zijn bij de uitrol weggevallen. De app maakt ze vanzelf opnieuw; hier doen
+      // we dat expliciet en kijken of er daarna weer meteen bericht komt.
+      [tijnTel, tijnLap, remon].forEach((a) => a.sluit());
+      await Promise.all([tijnTel.verbind(), tijnLap.verbind(), remon.verbind()]);
+      check(tijnTel.open && tijnLap.open && remon.open, "de apparaten verbinden na de uitrol weer");
+
+      [tijnLap, remon].forEach((a) => a.leeg());
+      const vanaf = Date.now();
+      await post("/state", tijnTel.token, { key: KEY3, data: [...records, { id: "na", naam: "Na de uitrol" }] });
+      meet("live meekijken werkt na de uitrol weer", await remon.wachtOp(KEY3, vanaf), 4000);
+      opruimen.push(KEY3);
+      void opnieuw;
+    }
+
+    // ── 9. Een onderdeel dat niet in één rij past ──
     // Hier ging het eerder mis: de database weigert een rij boven ongeveer 2,19 MB. Een voorschouwmap
     // vol foto's gaat daar zonder moeite overheen, en dan mislukte de schrijf zonder dat iemand het
     // zag — je hield de mappen, maar het werk van die dag kwam nergens aan.
     // De server knipt zo'n onderdeel nu zelf in stukken. Deze test controleert de drie dingen die
     // moeten kloppen: het slaat op, het komt er ongeschonden weer uit, en het gaat live door.
-    console.log("\n7. Werk dat groter is dan de database aankan");
+    console.log("\n9. Werk dat groter is dan de database aankan");
     {
       const maakGroot = (mb, merk) => {
         const brok = "F".repeat(60_000);

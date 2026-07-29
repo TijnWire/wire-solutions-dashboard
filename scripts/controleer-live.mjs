@@ -78,6 +78,8 @@ for (const [wat, naald] of [
   ["bewoners thuis van 08:00 tot 16:00", "08:00 tot 16:00"],
   ["uitvoering is een dag, geen periode", "Geplande uitvoeringsdag"],
   ["het sleepvak in de saneerflow", "de kolommen worden zelf herkend"],
+  ["postcodes opzoeken bij ontbreken", "Postcodes opzoeken"],
+  ["aparte pagina langs de deur", "adressen zonder telefoonnummer"],
 ]) check(code.includes(naald), wat, "zit niet in de uitgerolde bundel");
 
 console.log(`\n${geslaagd} geslaagd, ${gefaald} gefaald`);

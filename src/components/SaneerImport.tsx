@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import {
-  FileUp, AlertTriangle, CheckCircle2, Phone, PhoneOff, Pencil, X, Loader2, RotateCcw, Save,
+  FileUp, AlertTriangle, CheckCircle2, Phone, PhoneOff, Pencil, X, Loader2, RotateCcw, Save, Search,
 } from "lucide-react";
 import { ImportScan, type ScanStap } from "./ImportScan";
 import {
@@ -8,6 +8,7 @@ import {
   type ImportRij, type Mapping, type Raster,
 } from "../lib/bodemImport";
 import { haalMapping, stuurAdressen, type FlowAdres } from "../lib/saneerflowWerk";
+import { zoekPostcodes } from "../lib/postcodeZoeker";
 import type { Dossier } from "../lib/saneerflow";
 
 // Saneren — stap 2: het adressenbestand inlezen.
@@ -32,6 +33,8 @@ type Klaar = {
   bestandsnaam: string;
   mapping: Mapping;
   kopIndex: number;
+  leegAantal: number;   // regels zonder enige inhoud, stilzwijgend overgeslagen
+  opgezocht: number;    // postcodes die we bij de landelijke adressenzoeker hebben opgehaald
 };
 
 const nieuwId = (pd: string) => `${pd}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -61,6 +64,7 @@ export function SaneerImport({ dossier, aantalNu, onKlaar }: {
   const [bewerk, setBewerk] = useState<number | null>(null);
   const [gevonden, setGevonden] = useState(0);
   const [sleept, setSleept] = useState(false);
+  const [zoeken, setZoeken] = useState<{ gedaan: number; totaal: number } | null>(null);
 
   // Het uitlezen zelf duurt vaak geen halve seconde. Zonder iets in beeld voelt dat als "er gebeurt
   // niets", en bij een groot bestand juist als "hij is vastgelopen". Daarom lopen de stappen mee met
@@ -90,15 +94,44 @@ export function SaneerImport({ dossier, aantalNu, onKlaar }: {
 
     setScan("sorteren");
     await adem(450);
-    const rijen = bouwRijen(raster, kopIndex, mapping, []);
+    let rijen = bouwRijen(raster, kopIndex, mapping, []);
     if (rijen.length === 0) { setScan(null); setFout("In dit bestand staan geen regels die op adressen lijken."); return; }
 
-    // Zonder postcode kan dit adres nergens bij horen: het groeperen gaat juist op de volledige
-    // postcode. Zo'n regel er stilletjes doorheen laten betekent dat hij later in een verzamelgroep
-    // "onbekend" belandt en niemand ziet waarom. Dus: bij de te corrigeren regels.
+    // ── Lege regels tellen niet mee ──
+    // Aanleverbestanden zitten vol met regels die alleen een streepje of een restje opmaak bevatten.
+    // Die als "afgekeurd" tonen levert een lijst van honderden meldingen op waar niets tussen zit dat
+    // je kúnt rechtzetten — dan kijkt niemand meer naar de meldingen die er wél toe doen. Een regel
+    // zonder straat, huisnummer, postcode, naam én telefoonnummer is geen adres. Die slaan we over.
+    const heeftIets = (r: ImportRij) =>
+      [r.straat, r.huisnummer, r.postcode, r.bewoner, r.telefoon].some((v) => v.trim().length > 0);
+    const leegAantal = rijen.filter((r) => !heeftIets(r)).length;
+    rijen = rijen.filter(heeftIets);
+
+    // ── Ontbrekende postcodes opzoeken ──
+    // Zonder postcode kan een adres nergens bij horen; het groeperen gaat er juist op. Voor we zo'n
+    // regel afkeuren, vragen we hem op bij de landelijke adressenzoeker. Scheelt handwerk bij een
+    // bestand waar de opdrachtgever de postcode simpelweg niet meelevert.
+    const zonderPostcode = rijen.filter((r) => !postcodeGeldig(r.postcode) && r.straat.trim() && r.huisnummer.trim());
+    let opgezocht = 0;
+    if (zonderPostcode.length > 0) {
+      setZoeken({ gedaan: 0, totaal: zonderPostcode.length });
+      const uitslag = await zoekPostcodes(
+        zonderPostcode,
+        (rij, treffer) => {
+          rij.postcode = treffer.postcode;
+          if (!rij.plaats.trim() && treffer.plaats) rij.plaats = treffer.plaats;
+          rij.waarschuwingen = [...rij.waarschuwingen, "postcode opgezocht"];
+        },
+        (gedaan, totaal) => setZoeken({ gedaan, totaal }),
+      );
+      opgezocht = uitslag.gevonden;
+      setZoeken(null);
+    }
+
+    // Wat daarna nog geen postcode heeft, gaat naar de te corrigeren regels.
     for (const r of rijen) {
       if (r.fouten.length === 0 && !postcodeGeldig(r.postcode)) {
-        r.fouten = [r.postcode.trim() ? "Postcode klopt niet" : "Postcode ontbreekt"];
+        r.fouten = [r.postcode.trim() ? "Postcode klopt niet" : "Postcode niet gevonden"];
       }
     }
 
@@ -118,7 +151,7 @@ export function SaneerImport({ dossier, aantalNu, onKlaar }: {
     setKlaar({
       goed,
       afgekeurd: rijen.filter((r) => r.fouten.length > 0 || r.dubbelInBestand),
-      bestandsnaam: file.name, mapping, kopIndex,
+      bestandsnaam: file.name, mapping, kopIndex, leegAantal, opgezocht,
     });
     // De uitkomst even laten staan voordat het scherm opengaat — anders flitst het getal voorbij.
     await adem(1500);
@@ -185,6 +218,23 @@ export function SaneerImport({ dossier, aantalNu, onKlaar }: {
 
       {scan && <ImportScan stap={scan} aantal={gevonden} bestandsnaam={bestand} />}
 
+      {zoeken && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/50 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-xl">
+            <span className="mx-auto inline-flex rounded-full bg-brand-50 p-4 text-brand-600"><Search className="h-7 w-7" /></span>
+            <div className="mt-3 text-base font-bold text-ink-900">Postcodes opzoeken</div>
+            <p className="mt-1 text-sm text-ink-500">
+              Bij {zoeken.totaal} adressen ontbreekt de postcode. Die halen we op bij de landelijke
+              adressenzoeker, want zonder postcode kunnen ze niet gegroepeerd worden.
+            </p>
+            <div className="mt-4 h-2 overflow-hidden rounded-full bg-ink-100">
+              <div className="h-full rounded-full bg-brand-500 transition-all" style={{ width: `${Math.round((zoeken.gedaan / Math.max(1, zoeken.totaal)) * 100)}%` }} />
+            </div>
+            <div className="mt-1.5 text-sm font-semibold tabular-nums text-ink-600">{zoeken.gedaan} van de {zoeken.totaal}</div>
+          </div>
+        </div>
+      )}
+
       {fout && (
         <div className="flex items-start gap-2 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> {fout}
@@ -232,6 +282,22 @@ export function SaneerImport({ dossier, aantalNu, onKlaar }: {
       {klaar && (
         <>
           {/* Wat er straks gebeurt met deze adressen — dat is de vraag, niet welke kolom waar stond. */}
+          {(klaar.opgezocht > 0 || klaar.leegAantal > 0) && (
+            <div className="rounded-xl bg-brand-50 px-4 py-3 text-sm text-brand-900">
+              {klaar.opgezocht > 0 && (
+                <div>
+                  Bij <b>{klaar.opgezocht} adressen</b> stond geen postcode in het bestand; die zijn opgezocht
+                  bij de landelijke adressenzoeker en staan in de lijst hieronder.
+                </div>
+              )}
+              {klaar.leegAantal > 0 && (
+                <div className={klaar.opgezocht > 0 ? "mt-1" : ""}>
+                  <b>{klaar.leegAantal} lege regels</b> uit het bestand overgeslagen — daar stond geen adres in.
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-2xl border border-ink-200 bg-white p-4">
               <div className="flex items-center gap-2 text-brand-700"><Phone className="h-4 w-4" /><span className="text-sm font-semibold">Naar de bellijst</span></div>
@@ -257,7 +323,10 @@ export function SaneerImport({ dossier, aantalNu, onKlaar }: {
                 <div key={`${r.bron}-${i}`} className="flex items-center justify-between gap-3 px-4 py-2 text-sm">
                   <span className="min-w-0">
                     <span className="block truncate font-medium text-ink-800">{[r.straat, r.huisnummer, r.toevoeging].filter(Boolean).join(" ")}</span>
-                    <span className="block truncate text-xs text-ink-500">{netPostcode(r.postcode)} {r.plaats}{r.bewoner ? ` · ${r.bewoner}` : ""}</span>
+                    <span className="block truncate text-xs text-ink-500">
+                      {netPostcode(r.postcode)} {r.plaats}{r.bewoner ? ` · ${r.bewoner}` : ""}
+                      {r.waarschuwingen.includes("postcode opgezocht") && <span className="ml-1.5 rounded bg-brand-100 px-1.5 py-0.5 text-[10px] font-semibold text-brand-800">opgezocht</span>}
+                    </span>
                   </span>
                   {r.telefoon.trim()
                     ? <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-brand-50 px-2 py-1 text-xs font-semibold text-brand-800"><Phone className="h-3 w-3" /> {r.telefoon}</span>

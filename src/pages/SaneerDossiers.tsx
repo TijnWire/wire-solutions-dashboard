@@ -81,18 +81,18 @@ function NieuwDossier({ onKlaar, onAnnuleer }: { onKlaar: (pd: string) => void; 
   };
 
   return (
-    <div className="mx-auto max-w-2xl space-y-5">
+    <div className="mx-auto max-w-4xl space-y-6">
       <button type="button" onClick={onAnnuleer} className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-500 hover:text-ink-800">
         <ArrowLeft className="h-4 w-4" /> Terug
       </button>
 
       <div>
-        <h2 className="text-2xl font-bold text-ink-900">Nieuw dossier</h2>
+        <h2 className="text-2xl font-bold text-ink-900 lg:text-3xl">Nieuw dossier</h2>
         <p className="text-sm text-ink-500">Alles onder dit PD-nummer hoort bij elkaar en wordt straks in één keer afgeboekt.</p>
       </div>
 
-      <div className="space-y-4 rounded-2xl border border-ink-200 bg-white p-5 shadow-sm">
-        <label className="block">
+      <div className="space-y-5 rounded-2xl border border-ink-200 bg-white p-5 shadow-sm lg:grid lg:grid-cols-2 lg:gap-x-8 lg:gap-y-6 lg:space-y-0 lg:p-8">
+        <label className="block lg:col-span-1">
           <span className={label}>PD-nummer</span>
           {/* De PD staat er vast voor: die typ je bij elk dossier opnieuw en dat is precies waar
               typefouten insluipen. Je vult alleen de cijfers in. Plak je een heel nummer ("PD123456"),
@@ -113,7 +113,7 @@ function NieuwDossier({ onKlaar, onAnnuleer }: { onKlaar: (pd: string) => void; 
             : pdNet && <span className="mt-1 block text-xs text-ink-500">Wordt opgeslagen als <span className="font-mono font-semibold">{pdNet}</span></span>}
         </label>
 
-        <div>
+        <div className="lg:col-span-1">
           <span className={label}>Regio</span>
           <div className="flex gap-2">
             {REGIOS.map((r) => (
@@ -131,7 +131,7 @@ function NieuwDossier({ onKlaar, onAnnuleer }: { onKlaar: (pd: string) => void; 
           </div>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-2 lg:col-span-2">
           <label className="block">
             <span className={label}>Opdrachtgever</span>
             <input value={opdrachtgever} onChange={(e) => setOpdrachtgever(e.target.value)} placeholder="bijv. Stedin" className={veld} />
@@ -142,12 +142,12 @@ function NieuwDossier({ onKlaar, onAnnuleer }: { onKlaar: (pd: string) => void; 
           </label>
         </div>
 
-        <label className="block">
+        <label className="block lg:col-span-2">
           <span className={label}>Omschrijving werkzaamheden</span>
           <input value={omschrijving} onChange={(e) => setOmschrijving(e.target.value)} placeholder="bijv. Vervangen gasleiding" className={veld} />
         </label>
 
-        <div>
+        <div className="lg:col-span-1">
           <span className={label}>Geplande uitvoeringsdag</span>
           {/* Het werk duurt één dag — het hele gebouw tegelijk. Vandaar één datum en geen periode.
               Kan straks één bewoner niet, dan zoekt de app een andere dag in de weken erna; die
@@ -162,7 +162,7 @@ function NieuwDossier({ onKlaar, onAnnuleer }: { onKlaar: (pd: string) => void; 
         {/* Bewoners moeten thuis zijn van 08:00 tot 16:00. Dat is bij elke sanering hetzelfde, dus
             het is geen keuze meer — één vraag minder bij het aanmaken. Per cluster kan het nog
             afwijken als een gebouw dat vraagt. */}
-        <div className="rounded-xl bg-brand-50 px-4 py-3">
+        <div className="self-end rounded-xl bg-brand-50 px-4 py-3 lg:col-span-1">
           <span className="block text-sm font-semibold text-brand-900">Bewoners zijn thuis van 08:00 tot 16:00</span>
           <span className="mt-0.5 block text-xs text-brand-800">Dat is de standaard voor elke sanering. Per groep nog aan te passen als een gebouw dat vraagt.</span>
         </div>
