@@ -37,7 +37,7 @@ import {
   spiegelAan, spiegelUpsert, spiegelVerwijder, spiegelInsert, spiegelSelect,
   spiegelStatus, herspiegelAlles, type SpiegelEnv,
 } from "./spiegel";
-import { akkoordRoutes } from "./akkoord";
+import { schrijfGesplitst, herstelAllemaal, isDeelSleutel } from "./delen";
 
 export interface Env extends SpiegelEnv {
   DB: D1Database;
@@ -458,17 +458,19 @@ export default {
           const out: Record<string, unknown> = {};
           // Eén kapotte rij mag niet de héle lees laten mislukken — dan synct er niets meer.
           for (const r of results ?? []) {
-            if (afgeschermd.has(r.key)) continue;
+            if (afgeschermd.has(r.key) || isDeelSleutel(r.key)) continue;
             try { out[r.key] = JSON.parse(r.data); } catch { /* rij overslaan */ }
           }
-          return json(out);
+          // Onderdelen die te groot waren voor één rij staan in stukken; die zetten we hier weer aan
+          // elkaar. De app krijgt gewoon één lijst terug en merkt van de splitsing niets.
+          return json(await herstelAllemaal(env, out));
         } catch (e) {
           // D1 hapert → lees uit de Supabase-spiegel zodat het team gewoon doorwerkt.
           const rijen = await spiegelSelect<{ key: string; data: unknown }>(env, "wire_state", "select=key,data");
           if (!rijen) throw e;
           const out: Record<string, unknown> = {};
-          for (const r of rijen) { if (!afgeschermd.has(r.key)) out[r.key] = r.data; } // 'data' is jsonb → al geparsed
-          return json(out);
+          for (const r of rijen) { if (!afgeschermd.has(r.key) && !isDeelSleutel(r.key)) out[r.key] = r.data; } // 'data' is jsonb → al geparsed
+          return json(await herstelAllemaal(env, out));
         }
       }
 
@@ -476,13 +478,15 @@ export default {
         try {
           const { results } = await env.DB.prepare("select key, updated_at from wire_state").all<{ key: string; updated_at: string }>();
           const out: Record<string, string> = {};
-          for (const r of results ?? []) out[r.key] = r.updated_at;
+          // De losse stukken van een groot onderdeel horen hier niet in: de app kent ze niet en zou ze
+          // anders als onbekend onderdeel gaan uploaden.
+          for (const r of results ?? []) if (!isDeelSleutel(r.key)) out[r.key] = r.updated_at;
           return json(out);
         } catch (e) {
           const rijen = await spiegelSelect<{ key: string; updated_at: string }>(env, "wire_state", "select=key,updated_at");
           if (!rijen) throw e;
           const out: Record<string, string> = {};
-          for (const r of rijen) out[r.key] = r.updated_at;
+          for (const r of rijen) if (!isDeelSleutel(r.key)) out[r.key] = r.updated_at;
           return json(out);
         }
       }
@@ -491,7 +495,7 @@ export default {
         const keys = Array.isArray(body.keys) ? (body.keys as string[]).filter((k) => typeof k === "string") : [];
         const out: Record<string, unknown> = {};
         // Afgeschermde onderdelen er meteen uit filteren — dan hoeven ze niet eens uit de database.
-        const mag = keys.filter((k) => !afgeschermd.has(k));
+        const mag = keys.filter((k) => !afgeschermd.has(k) && !isDeelSleutel(k));
         if (mag.length) {
           try {
             const ph = mag.map(() => "?").join(",");
@@ -504,7 +508,7 @@ export default {
             for (const r of rijen) out[r.key] = r.data;
           }
         }
-        return json(out);
+        return json(await herstelAllemaal(env, out));
       }
 
       if (path === "/state" && req.method === "POST") {
@@ -516,12 +520,14 @@ export default {
         // Wie geen eigenaar/HR is, mag alles aan de lijst wijzigen (naam, contract, eigen wachtwoordhash)
         // BEHALVE de rollen — die worden teruggezet op wat er al stond.
         if (key === "users" && !magAlles(mijnRechten?.rol)) body.data = await zeefRollen(env, body.data);
-        const dataText = JSON.stringify(body.data ?? null);
-        await env.DB.prepare(
-          "insert into wire_state (key, data, updated_at) values (?1, ?2, ?3) on conflict(key) do update set data = ?2, updated_at = ?3"
-        ).bind(key, dataText, nuISO).run();
+        if (isDeelSleutel(key)) return json({ error: "Deze naam is voor intern gebruik." }, 400);
+        // Past het onderdeel in één rij, dan gaat het precies zoals altijd. Is het te groot voor de
+        // database, dan knipt schrijfGesplitst het in stukken en zet de leesroute het weer in elkaar.
+        // Zo mislukt een schrijf nooit meer op grootte — ook niet bij een map vol foto's.
+        const { rijen: geschreven, gesplitst } = await schrijfGesplitst(env, key, body.data ?? null, nuISO);
+        if (gesplitst) console.log("[delen]", key, "in", geschreven.length - 1, "stukken");
         // Tweede kopie naar Supabase (achtergrond — vertraagt of blokkeert deze schrijf nooit).
-        spiegelUpsert(env, ctx, "wire_state", [{ key, data: body.data ?? null, updated_at: nuISO }], "key");
+        spiegelUpsert(env, ctx, "wire_state", geschreven, "key");
         // Rol-spiegel bijwerken zodra de gebruikerslijst verandert (zodat is_owner/is_boekhouding kloppen).
         if (key === "users") await seedRollenUitUsers(env, body.data, nuISO, ctx);
         broadcast(env, ctx, { type: "changed", keys: [key], updated_at: nuISO }); // alle apparaten meteen op de hoogte
@@ -870,25 +876,6 @@ export default {
           "select id, adres_id, gebeurtenis, oud, nieuw, door, tijdstip from bodem_log where project_id = ? order by id desc limit 500"
         ).bind(projectId).all();
         return json({ regels: results ?? [] });
-      }
-
-      // ── BEWONERSAKKOORD ── aparte module met een eigen flow; zie cloudflare/akkoord.ts.
-      if (path.startsWith("/akkoord/")) {
-        const uit = await akkoordRoutes(path, req.method, url, body, {
-          env, ikEmail, nuISO, json,
-          magBeheren: magAlles(mijnRechten?.rol) || mijnRechten?.rol === "beheer",
-          mijnUserId: mijnId ?? (await mijnUserId(env, ikEmail)),
-          log: (v) => {
-            ctx.waitUntil(
-              env.DB.prepare(
-                "insert into akkoord_log (pd_nummer, cluster_id, adres_id, gebeurtenis, oud, nieuw, door, tijdstip) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)"
-              ).bind(v.pd, v.clusterId ?? "", v.adresId ?? "", v.gebeurtenis, v.oud ?? "", v.nieuw ?? "", ikEmail, nuISO).run()
-                .then(() => undefined)
-                .catch((e) => console.log("[akkoord-log]", String(e).slice(0, 120))),
-            );
-          },
-        });
-        if (uit) return uit;
       }
 
       // ═══ BODEMONDERZOEK — adressen als losse rijen ═══

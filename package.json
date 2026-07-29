@@ -10,7 +10,8 @@
     "cf:deploy": "wrangler deploy",
     "cf:schema": "wrangler d1 execute wire-solutions --remote --file cloudflare/schema.sql",
     "cf:tail": "wrangler tail",
-    "test": "node scripts/test-bodem.mjs"
+    "test": "node scripts/test-bodem.mjs",
+    "test:sync": "node scripts/test-sync.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.108.0",
@@ -38,6 +39,7 @@
     "tailwindcss": "^3.4.6",
     "typescript": "^5.5.3",
     "vite": "^5.3.4",
-    "wrangler": "^4.20.0"
+    "wrangler": "^4.20.0",
+    "ws": "^8.21.1"
   }
 }
