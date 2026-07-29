@@ -18,7 +18,7 @@ import { exporteerSaneerExcel, exporteerSaneerPdf } from "../lib/saneerflowExpor
 // Dezelfde opbouw als bij bodemonderzoek: één ding per scherm, niets op slot. Maar de stappen zijn
 // wezenlijk anders, want hier gaat het niet om losse afspraken maar om één datum die voor een hele
 // groep moet gelden. Vandaar de stap "Bellen" (adressen waar al een nummer van bekend is hoeven niet
-// langs) en de stap "Poster" (die moet hangen vóór de uitvoering, anders klopt de aankondiging niet).
+// langs) en de stap "Poster" (die moet binnen twee weken na de afspraak in het gebouw hangen).
 
 type StapKey = "inlezen" | "verdelen" | "onderweg" | "bellen" | "poster" | "afronden";
 
@@ -27,7 +27,7 @@ const STAPPEN: { key: StapKey; nr: number; titel: string; uitleg: string; Icon: 
   { key: "verdelen", nr: 2, titel: "Verdelen", uitleg: "Groepen op postcode, elk naar één medewerker", Icon: Users },
   { key: "onderweg", nr: 3, titel: "Onderweg", uitleg: "Langs de deuren tot iedereen akkoord is", Icon: Footprints },
   { key: "bellen",   nr: 4, titel: "Bellen",   uitleg: "Adressen waarvan het nummer al bekend is", Icon: PhoneCall },
-  { key: "poster",   nr: 5, titel: "Poster",   uitleg: "Aankondiging ophangen vóór de uitvoering", Icon: StickyNote },
+  { key: "poster",   nr: 5, titel: "Poster",   uitleg: "Binnen twee weken na de afspraak in het gebouw", Icon: StickyNote },
   { key: "afronden", nr: 6, titel: "Afronden", uitleg: "Controle, export en afboeken", Icon: FileCheck2 },
 ];
 
@@ -269,13 +269,14 @@ function Bellijst({ pd, onWijzig }: { pd: string; onWijzig: () => void }) {
 }
 
 // ── Stap 5 — de poster ──
-// De taak ontstaat vanzelf zodra een groep een datum heeft. De deadline is die datum min het aantal
-// weken uit het dossier: hangt de poster later, dan is de aankondigingstermijn niet gehaald.
+// De taak ontstaat vanzelf zodra een groep een datum heeft. Ophangen moet binnen twee weken ná die
+// afspraak — en nooit later dan de dag vóór de uitvoering, want daarna kondigt hij niets meer aan.
+// De herinnering hiervoor komt als pop-up over het scherm heen; zie PosterHerinnering.
 function Posters({ taken, naamVan, onWijzig }: { taken: Taak[]; naamVan: (id?: string | null) => string; onWijzig: () => void }) {
   const [bezig, setBezig] = useState("");
   const vandaag = new Date().toISOString().slice(0, 10);
 
-  if (taken.length === 0) return <p className="rounded-xl bg-ink-50 px-4 py-3 text-sm text-ink-600">Zodra een groep een definitieve datum heeft, verschijnt hier vanzelf de postertaak.</p>;
+  if (taken.length === 0) return <p className="rounded-xl bg-ink-50 px-4 py-3 text-sm text-ink-600">Zodra met een groep een datum is afgesproken, verschijnt hier vanzelf de postertaak — en krijg je er een herinnering over totdat hij hangt.</p>;
 
   return (
     <div className="space-y-2">
@@ -287,7 +288,7 @@ function Posters({ taken, naamVan, onWijzig }: { taken: Taak[]; naamVan: (id?: s
               <div className="min-w-0">
                 <div className="font-semibold text-ink-900">{t.cluster_naam || "Groep"}</div>
                 <div className="text-xs text-ink-500">
-                  Uitvoering {kortNL(t.definitieve_datum ?? "")} · poster uiterlijk {kortNL(t.deadline)}
+                  Uitvoering {kortNL(t.definitieve_datum ?? "")} · ophangen vóór {kortNL(t.deadline)}
                 </div>
               </div>
               {teLaat && <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${KLEUR.red}`}><ShieldAlert className="h-3.5 w-3.5" /> te laat</span>}
