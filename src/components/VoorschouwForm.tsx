@@ -6,6 +6,7 @@ import { Card } from "./ui";
 import { FotoKnoppen } from "./FotoKnoppen";
 import { AdresBekendHint } from "./AdresBekendHint";
 import { fileNaarDataUrl } from "../lib/image";
+import { bewaarFoto, fotoUrl } from "../lib/fotoOpslag";
 import { legeVoorschouw, type Voorschouw, type JaNee } from "../lib/types";
 
 function Tekstveld({
@@ -222,7 +223,9 @@ export function VoorschouwForm({
     try {
       const nieuwe: string[] = [];
       for (const file of Array.from(files)) {
-        nieuwe.push(await fileNaarDataUrl(file));
+        // Meteen naar de fotoruimte: dan gaat er geen megabyte aan base64 door de synchronisatie.
+        // Lukt dat niet (geen bereik), dan blijft het een data-URL en gaat hij later alsnog mee.
+        nieuwe.push(await bewaarFoto(await fileNaarDataUrl(file)));
       }
       // Functionele update: voeg toe aan de MEEST RECENTE fotos, niet aan de (mogelijk verouderde) snapshot —
       // anders gaan foto's verloren als er twee batches vlak na elkaar worden toegevoegd.
@@ -333,7 +336,7 @@ export function VoorschouwForm({
           <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
             {data.fotos.map((foto, i) => (
               <div key={i} className="group relative aspect-square overflow-hidden rounded-lg border border-ink-200">
-                <img src={foto} alt={`Gasbordje ${i + 1}`} className="h-full w-full object-cover" />
+                <img src={fotoUrl(foto)} alt={`Gasbordje ${i + 1}`} className="h-full w-full object-cover" />
                 <button
                   type="button"
                   onClick={() => verwijderFoto(i)}

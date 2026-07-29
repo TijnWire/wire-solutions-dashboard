@@ -85,3 +85,46 @@ export async function fotoRoutes(
 
   return null;
 }
+
+// ── Bestaande foto's verhuizen ──
+// De voorschouwen die er al staan hebben hun foto's als data-URL in de gegevens. Die halen we eruit
+// en zetten we in R2, met alleen de naam terug in de gegevens. Dat gebeurt hier op de server: er
+// hoeft geen megabyte het internet over, en geen enkel apparaat merkt er iets van.
+//
+// Eén onderdeel per aanroep, zodat een verhuizing nooit halverwege stukloopt op een tijdslimiet.
+export async function verhuisFotos(
+  env: FotoEnv,
+  lees: (key: string) => Promise<unknown>,
+  schrijf: (key: string, data: unknown) => Promise<void>,
+  key: string,
+): Promise<{ verplaatst: number; bespaard: number }> {
+  if (!env.FOTOS) return { verplaatst: 0, bespaard: 0 };
+  const lijst = await lees(key);
+  if (!Array.isArray(lijst)) return { verplaatst: 0, bespaard: 0 };
+
+  let verplaatst = 0;
+  let bespaard = 0;
+  for (const v of lijst as { fotos?: string[] }[]) {
+    if (!v || !Array.isArray(v.fotos)) continue;
+    for (let i = 0; i < v.fotos.length; i++) {
+      const f = v.fotos[i];
+      if (typeof f !== "string" || !f.startsWith("data:")) continue;
+      const m = /^data:([^;,]+)[^,]*,(.*)$/s.exec(f);
+      if (!m) continue;
+      try {
+        const ruw = atob(m[2]);
+        const bytes = new Uint8Array(ruw.length);
+        for (let j = 0; j < ruw.length; j++) bytes[j] = ruw.charCodeAt(j);
+        const naam = nieuweNaam(m[1] || "image/jpeg");
+        await env.FOTOS.put(naam, bytes, {
+          httpMetadata: { contentType: m[1] || "image/jpeg", cacheControl: "public, max-age=31536000, immutable" },
+        });
+        bespaard += f.length;
+        v.fotos[i] = `r2:${naam}`;
+        verplaatst++;
+      } catch { /* onleesbare foto laten staan; die verliezen we liever niet */ }
+    }
+  }
+  if (verplaatst > 0) await schrijf(key, lijst);
+  return { verplaatst, bespaard };
+}

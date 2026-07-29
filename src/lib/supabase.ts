@@ -14,7 +14,7 @@ export const supabaseAan = !CLOUD_API_URL.includes("PLAK-HIER");
 
 // ── Token (JWT) — alleen lokaal op dit apparaat bewaard ──
 const TOK_KEY = "wire.tok";
-function leesToken(): string { try { return localStorage.getItem(TOK_KEY) || ""; } catch { return ""; } }
+export function leesToken(): string { try { return localStorage.getItem(TOK_KEY) || ""; } catch { return ""; } }
 function bewaarToken(t: string): void { try { localStorage.setItem(TOK_KEY, t); } catch { /* opslag niet beschikbaar */ } }
 function wisToken(): void { try { localStorage.removeItem(TOK_KEY); } catch { /* niets */ } }
 

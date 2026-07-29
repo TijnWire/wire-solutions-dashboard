@@ -38,7 +38,7 @@ import {
   spiegelStatus, herspiegelAlles, type SpiegelEnv,
 } from "./spiegel";
 import { schrijfGesplitst, herstelAllemaal, isDeelSleutel } from "./delen";
-import { fotoRoutes } from "./fotos";
+import { fotoRoutes, verhuisFotos } from "./fotos";
 import { saneerRoutes } from "./saneerflow";
 
 export interface Env extends SpiegelEnv {
@@ -556,6 +556,27 @@ export default {
         }
         const na = await env.DB.prepare("select count(*) as n, sum(length(data)) as bytes from wire_state").first<{ n: number; bytes: number }>();
         return json({ ok: true, verwijderd: weg.length, rijenOver: na?.n ?? 0, tekensOver: na?.bytes ?? 0 });
+      }
+
+      // ── ONDERHOUD ── bestaande foto's uit de gegevens naar de fotoruimte verplaatsen.
+      // Eén onderdeel per aanroep; de app roept hem net zo vaak aan tot er niets meer te doen is.
+      if (path === "/state/fotos-naar-r2" && req.method === "POST") {
+        if (!magAlles(mijnRechten?.rol)) return json({ error: "Alleen de leiding mag dit." }, 403);
+        if (!env.FOTOS) return json({ error: "De fotoruimte staat nog niet aan." }, 503);
+        const key = String(body.key ?? "");
+        if (!key) return json({ error: "key ontbreekt." }, 400);
+        const uit = await verhuisFotos(
+          env,
+          async (k) => {
+            const rij = await env.DB.prepare("select data from wire_state where key = ?").bind(k).first<{ data: string }>();
+            if (!rij) return null;
+            try { return await herstelAllemaal(env, { [k]: JSON.parse(rij.data) }).then((o) => o[k]); }
+            catch { return null; }
+          },
+          async (k, data) => { await schrijfGesplitst(env, k, data, nuISO); },
+          key,
+        );
+        return json({ ok: true, ...uit });
       }
 
       if (path === "/state" && req.method === "POST") {

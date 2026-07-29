@@ -39,6 +39,6 @@ crons = ["0 3 * * *"]
 # Zolang deze binding er niet is, blijven foto's gewoon in de gesynchroniseerde gegevens staan en
 # werkt alles zoals het nu werkt — de code kijkt zelf of de fotoruimte bestaat.
 #
-# [[r2_buckets]]
-# binding = "FOTOS"
-# bucket_name = "wire-fotos"
+[[r2_buckets]]
+binding = "FOTOS"
+bucket_name = "wire-fotos"

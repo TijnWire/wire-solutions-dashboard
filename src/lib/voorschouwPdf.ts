@@ -1,8 +1,18 @@
+import { fotoUrl, isR2Foto } from "./fotoOpslag";
 import JSZip from "jszip";
 import type { Voorschouw, JaNee } from "./types";
 
 // Optioneel vast Stedin-mailadres. Leeg laten is prima: de mail opent dan met een leeg "Aan"-veld dat je
 // zelf invult. Weet je het adres later, vul het hier in (bv. "voorschouwen@stedin.net").
+// Bytes van een foto, of hij nu als data-URL in de gegevens zit of in de fotoruimte staat.
+async function fotoBytes(v: string): Promise<{ bytes: Uint8Array; png: boolean }> {
+  if (!isR2Foto(v)) return dataUrlNaarBytes(v);
+  const r = await fetch(fotoUrl(v), { signal: AbortSignal.timeout(30000) });
+  if (!r.ok) throw new Error("foto niet op te halen");
+  const buf = new Uint8Array(await r.arrayBuffer());
+  return { bytes: buf, png: (r.headers.get("content-type") ?? "").includes("png") };
+}
+
 export const STEDIN_EMAIL = "";
 
 const SZ = 10.5; // tekstgrootte van de waarden
@@ -104,7 +114,8 @@ async function maakVoorschouwPdfBytes(v: Voorschouw): Promise<Uint8Array> {
       const rij: { img: import("pdf-lib").PDFImage; w: number; h: number; x: number }[] = [];
       for (let j = 0; j < 2 && i + j < v.fotos.length; j++) {
         try {
-          const { bytes, png } = dataUrlNaarBytes(v.fotos[i + j]);
+          // Een foto uit de fotoruimte moet eerst opgehaald worden; een data-URL is al aanwezig.
+          const { bytes, png } = await fotoBytes(v.fotos[i + j]);
           const img = png ? await pdf.embedPng(bytes) : await pdf.embedJpg(bytes);
           let w = colW, h = (img.height / img.width) * colW;
           if (h > maxH) { h = maxH; w = (img.width / img.height) * maxH; } // hoge foto: schaal proportioneel terug
