@@ -38,6 +38,7 @@ import {
   spiegelStatus, herspiegelAlles, type SpiegelEnv,
 } from "./spiegel";
 import { schrijfGesplitst, herstelAllemaal, isDeelSleutel } from "./delen";
+import { fotoRoutes } from "./fotos";
 import { saneerRoutes } from "./saneerflow";
 
 export interface Env extends SpiegelEnv {
@@ -417,6 +418,14 @@ export default {
         return env.SYNC_HUB.get(env.SYNC_HUB.idFromName("global")).fetch(req);
       }
 
+      // ── FOTO'S ── staan in R2 en niet in de gesynchroniseerde gegevens; zie cloudflare/fotos.ts.
+      //    Het ophalen mag zonder token: de naam is niet te raden en een foto in een browsertab moet
+      //    gewoon laden. Opslaan en weggooien vereisen wél een sessie — die zitten hieronder.
+      if (path.startsWith("/foto/") && (req.method === "GET" || req.method === "HEAD")) {
+        const uit = await fotoRoutes(path, req.method, req, env, json);
+        if (uit) return uit;
+      }
+
       // ── Vanaf hier: geldige token vereist ──
       const auth = req.headers.get("Authorization") ?? "";
       const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
@@ -451,6 +460,11 @@ export default {
       // en haar eigen (mogelijk oude) kopie lokaal opruimt.
       if (path === "/rechten" && req.method === "GET") {
         return json({ rol: mijnRechten?.rol ?? "monteur", boekhouding: !!mijnRechten?.boekhouding, afgeschermd: [...afgeschermd] });
+      }
+
+      if (path.startsWith("/foto")) {
+        const uit = await fotoRoutes(path, req.method, req, env, json);
+        if (uit) return uit;
       }
 
       if (path === "/state" && req.method === "GET") {

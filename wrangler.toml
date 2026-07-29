@@ -29,3 +29,16 @@ new_sqlite_classes = ["SyncHub"]
 # Zonder deze trigger zou de bewaartermijn afhangen van wie er toevallig inlogt.
 [triggers]
 crons = ["0 3 * * *"]
+
+# ── Fotoruimte (R2) ──
+# Zet R2 één keer aan in het Cloudflare-dashboard (Storage → R2 → Enable, vraagt om een
+# betaalmethode; de eerste 10 GB per maand is gratis). Daarna:
+#     npx wrangler r2 bucket create wire-fotos
+# en dan de drie regels hieronder uit het commentaar halen en opnieuw uitrollen.
+#
+# Zolang deze binding er niet is, blijven foto's gewoon in de gesynchroniseerde gegevens staan en
+# werkt alles zoals het nu werkt — de code kijkt zelf of de fotoruimte bestaat.
+#
+# [[r2_buckets]]
+# binding = "FOTOS"
+# bucket_name = "wire-fotos"
