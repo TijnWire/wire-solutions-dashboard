@@ -378,6 +378,9 @@ export async function saneerUitvoeringRoutes(
       zetten.push(`${veld} = ?${zetten.length + 2}`); w.push(v);
     }
     if (patch.belpogingen !== undefined) { zetten.push(`belpogingen = ?${zetten.length + 2}`); w.push(Number(patch.belpogingen) || 0); }
+    // Wat er aan de deur gebeurde: kaartje in de bus, en hoe vaak er is aangebeld.
+    if (patch.kaartje_op !== undefined) { zetten.push(`kaartje_op = ?${zetten.length + 2}`); w.push(String(patch.kaartje_op ?? "")); }
+    if (patch.bezoeken !== undefined) { zetten.push(`bezoeken = ?${zetten.length + 2}`); w.push(Number(patch.bezoeken) || 0); }
     if (!zetten.length) return json({ ok: true });
     await env.DB.prepare(`update saneer_adressen set ${zetten.join(", ")}, bijgewerkt_op = ?${zetten.length + 2} where id = ?1`)
       .bind(id, ...w, nuISO).run();

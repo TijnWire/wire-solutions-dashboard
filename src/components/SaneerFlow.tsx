@@ -221,19 +221,45 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
         clusters.length === 0
           ? <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">Maak eerst groepen in stap 2.</p>
           : (
-              <div className="space-y-1.5">
-                {clusters.map((k) => (
-                  <button key={k.id} type="button" onClick={() => setCluster(k.id)}
-                    className="flex w-full items-center justify-between gap-3 rounded-xl border border-ink-200 bg-white px-4 py-3 text-left hover:bg-ink-50">
-                    <span className="min-w-0">
-                      <span className="block truncate font-semibold text-ink-900">{k.naam || k.postcode}</span>
-                      <span className="block text-xs text-ink-500">{k.adressen} adressen · {naamVan(k.toegewezen_aan)}</span>
-                    </span>
-                    {k.definitieve_datum
-                      ? <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${KLEUR.green}`}>{kortNL(k.definitieve_datum)}</span>
-                      : <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${KLEUR.slate}`}>geen datum</span>}
-                  </button>
-                ))}
+              <div className="space-y-2">
+                {clusters.map((k) => {
+                  // Per groep laten zien hoe ver het veldwerk staat. "Geen datum" zei niets over wat
+                  // er nog te doen was; dít is waar je op stuurt: bij hoeveel deuren heb je een
+                  // telefoonnummer, waar ligt een kaartje, en waar moet je nog heen.
+                  const inGroep = adressen.filter((a) => a.cluster_id === k.id);
+                  const nummer = inGroep.filter((a) => a.telefoon.trim()).length;
+                  const kaartje = inGroep.filter((a) => !a.telefoon.trim() && a.kaartje_op).length;
+                  const open = inGroep.length - nummer - kaartje;
+                  const pct = inGroep.length ? Math.round(((nummer + kaartje) / inGroep.length) * 100) : 0;
+                  return (
+                    <button key={k.id} type="button" onClick={() => setCluster(k.id)}
+                      className="block w-full overflow-hidden rounded-2xl border border-ink-200 bg-white text-left transition-shadow hover:shadow-md">
+                      <div className="flex items-center justify-between gap-3 px-4 pb-2.5 pt-3">
+                        <span className="min-w-0">
+                          <span className="block truncate font-semibold text-ink-900">{k.naam || k.postcode}</span>
+                          <span className="block text-xs text-ink-500">
+                            {inGroep.length} deuren · {naamVan(k.toegewezen_aan)}
+                            {k.definitieve_datum ? ` · uitvoering ${kortNL(k.definitieve_datum)}` : ""}
+                          </span>
+                        </span>
+                        <span className="flex shrink-0 items-center gap-1.5">
+                          {open === 0
+                            ? <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${KLEUR.green}`}>gehad</span>
+                            : <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${KLEUR.slate}`}>{open} nog langs</span>}
+                          <ChevronRight className="h-5 w-5 text-ink-400" />
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3 px-4 pb-3 text-xs">
+                        <span className="text-green-700">{nummer} nummer</span>
+                        <span className="text-amber-700">{kaartje} kaartje</span>
+                        <span className="ml-auto font-semibold tabular-nums text-ink-400">{pct}%</span>
+                      </div>
+                      <div className="h-1.5 bg-ink-100">
+                        <div className="h-full bg-green-500 transition-all" style={{ width: `${pct}%` }} />
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             )
       )}

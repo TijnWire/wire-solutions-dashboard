@@ -324,6 +324,31 @@ async function main() {
     }
 
     // ── 10. Poster en afronden ──
+    // ── Aan de deur: telefoonnummer of kaartje in de bus ──
+    // De kern van stap 3: aan de deur haal je meestal geen afspraak maar een telefoonnummer. Zodra dat
+    // er staat, moet het adres vanzelf op de bellijst komen — anders belt niemand die bewoner ooit.
+    console.log("\n9b. Saneren — langs de deuren");
+    {
+      const voor = await get(`/saneer/bellijst?pd=${PD2}`, baas);
+      const voorN = (voor.data.adressen ?? []).length;
+
+      // Niemand thuis bij adres 3: kaartje in de bus.
+      const kaartje = await post("/saneer/adres", baas, { id: `${PD2}-a3`, patch: { kaartje_op: "2026-07-29", bezoeken: 1 } });
+      check(kaartje.status === 200, "kaartje in de bus wordt vastgelegd", kaartje.data.error ?? "");
+
+      // Bij adres 4 doet iemand open en geeft een nummer.
+      await post("/saneer/adres", baas, { id: `${PD2}-a4`, patch: { telefoon: "0612349999", bezoeken: 1 } });
+      const na = await get(`/saneer/bellijst?pd=${PD2}`, baas);
+      const opBellijst = (na.data.adressen ?? []).some((a) => a.id === `${PD2}-a4`);
+      check(opBellijst, "een nummer dat aan de deur is opgehaald komt meteen op de bellijst");
+      check((na.data.adressen ?? []).length === voorN + 1, "en precies dat ene adres komt erbij", `${voorN} -> ${na.data.adressen?.length}`);
+
+      const alles = await get(`/saneer/adressen?pd=${PD2}`, baas);
+      const a3 = (alles.data.adressen ?? []).find((a) => a.id === `${PD2}-a3`);
+      check(a3?.kaartje_op === "2026-07-29" && a3?.bezoeken === 1, "het kaartje en het aantal bezoeken staan bij het adres");
+      check(!(na.data.adressen ?? []).some((a) => a.id === `${PD2}-a3`), "een adres met alleen een kaartje staat nog niet op de bellijst");
+    }
+
     console.log("\n10. Saneren — poster en afronden");
     {
       const teVroeg = await post("/saneer/afronden", baas, { pd_nummer: PD2 });

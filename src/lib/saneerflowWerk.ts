@@ -18,6 +18,8 @@ export type FlowAdres = {
   straat: string; huisnummer: string; toevoeging: string; postcode: string; plaats: string;
   bewoner: string; telefoon: string; email: string; opmerking: string;
   telefoon_bij_import: number; belstatus: string; belpogingen: number;
+  kaartje_op: string;   // ISO-datum: kaartje in de bus gedaan
+  bezoeken: number;     // hoe vaak er is aangebeld
   cluster_naam?: string; definitieve_datum?: string;
 };
 
