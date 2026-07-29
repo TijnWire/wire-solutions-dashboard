@@ -265,9 +265,27 @@ async function main() {
 
       const geenRecht = await post("/saneer/cluster", mont, { id: cluster1, toegewezen_aan: "u2" });
       check(geenRecht.status === 403, "een monteur mag zichzelf geen cluster toewijzen");
-      await post("/saneer/cluster", baas, { id: cluster1, toegewezen_aan: "u2" });
+
+      // Eén man op een flat: alle groepen tegelijk aanwijzen in plaats van stuk voor stuk.
+      const geenRecht2 = await post("/saneer/clusters/toewijzen", mont, { pd_nummer: PD2, toegewezen_aan: "u2" });
+      check(geenRecht2.status === 403, "een monteur mag het werk niet zelf verdelen");
+
+      const alles = await post("/saneer/clusters/toewijzen", baas, { pd_nummer: PD2, toegewezen_aan: "u2" });
+      check(alles.status === 200 && alles.data.aantal === 2, "één opdracht verdeelt alle groepen", JSON.stringify(alles.data));
+      const naVerdelen = await get(`/saneer/dossier?pd=${PD2}`, baas);
+      check((naVerdelen.data.clusters ?? []).every((k) => k.toegewezen_aan === "u2"), "elke groep staat op dezelfde naam");
+      check(naVerdelen.data.dossier?.status === "verdeeld", "het dossier staat op verdeeld", naVerdelen.data.dossier?.status);
+
       const eigen = await get(`/saneer/adressen?pd=${PD2}`, mont);
-      check(eigen.data.adressen?.length === 2, "de monteur ziet alleen zijn eigen cluster", `${eigen.data.adressen?.length}`);
+      check(eigen.data.adressen?.length === 4, "de monteur ziet nu alle adressen van het project", `${eigen.data.adressen?.length}`);
+
+      // En weer vrijgeven moet ook kunnen, zonder dat er groepen achterblijven.
+      await post("/saneer/clusters/toewijzen", baas, { pd_nummer: PD2, toegewezen_aan: "" });
+      const leeg = await get(`/saneer/dossier?pd=${PD2}`, baas);
+      check((leeg.data.clusters ?? []).every((k) => !k.toegewezen_aan), "toewijzing wissen laat geen groep achter");
+
+      // Voor de rest van de test weer op één man zetten.
+      await post("/saneer/clusters/toewijzen", baas, { pd_nummer: PD2, toegewezen_aan: "u2" });
     }
 
     // ── 9. Eén datum voor het hele cluster ──

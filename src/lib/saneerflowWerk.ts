@@ -89,6 +89,12 @@ export async function maakClusters(pd: string): Promise<{ ok: boolean; fout?: st
   const r = await probeer(cloudPost<ClusterUitslag>("/saneer/clusters/maak", { pd_nummer: netPd(pd) }));
   return r.ok ? { ok: true, uitslag: r.data } : { ok: false, fout: r.fout };
 }
+// Het hele dossier naar één medewerker. Dit is de normale gang van zaken: één man op een flat.
+export async function wijsAllesToe(pd: string, userId: string): Promise<{ ok: boolean; fout?: string; aantal?: number }> {
+  const r = await probeer(cloudPost<{ aantal: number }>("/saneer/clusters/toewijzen", { pd_nummer: netPd(pd), toegewezen_aan: userId }));
+  return r.ok ? { ok: true, aantal: r.data.aantal } : { ok: false, fout: r.fout };
+}
+
 export async function wijzigCluster(id: string, patch: Partial<Pick<Cluster, "naam" | "starttijd" | "toegewezen_aan">>): Promise<{ ok: boolean; fout?: string }> {
   const r = await probeer(cloudPost("/saneer/cluster", { id, ...patch }));
   return r.ok ? { ok: true } : { ok: false, fout: r.fout };

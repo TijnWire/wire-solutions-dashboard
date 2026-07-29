@@ -80,6 +80,7 @@ for (const [wat, naald] of [
   ["het sleepvak in de saneerflow", "de kolommen worden zelf herkend"],
   ["postcodes opzoeken bij ontbreken", "Postcodes opzoeken"],
   ["aparte pagina langs de deur", "adressen zonder telefoonnummer"],
+  ["een man op het hele project", "Wie voert dit werk uit?"],
 ]) check(code.includes(naald), wat, "zit niet in de uitgerolde bundel");
 
 console.log(`\n${geslaagd} geslaagd, ${gefaald} gefaald`);

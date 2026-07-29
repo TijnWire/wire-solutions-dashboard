@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  Users, AlertTriangle, Loader2, ArrowLeft, CheckCircle2, XCircle, DoorClosed, Ban,
+  Users, AlertTriangle, Loader2, ArrowLeft, Check, CheckCircle2, XCircle, DoorClosed, Ban,
   CalendarCheck, Scissors, WifiOff, Clock, RefreshCw, ShieldAlert, Phone,
 } from "lucide-react";
 import { DatumKiezer } from "./DatumKiezer";
 import {
-  maakClusters, wijzigCluster, splitsCluster, haalCluster, startRonde, zetDefinitieveDatum,
+  maakClusters, wijzigCluster, wijsAllesToe, splitsCluster, haalCluster, startRonde, zetDefinitieveDatum,
   legAntwoordVast, verwerkWachtrijFlow, aantalWachtendFlow, standVan, datumVoorstellen,
   ANTWOORD_INFO, type Antwoord, type ClusterDetail, type ClusterUitslag, type FlowAdres,
 } from "../lib/saneerflowWerk";
@@ -48,6 +48,8 @@ export function SaneerVerdelen({ dossier, adressen, clusters, veldwerkers, naamV
   const [fout, setFout] = useState("");
   const [splitsen, setSplitsen] = useState<string | null>(null);
   const [gekozen, setGekozen] = useState<Set<string>>(new Set());
+  // De groepenlijst staat dicht: normaal gesproken hoef je er niet in.
+  const [perGroep, setPerGroep] = useState(false);
 
   async function cluster() {
     setBezig(true); setFout("");
@@ -60,6 +62,16 @@ export function SaneerVerdelen({ dossier, adressen, clusters, veldwerkers, naamV
 
   async function wijs(id: string, userId: string) {
     await wijzigCluster(id, { toegewezen_aan: userId });
+    onWijzig();
+  }
+
+  // Het hele project naar één naam. Eén opdracht aan de server, dus of alles gaat mee of niets —
+  // je kunt niet halverwege blijven steken met de helft verdeeld.
+  async function wijsAlles(userId: string) {
+    setBezig(true); setFout("");
+    const r = await wijsAllesToe(dossier.pd_nummer, userId);
+    setBezig(false);
+    if (!r.ok) { setFout(r.fout ?? "Verdelen mislukte."); return; }
     onWijzig();
   }
 
@@ -121,13 +133,59 @@ export function SaneerVerdelen({ dossier, adressen, clusters, veldwerkers, naamV
         </div>
       ) : (
         <>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm text-ink-600">
-              {clusters.length} groepen · {onverdeeld > 0 ? <b className="text-amber-700">{onverdeeld} nog niet verdeeld</b> : "iedereen heeft werk"}
+          {/* ── Wie doet dit project? ──
+              Bij een portiekflat of appartementencomplex gaat er één iemand op het hele project. Dan
+              is het onzin om twintig groepen los aan te wijzen: dat is twintig keer dezelfde handeling
+              en twintig kansen om er eentje te vergeten. Dus: één klik op een naam, alles verdeeld.
+              Wie het toch wil splitsen, klapt hieronder de groepen open. */}
+          <div className="rounded-2xl border border-ink-200 bg-white p-4 shadow-sm">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h3 className="text-base font-bold text-ink-900">Wie voert dit werk uit?</h3>
+              <span className="text-xs text-ink-500">{clusters.length} groepen · {adressen.length} adressen</span>
+            </div>
+            <p className="mt-0.5 text-sm text-ink-500">
+              Eén klik zet het hele project op één naam. Alle groepen gaan mee.
             </p>
-            <button type="button" onClick={() => void cluster()} disabled={bezig} className={`${knop} bg-white text-ink-700 ring-1 ring-ink-200 hover:bg-ink-50`}>
-              {bezig ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Opnieuw groeperen
-            </button>
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              {veldwerkers.map((u) => {
+                const alles = clusters.length > 0 && clusters.every((k) => k.toegewezen_aan === u.id);
+                const deels = !alles && clusters.some((k) => k.toegewezen_aan === u.id);
+                return (
+                  <button key={u.id} type="button" onClick={() => void wijsAlles(u.id)} disabled={bezig}
+                    className={`rounded-xl border-2 px-4 py-2.5 text-sm font-semibold transition-colors disabled:opacity-60 ${
+                      alles ? "border-brand-500 bg-brand-50 text-brand-800"
+                        : deels ? "border-brand-300 bg-white text-ink-800"
+                        : "border-ink-200 bg-white text-ink-700 hover:border-brand-300 hover:bg-brand-50/50"}`}>
+                    {alles && <Check className="mr-1.5 inline h-4 w-4" />}
+                    {u.naam}
+                    {deels && <span className="ml-1.5 text-xs font-normal text-ink-500">(deels)</span>}
+                  </button>
+                );
+              })}
+              {onverdeeld === 0 && (
+                <button type="button" onClick={() => void wijsAlles("")} disabled={bezig}
+                  className="rounded-xl px-3 py-2.5 text-sm font-medium text-ink-500 hover:bg-ink-50">
+                  Toewijzing wissen
+                </button>
+              )}
+            </div>
+
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-ink-100 pt-3">
+              <p className="text-sm text-ink-600">
+                {onverdeeld === 0
+                  ? <span className="font-semibold text-green-700">Alles verdeeld — klaar om langs de deuren te gaan.</span>
+                  : <><b className="text-amber-700">{onverdeeld} van de {clusters.length} groepen</b> nog niet verdeeld</>}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={() => setPerGroep((v) => !v)} className={`${knop} bg-white text-ink-700 ring-1 ring-ink-200 hover:bg-ink-50`}>
+                  <Scissors className="h-4 w-4" /> {perGroep ? "Groepen verbergen" : "Per groep aanpassen"}
+                </button>
+                <button type="button" onClick={() => void cluster()} disabled={bezig} className={`${knop} bg-white text-ink-700 ring-1 ring-ink-200 hover:bg-ink-50`}>
+                  {bezig ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Opnieuw groeperen
+                </button>
+              </div>
+            </div>
           </div>
 
           {teGroot.length > 0 && (
@@ -139,6 +197,7 @@ export function SaneerVerdelen({ dossier, adressen, clusters, veldwerkers, naamV
             </div>
           )}
 
+          {perGroep && (
           <div className="grid gap-3 lg:grid-cols-2">
             {clusters.map((k) => (
               <div key={k.id} className="rounded-2xl border border-ink-200 bg-white p-4">
@@ -165,6 +224,7 @@ export function SaneerVerdelen({ dossier, adressen, clusters, veldwerkers, naamV
               </div>
             ))}
           </div>
+          )}
         </>
       )}
       {fout && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{fout}</p>}

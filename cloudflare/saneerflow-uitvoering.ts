@@ -10,6 +10,7 @@
 //
 // ROUTES
 //   POST /saneer/clusters/maak     clusters afleiden uit de postcodes
+//   POST /saneer/clusters/toewijzen alle groepen van een dossier naar één medewerker
 //   POST /saneer/cluster           cluster bijwerken (toewijzen, naam, starttijd)
 //   POST /saneer/cluster/splits    handmatig afsplitsen naar een nieuw cluster
 //   POST /saneer/cluster/datum     definitieve datum vastleggen (alleen bij volledig akkoord)
@@ -144,6 +145,30 @@ export async function saneerUitvoeringRoutes(
     const teGroot = nieuweClusters.filter((k) => k.aantal > grens);
     c.log({ pd, gebeurtenis: "geclusterd", nieuw: `${nieuweClusters.length} clusters` });
     return json({ ok: true, clusters: nieuweClusters, teGroot, grens });
+  }
+
+  // Alle groepen van een dossier in één keer aan één medewerker.
+  // Bij een portiekflat of appartementencomplex gaat er altijd één iemand op het hele project. Dat
+  // zijn zo twintig groepen, en die stuk voor stuk aanwijzen is twintig keer dezelfde handeling met
+  // twintig kansen om er eentje te vergeten. Eén opdracht, alles in één keer.
+  if (pad === "/saneer/clusters/toewijzen" && methode === "POST") {
+    if (!c.magBeheren) return json({ error: "Alleen een beheerder mag werk verdelen." }, 403);
+    const pd = netPd(String(body.pd_nummer ?? ""));
+    const aan = String(body.toegewezen_aan ?? "");
+    const dossier = await dossierVan(pd);
+    if (!dossier) return json({ error: "Dossier niet gevonden." }, 404);
+
+    const r = await env.DB.prepare(
+      "update saneer_clusters set toegewezen_aan = ?2, bijgewerkt_op = ?3 where pd_nummer = ?1 and verwijderd = 0"
+    ).bind(pd, aan, nuISO).run();
+    const aantal = Number(r.meta?.changes ?? 0);
+
+    if (aan) {
+      await env.DB.prepare("update saneer_dossiers set status = 'verdeeld', bijgewerkt_op = ?2 where pd_nummer = ?1 and status in ('nieuw','geimporteerd')")
+        .bind(pd, nuISO).run();
+    }
+    c.log({ pd, gebeurtenis: "verdeeld", nieuw: aan ? `${aantal} groepen naar ${aan}` : `${aantal} groepen vrijgegeven` });
+    return json({ ok: true, aantal });
   }
 
   // Cluster bijwerken: toewijzen aan een medewerker, naam of starttijd aanpassen.
