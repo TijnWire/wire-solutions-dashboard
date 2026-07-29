@@ -38,6 +38,7 @@ import {
   spiegelStatus, herspiegelAlles, type SpiegelEnv,
 } from "./spiegel";
 import { schrijfGesplitst, herstelAllemaal, isDeelSleutel } from "./delen";
+import { saneerRoutes } from "./saneerflow";
 
 export interface Env extends SpiegelEnv {
   DB: D1Database;
@@ -876,6 +877,26 @@ export default {
           "select id, adres_id, gebeurtenis, oud, nieuw, door, tijdstip from bodem_log where project_id = ? order by id desc limit 500"
         ).bind(projectId).all();
         return json({ regels: results ?? [] });
+      }
+
+      // ── SANEREN ── de afsprakenflow: één uitvoeringsdatum voor een heel gebouw of postcode.
+      //    Eigen bestand omdat de flow wezenlijk anders is dan die van bodemonderzoek.
+      if (path.startsWith("/saneer/")) {
+        const uit = await saneerRoutes(path, req.method, url, body, {
+          env, ikEmail, nuISO, json,
+          magBeheren: magAlles(mijnRechten?.rol) || mijnRechten?.rol === "beheer",
+          mijnUserId: mijnId ?? (await mijnUserId(env, ikEmail)),
+          log: (v) => {
+            ctx.waitUntil(
+              env.DB.prepare(
+                "insert into saneer_log (pd_nummer, cluster_id, adres_id, gebeurtenis, oud, nieuw, door, tijdstip) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)"
+              ).bind(v.pd, v.clusterId ?? "", v.adresId ?? "", v.gebeurtenis, v.oud ?? "", v.nieuw ?? "", ikEmail, nuISO).run()
+                .then(() => undefined)
+                .catch((e) => console.log("[saneer-log]", String(e).slice(0, 120))),
+            );
+          },
+        });
+        if (uit) return uit;
       }
 
       // ═══ BODEMONDERZOEK — adressen als losse rijen ═══

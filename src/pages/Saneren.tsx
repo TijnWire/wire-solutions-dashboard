@@ -6,6 +6,7 @@ import {
 import { useApp } from "../store/AppContext";
 import { Card, Badge, Bevestig } from "../components/ui";
 import { WerknemerKiezer } from "../components/WerknemerKiezer";
+import { SaneerDossiers } from "./SaneerDossiers";
 import { DatumKiezer } from "../components/DatumKiezer";
 import { TijdKiezer } from "../components/TijdKiezer";
 import { afleidRegio } from "../lib/regio";
@@ -486,8 +487,10 @@ function SaneringDetail({ sanering, onTerug }: { sanering: Sanering; onTerug: ()
   );
 }
 
-// ── Hoofdcomponent: overzicht per werkweek (TAUW-layout) ──
-export function Saneren({ initieelSanering }: { initieelSanering?: string }) {
+// ── De oude opzet: overzicht per werkweek ──
+// Blijft bestaan zodat eerder ingevoerde saneringen bereikbaar blijven. De nieuwe manier van werken
+// staat in SaneerDossiers; deze lijst is er alleen nog om terug te kijken.
+function OudeSaneringen({ initieelSanering }: { initieelSanering?: string }) {
   const { saneringen, users, currentUser, addSanering, updateSanering } = useApp();
   const [openId, setOpenId] = useState<string | null>(initieelSanering ?? null);
   const [vraagVerwijder, setVraagVerwijder] = useState<Sanering | null>(null);
@@ -662,4 +665,30 @@ export function Saneren({ initieelSanering }: { initieelSanering?: string }) {
       {scan.fase && <ScanOverlay fase={scan.fase} aantal={scan.aantal} />}
     </div>
   );
+}
+
+// ── Saneren ──
+// De nieuwe flow: één bestand met adressen per regio, de adressen zonder telefoonnummer eruit
+// gefilterd (daar moet iemand langs), sorteren op postcode, verdelen over medewerkers, en dan één
+// uitvoeringsdatum waarop iederéén thuis moet zijn. Zie SaneerDossiers en SaneerFlow.
+//
+// Wat er vroeger stond is niet weggegooid: onder "Eerder ingevoerd" staat de oude lijst nog, zodat
+// niemand kwijtraakt wat er al in stond.
+export function Saneren({ initieelSanering }: { initieelSanering?: string }) {
+  const [oud, setOud] = useState(!!initieelSanering);
+  if (oud) {
+    return (
+      <div className="space-y-4">
+        <button type="button" onClick={() => setOud(false)} className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-700">
+          <ArrowLeft className="h-4 w-4" /> Terug naar Saneren
+        </button>
+        <div className="rounded-xl bg-ink-100 px-4 py-3 text-sm text-ink-700">
+          Dit is de oude opzet. Nieuwe saneringen maak je aan op de vorige pagina; deze lijst staat er
+          alleen nog om terug te kijken.
+        </div>
+        <OudeSaneringen initieelSanering={initieelSanering} />
+      </div>
+    );
+  }
+  return <SaneerDossiers onEerder={() => setOud(true)} />;
 }
