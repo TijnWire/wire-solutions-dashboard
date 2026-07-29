@@ -213,6 +213,28 @@ export async function sbHerstelSessie(): Promise<boolean> {
 
 // Diagnose: test stap voor stap of dit apparaat met de centrale database kan praten.
 export type SyncTest = { sessie: boolean; email: string | null; lezen: boolean; schrijven: boolean; melding: string };
+// Een netwerkfout zegt een gebruiker niets. Deze vertaling zegt wél wat er speelt en wat je eraan
+// kunt doen. De drie gevallen die we in de praktijk zijn tegengekomen staan er met naam in.
+function duidingVanFout(e: unknown, email: string | null): string {
+  const m = e instanceof Error ? e.message : String(e);
+  if (/1027|Too Many Requests|429/i.test(m)) {
+    return "De centrale database heeft vandaag te veel verzoeken gehad en weigert tijdelijk alles "
+      + "(Cloudflare-foutcode 1027, de daglimiet van het gratis plan). Je werk blijft veilig op dit "
+      + "apparaat staan en gaat vanzelf mee zodra de limiet 's nachts wordt vrijgegeven.";
+  }
+  if (/Failed to fetch|NetworkError|load failed/i.test(m)) {
+    return `Wel ingelogd (${email}), maar dit apparaat krijgt de centrale database helemaal niet te `
+      + "pakken. Dat is bijna altijd het netwerk: probeer het op een ander netwerk of via je telefoon "
+      + "als hotspot, en zet een eventuele adblocker of VPN even uit. Blijft het zo op elk netwerk, "
+      + "dan is de daglimiet van de server bereikt.";
+  }
+  if (/aborted|timeout/i.test(m)) {
+    return `Wel ingelogd (${email}), maar het antwoord kwam niet binnen de tijd. Meestal een trage `
+      + "verbinding; het probeert vanzelf opnieuw.";
+  }
+  return `Wel ingelogd (${email}), maar lezen wordt geblokkeerd: ${m}.`;
+}
+
 export async function sbSyncTest(): Promise<SyncTest> {
   const r: SyncTest = { sessie: false, email: null, lezen: false, schrijven: false, melding: "" };
   try {
@@ -223,7 +245,10 @@ export async function sbSyncTest(): Promise<SyncTest> {
       return r;
     }
     try { await sbVersies(); r.lezen = true; }
-    catch (e) { r.melding = `Wel ingelogd (${r.email}), maar lezen wordt geblokkeerd: ${e instanceof Error ? e.message : String(e)}.`; return r; }
+    catch (e) {
+      r.melding = duidingVanFout(e, r.email);
+      return r;
+    }
     try { await sbSchrijf("synctest", { door: r.email, op: new Date().toISOString() }); r.schrijven = true; }
     catch (e) { r.melding = `Lezen lukt, maar schrijven wordt geblokkeerd: ${e instanceof Error ? e.message : String(e)}.`; return r; }
     r.melding = `Alles werkt — dit apparaat (${r.email}) leest én schrijft naar de centrale database. Wijzigingen worden gedeeld.`;

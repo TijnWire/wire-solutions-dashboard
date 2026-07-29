@@ -984,7 +984,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const url = cloudWsUrl();
       if (!url) { wsHerverbind = setTimeout(verbindWs, 3000); return; } // nog geen token → zo weer proberen
       try { ws = new WebSocket(url); } catch { wsHerverbind = setTimeout(verbindWs, backoff); backoff = Math.min(backoff * 2, 15000); return; }
-      ws.onopen = () => { wsStatus.verbonden = true; backoff = 1000; wsPing = setInterval(() => { try { ws?.send("ping"); } catch { /* noop */ } }, 25000); };
+      ws.onopen = () => { wsStatus.verbonden = true; backoff = 1000; pollMislukt = 0; wsPing = setInterval(() => { try { ws?.send("ping"); } catch { /* noop */ } }, 25000); };
       ws.onmessage = (ev) => {
         try {
           const msg = JSON.parse(String(ev.data));
@@ -1039,12 +1039,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
         sync.current.laatsteFout = "";
       } catch (e) { sync.current.laatsteFout = String((e as Error)?.message ?? e); }
     };
+    // ── Hoe vaak vragen we de server om nieuws? ──
+    // Dit bepaalt bijna in z'n eentje hoeveel verzoeken het hele team per dag doet, en op 29-07-2026
+    // liep dat mis: het gratis Workers-plan geeft 100.000 verzoeken per dag, en die waren halverwege
+    // de middag op. Daarna weigert Cloudflare álles met foutcode 1027 — in de browser zichtbaar als
+    // "Failed to fetch", en dus een team dat niet meer synchroniseert.
+    //
+    // Rekensom met zestien apparaten, tien uur per dag:
+    //   elke 12 s met verbinding →  16 × 3000 = 48.000 verzoeken, plus lezen en schrijven → eroverheen
+    //   elke 60 s met verbinding →  16 ×  600 =  9.600 verzoeken → ruim binnen
+    //
+    // Staat de WebSocket, dan duwt die wijzigingen zelf door en is de poll alleen een vangnet: dan mag
+    // hij rustig. Valt de verbinding weg, dan kijken we eerst snel (5 s) en lopen daarna op tot een
+    // halve minuut — genoeg om niets te missen, zonder de limiet op te souperen.
+    let pollMislukt = 0;
+    const pollPauze = () => {
+      if (wsStatus.verbonden) return 60000;
+      pollMislukt = Math.min(pollMislukt + 1, 6);
+      return Math.min(5000 * pollMislukt, 30000);
+    };
+
     const planPoll = () => {
       if (!actief) return;
       pollTimer = setTimeout(async () => {
         if (actief && sync.current.klaar) await pollTick();
         planPoll();
-      }, wsStatus.verbonden ? 12000 : 2000);
+      }, pollPauze());
     };
     planPoll();
     return () => { actief = false; sync.current.klaar = false; setSyncKlaar(false); if (pollTimer) clearTimeout(pollTimer); if (wsHerverbind) clearTimeout(wsHerverbind); sluitWs(); };

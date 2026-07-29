@@ -33,6 +33,7 @@ type MeldingData = {
   rondes: Brievenronde[];
   afspraken: Afspraak[];
   voorschouwen: Voorschouw[];
+  voorschouwMappen?: { id: string; gearchiveerd?: boolean; gereedVoorStedin?: boolean }[];
   projects: Project[];
   projectPosts: ProjectPost[];
   tauwOpdrachten: TauwOpdracht[];
@@ -46,7 +47,7 @@ type MeldingData = {
 
 // Persoonlijke meldingen per gebruiker — wat moet deze persoon oppakken?
 export function meldingenVoor(user: User, data: MeldingData): Melding[] {
-  const { taken, rondes, afspraken, voorschouwen, projects, projectPosts, tauwOpdrachten, saneringen, buurtaanpak, users, bedrijf, instellingen, verlof } = data;
+  const { taken, rondes, afspraken, voorschouwen, voorschouwMappen, projects, projectPosts, tauwOpdrachten, saneringen, buurtaanpak, users, bedrijf, instellingen, verlof } = data;
   const m: Melding[] = [];
   const isLeiding = user.rol === "eigenaar" || user.rol === "beheer" || user.rol === "hr";
 
@@ -93,7 +94,14 @@ export function meldingenVoor(user: User, data: MeldingData): Melding[] {
   if (concepten.length) m.push({ id: "vs", ernst: "waarschuwing", titel: `${concepten.length} voorschouw${concepten.length === 1 ? "" : "en"} niet ingediend`, tekst: "Dien je concept-voorschouwen in.", navKey: "voorschouwen" });
 
   // Ingediende voorschouwen zonder foto — foto's zijn verplicht, dus deze moeten aangevuld worden.
-  const eigenOfAlleVs = isLeiding ? voorschouwen : voorschouwen.filter((v) => v.ingevuldDoor === user.id);
+  // Alleen wat nog in het overzicht staat. Een map die is gearchiveerd of al naar Stedin is gegaan, is
+  // afgehandeld; die telt hier niet meer mee. Zonder deze grens meldde de app 96 ontbrekende foto's
+  // terwijl er maar 23 in beeld stonden — en een melding waar je niets mee kunt, leer je wegklikken.
+  const afgehandeldeMappen = new Set(
+    (voorschouwMappen ?? []).filter((mp) => mp.gearchiveerd || mp.gereedVoorStedin).map((mp) => mp.id),
+  );
+  const eigenOfAlleVs = (isLeiding ? voorschouwen : voorschouwen.filter((v) => v.ingevuldDoor === user.id))
+    .filter((v) => !v.mapId || !afgehandeldeMappen.has(v.mapId));
   const zonderFoto = eigenOfAlleVs.filter((v) => v.status === "Ingediend" && (!v.fotos || v.fotos.length === 0)).length;
   if (zonderFoto > 0) m.push({ id: "vs-foto", ernst: "waarschuwing", titel: `${zonderFoto} voorschouw${zonderFoto === 1 ? "" : "en"} zonder foto`, tekst: "Foto's zijn verplicht — open Voorschouwen en vul de ontbrekende foto's aan.", navKey: "voorschouwen" });
 
