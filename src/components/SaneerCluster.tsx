@@ -260,7 +260,7 @@ export function SaneerClusterWerk({ clusterId, onTerug }: { clusterId: string; o
         <h3 className="text-lg font-bold text-ink-900">{cluster.naam || cluster.postcode}</h3>
         <p className="text-sm text-ink-500">
           {cluster.postcode} · {data.adressen.length} adressen · iedereen moet op dezelfde dag thuis zijn
-          {cluster.starttijd || dossier.starttijd ? ` vanaf ${cluster.starttijd || dossier.starttijd}` : ""}
+          {` van ${cluster.starttijd || dossier.starttijd || "08:00"} tot 16:00`}
         </p>
       </div>
 
@@ -432,7 +432,7 @@ function DeurFormulier({ adres, rondeId, dossier, voorstel, bestaand, onKlaar, o
       <div className="rounded-2xl bg-sky-50 px-4 py-3">
         <span className="block text-[11px] font-semibold uppercase tracking-wide text-sky-700">Voorgestelde dag</span>
         <span className="block text-lg font-bold text-sky-900">{voorstel ? datumNL(voorstel) : "nog geen datum"}</span>
-        <span className="block text-xs text-sky-800">Vanaf {dossier.starttijd || "08:00"} · de hele straat tegelijk.</span>
+        <span className="block text-xs text-sky-800">Thuis van {dossier.starttijd || "08:00"} tot 16:00 · de hele straat tegelijk.</span>
       </div>
 
       <div className="grid grid-cols-2 gap-2">

@@ -166,7 +166,7 @@ export function exporteerSaneerPdf(d: ExportData): void {
     doc.setTextColor(GRIJS.r, GRIJS.g, GRIJS.b);
     doc.text(
       k.definitieve_datum
-        ? `${datumNL(k.definitieve_datum)} · vanaf ${k.starttijd || d.dossier.starttijd || "08:00"} · ${inGroep.length} adressen`
+        ? `${datumNL(k.definitieve_datum)} · ${k.starttijd || d.dossier.starttijd || "08:00"}–16:00 · ${inGroep.length} adressen`
         : `NOG GEEN DATUM · ${inGroep.length} adressen`,
       M + 12, y + 27);
     doc.setTextColor(30, 41, 59);

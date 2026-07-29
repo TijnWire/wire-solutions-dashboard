@@ -38,31 +38,31 @@ const datumNL = (iso: string) => {
 
 // ── Nieuw dossier ──
 function NieuwDossier({ onKlaar, onAnnuleer }: { onKlaar: (pd: string) => void; onAnnuleer: () => void }) {
-  const [pd, setPd] = useState("");
+  const [cijfers, setCijfers] = useState("");
+  const pd = cijfers ? `PD${cijfers}` : "";
   const [regio, setRegio] = useState<Regio | "">("");
   const [opdrachtgever, setOpdrachtgever] = useState("");
   const [gebouw, setGebouw] = useState("");
   const [omschrijving, setOmschrijving] = useState("");
   const [van, setVan] = useState("");
   const [tot, setTot] = useState("");
-  const [starttijd, setStarttijd] = useState("08:00");
   const [bezig, setBezig] = useState(false);
   const [fout, setFout] = useState("");
   const [washerstel, setWasHerstel] = useState(false);
 
   const pdNet = netPd(pd);
-  const pdFoutief = pd.trim().length > 0 && !pdGeldig(pd);
+  const pdFoutief = cijfers.length > 0 && !pdGeldig(pd);
 
   const bewaar = async (herstelEerst = false) => {
     setFout("");
-    if (!pdGeldig(pd)) return setFout("Vul een geldig PD-nummer in: PD gevolgd door cijfers, bijvoorbeeld PD123456.");
+    if (!pdGeldig(pd)) return setFout("Vul de cijfers van het PD-nummer in, bijvoorbeeld 123456.");
     if (!regio) return setFout("Kies een regio.");
     setBezig(true);
     try {
       if (herstelEerst) await verwijderDossier(pdNet, true);
       const r = await bewaarDossier({
         pd_nummer: pdNet, regio, opdrachtgever, gebouw, omschrijving,
-        uitvoering_van: van, uitvoering_tot: tot, starttijd,
+        uitvoering_van: van, uitvoering_tot: tot, starttijd: "08:00",
         bijwerken: herstelEerst,
       });
       if (!r.ok) { setFout(r.fout ?? "Niet gelukt."); setWasHerstel(!!r.verwijderd); return; }
@@ -84,15 +84,22 @@ function NieuwDossier({ onKlaar, onAnnuleer }: { onKlaar: (pd: string) => void; 
       <div className="space-y-4 rounded-2xl border border-ink-200 bg-white p-5 shadow-sm">
         <label className="block">
           <span className={label}>PD-nummer</span>
-          <input
-            value={pd}
-            onChange={(e) => { setPd(e.target.value); setFout(""); setWasHerstel(false); }}
-            placeholder="PD123456"
-            autoComplete="off"
-            className={`${veld} font-mono tracking-wide ${pdFoutief ? "border-amber-400" : ""}`}
-          />
+          {/* De PD staat er vast voor: die typ je bij elk dossier opnieuw en dat is precies waar
+              typefouten insluipen. Je vult alleen de cijfers in. Plak je een heel nummer ("PD123456"),
+              dan halen we de letters er zelf af. */}
+          <div className={`flex items-stretch overflow-hidden rounded-xl border ${pdFoutief ? "border-amber-400" : "border-ink-200"} focus-within:border-sky-400 focus-within:ring-2 focus-within:ring-sky-100`}>
+            <span className="flex select-none items-center bg-ink-50 px-4 font-mono text-base font-bold tracking-wide text-ink-500">PD</span>
+            <input
+              value={cijfers}
+              onChange={(e) => { setCijfers(e.target.value.replace(/\D/g, "").slice(0, 12)); setFout(""); setWasHerstel(false); }}
+              placeholder="123456"
+              inputMode="numeric"
+              autoComplete="off"
+              className="w-full px-4 py-3 font-mono text-base tracking-wide outline-none"
+            />
+          </div>
           {pdFoutief
-            ? <span className="mt-1 block text-xs text-amber-700">Verwacht: PD gevolgd door cijfers.</span>
+            ? <span className="mt-1 block text-xs text-amber-700">Vul de cijfers van het PD-nummer in.</span>
             : pdNet && <span className="mt-1 block text-xs text-ink-500">Wordt opgeslagen als <span className="font-mono font-semibold">{pdNet}</span></span>}
         </label>
 
@@ -145,23 +152,12 @@ function NieuwDossier({ onKlaar, onAnnuleer }: { onKlaar: (pd: string) => void; 
           </div>
         </div>
 
-        <div>
-          <span className={label}>Hoe laat moeten bewoners thuis zijn?</span>
-          <div className="flex gap-2">
-            {["08:00", "09:30"].map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setStarttijd(t)}
-                className={`rounded-xl border-2 px-4 py-2.5 text-sm font-semibold transition-colors ${
-                  starttijd === t ? "border-sky-500 bg-sky-50 text-sky-800" : "border-ink-200 bg-white text-ink-700 hover:bg-ink-50"
-                }`}
-              >
-                {t} – 16:00
-              </button>
-            ))}
-          </div>
-          <span className="mt-1 block text-xs text-ink-500">Per cluster nog aan te passen.</span>
+        {/* Bewoners moeten thuis zijn van 08:00 tot 16:00. Dat is bij elke sanering hetzelfde, dus
+            het is geen keuze meer — één vraag minder bij het aanmaken. Per cluster kan het nog
+            afwijken als een gebouw dat vraagt. */}
+        <div className="rounded-xl bg-sky-50 px-4 py-3">
+          <span className="block text-sm font-semibold text-sky-900">Bewoners zijn thuis van 08:00 tot 16:00</span>
+          <span className="mt-0.5 block text-xs text-sky-800">Dat is de standaard voor elke sanering. Per groep nog aan te passen als een gebouw dat vraagt.</span>
         </div>
       </div>
 
@@ -282,7 +278,7 @@ export function SaneerDossiers({ onEerder }: { onEerder: () => void }) {
                       <CalendarRange className="h-3.5 w-3.5" /> {datumNL(d.uitvoering_van)}{d.uitvoering_tot ? ` t/m ${datumNL(d.uitvoering_tot)}` : ""}
                     </span>
                   )}
-                  <span className="inline-flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> vanaf {d.starttijd}</span>
+                  <span className="inline-flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {d.starttijd || "08:00"}–16:00</span>
                   {!!d.adressen && <span className="inline-flex items-center gap-1"><Building2 className="h-3.5 w-3.5" /> {d.adressen} adressen{d.clusters ? ` · ${d.clusters} clusters` : ""}</span>}
                 </div>
 

@@ -4,7 +4,7 @@ import {
 } from "lucide-react";
 import { ImportScan, type ScanStap } from "./ImportScan";
 import {
-  leesRaster, raadKop, bouwRijen, herkenningCompleet, netPostcode,
+  leesRaster, raadKop, bouwRijen, herkenningCompleet, netPostcode, postcodeGeldig,
   type ImportRij, type Mapping, type Raster,
 } from "../lib/bodemImport";
 import { haalMapping, stuurAdressen, type FlowAdres } from "../lib/saneerflowWerk";
@@ -59,17 +59,25 @@ export function SaneerImport({ dossier, aantalNu, onKlaar }: {
   const [bezig, setBezig] = useState(false);
   const [uitslag, setUitslag] = useState<{ toegevoegd: number; overgeslagen: number; afgekeurd: number } | null>(null);
   const [bewerk, setBewerk] = useState<number | null>(null);
+  const [gevonden, setGevonden] = useState(0);
+
+  // Het uitlezen zelf duurt vaak geen halve seconde. Zonder iets in beeld voelt dat als "er gebeurt
+  // niets", en bij een groot bestand juist als "hij is vastgelopen". Daarom lopen de stappen mee met
+  // wat er echt gebeurt, met net genoeg pauze om ze te kunnen lezen.
+  const adem = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
   async function kies(file: File) {
     setFout(""); setUitslag(null); setKlaar(null);
     setBestand(file.name);
     setScan("lezen");
+    await adem(350);
 
     const gelezen = await leesRaster(file);
     if (!gelezen.ok) { setScan(null); setFout(gelezen.fout); return; }
     const raster: Raster = gelezen.raster;
 
     setScan("herkennen");
+    await adem(450);
     // De indeling van de vorige aanlevering van dezelfde opdrachtgever is een voorstel, geen wet:
     // klopt hij niet met dit bestand, dan wint wat we zelf in de kolommen herkennen.
     const zelf = raadKop(raster);
@@ -80,15 +88,40 @@ export function SaneerImport({ dossier, aantalNu, onKlaar }: {
       : zelf.mapping;
 
     setScan("sorteren");
+    await adem(450);
     const rijen = bouwRijen(raster, kopIndex, mapping, []);
     if (rijen.length === 0) { setScan(null); setFout("In dit bestand staan geen regels die op adressen lijken."); return; }
 
+    // Zonder postcode kan dit adres nergens bij horen: het groeperen gaat juist op de volledige
+    // postcode. Zo'n regel er stilletjes doorheen laten betekent dat hij later in een verzamelgroep
+    // "onbekend" belandt en niemand ziet waarom. Dus: bij de te corrigeren regels.
+    for (const r of rijen) {
+      if (r.fouten.length === 0 && !postcodeGeldig(r.postcode)) {
+        r.fouten = [r.postcode.trim() ? "Postcode klopt niet" : "Postcode ontbreekt"];
+      }
+    }
+
+    // Op postcode en huisnummer, zodat de lijst er straks uitziet zoals je 'm ook zou rijden.
+    const goed = rijen
+      .filter((r) => r.fouten.length === 0 && !r.dubbelInBestand)
+      .sort((a, b) => {
+        const pa = netPostcode(a.postcode), pb = netPostcode(b.postcode);
+        if (pa !== pb) return pa < pb ? -1 : 1;
+        const na = parseInt(a.huisnummer.replace(/\D/g, ""), 10) || 0;
+        const nb = parseInt(b.huisnummer.replace(/\D/g, ""), 10) || 0;
+        return na - nb || a.toevoeging.localeCompare(b.toevoeging);
+      });
+
+    setGevonden(goed.length);
     setScan("klaar");
     setKlaar({
-      goed: rijen.filter((r) => r.fouten.length === 0 && !r.dubbelInBestand),
+      goed,
       afgekeurd: rijen.filter((r) => r.fouten.length > 0 || r.dubbelInBestand),
       bestandsnaam: file.name, mapping, kopIndex,
     });
+    // De uitkomst even laten staan voordat het scherm opengaat — anders flitst het getal voorbij.
+    await adem(1500);
+    setScan(null);
   }
 
   async function verstuur() {
@@ -121,7 +154,7 @@ export function SaneerImport({ dossier, aantalNu, onKlaar }: {
       const nogFout: string[] = [];
       if (!rij.straat.trim()) nogFout.push("Straat ontbreekt");
       if (!rij.huisnummer.trim()) nogFout.push("Huisnummer ontbreekt");
-      if (!netPostcode(rij.postcode)) nogFout.push("Postcode ontbreekt");
+      if (!postcodeGeldig(rij.postcode)) nogFout.push(rij.postcode.trim() ? "Postcode klopt niet" : "Postcode ontbreekt");
       rij.fouten = nogFout;
       rij.dubbelInBestand = false;
       const afgekeurd = [...k.afgekeurd];
@@ -149,7 +182,7 @@ export function SaneerImport({ dossier, aantalNu, onKlaar }: {
         </div>
       )}
 
-      {scan && scan !== "klaar" && <ImportScan stap={scan} aantal={0} bestandsnaam={bestand} />}
+      {scan && <ImportScan stap={scan} aantal={gevonden} bestandsnaam={bestand} />}
 
       {fout && (
         <div className="flex items-start gap-2 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -191,6 +224,31 @@ export function SaneerImport({ dossier, aantalNu, onKlaar }: {
               <div className="flex items-center gap-2 text-amber-700"><PhoneOff className="h-4 w-4" /><span className="text-sm font-semibold">Langs de deur</span></div>
               <div className="mt-1 text-3xl font-bold text-ink-900">{zonderTelefoon}</div>
               <p className="text-xs text-ink-500">Geen nummer bekend — deze adressen worden veldwerk.</p>
+            </div>
+          </div>
+
+          {/* De adressen zoals ze straks in de database komen: op postcode, dan huisnummer. Zo zie je
+              in één oogopslag of het klopt — en of de goede kolommen zijn herkend. */}
+          <div className="overflow-hidden rounded-2xl border border-ink-200 bg-white">
+            <div className="flex items-center justify-between gap-2 border-b border-ink-100 px-4 py-2.5">
+              <span className="text-sm font-bold text-ink-900">{klaar.goed.length} adressen, op postcode gesorteerd</span>
+              <span className="text-xs text-ink-500">{klaar.bestandsnaam}</span>
+            </div>
+            <div className="max-h-80 divide-y divide-ink-50 overflow-y-auto">
+              {klaar.goed.slice(0, 200).map((r, i) => (
+                <div key={`${r.bron}-${i}`} className="flex items-center justify-between gap-3 px-4 py-2 text-sm">
+                  <span className="min-w-0">
+                    <span className="block truncate font-medium text-ink-800">{[r.straat, r.huisnummer, r.toevoeging].filter(Boolean).join(" ")}</span>
+                    <span className="block truncate text-xs text-ink-500">{netPostcode(r.postcode)} {r.plaats}{r.bewoner ? ` · ${r.bewoner}` : ""}</span>
+                  </span>
+                  {r.telefoon.trim()
+                    ? <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-sky-50 px-2 py-1 text-xs font-semibold text-sky-800"><Phone className="h-3 w-3" /> {r.telefoon}</span>
+                    : <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-800"><PhoneOff className="h-3 w-3" /> langs</span>}
+                </div>
+              ))}
+              {klaar.goed.length > 200 && (
+                <div className="px-4 py-2 text-xs text-ink-500">…en nog {klaar.goed.length - 200} adressen.</div>
+              )}
             </div>
           </div>
 
