@@ -152,7 +152,7 @@ function meldFout() {
 }
 
 // Bundelt meerdere voorschouwen tot één ZIP-blob (kan throwen als het sjabloon ontbreekt).
-async function genereerZipBlob(lijst: Voorschouw[]): Promise<Blob> {
+export async function genereerZipBlob(lijst: Voorschouw[]): Promise<Blob> {
   const zip = new JSZip();
   const gebruikt = new Set<string>();
   for (const v of lijst) {

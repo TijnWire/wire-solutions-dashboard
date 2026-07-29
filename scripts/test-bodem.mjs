@@ -416,6 +416,58 @@ async function main() {
       check(datumVoorstellen(alle, [], "", "").length === 0, "zonder periode komt er geen voorstel");
     }
 
+    // ── 12. De fotoruimte ──
+    // Foto's en archiefdossiers gaan niet meer door de synchronisatie maar naar R2. Als dit stukgaat,
+    // raak je geen gegevens kwijt maar wél het bewijsmateriaal van een afgerond dossier — dus het moet
+    // aantoonbaar heen én terug kunnen, ongeschonden.
+    console.log("\n12. Fotoruimte (R2)");
+    {
+      // Een piepklein PNG'je: 1 bij 1 pixel, maar wel een echt bestand met een echte header.
+      const png = Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+        "base64",
+      );
+      const opslaan = await fetch(`${U}/foto`, {
+        method: "POST",
+        headers: { "content-type": "image/png", Authorization: `Bearer ${baas}` },
+        body: png,
+      });
+      const uit = await opslaan.json().catch(() => ({}));
+      check(opslaan.status === 200 && !!uit.naam, "een foto wordt opgeslagen", uit.error ?? `status ${opslaan.status}`);
+
+      if (uit.naam) {
+        const terug = await fetch(`${U}/foto/${uit.naam}`);
+        const bytes = Buffer.from(await terug.arrayBuffer());
+        check(terug.status === 200, "en is weer op te halen");
+        check(bytes.equals(png), "byte voor byte hetzelfde als wat erin ging", `${bytes.length} van ${png.length} bytes`);
+        check((terug.headers.get("cache-control") ?? "").includes("immutable"), "en mag een jaar in de cache van de browser");
+
+        // Een archiefdossier is een ZIP of PDF; die moet ook kunnen, met een eigen plek.
+        const pdf = Buffer.from("%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF\n", "utf8");
+        const arch = await fetch(`${U}/foto`, {
+          method: "POST",
+          headers: { "content-type": "application/pdf", Authorization: `Bearer ${baas}` },
+          body: pdf,
+        });
+        const archUit = await arch.json().catch(() => ({}));
+        check(arch.status === 200 && String(archUit.naam ?? "").startsWith("archief/"),
+          "een archiefdossier komt in zijn eigen map terecht", archUit.naam ?? archUit.error);
+
+        // Zonder sessie mag je niets wegschrijven — anders kan iedereen de opslag volgooien.
+        const zonder = await fetch(`${U}/foto`, { method: "POST", headers: { "content-type": "image/png" }, body: png });
+        check(zonder.status === 401, "opslaan zonder sessie wordt geweigerd", `status ${zonder.status}`);
+
+        // Ophalen mag wél zonder sessie: de naam is niet te raden, en een foto in een tab moet laden.
+        const open = await fetch(`${U}/foto/${uit.naam}`);
+        check(open.status === 200, "ophalen mag zonder sessie");
+
+        const weg = await fetch(`${U}/foto/${uit.naam}`, { method: "DELETE", headers: { Authorization: `Bearer ${baas}` } });
+        check(weg.status === 200, "weggooien lukt");
+        const nadien = await fetch(`${U}/foto/${uit.naam}`);
+        check(nadien.status === 404, "en daarna is hij echt weg");
+      }
+    }
+
     console.log(`\n${geslaagd} geslaagd, ${gefaald} gefaald`);
   } finally {
     worker.kill();

@@ -105,3 +105,26 @@ export async function verhuisAlleFotos(
   }
   return stand;
 }
+
+// ── Een map afsluiten: de PDF's vastleggen en de losse foto's loslaten ──
+// Een gearchiveerde map is klaar. Wat je daarna nog nodig hebt is het dossier zoals het naar Stedin
+// ging: de PDF, met de foto's erin gebakken. Die zetten we als één bestand in de fotoruimte.
+//
+// Daarna mogen de losse foto's uit de gesynchroniseerde gegevens. Dat is waar het om begonnen was:
+// 73 afgehandelde mappen die elke telefoon nog steeds meesleepte. De PDF blijft, de losse kopieën
+// niet — en de PDF is wat je in het archief wilt kunnen openen.
+export async function legArchiefVast(pdf: Blob, naam: string): Promise<string | null> {
+  const token = leesToken();
+  if (!token) return null;
+  try {
+    const r = await fetch(`${CLOUD_API_URL}/foto?naam=${encodeURIComponent(naam)}`, {
+      method: "POST",
+      headers: { "content-type": "application/pdf", Authorization: `Bearer ${token}` },
+      body: pdf,
+      signal: AbortSignal.timeout(120000),
+    });
+    if (!r.ok) return null;
+    const uit = (await r.json()) as { naam?: string };
+    return uit.naam ? `r2:${uit.naam}` : null;
+  } catch { return null; }
+}

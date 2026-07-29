@@ -27,6 +27,7 @@ import {
   User,
 } from "lucide-react";
 import { useApp } from "../store/AppContext";
+import { legArchiefVast, fotoUrl } from "../lib/fotoOpslag";
 import { useProjectFilter } from "../components/ProjectFilter";
 import { mapPastBijPlaats } from "../lib/voorschouwGroep";
 import { scrollNaarBoven } from "../lib/scroll";
@@ -37,6 +38,7 @@ import {
   downloadVoorschouwPdf,
   downloadVoorschouwenZip,
   verstuurVoorschouwenNaarStedin,
+  genereerZipBlob,
 } from "../lib/voorschouwPdf";
 import type { Voorschouw, VoorschouwMap } from "../lib/types";
 
@@ -429,12 +431,41 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
     geselecteerd().forEach((v) => { if (v.mapId && geldigeMapIds.has(v.mapId)) ids.add(v.mapId); });
     return ids;
   };
-  const archiveerSelectie = () => {
+  // Archiveren is het afsluiten van een dossier. Daarom leggen we het hier vast zoals het naar Stedin
+  // ging — één PDF met de foto's erin — en laten we daarna de losse foto's uit de synchronisatie los.
+  // Dat scheelt megabytes die elke telefoon anders blijft meeslepen voor werk dat af is.
+  //
+  // Lukt het vastleggen niet (geen bereik, fotoruimte uit), dan archiveren we wél maar laten we de
+  // foto's staan. Nooit iets weggooien waarvan het bewijs niet zeker is opgeborgen.
+  const archiveerSelectie = async () => {
     const mapIds = teArchiverenMapIds();
     const nu = new Date().toISOString();
-    mapIds.forEach((id) => updateVoorschouwMap(id, { gearchiveerd: true, gearchiveerdOp: nu, gereedVoorStedin: false }));
-    wis();
     setVraagArchief(false);
+    setBezig(true);
+    try {
+      for (const id of mapIds) {
+        const map = voorschouwMappen.find((m) => m.id === id);
+        const items = itemsVanMap(id);
+        let vastgelegd: string | null = null;
+        if (items.length > 0) {
+          try {
+            const blob = await genereerZipBlob(items);   // één ZIP met alle PDF's van deze map
+            vastgelegd = await legArchiefVast(blob, `${map?.naam ?? id}.zip`);
+          } catch { vastgelegd = null; }
+        }
+        updateVoorschouwMap(id, {
+          gearchiveerd: true, gearchiveerdOp: nu, gereedVoorStedin: false,
+          ...(vastgelegd ? { archiefPdf: vastgelegd, archiefOp: nu } : {}),
+        });
+        // Pas als het dossier veilig staat, mogen de losse foto's eruit.
+        if (vastgelegd) {
+          for (const v of items) if (v.fotos?.length) updateVoorschouw(v.id, { fotos: [] });
+        }
+      }
+    } finally {
+      setBezig(false);
+      wis();
+    }
   };
   const terugUitArchief = (m: VoorschouwMap) => updateVoorschouwMap(m.id, { gearchiveerd: false, gearchiveerdOp: undefined });
   const verstuurMapNaarStedin = async (m: VoorschouwMap) => {
@@ -571,8 +602,17 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
                     <div className="truncate text-xs text-ink-500">
                       {n} {n === 1 ? "adres" : "adressen"}
                       {m.gearchiveerdOp ? ` · gearchiveerd op ${new Date(m.gearchiveerdOp).toLocaleDateString("nl-NL", { day: "numeric", month: "long", year: "numeric" })}` : ""}
+                      {m.archiefPdf ? " · dossier vastgelegd" : ""}
                     </div>
                   </div>
+                  {/* Het vastgelegde dossier: alle PDF's van deze map, met de foto's erin. Dat is wat
+                      je van een afgehandelde map nog nodig hebt. */}
+                  {m.archiefPdf && (
+                    <a href={fotoUrl(m.archiefPdf)} target="_blank" rel="noreferrer" download
+                      className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-ink-200 bg-white px-3 py-2 text-xs font-semibold text-ink-700 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700">
+                      <FolderArchive className="h-3.5 w-3.5" /> Dossier
+                    </a>
+                  )}
                   <button type="button" onClick={() => terugUitArchief(m)} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-ink-200 bg-white px-3 py-2 text-xs font-semibold text-ink-700 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700">
                     <ArrowLeft className="h-3.5 w-3.5" /> Terugzetten
                   </button>

@@ -398,6 +398,20 @@ export default {
     const url = new URL(req.url);
     const path = url.pathname.replace(/\/+$/, "") || "/";
 
+    // ── FOTO'S EN ARCHIEFDOSSIERS ── vóór alles, want dit is geen JSON.
+    // Zodra de body hieronder als JSON wordt gelezen, is de stroom op en kan hij niet meer worden
+    // doorgegeven aan de opslag. Dat kostte een testronde: "The ReadableStream has been locked".
+    if (path.startsWith("/foto")) {
+      const schrijft = req.method === "POST" || req.method === "DELETE";
+      if (schrijft) {
+        const auth = req.headers.get("Authorization") ?? "";
+        const t = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+        if (!t || !(await leesToken(t, env.JWT_SECRET, nu))) return json({ error: "Geen geldige sessie." }, 401);
+      }
+      const uit = await fotoRoutes(path, req.method, req, env, json);
+      if (uit) return uit;
+    }
+
     const body: Record<string, unknown> =
       req.method === "POST" || req.method === "DELETE" ? await req.json().catch(() => ({})) : {};
 
@@ -449,14 +463,6 @@ export default {
         return env.SYNC_HUB.get(env.SYNC_HUB.idFromName("global")).fetch(req);
       }
 
-      // ── FOTO'S ── staan in R2 en niet in de gesynchroniseerde gegevens; zie cloudflare/fotos.ts.
-      //    Het ophalen mag zonder token: de naam is niet te raden en een foto in een browsertab moet
-      //    gewoon laden. Opslaan en weggooien vereisen wél een sessie — die zitten hieronder.
-      if (path.startsWith("/foto/") && (req.method === "GET" || req.method === "HEAD")) {
-        const uit = await fotoRoutes(path, req.method, req, env, json);
-        if (uit) return uit;
-      }
-
       // ── Vanaf hier: geldige token vereist ──
       const auth = req.headers.get("Authorization") ?? "";
       const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
@@ -491,11 +497,6 @@ export default {
       // en haar eigen (mogelijk oude) kopie lokaal opruimt.
       if (path === "/rechten" && req.method === "GET") {
         return json({ rol: mijnRechten?.rol ?? "monteur", boekhouding: !!mijnRechten?.boekhouding, afgeschermd: [...afgeschermd] });
-      }
-
-      if (path.startsWith("/foto")) {
-        const uit = await fotoRoutes(path, req.method, req, env, json);
-        if (uit) return uit;
       }
 
       if (path === "/state" && req.method === "GET") {

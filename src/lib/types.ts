@@ -144,6 +144,11 @@ export type VoorschouwMap = {
   aangemaakt?: string; // ISO — voor "nieuwste eerst"-sortering
   gearchiveerd?: boolean; // naar de database verstuurd → uit de actieve lijst, bewaard onder "Voorschouwen"
   gearchiveerdOp?: string; // ISO
+  // Bij archiveren wordt het hele dossier als één PDF vastgelegd in de fotoruimte — met de foto's
+  // erin gebakken. Daarna mogen de losse foto's uit de gesynchroniseerde gegevens: wat je van een
+  // afgehandelde map nog nodig hebt is precies dat bestand.
+  archiefPdf?: string;      // "r2:archief/<datum>/<naam>.pdf"
+  archiefOp?: string;       // ISO — wanneer het is vastgelegd
   gereedVoorStedin?: boolean; // klaargezet op de controle-/verstuurpagina "Klaar voor Stedin"
   gereedOp?: string; // ISO
   verzondenOp?: string; // ISO — wanneer daadwerkelijk naar Stedin verstuurd

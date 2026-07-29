@@ -24,14 +24,15 @@
 export type FotoEnv = { FOTOS?: R2Bucket };
 
 const MAX_BYTES = 12_000_000;   // ruim boven een telefoonfoto; hoger is bijna altijd een vergissing
-const TOEGESTAAN = ["image/jpeg", "image/png", "image/webp", "image/heic"];
+const TOEGESTAAN = ["image/jpeg", "image/png", "image/webp", "image/heic", "application/pdf"];
 
 // Een naam die niet te raden is en niet kan botsen. De map ervoor houdt het overzichtelijk in R2.
-function nieuweNaam(soort: string): string {
-  const ext = soort.includes("png") ? "png" : soort.includes("webp") ? "webp" : soort.includes("heic") ? "heic" : "jpg";
+function nieuweNaam(soort: string, map = "voorschouw"): string {
+  const ext = soort.includes("pdf") ? "pdf"
+    : soort.includes("png") ? "png" : soort.includes("webp") ? "webp" : soort.includes("heic") ? "heic" : "jpg";
   const willekeurig = crypto.randomUUID().replace(/-/g, "");
   const dag = new Date().toISOString().slice(0, 10);
-  return `voorschouw/${dag}/${willekeurig}.${ext}`;
+  return `${map}/${dag}/${willekeurig}.${ext}`;
 }
 
 export async function fotoRoutes(
@@ -50,7 +51,8 @@ export async function fotoRoutes(
     const lengte = Number(req.headers.get("content-length") ?? 0);
     if (lengte > MAX_BYTES) return json({ error: "Deze foto is te groot (meer dan 12 MB)." }, 413);
 
-    const naam = nieuweNaam(soort);
+    // Een archief-PDF krijgt zijn eigen map, zodat je in de fotoruimte ziet wat wat is.
+    const naam = nieuweNaam(soort, soort.includes("pdf") ? "archief" : "voorschouw");
     await env.FOTOS.put(naam, req.body, {
       httpMetadata: { contentType: soort, cacheControl: "public, max-age=31536000, immutable" },
     });
