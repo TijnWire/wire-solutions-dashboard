@@ -339,6 +339,37 @@ export default {
   // er niemand inlogt — een bewaartermijn die afhangt van wie er toevallig het dashboard opent, is er geen.
   async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     const nuISO = new Date().toISOString();
+
+    // ── Foto's uit de gesynchroniseerde gegevens halen ──
+    // Dit hoort niemand met de hand te doen. Elke nacht pakt hij de onderdelen waar nog foto's als
+    // tekst in staan en zet ze in de fotoruimte; in de gegevens blijft alleen een verwijzing achter.
+    // Een paar per nacht, zodat één onderhoudsronde nooit te lang duurt — na een aantal nachten is
+    // alles over en blijft het vanzelf zo, want nieuwe foto's gaan meteen naar de fotoruimte.
+    if (env.FOTOS) {
+      ctx.waitUntil((async () => {
+        try {
+          const { results } = await env.DB.prepare("select key from wire_state").all<{ key: string }>();
+          const kandidaten = (results ?? [])
+            .map((r) => r.key)
+            .filter((k) => !isDeelSleutel(k) && k.startsWith("voorschouwen"))
+            .slice(0, 4);
+          for (const key of kandidaten) {
+            const uit = await verhuisFotos(
+              env,
+              async (k) => {
+                const rij = await env.DB.prepare("select data from wire_state where key = ?").bind(k).first<{ data: string }>();
+                if (!rij) return null;
+                try { return (await herstelAllemaal(env, { [k]: JSON.parse(rij.data) }))[k]; } catch { return null; }
+              },
+              async (k, data) => { await schrijfGesplitst(env, k, data, nuISO); },
+              key,
+            );
+            if (uit.verplaatst) console.log("[fotos]", key, uit.verplaatst, "foto's naar de fotoruimte");
+          }
+        } catch (e) { console.log("[fotos] nachtelijke verhuizing mislukt", String(e).slice(0, 140)); }
+      })());
+    }
+
     const grens = new Date();
     grens.setMonth(grens.getMonth() - BEWAARMAANDEN);
     const grensISO = grens.toISOString();

@@ -1,23 +1,12 @@
 import { useState } from "react";
-import { CheckCircle2, AlertTriangle, RotateCcw, Database, Lock, Loader2, Image as ImageIcon } from "lucide-react";
+import { CheckCircle2, AlertTriangle, RotateCcw, Database, Lock } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { Card, Bevestig } from "../components/ui";
-import { verhuisAlleFotos, type VerhuisVoortgang } from "../lib/fotoOpslag";
 import { sbSyncTest, sbAantallen, sbDbStatus, sbHerstelSpiegel, sbKoppelAccounts, type SyncTest, type DbStatus } from "../lib/supabase";
 
 // Aparte pagina: sync-status van dit apparaat + de automatische veiligheidskopie (met herstel).
 export function SyncBackup() {
   const { currentUser, users, synced, backupInfo, herstelBackup, buurtaanpak, voorschouwen, saneringen, rondes, afspraken, facturen, projects, taken } = useApp();
-  const [verhuis, setVerhuis] = useState<VerhuisVoortgang | null>(null);
-  const [verhuisFout, setVerhuisFout] = useState("");
-
-  const startVerhuizing = async () => {
-    setVerhuisFout("");
-    setVerhuis({ gedaan: 0, totaal: 0, verplaatst: 0, bespaard: 0 });
-    const uit = await verhuisAlleFotos(setVerhuis);
-    if (uit.fout) setVerhuisFout(uit.fout);
-    setVerhuis(uit);
-  };
 
   const [herstelVraag, setHerstelVraag] = useState(false);
   const [herstelKlaar, setHerstelKlaar] = useState(false);
@@ -191,7 +180,7 @@ export function SyncBackup() {
             <div className={`mt-2 rounded-lg px-3 py-2 text-xs ${dbs.gelijk ? "bg-green-100 text-green-800" : "bg-amber-50 text-amber-800"}`}>
               {dbs.gelijk
                 ? "Beide databases lopen gelijk — er staat overal hetzelfde in."
-                : "De twee databases lopen nog niet gelijk. Voor het werken maakt dat niets uit (Cloudflare is leidend), maar de reservekopie is dan niet compleet."}
+                : "De reservekopie loopt nog achter. Voor het werken maakt dat niets uit — Cloudflare is leidend — en hij trekt vanzelf bij."}
             </div>
 
             {/* Niet elk teamlid heeft automatisch een inlogaccount in de centrale database: wie er nog een
@@ -223,52 +212,8 @@ export function SyncBackup() {
         {spiegelMelding && <div className="mt-2 rounded-lg bg-ink-50 px-3 py-2 text-xs text-ink-700">{spiegelMelding}</div>}
       </Card>
 
-      {/* Foto's naar de fotoruimte */}
-      {/* De voorschouwfoto's zaten als tekst ín de gegevens die tussen alle apparaten heen en weer
-          gaan: één blok van bijna 18 MB, dat bij elke toegevoegde foto opnieuw rondging. Dit knopje
-          verhuist ze naar de fotoruimte (R2), waarna er alleen een verwijzing van een paar tientallen
-          tekens overblijft. Het verplaatsen gebeurt op de server — er gaat geen megabyte over jouw
-          verbinding — en het kan zonder gevaar meerdere keren gedraaid worden. */}
-      <Card className="p-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="rounded-lg bg-brand-50 p-2 text-brand-600"><ImageIcon className="h-5 w-5" /></div>
-          <div className="min-w-0 flex-1">
-            <div className="text-sm font-bold text-ink-900">Foto's uit de synchronisatie halen</div>
-            <div className="text-xs text-ink-500">
-              Verhuist de bestaande voorschouwfoto's naar de fotoruimte. Daarna synchroniseert de app
-              merkbaar sneller, vooral op een telefoon. Veilig om vaker te doen.
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => void startVerhuizing()}
-            disabled={!!verhuis && verhuis.gedaan < verhuis.totaal}
-            className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
-          >
-            {verhuis && verhuis.gedaan < verhuis.totaal
-              ? <><Loader2 className="h-4 w-4 animate-spin" /> Bezig…</>
-              : <><ImageIcon className="h-4 w-4" /> Foto's verplaatsen</>}
-          </button>
-        </div>
-
-        {verhuis && (
-          <div className="mt-3">
-            <div className="h-2 overflow-hidden rounded-full bg-ink-100">
-              <div className="h-full rounded-full bg-brand-500 transition-all"
-                style={{ width: `${verhuis.totaal ? Math.round((verhuis.gedaan / verhuis.totaal) * 100) : 0}%` }} />
-            </div>
-            <div className="mt-1.5 text-xs text-ink-600">
-              {verhuis.gedaan} van de {verhuis.totaal} onderdelen · <b>{verhuis.verplaatst} foto's verplaatst</b>
-              {verhuis.bespaard > 0 && ` · ${(verhuis.bespaard / 1_000_000).toFixed(1)} MB uit de synchronisatie gehaald`}
-              {verhuis.gedaan >= verhuis.totaal && verhuis.totaal > 0 && " · klaar"}
-            </div>
-          </div>
-        )}
-        {verhuisFout && <div className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{verhuisFout}</div>}
-      </Card>
-
       {/* Automatische veiligheidskopie */}
-      <Card className="flex flex-wrap items-center gap-3 p-4">
+      <Card className="flex flex-wrap items-center gap-3 px-4 py-3.5">
         <div className="rounded-lg bg-ink-100 p-2 text-ink-600"><Database className="h-5 w-5" /></div>
         <div className="min-w-0 flex-1">
           <div className="text-sm font-bold text-ink-900">Automatische veiligheidskopie</div>
