@@ -26,17 +26,19 @@ export function Verlof() {
   const [vNotitie, setVNotitie] = useState("");
   const [fout, setFout] = useState("");
 
-  if (!currentUser) return null;
-  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr";
-  const magBoek = magBoekhouding(currentUser);
+  const isLeiding = currentUser?.rol === "eigenaar" || currentUser?.rol === "beheer" || currentUser?.rol === "hr";
+  const magBoek = !!currentUser && magBoekhouding(currentUser);
   const naamVan = (id: string) => users.find((u) => u.id === id)?.naam ?? "Onbekend";
 
   // Effectieve status = de DB-beslissing (autoritair, RLS-afgedwongen) als die er is, anders de blob-status.
   const effStatus = (v: VerlofT): VerlofStatus => beslissingen[v.id]?.status ?? v.status;
 
-  const mijn = isLeiding ? verlof : verlof.filter((v) => v.medewerkerId === currentUser.id);
+  const mijn = isLeiding ? verlof : verlof.filter((v) => v.medewerkerId === currentUser?.id);
   const gesorteerd = useMemo(() => [...mijn].sort((a, b) => a.van.localeCompare(b.van)), [mijn]);
   const teBeoordelen = useMemo(() => verlof.filter((v) => effStatus(v) === "Aangevraagd").sort((a, b) => a.van.localeCompare(b.van)), [verlof, beslissingen]);
+
+  // Onder alle hooks: React eist dat die bij iedere render in dezelfde volgorde draaien.
+  if (!currentUser) return null;
 
   const opslaanVerlof = () => {
     if (!vVan || !vTot) return;

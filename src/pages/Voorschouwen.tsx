@@ -273,6 +273,14 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
   // in de lijst stond en land je middenin de map.
   useEffect(() => { if (mapDetailId) scrollNaarBoven(); }, [mapDetailId]);
 
+  // Boven elke return: hooks moeten bij iedere render in dezelfde volgorde draaien.
+  const nietGearchiveerd = voorschouwMappen.filter((m) => !m.gearchiveerd && !m.gereedVoorStedin);
+  const filter = useProjectFilter(nietGearchiveerd, {
+    datum: (m) => m.aangemaakt,
+    isOpen: () => true,
+    toonOpenKnop: false,
+  });
+
   if (!currentUser) return null;
   const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr";
 
@@ -395,12 +403,6 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
   };
 
   // Groepeer de zichtbare voorschouwen per eigen map; losse adressen onder "Zonder map".
-  const nietGearchiveerd = voorschouwMappen.filter((m) => !m.gearchiveerd && !m.gereedVoorStedin);
-  const filter = useProjectFilter(nietGearchiveerd, {
-    datum: (m) => m.aangemaakt,
-    isOpen: () => true,
-    toonOpenKnop: false,
-  });
   const actieveMappen = filter.zichtbaar;
   const geldigeMapIds = new Set(actieveMappen.map((m) => m.id));
   // Mappen die klaarstaan voor de controle-/verstuurpagina "Klaar voor Stedin".

@@ -32,20 +32,20 @@ export function Schouwafspraken() {
   const [bewerkId, setBewerkId] = useState<string | null>(null);
   const [zoek, setZoek] = useState("");
 
-  if (!currentUser) return null;
-  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr";
-  const naamVan = (id?: string) => users.find((u) => u.id === id)?.naam ?? "Niet toegewezen";
-  const set = (p: Partial<typeof leegForm>) => setForm((f) => ({ ...(f ?? leegForm), ...p }));
-
-  // Werknemers zien alleen hun eigen toegewezen schouwafspraken; leiding ziet alles.
   const filter = useProjectFilter(schouwafspraken, {
     datum: (s) => s.datum || s.aangemaakt,
     isOpen: (s) => !s.datum,          // nog geen afspraak gepland = nog te doen
   });
+
+  const isLeiding = currentUser?.rol === "eigenaar" || currentUser?.rol === "beheer" || currentUser?.rol === "hr";
+  const naamVan = (id?: string) => users.find((u) => u.id === id)?.naam ?? "Niet toegewezen";
+  const set = (p: Partial<typeof leegForm>) => setForm((f) => ({ ...(f ?? leegForm), ...p }));
+
+  // Werknemers zien alleen hun eigen toegewezen schouwafspraken; leiding ziet alles.
   const zichtbaar = useMemo(() => {
     const q = zoek.trim().toLowerCase();
     return filter.zichtbaar
-      .filter((s) => isLeiding || s.toegewezenAan === currentUser.id)
+      .filter((s) => isLeiding || s.toegewezenAan === currentUser?.id)
       .filter((s) => !q || `${s.straat} ${s.huisnummer} ${s.postcode} ${s.plaats} ${s.contactNaam}`.toLowerCase().includes(q))
       .sort((a, b) => {
         // Ingeplande met datum vooraan (op datum/tijd), daarna de rest op aanmaakmoment.
@@ -54,7 +54,11 @@ export function Schouwafspraken() {
         if (b.datum) return 1;
         return b.aangemaakt.localeCompare(a.aangemaakt);
       });
-  }, [schouwafspraken, isLeiding, currentUser.id, zoek]);
+  }, [filter.zichtbaar, isLeiding, currentUser?.id, zoek]);
+
+  // Deze controle staat bewust onder alle hooks: React eist dat hooks bij iedere render in
+  // dezelfde volgorde draaien, en een return erboven slaat ze over.
+  if (!currentUser) return null;
 
   const openNieuw = () => { setBewerkId(null); setForm({ ...leegForm }); };
   const openBewerk = (s: Schouwafspraak) => {

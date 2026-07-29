@@ -134,6 +134,13 @@ export function Buurtaanpak({ initieelId }: { initieelId?: string }) {
   const [importFout, setImportFout] = useState<string | null>(null);
 
   const gekozen = buurtaanpak.find((b) => b.id === selId);
+  const vanMij = isLeiding ? buurtaanpak : buurtaanpak.filter((b) => b.toegewezenAan === currentUser?.id);
+  const filter = useProjectFilter(vanMij, {
+    datum: (b) => b.aangemaakt,
+    isOpen: (b) => !b.afgerondOp,
+  });
+  const zichtbaar = filter.zichtbaar;
+
   if (gekozen) return <Detail project={gekozen} onTerug={() => setSelId(null)} isLeiding={isLeiding} />;
 
   const maak = () => {
@@ -159,12 +166,6 @@ export function Buurtaanpak({ initieelId }: { initieelId?: string }) {
   };
 
   // Voor werknemers alleen de aan hen toegewezen buurtaanpakken
-  const vanMij = isLeiding ? buurtaanpak : buurtaanpak.filter((b) => b.toegewezenAan === currentUser?.id);
-  const filter = useProjectFilter(vanMij, {
-    datum: (b) => b.aangemaakt,
-    isOpen: (b) => !b.afgerondOp,
-  });
-  const zichtbaar = filter.zichtbaar;
 
   return (
     <div className="space-y-5">

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/geen-localhost.mjs && tsc -b && vite build",
+    "build": "node scripts/geen-localhost.mjs && node scripts/hook-volgorde.mjs && tsc -b && vite build",
     "preview": "vite preview",
     "cf:deploy": "wrangler deploy",
     "cf:schema": "wrangler d1 execute wire-solutions --remote --file cloudflare/schema.sql",

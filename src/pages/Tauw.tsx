@@ -872,15 +872,14 @@ export function Tauw({ initieelTauw }: { initieelTauw?: string }) {
   // Importeren zit nu in het aanmaakscherm zelf: één knop "Nieuwe opdracht", en daarbinnen kies je of je
   // een bestand inleest of alles zelf invult.
 
-  if (!currentUser) return null;
-  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr";
+  const isLeiding = currentUser?.rol === "eigenaar" || currentUser?.rol === "beheer" || currentUser?.rol === "hr";
   // Een bodemonderzoek wordt over meerdere mensen verdeeld. Je ziet de map dus niet alleen als hij als
   // geheel aan jou is toegewezen, maar ook als je in het team zit of als er adressen op jouw naam staan —
   // anders werken je collega's in een map die jij niet eens ziet.
   const hoortBijMij = (o: TauwOpdracht) =>
-    o.toegewezenAan === currentUser.id ||
-    (o.team ?? []).includes(currentUser.id) ||
-    o.adressen.some((a) => a.toegewezenAan === currentUser.id);
+    o.toegewezenAan === currentUser?.id ||
+    (o.team ?? []).includes(currentUser?.id ?? "") ||
+    o.adressen.some((a) => a.toegewezenAan === currentUser?.id);
   const metRol = (isLeiding ? tauwOpdrachten : tauwOpdrachten.filter(hoortBijMij)).filter((o) => !o.gearchiveerd);
   const toonOgFilter = new Set(metRol.map((o) => o.opdrachtgever ?? "TAUW")).size > 1;
   const naOpdrachtgever = ogFilter === "alle" ? metRol : metRol.filter((o) => (o.opdrachtgever ?? "TAUW") === ogFilter);
@@ -890,6 +889,9 @@ export function Tauw({ initieelTauw }: { initieelTauw?: string }) {
     isOpen: (o) => o.status !== "verstuurd",
   });
   const zichtbaar = filter.zichtbaar;
+
+  // Pas hier de controle op een ingelogde gebruiker: alle hooks hierboven moeten altijd draaien.
+  if (!currentUser) return null;
 
   if (nieuw) return <TauwIntake type={nieuwType} onKlaar={(id) => { setNieuw(false); if (id) setOpenId(id); }} />;
 

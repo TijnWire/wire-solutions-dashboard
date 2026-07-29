@@ -1199,12 +1199,21 @@ export function Brieven({ initieelRonde, initieelMap }: { initieelRonde?: string
   // je moet klikken.
   const [tab, setTab] = useState<"overzicht" | "stedin" | "archief">("overzicht");
 
-  if (!currentUser) return null;
-  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr";
+  const isLeiding = currentUser?.rol === "eigenaar" || currentUser?.rol === "beheer" || currentUser?.rol === "hr";
   const zichtbaar = (isLeiding
     ? rondes
-    : rondes.filter((r) => r.toegewezenAan === currentUser.id)
+    : rondes.filter((r) => r.toegewezenAan === currentUser?.id)
   ).filter((r) => !r.gearchiveerd && !r.verwijderd);
+
+  // De filterbalk hoort boven élke return te staan: hooks moeten bij iedere render in dezelfde
+  // volgorde draaien. Stond hij lager, dan sloeg React hem over zodra je een map opende — en dat
+  // gaf een wit scherm.
+  const filter = useProjectFilter(zichtbaar, {
+    datum: (r) => peildatum(r) || r.aangemaakt,
+    isOpen: isOpenRonde,
+  });
+
+  if (!currentUser) return null;
 
   // Verwijderde mappen — zacht verwijderd: weg uit het overzicht maar bewaard in de database, terug te zetten.
   const verwijderdeMappen: { naam: string; items: Brievenronde[] }[] = [];
@@ -1221,9 +1230,9 @@ export function Brieven({ initieelRonde, initieelMap }: { initieelRonde?: string
   // Klaar voor Stedin: mappen die met de knop "Naar boekhouding" zijn doorgestuurd en nog niet
   // gefactureerd zijn. Dit is dus geen apart vinkje maar precies de stand die die knop al zet —
   // anders zou je twee dingen bijhouden die uit de pas kunnen gaan lopen.
-  const klaarRondes = (isLeiding ? rondes : rondes.filter((r) => r.toegewezenAan === currentUser.id))
+  const klaarRondes = (isLeiding ? rondes : rondes.filter((r) => r.toegewezenAan === currentUser?.id))
     .filter((r) => !r.gearchiveerd && !r.verwijderd && r.boekhouding === "te_factureren");
-  const archiefRondes = (isLeiding ? rondes : rondes.filter((r) => r.toegewezenAan === currentUser.id))
+  const archiefRondes = (isLeiding ? rondes : rondes.filter((r) => r.toegewezenAan === currentUser?.id))
     .filter((r) => r.gearchiveerd && !r.verwijderd);
 
   // Rondes uit dezelfde aanlevering horen bij elkaar; los ze anders per straat.
@@ -1256,13 +1265,6 @@ export function Brieven({ initieelRonde, initieelMap }: { initieelRonde?: string
   const mapRondes = mapDetail ? zichtbaar.filter((r) => r.mapNaam === mapDetail) : [];
   if (mapDetail && mapRondes.length > 0)
     return <MapDetail naam={mapDetail} rondes={mapRondes} isLeiding={isLeiding} onOpenRonde={setOpenId} onTerug={() => setMapDetail(null)} />;
-
-  // Dezelfde filterbalk als op de andere projectpagina's. De weekindeling hieronder groepeert
-  // gewoon opnieuw op wat er na het filteren overblijft, dus die twee bijten elkaar niet.
-  const filter = useProjectFilter(zichtbaar, {
-    datum: (r) => peildatum(r) || r.aangemaakt,
-    isOpen: isOpenRonde,
-  });
 
   // Samenvatting + groeperen per week (zelfde layout als TAUW)
   const vandaag = vandaagISO();
