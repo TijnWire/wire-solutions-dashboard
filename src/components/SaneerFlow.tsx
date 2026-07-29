@@ -139,7 +139,7 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
           <h2 className="text-xl font-bold text-ink-900">{dossier.pd_nummer}</h2>
           <p className="text-sm text-ink-500">
             {[dossier.opdrachtgever, dossier.gebouw, dossier.regio].filter(Boolean).join(" · ")}
-            {dossier.uitvoering_van && ` · ${kortNL(dossier.uitvoering_van)} t/m ${kortNL(dossier.uitvoering_tot)}`}
+            {dossier.uitvoering_van && ` · uitvoering ${kortNL(dossier.uitvoering_van)}`}
           </p>
         </div>
         <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${KLEUR[STATUS_INFO[dossier.status]?.kleur ?? "slate"]}`}>

@@ -36,6 +36,17 @@ const datumNL = (iso: string) => {
   return d.length === 3 ? `${Number(d[2])}-${Number(d[1])}-${d[0]}` : iso;
 };
 
+// Het werk duurt één dag. De database bewaart nog steeds een periode, en dat is met opzet: het
+// tweede veld is de speelruimte waarbinnen de app een andere dag mag voorstellen als iemand niet kan.
+// Dat hoeft niemand in te vullen — het volgt uit de gekozen dag.
+const SPEELRUIMTE_WEKEN = 8;
+const speelruimteTot = (dag: string) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dag)) return dag;
+  const d = new Date(`${dag}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + SPEELRUIMTE_WEKEN * 7);
+  return d.toISOString().slice(0, 10);
+};
+
 // ── Nieuw dossier ──
 function NieuwDossier({ onKlaar, onAnnuleer }: { onKlaar: (pd: string) => void; onAnnuleer: () => void }) {
   const [cijfers, setCijfers] = useState("");
@@ -44,8 +55,7 @@ function NieuwDossier({ onKlaar, onAnnuleer }: { onKlaar: (pd: string) => void; 
   const [opdrachtgever, setOpdrachtgever] = useState("");
   const [gebouw, setGebouw] = useState("");
   const [omschrijving, setOmschrijving] = useState("");
-  const [van, setVan] = useState("");
-  const [tot, setTot] = useState("");
+  const [dag, setDag] = useState("");
   const [bezig, setBezig] = useState(false);
   const [fout, setFout] = useState("");
   const [washerstel, setWasHerstel] = useState(false);
@@ -62,7 +72,7 @@ function NieuwDossier({ onKlaar, onAnnuleer }: { onKlaar: (pd: string) => void; 
       if (herstelEerst) await verwijderDossier(pdNet, true);
       const r = await bewaarDossier({
         pd_nummer: pdNet, regio, opdrachtgever, gebouw, omschrijving,
-        uitvoering_van: van, uitvoering_tot: tot, starttijd: "08:00",
+        uitvoering_van: dag, uitvoering_tot: speelruimteTot(dag), starttijd: "08:00",
         bijwerken: herstelEerst,
       });
       if (!r.ok) { setFout(r.fout ?? "Niet gelukt."); setWasHerstel(!!r.verwijderd); return; }
@@ -138,18 +148,15 @@ function NieuwDossier({ onKlaar, onAnnuleer }: { onKlaar: (pd: string) => void; 
         </label>
 
         <div>
-          <span className={label}>Geplande uitvoeringsperiode</span>
-          <div className="flex flex-wrap items-end gap-3">
-            <div>
-              <span className="mb-1 block text-xs text-ink-500">Van</span>
-              <DatumKiezer value={van} onChange={setVan} placeholder="Eerste dag" />
-            </div>
-            <span className="pb-2.5 text-sm text-ink-400">t/m</span>
-            <div>
-              <span className="mb-1 block text-xs text-ink-500">Tot en met</span>
-              <DatumKiezer value={tot} onChange={setTot} placeholder="Laatste dag" />
-            </div>
-          </div>
+          <span className={label}>Geplande uitvoeringsdag</span>
+          {/* Het werk duurt één dag — het hele gebouw tegelijk. Vandaar één datum en geen periode.
+              Kan straks één bewoner niet, dan zoekt de app een andere dag in de weken erna; die
+              speelruimte hoef je hier niet in te vullen. */}
+          <DatumKiezer value={dag} onChange={setDag} placeholder="Kies de dag" />
+          <span className="mt-1 block text-xs text-ink-500">
+            Eén dag voor het hele gebouw. Kan een bewoner niet, dan stelt de app een andere dag voor
+            binnen {SPEELRUIMTE_WEKEN} weken hierna.
+          </span>
         </div>
 
         {/* Bewoners moeten thuis zijn van 08:00 tot 16:00. Dat is bij elke sanering hetzelfde, dus
@@ -275,7 +282,7 @@ export function SaneerDossiers({ onEerder }: { onEerder: () => void }) {
                   <span className="inline-flex items-center gap-1"><MapPin className="h-3.5 w-3.5" /> {d.regio || "geen regio"}</span>
                   {d.uitvoering_van && (
                     <span className="inline-flex items-center gap-1">
-                      <CalendarRange className="h-3.5 w-3.5" /> {datumNL(d.uitvoering_van)}{d.uitvoering_tot ? ` t/m ${datumNL(d.uitvoering_tot)}` : ""}
+                      <CalendarRange className="h-3.5 w-3.5" /> {datumNL(d.uitvoering_van)}
                     </span>
                   )}
                   <span className="inline-flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {d.starttijd || "08:00"}–16:00</span>

@@ -298,9 +298,18 @@ export function SaneerClusterWerk({ clusterId, onTerug }: { clusterId: string; o
         </div>
       ) : (
         <div className="rounded-2xl border border-dashed border-ink-300 bg-white p-6 text-center">
-          <p className="text-sm text-ink-600">Er loopt nog geen ronde. Kies een datum om aan de bewoners voor te leggen.</p>
+          <p className="text-sm text-ink-600">Er loopt nog geen ronde. Welke dag leg je aan de bewoners voor?</p>
+          {/* De geplande uitvoeringsdag staat als knop klaar: dat is negen van de tien keer het
+              antwoord, en dan hoeft er niemand een kalender open te klikken. Een andere dag kan
+              natuurlijk ook. */}
           <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
-            <DatumKiezer value="" onChange={(d) => void nieuweRonde(d)} placeholder="Datum voorstellen" />
+            {dossier.uitvoering_van && (
+              <button type="button" onClick={() => void nieuweRonde(dossier.uitvoering_van)} disabled={bezig}
+                className={`${knop} bg-sky-600 text-white hover:bg-sky-700 disabled:opacity-60`}>
+                <CalendarCheck className="h-4 w-4" /> {datumNL(dossier.uitvoering_van)}
+              </button>
+            )}
+            <DatumKiezer value="" onChange={(d) => void nieuweRonde(d)} placeholder="Andere dag" />
           </div>
         </div>
       )}
