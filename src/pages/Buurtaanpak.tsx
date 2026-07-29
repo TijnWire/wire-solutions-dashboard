@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef, useCallback, memo, Fragment } from "react";
 import { Plus, ArrowLeft, Trash2, Upload, MessageSquare, Send, Check, Copy, Cable, ChevronRight, Phone, Search, Download, CalendarDays } from "lucide-react";
 import { useApp } from "../store/AppContext";
+import { useProjectFilter } from "../components/ProjectFilter";
 import { Card, Badge, Bevestig } from "../components/ui";
 import { DatumKiezer } from "../components/DatumKiezer";
 import { Keuze } from "../components/Keuze";
@@ -158,7 +159,12 @@ export function Buurtaanpak({ initieelId }: { initieelId?: string }) {
   };
 
   // Voor werknemers alleen de aan hen toegewezen buurtaanpakken
-  const zichtbaar = isLeiding ? buurtaanpak : buurtaanpak.filter((b) => b.toegewezenAan === currentUser?.id);
+  const vanMij = isLeiding ? buurtaanpak : buurtaanpak.filter((b) => b.toegewezenAan === currentUser?.id);
+  const filter = useProjectFilter(vanMij, {
+    datum: (b) => b.aangemaakt,
+    isOpen: (b) => !b.afgerondOp,
+  });
+  const zichtbaar = filter.zichtbaar;
 
   return (
     <div className="space-y-5">
@@ -196,6 +202,8 @@ export function Buurtaanpak({ initieelId }: { initieelId?: string }) {
           </div>
         </Card>
       )}
+
+      {filter.balk}
 
       {zichtbaar.length === 0 ? (
         <Card className="p-10 text-center">

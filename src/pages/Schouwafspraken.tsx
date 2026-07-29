@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Plus, X, Trash2, MapPin, Phone, CalendarClock, Search, Pencil } from "lucide-react";
 import { useApp } from "../store/AppContext";
+import { useProjectFilter } from "../components/ProjectFilter";
 import { Card, Badge } from "../components/ui";
 import { WerknemerKiezer } from "../components/WerknemerKiezer";
 import { DatumKiezer } from "../components/DatumKiezer";
@@ -37,9 +38,13 @@ export function Schouwafspraken() {
   const set = (p: Partial<typeof leegForm>) => setForm((f) => ({ ...(f ?? leegForm), ...p }));
 
   // Werknemers zien alleen hun eigen toegewezen schouwafspraken; leiding ziet alles.
+  const filter = useProjectFilter(schouwafspraken, {
+    datum: (s) => s.datum || s.aangemaakt,
+    isOpen: (s) => !s.datum,          // nog geen afspraak gepland = nog te doen
+  });
   const zichtbaar = useMemo(() => {
     const q = zoek.trim().toLowerCase();
-    return schouwafspraken
+    return filter.zichtbaar
       .filter((s) => isLeiding || s.toegewezenAan === currentUser.id)
       .filter((s) => !q || `${s.straat} ${s.huisnummer} ${s.postcode} ${s.plaats} ${s.contactNaam}`.toLowerCase().includes(q))
       .sort((a, b) => {
@@ -139,6 +144,8 @@ export function Schouwafspraken() {
       )}
 
       {/* Lijst */}
+      {filter.balk}
+
       {zichtbaar.length === 0 ? (
         <Card className="p-10 text-center">
           <CalendarClock className="mx-auto h-10 w-10 text-ink-300" />

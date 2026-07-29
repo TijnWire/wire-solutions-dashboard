@@ -86,6 +86,7 @@ for (const [wat, naald] of [
   ["map doorsturen naar de boekhouding", "Naar boekhouding"],
   ["route via Google Maps", "google.com/maps/dir"],
   ["kaartje in de bus", "kaartje in de bus"],
+  ["filterbalk op de projectpaginas", "nieuwste bovenaan"],
 ]) check(code.includes(naald), wat, "zit niet in de uitgerolde bundel");
 
 console.log(`\n${geslaagd} geslaagd, ${gefaald} gefaald`);

@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useState } from "react";
 import { ArrowLeft, Plus, FlaskConical, Trash2, MessageCircle, Phone, Navigation, FileDown, FileUp, Mail, Check, Wand2, ChevronRight, ChevronDown, X, UserPlus, RotateCcw, Footprints, Search, CalendarClock, Pencil } from "lucide-react";
 import { useApp } from "../store/AppContext";
+import { useProjectFilter } from "../components/ProjectFilter";
 import { WerknemerKiezer } from "../components/WerknemerKiezer";
 import { DatumKiezer } from "../components/DatumKiezer";
 import { TijdKiezer } from "../components/TijdKiezer";
@@ -882,7 +883,13 @@ export function Tauw({ initieelTauw }: { initieelTauw?: string }) {
     o.adressen.some((a) => a.toegewezenAan === currentUser.id);
   const metRol = (isLeiding ? tauwOpdrachten : tauwOpdrachten.filter(hoortBijMij)).filter((o) => !o.gearchiveerd);
   const toonOgFilter = new Set(metRol.map((o) => o.opdrachtgever ?? "TAUW")).size > 1;
-  const zichtbaar = ogFilter === "alle" ? metRol : metRol.filter((o) => (o.opdrachtgever ?? "TAUW") === ogFilter);
+  const naOpdrachtgever = ogFilter === "alle" ? metRol : metRol.filter((o) => (o.opdrachtgever ?? "TAUW") === ogFilter);
+  // Zelfde filterbalk als op de andere projectpagina's: periode, alleen wat openstaat, nieuwste bovenaan.
+  const filter = useProjectFilter(naOpdrachtgever, {
+    datum: (o) => o.aangemaakt,
+    isOpen: (o) => o.status !== "verstuurd",
+  });
+  const zichtbaar = filter.zichtbaar;
 
   if (nieuw) return <TauwIntake type={nieuwType} onKlaar={(id) => { setNieuw(false); if (id) setOpenId(id); }} />;
 
@@ -944,6 +951,8 @@ export function Tauw({ initieelTauw }: { initieelTauw?: string }) {
         </div>
       )}
 
+
+      {filter.balk}
 
       {zichtbaar.length === 0 ? (
         <Card className="p-10 text-center">

@@ -6,6 +6,7 @@ import {
 import { useApp } from "../store/AppContext";
 import { DatumKiezer } from "../components/DatumKiezer";
 import { SaneerFlow } from "../components/SaneerFlow";
+import { useProjectFilter } from "../components/ProjectFilter";
 import {
   haalDossiers, bewaarDossier, verwijderDossier, netPd, pdGeldig,
   REGIOS, STATUS_INFO, type Dossier, type Regio,
@@ -209,12 +210,16 @@ export function SaneerDossiers({ onEerder }: { onEerder: () => void }) {
 
   const isLeiding = currentUser?.rol === "eigenaar" || currentUser?.rol === "beheer" || currentUser?.rol === "hr";
 
+  const filter = useProjectFilter(dossiers ?? [], {
+    datum: (d) => (d.uitvoering_van || d.aangemaakt_op || "").slice(0, 10),
+    isOpen: (d) => d.status !== "afgerond" && d.status !== "afgeboekt",
+  });
   const zichtbaar = useMemo(() => {
     const q = zoek.trim().toLowerCase();
-    if (!q) return dossiers ?? [];
-    return (dossiers ?? []).filter((d) =>
+    if (!q) return filter.zichtbaar;
+    return filter.zichtbaar.filter((d) =>
       `${d.pd_nummer} ${d.opdrachtgever} ${d.gebouw} ${d.omschrijving} ${d.regio}`.toLowerCase().includes(q));
-  }, [dossiers, zoek]);
+  }, [filter.zichtbaar, zoek]);
 
   if (nieuw) return <NieuwDossier onAnnuleer={() => setNieuw(false)} onKlaar={(pd) => { setNieuw(false); laad(); setOpen(pd); }} />;
   if (open) return <SaneerFlow pd={open} onTerug={() => { setOpen(null); laad(); }} />;
@@ -239,6 +244,8 @@ export function SaneerDossiers({ onEerder }: { onEerder: () => void }) {
           )}
         </div>
       </div>
+
+      {filter.balk}
 
       {(dossiers?.length ?? 0) > 4 && (
         <div className="relative">
