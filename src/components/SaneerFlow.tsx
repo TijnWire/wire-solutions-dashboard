@@ -21,18 +21,23 @@ import { maakChecklists } from "../lib/saneerChecklist";
 // groep moet gelden. Vandaar de stap "Bellen" (adressen waar al een nummer van bekend is hoeven niet
 // langs) en de stap "Poster" (die moet binnen twee weken na de afspraak in het gebouw hangen).
 
-type StapKey = "inlezen" | "verdelen" | "onderweg" | "bellen" | "langs" | "poster" | "afronden";
+type StapKey = "inlezen" | "verdelen" | "deur" | "bellen" | "poster" | "afronden";
 
-const STAPPEN: { key: StapKey; nr: number; titel: string; uitleg: string; Icon: typeof ListPlus }[] = [
-  { key: "inlezen",  nr: 1, titel: "Inlezen",  uitleg: "Adressenbestand van de opdrachtgever", Icon: ListPlus },
-  { key: "verdelen", nr: 2, titel: "Verdelen", uitleg: "Groepen op postcode, elk naar één medewerker", Icon: Users },
-  { key: "onderweg", nr: 3, titel: "Onderweg", uitleg: "Langs de deuren tot iedereen akkoord is", Icon: Footprints },
-  { key: "bellen",   nr: 4, titel: "Bellen",        uitleg: "Adressen waarvan het nummer al bekend is", Icon: PhoneCall },
-  { key: "langs",    nr: 5, titel: "Langs de deur", uitleg: "Geen telefoonnummer — hier moet iemand naartoe", Icon: Footprints },
-  { key: "poster",   nr: 6, titel: "Poster",        uitleg: "Binnen twee weken na de afspraak in het gebouw", Icon: StickyNote },
-  { key: "afronden", nr: 7, titel: "Afronden",      uitleg: "Controle, export en afboeken", Icon: FileCheck2 },
+// De stappen vallen in twee helften, en dat is precies hoe het werk ook loopt:
+//
+//   BEHEER      het bestand inlezen en het werk verdelen. Doe je één keer, achter een bureau.
+//   UITVOERING  wat de medewerker de hele week doet. Twee lijsten die elkaar aanvullen:
+//               zonder telefoonnummer moet je langs de deur; mét nummer kun je bellen.
+//               Haal je aan de deur een nummer op, dan schuift dat adres vanzelf naar Bellen.
+const STAPPEN: { key: StapKey; nr: number; titel: string; uitleg: string; groep: "beheer" | "werk"; Icon: typeof ListPlus }[] = [
+  { key: "inlezen",  nr: 1, titel: "Inlezen",       uitleg: "Adressenbestand van de opdrachtgever", groep: "beheer", Icon: ListPlus },
+  { key: "verdelen", nr: 2, titel: "Verdelen",      uitleg: "Groepen op postcode, naar één medewerker", groep: "beheer", Icon: Users },
+  { key: "deur",     nr: 3, titel: "Langs de deur", uitleg: "Geen telefoonnummer bekend — hier moet iemand naartoe", groep: "werk", Icon: Footprints },
+  { key: "bellen",   nr: 4, titel: "Bellen",        uitleg: "Nummer bekend — hier maak je de afspraak", groep: "werk", Icon: PhoneCall },
+  { key: "poster",   nr: 5, titel: "Poster",        uitleg: "Binnen twee weken na de afspraak in het gebouw", groep: "werk", Icon: StickyNote },
+  { key: "afronden", nr: 6, titel: "Afronden",      uitleg: "Controle, export en afboeken", groep: "werk", Icon: FileCheck2 },
 ];
-
+const GROEP_LABEL: Record<"beheer" | "werk", string> = { beheer: "Voorbereiden", werk: "Uitvoeren" };
 const knop = "inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors";
 const knop2 = knop;
 const KLEUR: Record<string, string> = {
@@ -82,20 +87,18 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
 
   const clusters = detail?.clusters ?? [];
   const verdeeld = clusters.filter((k) => k.toegewezen_aan).length;
-  const metDatum = clusters.filter((k) => k.definitieve_datum).length;
   const openTaken = taken.filter((t) => !t.afgevinkt_op).length;
-  const bellen = adressen.filter((a) => a.telefoon_bij_import === 1);
-  // Geen telefoonnummer bij de aanlevering: daar moet iemand langs. Komt er onderweg alsnog een
-  // nummer bij, dan blijft het adres toch in deze lijst staan — je bent er immers al geweest.
-  const langs = adressen.filter((a) => a.telefoon_bij_import !== 1);
+  // De twee lijsten van de uitvoering, en ze schuiven in elkaar over: zodra er bij een adres een
+  // telefoonnummer staat, hoeft er niemand meer langs en kan het gebeld worden.
+  const bellen = adressen.filter((a) => a.telefoon.trim());
+  const langs = adressen.filter((a) => !a.telefoon.trim());
 
   // Wanneer is een stap af? Puur informatief — je mag altijd overal heen.
   const af: Record<StapKey, boolean> = {
     inlezen: adressen.length > 0,
     verdelen: clusters.length > 0 && verdeeld === clusters.length,
-    onderweg: clusters.length > 0 && metDatum === clusters.length,
+    deur: langs.length === 0,
     bellen: bellen.length === 0 || bellen.every((a) => a.belstatus === "akkoord"),
-    langs: langs.length === 0 || langs.every((a) => a.telefoon.trim().length > 0),
     poster: taken.length > 0 && openTaken === 0,
     afronden: detail?.dossier.status === "afgerond" || detail?.dossier.status === "afgeboekt",
   };
@@ -107,9 +110,8 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
   const samenvatting: Record<StapKey, string> = {
     inlezen: adressen.length ? `${adressen.length} adressen` : "nog leeg",
     verdelen: clusters.length ? `${verdeeld}/${clusters.length} verdeeld` : "geen groepen",
-    onderweg: clusters.length ? `${metDatum}/${clusters.length} datum rond` : "—",
-    bellen: bellen.length ? `${bellen.filter((a) => a.belstatus === "akkoord").length}/${bellen.length}` : "geen",
-    langs: langs.length ? `${langs.length} adressen` : "geen",
+    deur: langs.length ? `${langs.length} deuren` : "alles gehad",
+    bellen: bellen.length ? `${bellen.filter((a) => a.belstatus === "akkoord").length}/${bellen.length} afgesproken` : "geen",
     poster: taken.length ? `${taken.length - openTaken}/${taken.length}` : "—",
     afronden: STATUS_INFO[detail?.dossier.status ?? "nieuw"]?.label ?? "—",
   };
@@ -178,26 +180,34 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
           </span>
         </div>
 
-        {/* De stappen: hiermee klik je direct naar elk onderdeel, ook vooruit. Niets zit op slot —
-            een beheerder moet ook halverwege iets kunnen bijstellen. */}
-        <div className="-mx-4 mt-2.5 flex gap-2 overflow-x-auto px-4 pb-2 sm:-mx-6 sm:px-6">
-          {STAPPEN.map((s) => {
-            const isNu = s.key === actief;
-            return (
-              <button key={s.key} type="button" onClick={() => { setStap(s.key); setCluster(null); }} aria-current={isNu ? "step" : undefined}
-                className={`flex shrink-0 items-center gap-2.5 rounded-xl border-2 px-3.5 py-2 text-left transition-colors ${
-                  isNu ? "border-brand-500 bg-brand-50" : "border-ink-200 bg-white hover:border-brand-300 hover:bg-brand-50/50"}`}>
-                <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
-                  af[s.key] ? "bg-green-500 text-white" : isNu ? "bg-brand-600 text-white" : "bg-ink-200 text-ink-500"}`}>
-                  {af[s.key] ? <Check className="h-4 w-4" /> : s.nr}
-                </span>
-                <span className="min-w-0">
-                  <span className={`block text-sm font-bold ${isNu ? "text-brand-800" : "text-ink-800"}`}>{s.titel}</span>
-                  <span className="block text-[11px] text-ink-500">{samenvatting[s.key]}</span>
-                </span>
-              </button>
-            );
-          })}
+        {/* De stappen, in twee helften: eerst wat de leiding klaarzet, daarna wat er de wijk in gaat.
+            Zo zie je meteen of een stap van jou is of van een ander. Klikken kan overal naartoe —
+            niets zit op slot, want ook halverwege moet je iets kunnen bijstellen. */}
+        <div className="-mx-4 mt-2.5 flex items-end gap-4 overflow-x-auto px-4 pb-2 sm:-mx-6 sm:px-6">
+          {(["beheer", "werk"] as const).map((groep) => (
+            <div key={groep} className="shrink-0">
+              <div className="mb-1 pl-1 text-[10px] font-bold uppercase tracking-wider text-ink-400">{GROEP_LABEL[groep]}</div>
+              <div className="flex gap-2">
+                {STAPPEN.filter((x) => x.groep === groep).map((x) => {
+                  const isNu = x.key === actief;
+                  return (
+                    <button key={x.key} type="button" onClick={() => { setStap(x.key); setCluster(null); }} aria-current={isNu ? "step" : undefined}
+                      className={`flex shrink-0 items-center gap-2.5 rounded-xl border-2 px-3.5 py-2 text-left transition-colors ${
+                        isNu ? "border-brand-500 bg-brand-50" : "border-ink-200 bg-white hover:border-brand-300 hover:bg-brand-50/50"}`}>
+                      <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                        af[x.key] ? "bg-green-500 text-white" : isNu ? "bg-brand-600 text-white" : "bg-ink-200 text-ink-500"}`}>
+                        {af[x.key] ? <Check className="h-4 w-4" /> : x.nr}
+                      </span>
+                      <span className="min-w-0">
+                        <span className={`block text-sm font-bold ${isNu ? "text-brand-800" : "text-ink-800"}`}>{x.titel}</span>
+                        <span className="block text-[11px] text-ink-500">{samenvatting[x.key]}</span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -213,11 +223,11 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
 
       {actief === "verdelen" && (
         adressen.length === 0
-          ? <Leeg Icon={ListPlus} titel="Nog geen adressen" tekst="Lees eerst het bestand van de opdrachtgever in bij stap 1. Daarna maakt de app hier vanzelf groepen op postcode." knop="Naar stap 1" onKlik={() => setStap("inlezen")} />
+          ? <Leeg Icon={ListPlus} titel="Nog geen adressen" tekst="Lees eerst het bestand van de opdrachtgever in bij stap 1. Daarna maakt de app hier vanzelf groepen op postcode." knop="Naar Inlezen" onKlik={() => setStap("inlezen")} />
           : <SaneerVerdelen dossier={dossier} adressen={adressen} clusters={clusters} veldwerkers={veldwerkers} naamVan={naamVan} onWijzig={() => void laad()} />
       )}
 
-      {actief === "onderweg" && (
+      {actief === "deur" && (
         clusters.length === 0
           ? <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">Maak eerst groepen in stap 2.</p>
           : (
@@ -229,7 +239,7 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
                   const inGroep = adressen.filter((a) => a.cluster_id === k.id);
                   const nummer = inGroep.filter((a) => a.telefoon.trim()).length;
                   const kaartje = inGroep.filter((a) => !a.telefoon.trim() && a.kaartje_op).length;
-                  const open = inGroep.length - nummer - kaartje;
+                  const open = inGroep.length - nummer - kaartje;   // hier moet nog iemand naartoe
                   const pct = inGroep.length ? Math.round(((nummer + kaartje) / inGroep.length) * 100) : 0;
                   return (
                     <button key={k.id} type="button" onClick={() => setCluster(k.id)}
@@ -265,7 +275,6 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
       )}
 
       {actief === "bellen" && <Bellijst pd={pd} onWijzig={() => void laad()} />}
-      {actief === "langs" && <LangsDeDeur adressen={langs} clusters={clusters} naamVan={naamVan} onWijzig={() => void laad()} />}
       {actief === "poster" && <Posters taken={taken} naamVan={naamVan} onWijzig={() => void laad()} />}
       {actief === "afronden" && <Afronden dossier={dossier} clusters={clusters} adressen={adressen} taken={taken} onWijzig={() => void laad()} />}
     </div>
@@ -286,12 +295,17 @@ function Bellijst({ pd, onWijzig }: { pd: string; onWijzig: () => void }) {
   }
 
   if (!lijst) return <div className="flex items-center gap-2 py-10 text-sm text-ink-400"><Loader2 className="h-4 w-4 animate-spin" /> Bezig…</div>;
-  if (lijst.length === 0) return <Leeg Icon={PhoneCall} titel="Geen belwerk" tekst="Bij dit bestand leverde de opdrachtgever geen telefoonnummers aan. Alle afspraken worden dus aan de deur gemaakt." />;
+  if (lijst.length === 0) return <Leeg Icon={PhoneCall} titel="Nog niemand te bellen" tekst="Zodra er bij een adres een telefoonnummer bekend is — aangeleverd of aan de deur genoteerd — verschijnt het hier vanzelf." />;
 
   const terugbellen = lijst.filter((a) => a.belstatus === "terugbellen");
 
   return (
     <div className="space-y-3">
+      <div className="rounded-xl bg-brand-50 px-4 py-3 text-sm text-brand-900">
+        Alle adressen waarvan het nummer bekend is. Wat aan de deur al is afgesproken staat groen —
+        daar hoef je niet meer achteraan.
+      </div>
+
       {terugbellen.length > 0 && (
         <div className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-800">
           <b>{terugbellen.length} bewoner(s)</b> wachten op een terugbelafspraak. Die staan hieronder bovenaan.
@@ -328,102 +342,7 @@ function Bellijst({ pd, onWijzig }: { pd: string; onWijzig: () => void }) {
   );
 }
 
-// ── Stap 5 — langs de deur ──
-// De adressen waarvan de opdrachtgever geen telefoonnummer meeleverde. Bellen kan niet, dus hier moet
-// iemand fysiek naartoe. Ze staan apart omdat dit het werk is dat tijd en kilometers kost: je wilt
-// vóóraf weten hoeveel deuren het zijn en waar ze liggen, niet pas als je onderweg bent.
-// Per groep, want zo rijd je ze ook.
-function LangsDeDeur({ adressen, clusters, naamVan, onWijzig }: {
-  adressen: FlowAdres[];
-  clusters: DossierDetail["clusters"];
-  naamVan: (id?: string | null) => string;
-  onWijzig: () => void;
-}) {
-  const [bezig, setBezig] = useState("");
-  const [nummer, setNummer] = useState<Record<string, string>>({});
-
-  if (adressen.length === 0) {
-    return <Leeg Icon={Footprints} titel="Nergens langs" tekst="Bij elk adres in dit bestand stond een telefoonnummer. Alles kan dus telefonisch — zie de stap Bellen." />;
-  }
-
-  const perCluster = new Map<string, FlowAdres[]>();
-  for (const a of adressen) {
-    const k = a.cluster_id || "__nog_niet_verdeeld__";
-    if (!perCluster.has(k)) perCluster.set(k, []);
-    perCluster.get(k)!.push(a);
-  }
-
-  const bewaar = async (a: FlowAdres) => {
-    const tel = (nummer[a.id] ?? "").trim();
-    if (!tel) return;
-    setBezig(a.id);
-    await wijzigFlowAdres(a.id, { telefoon: tel });
-    setBezig("");
-    setNummer((n) => ({ ...n, [a.id]: "" }));
-    onWijzig();
-  };
-
-  return (
-    <div className="space-y-4">
-      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
-        <div className="flex items-center gap-2 font-bold text-amber-900">
-          <Footprints className="h-5 w-5" /> {adressen.length} adressen zonder telefoonnummer
-        </div>
-        <p className="mt-1 text-sm text-amber-900">
-          Hier is niemand telefonisch te bereiken, dus moet er iemand langs om de afspraak te maken.
-          Noteer het nummer als je het aan de deur krijgt — dan hoeft dat de volgende ronde niet opnieuw.
-        </p>
-      </div>
-
-      {[...perCluster.entries()].map(([id, lijst]) => {
-        const k = clusters.find((c) => c.id === id);
-        return (
-          <div key={id} className="overflow-hidden rounded-2xl border border-ink-200 bg-white">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-ink-100 px-4 py-2.5">
-              <span className="text-sm font-bold text-ink-900">{k ? (k.naam || k.postcode) : "Nog niet verdeeld"}</span>
-              <span className="text-xs text-ink-500">
-                {lijst.length} deuren{k?.toegewezen_aan ? ` · ${naamVan(k.toegewezen_aan)}` : ""}
-              </span>
-            </div>
-            <div className="divide-y divide-ink-50">
-              {lijst.map((a) => (
-                <div key={a.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5">
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm font-medium text-ink-800">
-                      {`${a.straat} ${a.huisnummer}${a.toevoeging}`.replace(/\s+/g, " ").trim()}
-                    </span>
-                    <span className="block truncate text-xs text-ink-500">{a.postcode} {a.plaats}{a.bewoner ? ` · ${a.bewoner}` : ""}</span>
-                  </span>
-                  {a.telefoon.trim() ? (
-                    <a href={`tel:${a.telefoon}`} className="inline-flex shrink-0 items-center gap-1 rounded-full bg-green-50 px-2.5 py-1 text-xs font-semibold text-green-800">
-                      <PhoneCall className="h-3 w-3" /> {a.telefoon}
-                    </a>
-                  ) : (
-                    <span className="flex shrink-0 items-center gap-1.5">
-                      <input
-                        value={nummer[a.id] ?? ""}
-                        onChange={(e) => setNummer((n) => ({ ...n, [a.id]: e.target.value }))}
-                        placeholder="nummer aan de deur"
-                        inputMode="tel"
-                        className="w-40 rounded-lg border border-ink-200 px-2.5 py-1.5 text-sm outline-none focus:border-brand-400"
-                      />
-                      <button type="button" onClick={() => void bewaar(a)} disabled={bezig === a.id || !(nummer[a.id] ?? "").trim()}
-                        className="rounded-lg bg-brand-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-40">
-                        {bezig === a.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                      </button>
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// ── Stap 6 — de poster ──
+// ── Poster ──
 // De taak ontstaat vanzelf zodra een groep een datum heeft. Ophangen moet binnen twee weken ná die
 // afspraak — en nooit later dan de dag vóór de uitvoering, want daarna kondigt hij niets meer aan.
 // De herinnering hiervoor komt als pop-up over het scherm heen; zie PosterHerinnering.
@@ -467,7 +386,7 @@ function Posters({ taken, naamVan, onWijzig }: { taken: Taak[]; naamVan: (id?: s
   );
 }
 
-// ── Stap 7 — afronden en afboeken ──
+// ── Afronden en afboeken ──
 // De knop is geen meningsuiting: de server rekent na of alles echt klaar is en weigert anders. Wat er
 // nog openstaat, staat er letterlijk bij.
 function Afronden({ dossier, clusters, adressen, taken, onWijzig }: {

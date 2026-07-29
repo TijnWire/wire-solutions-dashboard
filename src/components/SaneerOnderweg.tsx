@@ -190,6 +190,10 @@ function Deur({ adres, ronde, respons, onWijzig }: {
       kan_wel: a === "akkoord" && voorstel ? [voorstel] : (kanWel ? [kanWel] : []),
       kan_niet: a === "niet_akkoord" && voorstel ? [voorstel] : [],
     });
+    // Is de afspraak aan de deur al rond, dan hoeft er niemand meer te bellen. Daarom zetten we de
+    // belstatus meteen mee: op de belpagina staat dit adres dan groen afgevinkt in plaats van
+    // bovenaan de lijst met nog te bellen mensen.
+    await wijzigFlowAdres(adres.id, { belstatus: a === "akkoord" ? "akkoord" : "" });
     setBezig(""); setAndereDag(false); onWijzig();
   }
 

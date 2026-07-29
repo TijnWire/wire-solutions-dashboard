@@ -79,7 +79,7 @@ for (const [wat, naald] of [
   ["uitvoering is een dag, geen periode", "Geplande uitvoeringsdag"],
   ["het sleepvak in de saneerflow", "de kolommen worden zelf herkend"],
   ["postcodes opzoeken bij ontbreken", "Postcodes opzoeken"],
-  ["aparte pagina langs de deur", "adressen zonder telefoonnummer"],
+  ["kop met voorbereiden en uitvoeren", "Voorbereiden"],
   ["een man op het hele project", "Wie voert dit werk uit?"],
   ["checklist voor de schouwer", "Checklists schouwer"],
   ["tabbalk bij Brieven & Routes", "Klaar voor Stedin"],
