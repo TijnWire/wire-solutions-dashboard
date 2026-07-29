@@ -113,10 +113,18 @@ function AdresRij({
   const isBedrijf = adres.type === "bedrijf";
 
   return (
-    <div className={`rounded-xl border border-l-4 border-ink-200 bg-white ${statusRand[adres.status]} ${geselecteerd ? "ring-2 ring-brand-300" : ""}`}>
-      <div className="flex flex-wrap items-center gap-2 p-3 sm:gap-3">
+    <div className={`rounded-xl border border-l-4 border-ink-200 bg-white transition-colors ${statusRand[adres.status]} ${
+      geselecteerd ? "bg-brand-50 ring-2 ring-brand-300" : ""}`}>
+      <div
+        className={`flex flex-wrap items-center gap-2 p-3 sm:gap-3 ${onToggleSelectie ? "cursor-pointer" : ""}`}
+        onClick={onToggleSelectie ? () => onToggleSelectie() : undefined}
+        role={onToggleSelectie ? "button" : undefined}
+        tabIndex={onToggleSelectie ? 0 : undefined}
+        onKeyDown={onToggleSelectie ? (e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); onToggleSelectie(); } } : undefined}
+        aria-pressed={onToggleSelectie ? !!geselecteerd : undefined}
+      >
         {onToggleSelectie && (
-          <input type="checkbox" checked={geselecteerd} onChange={onToggleSelectie} aria-label={`Selecteer ${adresLabel(adres)}`} className="h-4 w-4 shrink-0 rounded border-ink-300 text-brand-600 focus:ring-brand-200" />
+          <input type="checkbox" checked={geselecteerd} onChange={onToggleSelectie} onClick={(e) => e.stopPropagation()} aria-label={`Selecteer ${adresLabel(adres)}`} className="h-4 w-4 shrink-0 rounded border-ink-300 text-brand-600 focus:ring-brand-200" />
         )}
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-ink-100 text-xs font-bold text-ink-600">
           {stap}
@@ -133,7 +141,7 @@ function AdresRij({
           </div>
         </div>
 
-        <div className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">
+        <div className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto" onClick={(e) => e.stopPropagation()}>
           <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${statusDot[adres.status]}`} />
           <div className="min-w-0 flex-1 sm:w-32 sm:flex-none"><Keuze value={adres.status} onChange={(w) => onUpdate({ status: w as BriefStatus })} opties={BRIEF_STATUSSEN.map((s) => ({ waarde: s, label: s, kleur: statusDot[s], tekstKleur: statusTekst[s] }))} disabled={vergrendeld} size="sm" title="Status van dit adres" /></div>
           <a
