@@ -11,7 +11,7 @@ import ExcelJS from "exceljs";
 import { jsPDF } from "jspdf";
 import { ANTWOORD_INFO, BELSTATUS_INFO, type ExportData, type FlowAdres } from "./saneerflowWerk";
 
-const MERK = { r: 2, g: 132, b: 199 };   // sky-600 — de kleur van deze module
+const MERK = { r: 234, g: 88, b: 12 };   // brand-600 — de oranje van Wire Solutions
 const GRIJS = { r: 100, g: 116, b: 139 };
 
 const adresTekst = (a: FlowAdres) => `${a.straat} ${a.huisnummer}${a.toevoeging}`.replace(/\s+/g, " ").trim();
@@ -45,7 +45,7 @@ export async function exporteerSaneerExcel(d: ExportData): Promise<void> {
     ws.addRow(koppen);
     const r = ws.getRow(1);
     r.font = { bold: true, color: { argb: "FFFFFFFF" } };
-    r.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0284C7" } };
+    r.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEA580C" } };
     r.height = 20;
     r.alignment = { vertical: "middle" };
     breedtes.forEach((b, i) => { ws.getColumn(i + 1).width = b; });

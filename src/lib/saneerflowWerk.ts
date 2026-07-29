@@ -39,7 +39,7 @@ export const ANTWOORD_INFO: Record<Antwoord, { label: string; kort: string; kleu
 
 export const BELSTATUS_INFO: Record<string, { label: string; kleur: string }> = {
   "":          { label: "Nog niet gebeld", kleur: "slate" },
-  gebeld:      { label: "Gebeld",          kleur: "sky" },
+  gebeld:      { label: "Gebeld",          kleur: "brand" },
   geen_gehoor: { label: "Geen gehoor",     kleur: "amber" },
   terugbellen: { label: "Terugbellen",     kleur: "red" },
   akkoord:     { label: "Akkoord",         kleur: "green" },

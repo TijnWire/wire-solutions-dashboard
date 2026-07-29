@@ -21,7 +21,7 @@ import type { User } from "../lib/types";
 const knop = "inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors";
 const KLEUR: Record<string, string> = {
   green: "bg-green-100 text-green-800", amber: "bg-amber-100 text-amber-800",
-  red: "bg-red-100 text-red-800", slate: "bg-ink-100 text-ink-600", sky: "bg-sky-100 text-sky-800",
+  red: "bg-red-100 text-red-800", slate: "bg-ink-100 text-ink-600", brand: "bg-brand-100 text-brand-800",
 };
 
 const datumNL = (iso: string) => {
@@ -79,10 +79,10 @@ export function SaneerVerdelen({ dossier, adressen, clusters, veldwerkers, naamV
     const inCluster = adressen.filter((a) => a.cluster_id === splitsen);
     return (
       <div className="space-y-3">
-        <button type="button" onClick={() => { setSplitsen(null); setGekozen(new Set()); }} className="inline-flex items-center gap-1.5 text-sm font-semibold text-sky-700">
+        <button type="button" onClick={() => { setSplitsen(null); setGekozen(new Set()); }} className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-700">
           <ArrowLeft className="h-4 w-4" /> Terug
         </button>
-        <p className="rounded-xl bg-sky-50 px-4 py-3 text-sm text-sky-900">
+        <p className="rounded-xl bg-brand-50 px-4 py-3 text-sm text-brand-900">
           Kies de adressen die een eigen groep worden. Handig bij een flat waar de begane grond op een
           andere dag kan dan de verdiepingen.
         </p>
@@ -91,13 +91,13 @@ export function SaneerVerdelen({ dossier, adressen, clusters, veldwerkers, naamV
             <label key={a.id} className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 hover:bg-ink-50">
               <input type="checkbox" checked={gekozen.has(a.id)}
                 onChange={(e) => setGekozen((s) => { const n = new Set(s); if (e.target.checked) n.add(a.id); else n.delete(a.id); return n; })}
-                className="h-4 w-4 rounded border-ink-300 text-sky-600" />
+                className="h-4 w-4 rounded border-ink-300 text-brand-600" />
               <span className="text-sm text-ink-800">{adresTekst(a)} · {a.postcode}</span>
             </label>
           ))}
         </div>
         <button type="button" onClick={() => void splitsNu()} disabled={bezig || gekozen.size === 0}
-          className={`${knop} bg-sky-600 text-white hover:bg-sky-700 disabled:opacity-60`}>
+          className={`${knop} bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-60`}>
           {bezig ? <Loader2 className="h-4 w-4 animate-spin" /> : <Scissors className="h-4 w-4" />}
           {gekozen.size} adressen afsplitsen
         </button>
@@ -115,7 +115,7 @@ export function SaneerVerdelen({ dossier, adressen, clusters, veldwerkers, naamV
             waarop iedereen thuis moet zijn.
           </p>
           <button type="button" onClick={() => void cluster()} disabled={bezig || adressen.length === 0}
-            className={`${knop} mt-4 bg-sky-600 text-white hover:bg-sky-700 disabled:opacity-60`}>
+            className={`${knop} mt-4 bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-60`}>
             {bezig ? <Loader2 className="h-4 w-4 animate-spin" /> : <Users className="h-4 w-4" />} Groepen maken
           </button>
         </div>
@@ -153,7 +153,7 @@ export function SaneerVerdelen({ dossier, adressen, clusters, veldwerkers, naamV
                 </div>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <select value={k.toegewezen_aan ?? ""} onChange={(e) => void wijs(k.id, e.target.value)}
-                    className="flex-1 rounded-lg border border-ink-200 px-2.5 py-2 text-sm outline-none focus:border-sky-400">
+                    className="flex-1 rounded-lg border border-ink-200 px-2.5 py-2 text-sm outline-none focus:border-brand-400">
                     <option value="">— nog niemand —</option>
                     {veldwerkers.map((u) => <option key={u.id} value={u.id}>{u.naam}</option>)}
                   </select>
@@ -252,7 +252,7 @@ export function SaneerClusterWerk({ clusterId, onTerug }: { clusterId: string; o
 
   return (
     <div className="space-y-4">
-      <button type="button" onClick={onTerug} className="inline-flex items-center gap-1.5 text-sm font-semibold text-sky-700">
+      <button type="button" onClick={onTerug} className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-700">
         <ArrowLeft className="h-4 w-4" /> Alle groepen
       </button>
 
@@ -305,7 +305,7 @@ export function SaneerClusterWerk({ clusterId, onTerug }: { clusterId: string; o
           <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
             {dossier.uitvoering_van && (
               <button type="button" onClick={() => void nieuweRonde(dossier.uitvoering_van)} disabled={bezig}
-                className={`${knop} bg-sky-600 text-white hover:bg-sky-700 disabled:opacity-60`}>
+                className={`${knop} bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-60`}>
                 <CalendarCheck className="h-4 w-4" /> {datumNL(dossier.uitvoering_van)}
               </button>
             )}
@@ -328,9 +328,9 @@ export function SaneerClusterWerk({ clusterId, onTerug }: { clusterId: string; o
           </p>
           <div className="mt-3 space-y-1.5">
             {voorstellen.slice(0, 6).map((v) => (
-              <div key={v.datum} className={`flex items-center justify-between gap-3 rounded-xl px-3 py-2 ${v.haalbaar ? "bg-sky-50" : "bg-ink-50"}`}>
+              <div key={v.datum} className={`flex items-center justify-between gap-3 rounded-xl px-3 py-2 ${v.haalbaar ? "bg-brand-50" : "bg-ink-50"}`}>
                 <div className="min-w-0">
-                  <div className={`text-sm font-semibold ${v.haalbaar ? "text-sky-900" : "text-ink-500"}`}>{datumNL(v.datum)}</div>
+                  <div className={`text-sm font-semibold ${v.haalbaar ? "text-brand-900" : "text-ink-500"}`}>{datumNL(v.datum)}</div>
                   <div className="text-xs text-ink-500">
                     {v.kan} kan · {v.kanNiet > 0 ? <b className="text-red-600">{v.kanNiet} kan niet</b> : "niemand tegen"} · {v.onbekend} onbekend
                   </div>
@@ -404,7 +404,7 @@ function DeurFormulier({ adres, rondeId, dossier, voorstel, bestaand, onKlaar, o
   const [bezig, setBezig] = useState(false);
   const [fout, setFout] = useState("");
 
-  const veld = "w-full rounded-xl border border-ink-200 px-4 py-3 text-base outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100";
+  const veld = "w-full rounded-xl border border-ink-200 px-4 py-3 text-base outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100";
 
   async function bewaar() {
     if (!antwoord) return;
@@ -429,7 +429,7 @@ function DeurFormulier({ adres, rondeId, dossier, voorstel, bestaand, onKlaar, o
 
   return (
     <div className="space-y-4">
-      <button type="button" onClick={onTerug} className="inline-flex items-center gap-1.5 text-sm font-semibold text-sky-700">
+      <button type="button" onClick={onTerug} className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-700">
         <ArrowLeft className="h-4 w-4" /> Terug naar de groep
       </button>
 
@@ -438,10 +438,10 @@ function DeurFormulier({ adres, rondeId, dossier, voorstel, bestaand, onKlaar, o
         <p className="text-sm text-ink-500">{adres.postcode} {adres.plaats}</p>
       </div>
 
-      <div className="rounded-2xl bg-sky-50 px-4 py-3">
-        <span className="block text-[11px] font-semibold uppercase tracking-wide text-sky-700">Voorgestelde dag</span>
-        <span className="block text-lg font-bold text-sky-900">{voorstel ? datumNL(voorstel) : "nog geen datum"}</span>
-        <span className="block text-xs text-sky-800">Thuis van {dossier.starttijd || "08:00"} tot 16:00 · de hele straat tegelijk.</span>
+      <div className="rounded-2xl bg-brand-50 px-4 py-3">
+        <span className="block text-[11px] font-semibold uppercase tracking-wide text-brand-700">Voorgestelde dag</span>
+        <span className="block text-lg font-bold text-brand-900">{voorstel ? datumNL(voorstel) : "nog geen datum"}</span>
+        <span className="block text-xs text-brand-800">Thuis van {dossier.starttijd || "08:00"} tot 16:00 · de hele straat tegelijk.</span>
       </div>
 
       <div className="grid grid-cols-2 gap-2">
@@ -498,7 +498,7 @@ function DeurFormulier({ adres, rondeId, dossier, voorstel, bestaand, onKlaar, o
       {fout && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{fout}</p>}
 
       <button type="button" onClick={() => void bewaar()} disabled={!antwoord || bezig}
-        className={`${knop} w-full bg-sky-600 py-4 text-base text-white hover:bg-sky-700 disabled:opacity-60`}>
+        className={`${knop} w-full bg-brand-600 py-4 text-base text-white hover:bg-brand-700 disabled:opacity-60`}>
         {bezig ? <Loader2 className="h-5 w-5 animate-spin" /> : <CheckCircle2 className="h-5 w-5" />} Vastleggen
       </button>
     </div>

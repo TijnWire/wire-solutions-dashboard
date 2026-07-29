@@ -32,10 +32,30 @@ const STAPPEN: { key: StapKey; nr: number; titel: string; uitleg: string; Icon: 
 ];
 
 const knop = "inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors";
+const knop2 = knop;
 const KLEUR: Record<string, string> = {
   green: "bg-green-100 text-green-800", amber: "bg-amber-100 text-amber-800",
-  red: "bg-red-100 text-red-800", slate: "bg-ink-100 text-ink-600", sky: "bg-sky-100 text-sky-800",
+  red: "bg-red-100 text-red-800", slate: "bg-ink-100 text-ink-600", brand: "bg-brand-100 text-brand-800",
 };
+// Een lege stap: vertel wat er moet gebeuren en zet de knop ernaartoe klaar. Een grijze regel tekst
+// laat iemand raden of er iets stuk is.
+function Leeg({ Icon, titel, tekst, knop, onKlik }: {
+  Icon: typeof ListPlus; titel: string; tekst: string; knop?: string; onKlik?: () => void;
+}) {
+  return (
+    <div className="rounded-2xl border border-dashed border-ink-300 bg-white px-6 py-12 text-center">
+      <span className="mx-auto inline-flex rounded-full bg-brand-50 p-4 text-brand-500"><Icon className="h-7 w-7" /></span>
+      <h4 className="mt-3 text-base font-bold text-ink-900">{titel}</h4>
+      <p className="mx-auto mt-1 max-w-md text-sm text-ink-500">{tekst}</p>
+      {knop && onKlik && (
+        <button type="button" onClick={onKlik} className={`${knop2} mt-4 bg-brand-600 text-white hover:bg-brand-700`}>
+          {knop} <ChevronRight className="h-4 w-4" />
+        </button>
+      )}
+    </div>
+  );
+}
+
 const kortNL = (iso: string) => (iso ? iso.slice(0, 10).split("-").reverse().map(Number).join("-") : "");
 
 export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void }) {
@@ -90,7 +110,7 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
   if (laden) return <div className="flex items-center justify-center gap-2 py-20 text-sm text-ink-400"><Loader2 className="h-4 w-4 animate-spin" /> Bezig met ophalen…</div>;
   if (!detail) return (
     <div className="space-y-3">
-      <button type="button" onClick={onTerug} className="inline-flex items-center gap-1.5 text-sm font-semibold text-sky-700"><ArrowLeft className="h-4 w-4" /> Terug</button>
+      <button type="button" onClick={onTerug} className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-700"><ArrowLeft className="h-4 w-4" /> Terug</button>
       <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">Dit dossier is niet (meer) beschikbaar.</p>
     </div>
   );
@@ -103,7 +123,7 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
     if (cluster) return <SaneerClusterWerk clusterId={cluster} onTerug={() => { setCluster(null); void laad(); }} />;
     return (
       <div className="space-y-4">
-        <button type="button" onClick={onTerug} className="inline-flex items-center gap-1.5 text-sm font-semibold text-sky-700"><ArrowLeft className="h-4 w-4" /> Alle dossiers</button>
+        <button type="button" onClick={onTerug} className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-700"><ArrowLeft className="h-4 w-4" /> Alle dossiers</button>
         <div>
           <h2 className="text-xl font-bold text-ink-900">{dossier.pd_nummer}</h2>
           <p className="text-sm text-ink-500">{[dossier.opdrachtgever, dossier.gebouw].filter(Boolean).join(" · ")}</p>
@@ -130,46 +150,52 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
 
   return (
     <div className="space-y-4">
-      <button type="button" onClick={onTerug} className="inline-flex items-center gap-1.5 text-sm font-semibold text-sky-700">
-        <ArrowLeft className="h-4 w-4" /> Alle dossiers
-      </button>
+      {/* De kop blijft staan als je scrollt. Dit is een dossier waar je heen en weer in springt —
+          van de bellijst naar een groep en terug — en dan wil je niet steeds omhoog moeten om bij de
+          volgende stap te komen. */}
+      <div className="sticky top-0 z-20 -mx-4 -mt-4 border-b border-ink-200 bg-white/95 px-4 pb-2 pt-4 backdrop-blur sm:-mx-6 sm:px-6">
+        <button type="button" onClick={onTerug} className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-700">
+          <ArrowLeft className="h-4 w-4" /> Alle saneringen
+        </button>
 
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <h2 className="text-xl font-bold text-ink-900">{dossier.pd_nummer}</h2>
-          <p className="text-sm text-ink-500">
-            {[dossier.opdrachtgever, dossier.gebouw, dossier.regio].filter(Boolean).join(" · ")}
-            {dossier.uitvoering_van && ` · uitvoering ${kortNL(dossier.uitvoering_van)}`}
-          </p>
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+            <h2 className="font-mono text-xl font-bold tracking-wide text-ink-900">{dossier.pd_nummer}</h2>
+            <p className="text-sm text-ink-500">
+              {[dossier.opdrachtgever, dossier.gebouw, dossier.regio].filter(Boolean).join(" · ")}
+              {dossier.uitvoering_van && ` · uitvoering ${kortNL(dossier.uitvoering_van)}`}
+            </p>
+          </div>
+          <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${KLEUR[STATUS_INFO[dossier.status]?.kleur ?? "slate"]}`}>
+            {STATUS_INFO[dossier.status]?.label}
+          </span>
         </div>
-        <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${KLEUR[STATUS_INFO[dossier.status]?.kleur ?? "slate"]}`}>
-          {STATUS_INFO[dossier.status]?.label}
-        </span>
-      </div>
 
-      {/* Stappenbalk */}
-      <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
-        {STAPPEN.map((s) => {
-          const isNu = s.key === actief;
-          return (
-            <button key={s.key} type="button" onClick={() => { setStap(s.key); setCluster(null); }} aria-current={isNu ? "step" : undefined}
-              className={`flex shrink-0 items-center gap-2.5 rounded-xl border-2 px-3.5 py-2.5 text-left transition-colors ${
-                isNu ? "border-sky-500 bg-sky-50" : "border-ink-200 bg-white hover:bg-ink-50"}`}>
-              <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
-                af[s.key] ? "bg-green-500 text-white" : isNu ? "bg-sky-600 text-white" : "bg-ink-200 text-ink-500"}`}>
-                {af[s.key] ? <Check className="h-4 w-4" /> : s.nr}
-              </span>
-              <span className="min-w-0">
-                <span className={`block text-sm font-bold ${isNu ? "text-sky-800" : "text-ink-800"}`}>{s.titel}</span>
-                <span className="block text-[11px] text-ink-500">{samenvatting[s.key]}</span>
-              </span>
-            </button>
-          );
-        })}
+        {/* De stappen: hiermee klik je direct naar elk onderdeel, ook vooruit. Niets zit op slot —
+            een beheerder moet ook halverwege iets kunnen bijstellen. */}
+        <div className="-mx-4 mt-2.5 flex gap-2 overflow-x-auto px-4 pb-2 sm:-mx-6 sm:px-6">
+          {STAPPEN.map((s) => {
+            const isNu = s.key === actief;
+            return (
+              <button key={s.key} type="button" onClick={() => { setStap(s.key); setCluster(null); }} aria-current={isNu ? "step" : undefined}
+                className={`flex shrink-0 items-center gap-2.5 rounded-xl border-2 px-3.5 py-2 text-left transition-colors ${
+                  isNu ? "border-brand-500 bg-brand-50" : "border-ink-200 bg-white hover:border-brand-300 hover:bg-brand-50/50"}`}>
+                <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                  af[s.key] ? "bg-green-500 text-white" : isNu ? "bg-brand-600 text-white" : "bg-ink-200 text-ink-500"}`}>
+                  {af[s.key] ? <Check className="h-4 w-4" /> : s.nr}
+                </span>
+                <span className="min-w-0">
+                  <span className={`block text-sm font-bold ${isNu ? "text-brand-800" : "text-ink-800"}`}>{s.titel}</span>
+                  <span className="block text-[11px] text-ink-500">{samenvatting[s.key]}</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div className="flex items-center gap-2.5">
-        <span className="rounded-lg bg-sky-50 p-2 text-sky-600"><huidig.Icon className="h-5 w-5" /></span>
+        <span className="rounded-lg bg-brand-50 p-2 text-brand-600"><huidig.Icon className="h-5 w-5" /></span>
         <div>
           <h3 className="text-base font-bold text-ink-900">Stap {huidig.nr} — {huidig.titel}</h3>
           <p className="text-sm text-ink-500">{huidig.uitleg}</p>
@@ -180,7 +206,7 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
 
       {actief === "verdelen" && (
         adressen.length === 0
-          ? <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">Er zijn nog geen adressen. Ga eerst terug naar stap 1.</p>
+          ? <Leeg Icon={ListPlus} titel="Nog geen adressen" tekst="Lees eerst het bestand van de opdrachtgever in bij stap 1. Daarna maakt de app hier vanzelf groepen op postcode." knop="Naar stap 1" onKlik={() => setStap("inlezen")} />
           : <SaneerVerdelen dossier={dossier} adressen={adressen} clusters={clusters} veldwerkers={veldwerkers} naamVan={naamVan} onWijzig={() => void laad()} />
       )}
 
@@ -226,7 +252,7 @@ function Bellijst({ pd, onWijzig }: { pd: string; onWijzig: () => void }) {
   }
 
   if (!lijst) return <div className="flex items-center gap-2 py-10 text-sm text-ink-400"><Loader2 className="h-4 w-4 animate-spin" /> Bezig…</div>;
-  if (lijst.length === 0) return <p className="rounded-xl bg-ink-50 px-4 py-3 text-sm text-ink-600">Van geen enkel adres is een telefoonnummer aangeleverd. Alles gaat via de deur.</p>;
+  if (lijst.length === 0) return <Leeg Icon={PhoneCall} titel="Geen belwerk" tekst="Bij dit bestand leverde de opdrachtgever geen telefoonnummers aan. Alle afspraken worden dus aan de deur gemaakt." />;
 
   const terugbellen = lijst.filter((a) => a.belstatus === "terugbellen");
 
@@ -250,7 +276,7 @@ function Bellijst({ pd, onWijzig }: { pd: string; onWijzig: () => void }) {
                 {info.label}{a.belpogingen > 0 ? ` (${a.belpogingen}×)` : ""}
               </span>
             </div>
-            <a href={`tel:${a.telefoon}`} className={`${knop} mt-3 w-full bg-sky-600 text-white hover:bg-sky-700`}>
+            <a href={`tel:${a.telefoon}`} className={`${knop} mt-3 w-full bg-brand-600 text-white hover:bg-brand-700`}>
               <PhoneCall className="h-4 w-4" /> {a.telefoon}
             </a>
             <div className="mt-2 flex flex-wrap gap-1.5">
@@ -276,7 +302,7 @@ function Posters({ taken, naamVan, onWijzig }: { taken: Taak[]; naamVan: (id?: s
   const [bezig, setBezig] = useState("");
   const vandaag = new Date().toISOString().slice(0, 10);
 
-  if (taken.length === 0) return <p className="rounded-xl bg-ink-50 px-4 py-3 text-sm text-ink-600">Zodra met een groep een datum is afgesproken, verschijnt hier vanzelf de postertaak — en krijg je er een herinnering over totdat hij hangt.</p>;
+  if (taken.length === 0) return <Leeg Icon={StickyNote} titel="Nog geen poster nodig" tekst="Zodra met een groep een dag is afgesproken, verschijnt hier vanzelf de taak om de aankondiging op te hangen — met een herinnering die blijft komen tot hij hangt." />;
 
   return (
     <div className="space-y-2">
@@ -300,7 +326,7 @@ function Posters({ taken, naamVan, onWijzig }: { taken: Taak[]; naamVan: (id?: s
             ) : (
               <button type="button" disabled={bezig === t.id}
                 onClick={async () => { setBezig(t.id); await vinkTaak(t.id); setBezig(""); onWijzig(); }}
-                className={`${knop} mt-3 bg-sky-600 text-white hover:bg-sky-700 disabled:opacity-60`}>
+                className={`${knop} mt-3 bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-60`}>
                 {bezig === t.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Poster opgehangen
               </button>
             )}
@@ -378,7 +404,7 @@ function Afronden({ dossier, clusters, taken, onWijzig }: {
           {bezig === "afboeken" ? <Loader2 className="h-5 w-5 animate-spin" /> : <FileCheck2 className="h-5 w-5" />} Afboeken op {dossier.pd_nummer}
         </button>
       ) : (
-        <button type="button" onClick={() => void doe("afronden")} disabled={!!bezig} className={`${knop} w-full bg-sky-600 py-3.5 text-base text-white hover:bg-sky-700 disabled:opacity-60 sm:w-auto`}>
+        <button type="button" onClick={() => void doe("afronden")} disabled={!!bezig} className={`${knop} w-full bg-brand-600 py-3.5 text-base text-white hover:bg-brand-700 disabled:opacity-60 sm:w-auto`}>
           {bezig === "afronden" ? <Loader2 className="h-5 w-5 animate-spin" /> : <FileCheck2 className="h-5 w-5" />} Dossier afronden
         </button>
       )}

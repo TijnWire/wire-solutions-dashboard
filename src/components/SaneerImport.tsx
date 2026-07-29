@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import {
-  Upload, AlertTriangle, CheckCircle2, Phone, PhoneOff, Pencil, X, Loader2, RotateCcw, Save,
+  FileUp, AlertTriangle, CheckCircle2, Phone, PhoneOff, Pencil, X, Loader2, RotateCcw, Save,
 } from "lucide-react";
 import { ImportScan, type ScanStap } from "./ImportScan";
 import {
@@ -60,6 +60,7 @@ export function SaneerImport({ dossier, aantalNu, onKlaar }: {
   const [uitslag, setUitslag] = useState<{ toegevoegd: number; overgeslagen: number; afgekeurd: number } | null>(null);
   const [bewerk, setBewerk] = useState<number | null>(null);
   const [gevonden, setGevonden] = useState(0);
+  const [sleept, setSleept] = useState(false);
 
   // Het uitlezen zelf duurt vaak geen halve seconde. Zonder iets in beeld voelt dat als "er gebeurt
   // niets", en bij een groot bestand juist als "hij is vastgelopen". Daarom lopen de stappen mee met
@@ -176,7 +177,7 @@ export function SaneerImport({ dossier, aantalNu, onKlaar }: {
         onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void kies(f); }} />
 
       {aantalNu > 0 && !klaar && !scan && (
-        <div className="rounded-xl bg-sky-50 px-4 py-3 text-sm text-sky-900">
+        <div className="rounded-xl bg-brand-50 px-4 py-3 text-sm text-brand-900">
           Er staan al <b>{aantalNu} adressen</b> in dit dossier. Een nieuw bestand vult die lijst aan:
           bestaande adressen blijven ongemoeid, inclusief wat er aan de deur is ingevuld.
         </div>
@@ -204,11 +205,28 @@ export function SaneerImport({ dossier, aantalNu, onKlaar }: {
       )}
 
       {!klaar && (
-        <button type="button" onClick={() => invoer.current?.click()} disabled={!!scan}
-          className={`${knop} w-full bg-sky-600 py-4 text-base text-white hover:bg-sky-700 disabled:opacity-60 sm:w-auto`}>
-          {scan ? <Loader2 className="h-5 w-5 animate-spin" /> : <Upload className="h-5 w-5" />}
-          {aantalNu > 0 ? "Nog een bestand inlezen" : "Adressenbestand inlezen"}
-        </button>
+        <div
+          onDragOver={(e) => { e.preventDefault(); setSleept(true); }}
+          onDragLeave={() => setSleept(false)}
+          onDrop={(e) => { e.preventDefault(); setSleept(false); const f = e.dataTransfer.files?.[0]; if (f) void kies(f); }}
+          onClick={() => { if (!scan) invoer.current?.click(); }}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); invoer.current?.click(); } }}
+          className={`cursor-pointer rounded-2xl border-2 border-dashed px-5 py-12 text-center transition-colors ${
+            sleept ? "border-brand-500 bg-brand-50" : "border-ink-300 bg-white hover:border-brand-400 hover:bg-brand-50/40"
+          } ${scan ? "pointer-events-none opacity-60" : ""}`}
+        >
+          <div className="mx-auto mb-3 inline-flex rounded-full border border-ink-200 bg-white p-4 text-brand-600">
+            {scan ? <Loader2 className="h-7 w-7 animate-spin" /> : <FileUp className="h-7 w-7" />}
+          </div>
+          <div className="text-base font-bold text-ink-900">
+            {aantalNu > 0 ? "Sleep nog een bestand hierheen of klik om te kiezen" : "Sleep het bestand hierheen of klik om te kiezen"}
+          </div>
+          <div className="mt-1 text-sm text-ink-500">
+            Excel (.xlsx, .xls) of CSV — de kolommen worden zelf herkend
+          </div>
+        </div>
       )}
 
       {klaar && (
@@ -216,7 +234,7 @@ export function SaneerImport({ dossier, aantalNu, onKlaar }: {
           {/* Wat er straks gebeurt met deze adressen — dat is de vraag, niet welke kolom waar stond. */}
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-2xl border border-ink-200 bg-white p-4">
-              <div className="flex items-center gap-2 text-sky-700"><Phone className="h-4 w-4" /><span className="text-sm font-semibold">Naar de bellijst</span></div>
+              <div className="flex items-center gap-2 text-brand-700"><Phone className="h-4 w-4" /><span className="text-sm font-semibold">Naar de bellijst</span></div>
               <div className="mt-1 text-3xl font-bold text-ink-900">{metTelefoon}</div>
               <p className="text-xs text-ink-500">Telefoonnummer bekend — hier hoeft niemand langs.</p>
             </div>
@@ -242,7 +260,7 @@ export function SaneerImport({ dossier, aantalNu, onKlaar }: {
                     <span className="block truncate text-xs text-ink-500">{netPostcode(r.postcode)} {r.plaats}{r.bewoner ? ` · ${r.bewoner}` : ""}</span>
                   </span>
                   {r.telefoon.trim()
-                    ? <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-sky-50 px-2 py-1 text-xs font-semibold text-sky-800"><Phone className="h-3 w-3" /> {r.telefoon}</span>
+                    ? <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-brand-50 px-2 py-1 text-xs font-semibold text-brand-800"><Phone className="h-3 w-3" /> {r.telefoon}</span>
                     : <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-800"><PhoneOff className="h-3 w-3" /> langs</span>}
                 </div>
               ))}
@@ -269,7 +287,7 @@ export function SaneerImport({ dossier, aantalNu, onKlaar }: {
                           {(["straat", "huisnummer", "postcode", "plaats"] as const).map((veld) => (
                             <input key={veld} defaultValue={r[veld]} placeholder={veld}
                               onBlur={(e) => herstel(i, { [veld]: e.target.value } as Partial<ImportRij>)}
-                              className="rounded-lg border border-ink-200 px-2 py-1.5 text-sm outline-none focus:border-sky-400" />
+                              className="rounded-lg border border-ink-200 px-2 py-1.5 text-sm outline-none focus:border-brand-400" />
                           ))}
                         </div>
                         <button type="button" onClick={() => setBewerk(null)} className={`${knop} bg-ink-100 py-1.5 text-xs text-ink-700`}>
@@ -300,7 +318,7 @@ export function SaneerImport({ dossier, aantalNu, onKlaar }: {
 
           <div className="flex flex-wrap gap-2">
             <button type="button" onClick={() => void verstuur()} disabled={bezig || klaar.goed.length === 0}
-              className={`${knop} bg-sky-600 py-3.5 text-base text-white hover:bg-sky-700 disabled:opacity-60`}>
+              className={`${knop} bg-brand-600 py-3.5 text-base text-white hover:bg-brand-700 disabled:opacity-60`}>
               {bezig ? <Loader2 className="h-5 w-5 animate-spin" /> : <CheckCircle2 className="h-5 w-5" />}
               {klaar.goed.length} adressen toevoegen
             </button>

@@ -20,12 +20,12 @@ import {
 // Blauw als accentkleur, tegenover het oranje van bodemonderzoek. Twee modules die op elkaar lijken
 // maar verschillend werken, moeten er ook verschillend uitzien — anders opent iemand de verkeerde.
 
-const veld = "w-full rounded-xl border border-ink-200 px-4 py-3 text-base outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100";
+const veld = "w-full rounded-xl border border-ink-200 px-4 py-3 text-base outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100";
 const label = "mb-1.5 block text-sm font-semibold text-ink-700";
 
 const STATUS_KLEUR: Record<string, string> = {
   slate: "bg-ink-100 text-ink-600",
-  indigo: "bg-sky-100 text-sky-800",
+  indigo: "bg-brand-100 text-brand-800",
   amber: "bg-amber-100 text-amber-800",
   green: "bg-green-100 text-green-800",
 };
@@ -97,7 +97,7 @@ function NieuwDossier({ onKlaar, onAnnuleer }: { onKlaar: (pd: string) => void; 
           {/* De PD staat er vast voor: die typ je bij elk dossier opnieuw en dat is precies waar
               typefouten insluipen. Je vult alleen de cijfers in. Plak je een heel nummer ("PD123456"),
               dan halen we de letters er zelf af. */}
-          <div className={`flex items-stretch overflow-hidden rounded-xl border ${pdFoutief ? "border-amber-400" : "border-ink-200"} focus-within:border-sky-400 focus-within:ring-2 focus-within:ring-sky-100`}>
+          <div className={`flex items-stretch overflow-hidden rounded-xl border ${pdFoutief ? "border-amber-400" : "border-ink-200"} focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-100`}>
             <span className="flex select-none items-center bg-ink-50 px-4 font-mono text-base font-bold tracking-wide text-ink-500">PD</span>
             <input
               value={cijfers}
@@ -122,7 +122,7 @@ function NieuwDossier({ onKlaar, onAnnuleer }: { onKlaar: (pd: string) => void; 
                 type="button"
                 onClick={() => { setRegio(r); setFout(""); }}
                 className={`flex-1 rounded-xl border-2 px-4 py-3 text-sm font-semibold transition-colors ${
-                  regio === r ? "border-sky-500 bg-sky-50 text-sky-800" : "border-ink-200 bg-white text-ink-700 hover:bg-ink-50"
+                  regio === r ? "border-brand-500 bg-brand-50 text-brand-800" : "border-ink-200 bg-white text-ink-700 hover:bg-ink-50"
                 }`}
               >
                 {r}
@@ -162,9 +162,9 @@ function NieuwDossier({ onKlaar, onAnnuleer }: { onKlaar: (pd: string) => void; 
         {/* Bewoners moeten thuis zijn van 08:00 tot 16:00. Dat is bij elke sanering hetzelfde, dus
             het is geen keuze meer — één vraag minder bij het aanmaken. Per cluster kan het nog
             afwijken als een gebouw dat vraagt. */}
-        <div className="rounded-xl bg-sky-50 px-4 py-3">
-          <span className="block text-sm font-semibold text-sky-900">Bewoners zijn thuis van 08:00 tot 16:00</span>
-          <span className="mt-0.5 block text-xs text-sky-800">Dat is de standaard voor elke sanering. Per groep nog aan te passen als een gebouw dat vraagt.</span>
+        <div className="rounded-xl bg-brand-50 px-4 py-3">
+          <span className="block text-sm font-semibold text-brand-900">Bewoners zijn thuis van 08:00 tot 16:00</span>
+          <span className="mt-0.5 block text-xs text-brand-800">Dat is de standaard voor elke sanering. Per groep nog aan te passen als een gebouw dat vraagt.</span>
         </div>
       </div>
 
@@ -186,7 +186,7 @@ function NieuwDossier({ onKlaar, onAnnuleer }: { onKlaar: (pd: string) => void; 
         type="button"
         onClick={() => void bewaar(false)}
         disabled={bezig}
-        className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-sky-600 px-5 py-3.5 text-base font-bold text-white hover:bg-sky-700 disabled:opacity-60 sm:w-auto"
+        className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 px-5 py-3.5 text-base font-bold text-white hover:bg-brand-700 disabled:opacity-60 sm:w-auto"
       >
         {bezig ? <Loader2 className="h-5 w-5 animate-spin" /> : <Plus className="h-5 w-5" />}
         Dossier aanmaken
@@ -233,7 +233,7 @@ export function SaneerDossiers({ onEerder }: { onEerder: () => void }) {
             <FolderOpen className="h-4 w-4" /> Eerder ingevoerd
           </button>
           {isLeiding && (
-            <button type="button" onClick={() => setNieuw(true)} className="inline-flex items-center gap-2 rounded-xl bg-sky-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-sky-700">
+            <button type="button" onClick={() => setNieuw(true)} className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700">
               <Plus className="h-4 w-4" /> Nieuwe sanering
             </button>
           )}
@@ -244,7 +244,7 @@ export function SaneerDossiers({ onEerder }: { onEerder: () => void }) {
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" />
           <input value={zoek} onChange={(e) => setZoek(e.target.value)} placeholder="PD-nummer, opdrachtgever of gebouw…"
-            className="w-full rounded-xl border border-ink-200 py-2.5 pl-9 pr-3 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100" />
+            className="w-full rounded-xl border border-ink-200 py-2.5 pl-9 pr-3 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100" />
         </div>
       )}
 
@@ -290,12 +290,12 @@ export function SaneerDossiers({ onEerder }: { onEerder: () => void }) {
                 </div>
 
                 {/* De volgende actie — het hele idee van deze module: één dossier, één ding te doen. */}
-                <div className="mt-3 flex items-center justify-between gap-2 rounded-xl bg-sky-50 px-3 py-2">
+                <div className="mt-3 flex items-center justify-between gap-2 rounded-xl bg-brand-50 px-3 py-2">
                   <span className="min-w-0">
-                    <span className="block text-[11px] font-semibold uppercase tracking-wide text-sky-700">Volgende stap</span>
-                    <span className="block truncate text-sm font-semibold text-sky-900">{info.volgende}</span>
+                    <span className="block text-[11px] font-semibold uppercase tracking-wide text-brand-700">Volgende stap</span>
+                    <span className="block truncate text-sm font-semibold text-brand-900">{info.volgende}</span>
                   </span>
-                  <ArrowRight className="h-5 w-5 shrink-0 text-sky-600" />
+                  <ArrowRight className="h-5 w-5 shrink-0 text-brand-600" />
                 </div>
               </button>
             );

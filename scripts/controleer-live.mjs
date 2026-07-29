@@ -77,6 +77,7 @@ for (const [wat, naald] of [
   ["de poster-herinnering", "Poster hangt"],
   ["bewoners thuis van 08:00 tot 16:00", "08:00 tot 16:00"],
   ["uitvoering is een dag, geen periode", "Geplande uitvoeringsdag"],
+  ["het sleepvak voor het bestand", "Sleep het bestand hierheen"],
 ]) check(code.includes(naald), wat, "zit niet in de uitgerolde bundel");
 
 console.log(`\n${geslaagd} geslaagd, ${gefaald} gefaald`);
