@@ -61,3 +61,47 @@ export async function bewaarFotos(lijst: string[]): Promise<string[]> {
   for (const f of lijst) uit.push(await bewaarFoto(f));
   return uit;
 }
+
+// ── Bestaande foto's verhuizen ──
+// De voorschouwen die er al stonden hebben hun foto's nog als data-URL in de gegevens. Het verplaatsen
+// gebeurt op de server (er hoeft geen megabyte het internet over), maar het wordt hiervandaan
+// aangestuurd: één onderdeel per keer, zodat het nooit halverwege stukloopt en je ziet hoever het is.
+export type VerhuisVoortgang = { gedaan: number; totaal: number; verplaatst: number; bespaard: number };
+
+export async function verhuisAlleFotos(
+  onVoortgang: (v: VerhuisVoortgang) => void,
+): Promise<VerhuisVoortgang & { fout?: string }> {
+  const token = leesToken();
+  const kop = { "content-type": "application/json", Authorization: `Bearer ${token}` };
+  const stand: VerhuisVoortgang = { gedaan: 0, totaal: 0, verplaatst: 0, bespaard: 0 };
+  if (!token) return { ...stand, fout: "Geen sessie — log opnieuw in." };
+
+  let keys: string[];
+  try {
+    const r = await fetch(`${CLOUD_API_URL}/state/versions`, { headers: kop, signal: AbortSignal.timeout(30000) });
+    if (!r.ok) return { ...stand, fout: `Kon de onderdelen niet ophalen (${r.status}).` };
+    // Alleen waar foto's in zitten. De rest heeft niets te verhuizen en hoeft niet herschreven.
+    keys = Object.keys((await r.json()) as Record<string, string>).filter((k) => k.startsWith("voorschouwen"));
+  } catch (e) {
+    return { ...stand, fout: e instanceof Error ? e.message : String(e) };
+  }
+
+  stand.totaal = keys.length;
+  onVoortgang({ ...stand });
+  for (const key of keys) {
+    try {
+      const r = await fetch(`${CLOUD_API_URL}/state/fotos-naar-r2`, {
+        method: "POST", headers: kop, body: JSON.stringify({ key }),
+        signal: AbortSignal.timeout(120000),   // een blok van 18 MB duurt even
+      });
+      if (r.ok) {
+        const uit = (await r.json()) as { verplaatst?: number; bespaard?: number };
+        stand.verplaatst += uit.verplaatst ?? 0;
+        stand.bespaard += uit.bespaard ?? 0;
+      }
+    } catch { /* dit onderdeel later; de volgende keer pakt hij hem alsnog */ }
+    stand.gedaan++;
+    onVoortgang({ ...stand });
+  }
+  return stand;
+}
