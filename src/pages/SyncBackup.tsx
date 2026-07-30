@@ -1,8 +1,15 @@
 import { useState } from "react";
-import { CheckCircle2, AlertTriangle, RotateCcw, Database, Lock } from "lucide-react";
+import { CheckCircle2, AlertTriangle, RotateCcw, Database, Lock, Loader2, RefreshCw } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { Card, Bevestig } from "../components/ui";
-import { sbSyncTest, sbAantallen, sbDbStatus, sbHerstelSpiegel, sbKoppelAccounts, type SyncTest, type DbStatus } from "../lib/supabase";
+import { sbSyncTest, sbAantallen, sbDbStatus, sbHerstelSpiegel, sbKoppelAccounts, type SyncTest, type DbStatus, type SyncStap } from "../lib/supabase";
+
+// De drie stappen van de test, in de volgorde waarin ze gebeuren.
+const STAP_LABELS: [SyncStap, string][] = [
+  ["sessie", "Ingelogd"],
+  ["lezen", "Gegevens lezen"],
+  ["schrijven", "Gegevens opslaan"],
+];
 
 // Aparte pagina: sync-status van dit apparaat + de automatische veiligheidskopie (met herstel).
 export function SyncBackup() {
@@ -29,11 +36,15 @@ export function SyncBackup() {
     );
   }
 
+  const [stappen, setStappen] = useState<Partial<Record<SyncStap, boolean>>>({});
+
   const doeHerstel = async () => { await herstelBackup(); setHerstelVraag(false); setHerstelKlaar(true); };
   const syncTesten = async () => {
     setTestBezig(true);
+    setStappen({});
     try {
-      setTest(await sbSyncTest());
+      // Elke stap meldt zich zodra hij klaar is; dan zie je bij een fout wélke stap strandde.
+      setTest(await sbSyncTest((stap, gelukt) => setStappen((v) => ({ ...v, [stap]: gelukt }))));
       const a = await sbAantallen();
       setCentraal(a.ok ? a.aantallen : null);
     } finally { setTestBezig(false); }
@@ -86,28 +97,57 @@ export function SyncBackup() {
       {/* Sync-status van DIT apparaat */}
       <Card className={`p-4 ${synced ? "border-green-300 bg-green-50/60" : "border-amber-300 bg-amber-50/60"}`}>
         <div className="flex flex-wrap items-start gap-3">
-          <div className={`rounded-lg p-2 ${synced ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
-            {synced ? <CheckCircle2 className="h-5 w-5" /> : <AlertTriangle className="h-5 w-5" />}
-          </div>
+          {/* Een levend bolletje in plaats van een stilstaand icoontje: loopt het synchroniseren, dan
+              zie je dat het loopt. Tijdens het testen draait hij. */}
+          <span className="relative flex h-9 w-9 shrink-0 items-center justify-center">
+            {synced && !testBezig && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-40" />}
+            <span className={`relative inline-flex h-9 w-9 items-center justify-center rounded-full ${synced ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
+              {testBezig ? <Loader2 className="h-5 w-5 animate-spin" />
+                : synced ? <CheckCircle2 className="h-5 w-5" /> : <AlertTriangle className="h-5 w-5" />}
+            </span>
+          </span>
           <div className="min-w-0 flex-1">
-            <div className="text-sm font-bold text-ink-900">{synced ? "Dit apparaat is gesynchroniseerd" : "Dit apparaat synchroniseert nu NIET"}</div>
-            <div className="text-xs text-ink-500">
+            <div className="text-base font-bold text-ink-900">{synced ? "Dit apparaat is gesynchroniseerd" : "Dit apparaat synchroniseert nu niet"}</div>
+            <div className="text-sm text-ink-600">
               {synced
                 ? "Wijzigingen worden automatisch gedeeld met alle apparaten en het hele team."
-                : "Je werkt nu lokaal — wijzigingen blijven op dit apparaat. Log uit en weer in om te synchroniseren. Test hiernaast wat er misgaat."}
+                : "Je werk blijft veilig op dit apparaat staan en gaat mee zodra de verbinding er weer is. Test hiernaast wat er misgaat."}
             </div>
           </div>
-          <button type="button" onClick={() => void syncTesten()} disabled={testBezig} className="shrink-0 rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-50 disabled:opacity-50">
-            {testBezig ? "Bezig…" : "Sync testen"}
+          <button type="button" onClick={() => void syncTesten()} disabled={testBezig}
+            className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-ink-700 ring-1 ring-ink-200 transition-colors hover:bg-ink-50 disabled:opacity-60">
+            {testBezig ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            {testBezig ? "Bezig met testen…" : "Sync testen"}
           </button>
         </div>
+        {(testBezig || test) && (
+          <div className="mt-3 grid gap-2 sm:grid-cols-3">
+            {STAP_LABELS.map(([sleutel, label], i) => {
+              const uitslag = stappen[sleutel];
+              // Welke stap is nu aan de beurt? De eerste waarvan de uitslag nog niet binnen is.
+              const bezigNu = testBezig && uitslag === undefined
+                && STAP_LABELS.filter(([k]) => stappen[k] !== undefined).length === i;
+              return (
+                <div key={sleutel} className={`flex items-center gap-2.5 rounded-xl px-3 py-2.5 transition-colors ${
+                  uitslag === true ? "bg-green-100 text-green-800"
+                    : uitslag === false ? "bg-red-100 text-red-800"
+                    : bezigNu ? "bg-white text-ink-800 ring-1 ring-brand-200"
+                    : "bg-white/60 text-ink-400"}`}>
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center">
+                    {uitslag === true ? <CheckCircle2 className="h-5 w-5" />
+                      : uitslag === false ? <AlertTriangle className="h-5 w-5" />
+                      : bezigNu ? <Loader2 className="h-4 w-4 animate-spin" />
+                      : <span className="h-2 w-2 rounded-full bg-current opacity-40" />}
+                  </span>
+                  <span className="truncate text-sm font-semibold">{label}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
         {test && (
-          <div className={`mt-3 rounded-lg p-3 text-xs ${test.schrijven ? "bg-green-100 text-green-800" : "bg-red-50 text-red-700"}`}>
-            <div className="mb-1 flex flex-wrap gap-x-3 gap-y-0.5 font-semibold">
-              <span>{test.sessie ? "✓" : "✗"} Verbonden{test.email ? ` (${test.email})` : ""}</span>
-              <span>{test.lezen ? "✓" : "✗"} Lezen</span>
-              <span>{test.schrijven ? "✓" : "✗"} Schrijven</span>
-            </div>
+          <div className={`mt-2 rounded-xl px-3 py-2.5 text-sm ${test.schrijven ? "bg-green-100 text-green-900" : "bg-red-50 text-red-800"}`}>
+            {test.email && <div className="mb-0.5 text-xs font-semibold opacity-70">{test.email}</div>}
             {test.melding}
           </div>
         )}

@@ -235,22 +235,29 @@ function duidingVanFout(e: unknown, email: string | null): string {
   return `Wel ingelogd (${email}), maar lezen wordt geblokkeerd: ${m}.`;
 }
 
-export async function sbSyncTest(): Promise<SyncTest> {
+// Het testen gaat in drie stappen, en die melden zich onderweg. Anders staat er tien seconden een
+// draaiend rondje en weet je bij een fout niet welke stap het was.
+export type SyncStap = "sessie" | "lezen" | "schrijven";
+
+export async function sbSyncTest(onStap?: (stap: SyncStap, gelukt: boolean) => void): Promise<SyncTest> {
   const r: SyncTest = { sessie: false, email: null, lezen: false, schrijven: false, melding: "" };
   try {
     r.sessie = tokenGeldig();
     r.email = tokenPayload()?.email ?? null;
+    onStap?.("sessie", r.sessie);
     if (!r.sessie) {
       r.melding = "Niet verbonden met de centrale database (geen sessie). Log uit en opnieuw in.";
       return r;
     }
-    try { await sbVersies(); r.lezen = true; }
+    try { await sbVersies(); r.lezen = true; onStap?.("lezen", true); }
     catch (e) {
+      onStap?.("lezen", false);
       r.melding = duidingVanFout(e, r.email);
       return r;
     }
-    try { await sbSchrijf("synctest", { door: r.email, op: new Date().toISOString() }); r.schrijven = true; }
-    catch (e) { r.melding = `Lezen lukt, maar schrijven wordt geblokkeerd: ${e instanceof Error ? e.message : String(e)}.`; return r; }
+    try { await sbSchrijf("synctest", { door: r.email, op: new Date().toISOString() }); r.schrijven = true; onStap?.("schrijven", true); }
+    catch (e) {
+      onStap?.("schrijven", false); r.melding = `Lezen lukt, maar schrijven wordt geblokkeerd: ${e instanceof Error ? e.message : String(e)}.`; return r; }
     r.melding = `Alles werkt — dit apparaat (${r.email}) leest én schrijft naar de centrale database. Wijzigingen worden gedeeld.`;
   } catch (e) {
     r.melding = `Onverwachte fout: ${e instanceof Error ? e.message : String(e)}`;

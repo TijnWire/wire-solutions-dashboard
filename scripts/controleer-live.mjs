@@ -88,6 +88,7 @@ for (const [wat, naald] of [
   ["route via Google Maps", "google.com/maps/dir"],
   ["kaartje in de bus", "Niemand thuis"],
   ["telefoonnummer bewaart zichzelf", "wordt bewaard"],
+  ["sync-test met stappen", "Gegevens opslaan"],
   ["filterbalk op de projectpaginas", "nieuwste bovenaan"],
 ]) check(code.includes(naald), wat, "zit niet in de uitgerolde bundel");
 
