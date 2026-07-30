@@ -2,11 +2,18 @@
 // Strategie: navigaties altijd via netwerk (verse app), gehashte assets cache-first.
 // Let op: verhoog het versienummer bij elke release, dan wist de nieuwe worker de oude cache
 // en laadt iedereen automatisch de nieuwste versie.
-const CACHE = "wire-cache-v179";
+const CACHE = "wire-cache-v180";
 const CORE = ["/", "/index.html", "/manifest.webmanifest", "/logo.svg", "/stedin-header.png"];
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(CORE)).catch(() => {}));
+  // Let op de "reload": zonder dat haalt addAll de bestanden op via de gewone browsercache, en dan
+  // legt een verse worker doodleuk de OUDE app-shell in zijn nieuwe cache. Op iOS blijf je dan hangen
+  // op de vorige versie tot je de app van je beginscherm gooit — precies het probleem dat we hadden.
+  event.waitUntil(
+    caches.open(CACHE)
+      .then((cache) => cache.addAll(CORE.map((u) => new Request(u, { cache: "reload" }))))
+      .catch(() => {}),
+  );
   self.skipWaiting();
 });
 
@@ -26,7 +33,10 @@ self.addEventListener("fetch", (event) => {
   // Navigaties (pagina openen): altijd netwerk eerst → verse app; offline terugval op de app-shell.
   if (request.mode === "navigate") {
     event.respondWith(
-      fetch(request).catch(() => caches.match("/index.html").then((r) => r || caches.match("/")))
+      // "no-store": ook de netwerklaag van de telefoon mag hier geen oude kopie teruggeven.
+      fetch(new Request(request, { cache: "no-store" }))
+        .catch(() => fetch(request))
+        .catch(() => caches.match("/index.html").then((r) => r || caches.match("/")))
     );
     return;
   }

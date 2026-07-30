@@ -15,6 +15,7 @@ import { Planning } from "./pages/Planning";
 import { Voorschouwen } from "./pages/Voorschouwen";
 import { Saneren } from "./pages/Saneren";
 import { PosterHerinnering } from "./components/PosterHerinnering";
+import { NieuweVersie } from "./components/NieuweVersie";
 import { Buurtaanpak } from "./pages/Buurtaanpak";
 import { Tauw } from "./pages/Tauw";
 import { Brieven } from "./pages/Brieven";
@@ -190,6 +191,9 @@ export default function App() {
     {/* Herinnering om de aankondiging in het gebouw op te hangen. Staat hier en niet op de
         saneerpagina: je moet hem zien ook als je met iets anders bezig bent. */}
     <PosterHerinnering />
+    {/* Meldt een nieuwe versie ook als de service worker zich niet laat vernieuwen — het geval op
+        iOS waarbij de app anders van het beginscherm gegooid moest worden. */}
+    <NieuweVersie />
     <div className="flex h-full overflow-hidden bg-ink-100">
       {/* Vaste zijbalk op desktop */}
       <div className="hidden md:flex">

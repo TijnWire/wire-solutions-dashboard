@@ -89,6 +89,7 @@ for (const [wat, naald] of [
   ["kaartje in de bus", "Niemand thuis"],
   ["telefoonnummer bewaart zichzelf", "wordt bewaard"],
   ["sync-test met stappen", "Gegevens opslaan"],
+  ["melding bij een nieuwe versie", "Nieuwe versie klaar"],
   ["telefoonnummer per adres verplicht", "telefoonnummers"],
   ["een deur tegelijk aan de deur", "Volgende deur"],
   ["lijst met adressen en de dag", "Alle adressen"],
