@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  Plus, ArrowLeft, ArrowRight, Search, Loader2, AlertCircle, MapPin,
-  FolderOpen, RotateCcw,
+  Plus, ArrowLeft, Search, Loader2, AlertCircle,
+  FolderOpen, RotateCcw, Recycle,
 } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { DatumKiezer } from "../components/DatumKiezer";
@@ -23,6 +23,13 @@ import {
 
 const veld = "w-full rounded-xl border border-ink-200 px-4 py-3 text-base outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100";
 const label = "mb-1.5 block text-sm font-semibold text-ink-700";
+
+// Hoe ver een dossier is, afgeleid uit de stand. Genoeg voor een balkje op de kaart; de echte
+// tellers staan binnenin bij de stappen.
+const VOORTGANG: Record<string, number> = {
+  nieuw: 5, geimporteerd: 20, verdeeld: 35, in_uitvoering: 55,
+  datum_akkoord: 75, poster_geplaatst: 90, afgerond: 100, afgeboekt: 100,
+};
 
 const STATUS_KLEUR: Record<string, string> = {
   slate: "bg-ink-100 text-ink-600",
@@ -277,38 +284,37 @@ export function SaneerDossiers({ onEerder }: { onEerder: () => void }) {
                 onClick={() => setOpen(d.pd_nummer)}
                 className="rounded-2xl border border-ink-200 bg-white p-4 text-left shadow-sm transition-shadow hover:shadow-md"
               >
-                {/* Eén regel met wie en waar, één regel met de cijfers, en onderaan wat er te doen
-                    staat. De iconen bij elk cijfer maakten het rommelig zonder iets toe te voegen:
-                    een datum en een tijdvak herken je ook zonder klokje ervoor. */}
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-baseline gap-x-2.5">
-                      <span className="font-mono text-lg font-bold tracking-wide text-ink-900">{d.pd_nummer}</span>
-                      <span className="truncate text-sm text-ink-500">{[d.opdrachtgever, d.gebouw].filter(Boolean).join(" · ")}</span>
-                    </div>
-                    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-ink-500">
-                      <span className="inline-flex items-center gap-1 font-medium text-ink-600">
-                        <MapPin className="h-3.5 w-3.5" /> {d.regio || "geen regio"}
-                      </span>
-                      {d.uitvoering_van && <><span className="text-ink-300">·</span><span>{datumNL(d.uitvoering_van)}</span></>}
-                      <span className="text-ink-300">·</span>
-                      <span>{d.starttijd || "08:00"}–16:00</span>
-                      {!!d.adressen && (
-                        <>
-                          <span className="text-ink-300">·</span>
-                          <span>{d.adressen} adressen{d.clusters ? ` in ${d.clusters} groepen` : ""}</span>
-                        </>
-                      )}
-                    </div>
-                  </div>
+                {/* Zelfde opbouw als bij TAUW: een icoon, de naam van de locatie groot, en de rest
+                    eronder. Het PD-nummer is een administratief kenmerk — je herkent een klus aan de
+                    plek, niet aan elf cijfers. Dus dat staat klein bij de details. */}
+                <div className="flex items-center gap-3">
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
+                    <Recycle className="h-5 w-5" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-base font-bold text-ink-900">
+                      {d.gebouw || d.omschrijving || d.pd_nummer}
+                    </span>
+                    <span className="block truncate text-xs text-ink-500">
+                      <span className="font-mono">{d.pd_nummer}</span>
+                      {d.opdrachtgever ? ` · ${d.opdrachtgever}` : ""}
+                      {d.regio ? ` · ${d.regio}` : ""}
+                      {d.adressen ? ` · ${d.adressen} adressen` : ""}
+                    </span>
+                  </span>
                   <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${STATUS_KLEUR[info.kleur]}`}>{info.label}</span>
                 </div>
 
-                {/* De volgende actie — het hele idee van deze module: één dossier, één ding te doen.
-                    Als een dunne regel onderaan, niet als een blok dat om aandacht schreeuwt. */}
-                <div className="mt-3 flex items-center gap-2 border-t border-ink-100 pt-2.5">
-                  <span className="min-w-0 flex-1 truncate text-sm font-semibold text-brand-800">{info.volgende}</span>
-                  <ArrowRight className="h-4 w-4 shrink-0 text-brand-500" />
+                <div className="mt-2.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs">
+                  <span className="font-semibold text-brand-700">{info.volgende}</span>
+                  <span className="text-ink-500">
+                    {d.uitvoering_van ? `uitvoering ${datumNL(d.uitvoering_van)}` : "nog geen dag"}
+                    {` · ${d.starttijd || "08:00"}–16:00`}
+                  </span>
+                </div>
+                <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-ink-100">
+                  <div className="h-full rounded-full bg-green-500 transition-all"
+                    style={{ width: `${Math.round(((VOORTGANG[d.status] ?? 0) / 100) * 100)}%` }} />
                 </div>
               </button>
             );
