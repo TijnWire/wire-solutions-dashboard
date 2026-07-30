@@ -192,11 +192,13 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
         {/* De stappen, in twee helften: eerst wat de leiding klaarzet, daarna wat er de wijk in gaat.
             Zo zie je meteen of een stap van jou is of van een ander. Klikken kan overal naartoe —
             niets zit op slot, want ook halverwege moet je iets kunnen bijstellen. */}
-        <div className="-mx-4 mt-2.5 flex items-end gap-4 overflow-x-auto px-4 pb-2 sm:-mx-6 sm:px-6">
+        {/* Op een telefoon schuift de balk zijwaarts; is er breedte, dan breekt hij netjes af in
+            plaats van achter de rand door te lopen. Zes stappen in twee groepen passen anders niet. */}
+        <div className="-mx-4 mt-2.5 flex items-end gap-x-5 gap-y-2 overflow-x-auto px-4 pb-2 sm:-mx-6 sm:flex-wrap sm:overflow-visible sm:px-6">
           {(["beheer", "werk"] as const).map((groep) => (
             <div key={groep} className="shrink-0">
               <div className="mb-1 pl-1 text-[10px] font-bold uppercase tracking-wider text-ink-400">{GROEP_LABEL[groep]}</div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 sm:flex-wrap">
                 {STAPPEN.filter((x) => x.groep === groep).map((x) => {
                   const isNu = x.key === actief;
                   return (
@@ -220,7 +222,7 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
         </div>
       </div>
 
-      <div className="flex items-center gap-2.5">
+      <div className="flex items-center gap-2.5 pt-2">
         <span className="rounded-lg bg-brand-50 p-2 text-brand-600"><huidig.Icon className="h-5 w-5" /></span>
         <div>
           <h3 className="text-base font-bold text-ink-900">Stap {huidig.nr} — {huidig.titel}</h3>
