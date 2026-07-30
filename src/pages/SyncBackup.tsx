@@ -259,7 +259,7 @@ export function SyncBackup() {
           <div className="text-sm font-bold text-ink-900">Automatische veiligheidskopie</div>
           <div className="text-xs text-ink-500">
             {backupInfo
-              ? `Laatste back-up: ${new Date(backupInfo.tijd).toLocaleString("nl-NL", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })} · ${backupInfo.totaal} items, veilig op dit apparaat. Een lege staat overschrijft de back-up nooit.`
+              ? `Laatste back-up: ${new Date(backupInfo.tijd).toLocaleString("nl-NL", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })} · ${backupInfo.totaal} items, veilig op dit apparaat. Terugzetten voegt alleen toe wat weg is — het maakt niets ongedaan.`
               : "Nog geen back-up — wordt automatisch gemaakt zodra er gegevens zijn."}
           </div>
         </div>
@@ -270,7 +270,9 @@ export function SyncBackup() {
         )}
       </Card>
 
-      <Bevestig open={herstelVraag} titel="Gegevens herstellen?" tekst={backupInfo ? `Alle gegevens worden teruggezet naar de veiligheidskopie van ${new Date(backupInfo.tijd).toLocaleString("nl-NL")} (${backupInfo.totaal} items). Recentere wijzigingen die niet in de kopie staan, worden overschreven.` : ""} bevestigLabel="Ja, herstellen" bevestigTone="brand" onBevestig={() => void doeHerstel()} onAnnuleer={() => setHerstelVraag(false)} />
+      <Bevestig open={herstelVraag} titel="Verdwenen gegevens terugzetten?" tekst={backupInfo ? `Records die er nu niet meer zijn, worden teruggezet uit de kopie van ${new Date(backupInfo.tijd).toLocaleString("nl-NL")} (${backupInfo.totaal} items).
+
+Wat er nu staat blijft ongemoeid: mappen die je daarna hebt gearchiveerd blijven gearchiveerd, en hernoemen of toewijzen van na de kopie wordt niet ongedaan gemaakt. Er wordt dus niets overschreven — er komt alleen bij wat weg was.` : ""} bevestigLabel="Ja, terugzetten" bevestigTone="brand" onBevestig={() => void doeHerstel()} onAnnuleer={() => setHerstelVraag(false)} />
       {herstelKlaar && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40" onClick={() => setHerstelKlaar(false)} />

@@ -217,6 +217,21 @@ async function main() {
       const mijnNieuwer = [{ id: "m1", naam: "Net gearchiveerd", bijgewerktOp: "2026-07-29T12:00:00Z" }];
       const hunOuder = [{ id: "m1", naam: "Bestaande map", bijgewerktOp: "2026-07-29T09:00:00Z" }];
       check(mergeCollection(mijnNieuwer, hunOuder)[0].naam === "Net gearchiveerd", "een nieuwere wijziging wint van een oudere");
+
+      // ── Terugzetten van een veiligheidskopie mag niets ongedaan maken ──
+      // Dit is precies de zorg van Tijn: klik je op herstellen, dan mogen mappen die je daarna hebt
+      // gearchiveerd niet ineens weer in de actieve lijst staan. Het herstel voegt daarom alleen toe:
+      // de kopie is 'local', de huidige toestand is 'incoming', en bij een gedeeld id wint het huidige.
+      const kopie = [
+        { id: "m1", naam: "Vlaardingen", gearchiveerd: false },
+        { id: "m2", naam: "Per ongeluk weg", gearchiveerd: false },
+      ];
+      const nu = [{ id: "m1", naam: "Vlaardingen", gearchiveerd: true }];
+      const na = mergeCollection(kopie, nu);
+      const m1 = na.find((x) => x.id === "m1");
+      check(m1?.gearchiveerd === true, "na terugzetten blijft een gearchiveerde map gearchiveerd");
+      check(na.some((x) => x.id === "m2"), "en komt de map die weg was wél terug");
+      check(na.length === 2, "zonder dubbelen", `${na.length}`);
     }
 
     // ── 5. Verwijderen blijft verwijderd ──

@@ -817,18 +817,47 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setBackupInfo({ tijd: snap.tijd, totaal });
     } catch { /* back-up is niet kritisch voor de werking */ }
   };
+  // Terugzetten voegt ALLEEN TOE. Wat er nu staat blijft staan zoals het staat.
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Hij zette eerst de hele toestand van tien minuten geleden terug. Dat maakte ook álles ongedaan wat
+  // je daarna had gedaan: mappen die je netjes had gearchiveerd stonden ineens weer in de actieve lijst,
+  // en een bewust weggegooide map kwam terug. Dan is de herstelknop gevaarlijker dan het probleem.
+  //
+  // Nu doet hij precies één ding: records die er nú niet meer zijn, komen terug. Een record dat er wél
+  // is wordt niet aangeraakt — dus archiveren, hernoemen en toewijzen van ná de kopie blijven staan.
+  // Alleen van de records die hij terugzet, haalt hij de "verwijderd"-markering weg; anders zou de
+  // opschoning ze meteen weer weghalen.
   const herstelBackup = async (): Promise<boolean> => {
     try {
       const snap = await idbGet<{ tijd: string; data: Record<string, unknown> }>("backup");
       if (!snap?.data) return false;
-      // Tombstones uit de kopie terugzetten (vervangen, niet samenvoegen) — anders zou de opschoning een
-      // teruggezet record meteen weer als "verwijderd" weghalen.
-      const snapDel = (snap.data.deletes as Tombstones) ?? {};
-      deletesRef.current = snapDel;
-      setDeletes(snapDel);
+
+      const terugGezet: Record<string, string[]> = {};
       for (const [key, val] of Object.entries(snap.data)) {
-        if (key === "deletes") continue;
-        setters[key]?.(val);
+        if (key === "deletes" || !(key in setters)) continue;
+        if (!Array.isArray(val)) continue;   // niet-lijsten (instellingen, bedrijf) met rust laten
+        const huidig = waardenRef.current[key];
+        const nu = Array.isArray(huidig) ? (huidig as { id: string }[]) : [];
+        const aanwezig = new Set(nu.map((x) => x?.id).filter(Boolean));
+        const missend = (val as { id: string }[]).filter((x) => x?.id && !aanwezig.has(x.id));
+        if (missend.length === 0) continue;
+        terugGezet[key] = missend.map((x) => x.id);
+        // mergeCollection met de HUIDIGE lijst als "incoming": bij een gedeeld id wint wat er nu staat,
+        // en wat alleen in de kopie zat komt erbij. Geen tombstones meegeven — die halen we hieronder weg.
+        setters[key]?.(mergeCollection(val as never[], nu as never[]));
+      }
+
+      // De "verwijderd"-markering van precies deze records opheffen. De rest blijft verwijderd.
+      const ids = new Set(Object.values(terugGezet).flat());
+      if (ids.size > 0) {
+        const schoon: Tombstones = {};
+        for (const [slice, perId] of Object.entries(deletesRef.current ?? {})) {
+          const over: Record<string, string> = {};
+          for (const [id, tijd] of Object.entries(perId)) if (!ids.has(id)) over[id] = tijd;
+          if (Object.keys(over).length > 0) schoon[slice] = over;
+        }
+        deletesRef.current = schoon;
+        setDeletes(schoon);
       }
       return true;
     } catch { return false; }

@@ -22,7 +22,7 @@ import {
   Plane,
   Recycle,
   FlaskConical,
-  Cable,
+  // Cable, — hoort bij Buurtaanpak; terug zodra die weer in het menu staat
   Briefcase,
   type LucideIcon,
 } from "lucide-react";
@@ -48,7 +48,6 @@ const LEIDING: Role[] = ["eigenaar", "beheer", "hr"];
 // Boekhouding, Klanten & Database en beheer zijn sowieso leiding-only (werknemers zien die niet).
 export const WERKNEMER_TOEGANG: { key: string; label: string }[] = [
   { key: "brieven", label: "Brieven & Routes" },
-  { key: "buurtaanpak", label: "Buurtaanpak" },
   { key: "saneren", label: "Saneren" },
   { key: "voorschouwen", label: "Voorschouwen" },
   { key: "schouwafspraken", label: "Schouwafspraken" },
@@ -62,7 +61,9 @@ export const NAV: NavItem[] = [
   { key: "mededelingen", label: "Mededelingen", icon: Megaphone, group: "Werk", roles: ALLE },
 
   { key: "brieven", label: "Brieven & Routes", icon: Mailbox, group: "Projecten", roles: ALLE },
-  { key: "buurtaanpak", label: "Buurtaanpak", icon: Cable, group: "Projecten", roles: ALLE },
+  // Buurtaanpak staat tijdelijk niet in het menu (30-07-2026, op verzoek). De pagina, de gegevens en
+  // de code blijven bestaan: zodra dit project weer begint, hoeft alleen deze regel terug.
+  // { key: "buurtaanpak", label: "Buurtaanpak", icon: Waypoints, group: "Projecten", roles: ALLE },
   { key: "saneren", label: "Saneren", icon: Recycle, group: "Projecten", roles: ALLE },
   { key: "voorschouwen", label: "Voorschouwen", icon: ClipboardCheck, group: "Projecten", roles: ALLE },
   { key: "schouwafspraken", label: "Schouwafspraken", icon: CalendarClock, group: "Projecten", roles: ALLE },
