@@ -90,6 +90,8 @@ for (const [wat, naald] of [
   ["telefoonnummer bewaart zichzelf", "wordt bewaard"],
   ["sync-test met stappen", "Gegevens opslaan"],
   ["telefoonnummer per adres verplicht", "telefoonnummers"],
+  ["een deur tegelijk aan de deur", "Volgende deur"],
+  ["lijst met adressen en de dag", "Alle adressen"],
   ["filterbalk op de projectpaginas", "nieuwste bovenaan"],
 ]) check(code.includes(naald), wat, "zit niet in de uitgerolde bundel");
 

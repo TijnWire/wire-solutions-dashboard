@@ -34,8 +34,10 @@ const STAPPEN: { key: StapKey; nr: number; titel: string; uitleg: string; groep:
   { key: "verdelen", nr: 2, titel: "Verdelen",      uitleg: "Groepen op postcode, naar één medewerker", groep: "beheer", Icon: Users },
   { key: "deur",     nr: 3, titel: "Langs de deur", uitleg: "Geen telefoonnummer bekend — hier moet iemand naartoe", groep: "werk", Icon: Footprints },
   { key: "bellen",   nr: 4, titel: "Bellen",        uitleg: "Nummer bekend — hier maak je de afspraak", groep: "werk", Icon: PhoneCall },
-  { key: "poster",   nr: 5, titel: "Poster",        uitleg: "Binnen twee weken na de afspraak in het gebouw", groep: "werk", Icon: StickyNote },
-  { key: "afronden", nr: 6, titel: "Afronden",      uitleg: "Controle, export en afboeken", groep: "werk", Icon: FileCheck2 },
+  // Afronden komt direct na het bellen: zodra de afspraken staan wil je de lijst zien en controleren.
+  // De poster volgt daarna — die hangt pas ná de afspraak, dus dat is ook in de tijd de laatste stap.
+  { key: "afronden", nr: 5, titel: "Afronden",      uitleg: "De lijst met adressen, nummers en de dag", groep: "werk", Icon: FileCheck2 },
+  { key: "poster",   nr: 6, titel: "Poster",        uitleg: "Binnen twee weken na de afspraak in het gebouw", groep: "werk", Icon: StickyNote },
 ];
 const GROEP_LABEL: Record<"beheer" | "werk", string> = { beheer: "Voorbereiden", werk: "Uitvoeren" };
 const knop = "inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors";
@@ -63,6 +65,12 @@ function Leeg({ Icon, titel, tekst, knop, onKlik }: {
   );
 }
 
+const dagNL = (iso: string) => {
+  if (!iso || iso === "—") return "";
+  const d = new Date(`${iso.slice(0, 10)}T12:00:00Z`);
+  return Number.isNaN(d.getTime()) ? iso
+    : d.toLocaleDateString("nl-NL", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+};
 const kortNL = (iso: string) => (iso ? iso.slice(0, 10).split("-").reverse().map(Number).join("-") : "");
 
 export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void }) {
@@ -407,6 +415,15 @@ function Afronden({ dossier, clusters, adressen, taken, onWijzig }: {
 
   const zonderDatum = clusters.filter((k) => !k.definitieve_datum);
   const zonderNummer = adressen.filter((a) => !a.telefoon.trim() && a.belstatus !== "weigert");
+
+  // Per uitvoeringsdag, want zo wordt het gereden. Zonder dag komt onderaan te staan.
+  const datumVan = (a: FlowAdres) => clusters.find((k) => k.id === a.cluster_id)?.definitieve_datum || "—";
+  const perDag = [...adressen.reduce((m, a) => {
+    const d = datumVan(a);
+    if (!m.has(d)) m.set(d, []);
+    m.get(d)!.push(a);
+    return m;
+  }, new Map<string, FlowAdres[]>())].sort((x, y) => (x[0] === "—" ? 1 : y[0] === "—" ? -1 : x[0].localeCompare(y[0])));
   const openTaken = taken.filter((t) => !t.afgevinkt_op);
   const klaar = clusters.length > 0 && zonderDatum.length === 0 && openTaken.length === 0 && zonderNummer.length === 0;
 
@@ -456,6 +473,48 @@ function Afronden({ dossier, clusters, adressen, taken, onWijzig }: {
             </li>
           )}
         </ul>
+      </div>
+
+      {/* ── De lijst waar het om draait ──
+          Per adres: wie er woont, op welk nummer je hem bereikt en wanneer de werkzaamheden zijn.
+          Dat is wat je aan de opdrachtgever laat zien en wat de ploeg meeneemt. Gegroepeerd per dag,
+          want zo wordt het uitgevoerd — en een adres zonder nummer of zonder dag springt eruit. */}
+      <div className="overflow-hidden rounded-2xl border border-ink-200 bg-white">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-ink-100 px-4 py-3">
+          <h4 className="text-sm font-bold text-ink-900">Alle adressen</h4>
+          <span className="text-xs text-ink-500">{adressen.length} adressen · {adressen.filter((a) => a.telefoon.trim()).length} met nummer</span>
+        </div>
+        {perDag.length === 0 ? (
+          <p className="px-4 py-6 text-center text-sm text-ink-500">Nog geen adressen.</p>
+        ) : perDag.map(([dag, lijst]) => (
+          <div key={dag}>
+            <div className="flex items-center justify-between gap-2 bg-ink-50/70 px-4 py-2">
+              <span className="text-sm font-bold text-ink-800">
+                {dag === "—" ? "Nog geen dag afgesproken" : `Uitvoering ${dagNL(dag)}`}
+              </span>
+              <span className="text-xs text-ink-500">{lijst.length} {lijst.length === 1 ? "adres" : "adressen"}</span>
+            </div>
+            <div className="divide-y divide-ink-50">
+              {lijst.map((a) => (
+                <div key={a.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-2.5">
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold text-ink-900">
+                      {`${a.straat} ${a.huisnummer}${a.toevoeging}`.replace(/\s+/g, " ").trim()}
+                    </span>
+                    <span className="block truncate text-xs text-ink-500">
+                      {a.postcode} {a.plaats}{a.bewoner ? ` · ${a.bewoner}` : ""}
+                    </span>
+                  </span>
+                  {a.telefoon.trim() ? (
+                    <a href={`tel:${a.telefoon}`} className="shrink-0 font-mono text-sm font-semibold text-green-700">{a.telefoon}</a>
+                  ) : (
+                    <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-800">geen nummer</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
 
       <div className="flex flex-wrap gap-2">

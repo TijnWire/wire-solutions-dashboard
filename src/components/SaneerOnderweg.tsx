@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  Navigation, PhoneCall, Mail, Check, Loader2, MapPin, Ban, Search, CalendarX2, Undo2,
+  Navigation, PhoneCall, Mail, Check, Loader2, MapPin, Ban, CalendarX2, Undo2, ChevronRight, ChevronLeft,
 } from "lucide-react";
 import { DatumKiezer } from "./DatumKiezer";
 import {
@@ -72,8 +72,6 @@ export function SaneerOnderweg({ adressen, ronde, responsen, onWijzig }: {
   responsen: Respons[];
   onWijzig: () => void;
 }) {
-  const [zoek, setZoek] = useState("");
-  const [alleen, setAlleen] = useState<"open" | "alles">("open");
 
   const opVolgorde = useMemo(() => [...adressen].sort((a, b) => {
     const na = parseInt(a.huisnummer.replace(/\D/g, ""), 10) || 0;
@@ -87,62 +85,88 @@ export function SaneerOnderweg({ adressen, ronde, responsen, onWijzig }: {
   // "Gehad" = er is een nummer én er ligt een antwoord op de datum, óf er hangt een kaartje.
   const gehad = (a: FlowAdres) => !!perAdres.get(a.id) || (!!a.telefoon.trim() && !ronde) || !!a.kaartje_op;
   const metNummer = opVolgorde.filter((a) => a.telefoon.trim()).length;
-  const nogLangs = opVolgorde.filter((a) => !gehad(a)).length;
+  // Eén deur tegelijk. Aan de deur heb je één hand vrij en sta je in de regen: een lijst van twintig
+  // kaarten waarin je moet zoeken welke je nu voor je hebt, werkt daar niet. Je loopt ze op volgorde
+  // af, dus laat er één zien, groot, met de knoppen eronder. De hele lijst blijft bereikbaar voor als
+  // je iets wilt opzoeken of terug moet naar een adres van eerder.
+  const [nr, setNr] = useState(0);
+  const [lijstOpen, setLijstOpen] = useState(false);
 
-  const zichtbaar = opVolgorde
-    .filter((a) => (alleen === "alles" ? true : !gehad(a)))
-    .filter((a) => !zoek.trim() || volledig(a).toLowerCase().includes(zoek.trim().toLowerCase()));
+  // Wie nog een nummer moet krijgen. Zodra je er een invult, schuift hij vanzelf uit deze rij.
+  const teDoen = opVolgorde.filter((a) => !gehad(a));
+  const rij = teDoen.length > 0 ? teDoen : opVolgorde;
+  const huidig = rij[Math.min(nr, rij.length - 1)];
+
+  if (!huidig) {
+    return (
+      <div className="rounded-2xl border border-dashed border-green-300 bg-green-50 px-6 py-12 text-center">
+        <Check className="mx-auto h-10 w-10 text-green-600" />
+        <p className="mt-3 text-lg font-bold text-ink-900">Alle deuren zijn gehad.</p>
+        <p className="mt-1 text-sm text-ink-600">De nummers staan bij Bellen klaar om de afspraak te maken.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3">
-      {/* Eén regel met alles wat je onderweg moet weten. */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-ink-200 bg-white px-4 py-3">
-        <div className="text-sm">
-          <b className="text-ink-900">{opVolgorde.length} deuren</b>
-          <span className="text-ink-500">
-            {" · "}{metNummer} nummer{metNummer === 1 ? "" : "s"}
-            {" · "}{nogLangs} nog langs
-            {ronde?.voorgestelde_datum ? ` · voorstel ${datumNL(ronde.voorgestelde_datum)}` : ""}
+      {/* Waar ben je, en waar moet je heen. Meer hoeft er onderweg niet te staan. */}
+      <div className="rounded-2xl border border-ink-200 bg-white p-4">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-sm font-semibold text-ink-700">
+            Deur {Math.min(nr, rij.length - 1) + 1} van de {rij.length}
           </span>
+          <div className="flex gap-2">
+            {routes.map((url, i) => (
+              <a key={url} href={url} target="_blank" rel="noreferrer" className={`${knop} bg-brand-600 px-3 py-2 text-white hover:bg-brand-700`}>
+                <Navigation className="h-4 w-4" /> Route{routes.length > 1 ? ` ${i + 1}` : ""}
+              </a>
+            ))}
+          </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          {routes.map((url, i) => (
-            <a key={url} href={url} target="_blank" rel="noreferrer" className={`${knop} bg-brand-600 text-white hover:bg-brand-700`}>
-              <Navigation className="h-4 w-4" /> Route{routes.length > 1 ? ` ${i + 1}/${routes.length}` : ""}
-            </a>
-          ))}
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-ink-100">
+          <div className="h-full rounded-full bg-green-500 transition-all"
+            style={{ width: `${opVolgorde.length ? Math.round((metNummer / opVolgorde.length) * 100) : 0}%` }} />
         </div>
+        <div className="mt-1.5 text-xs text-ink-500">{metNummer} van de {opVolgorde.length} telefoonnummers binnen</div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="flex gap-1 rounded-xl border border-ink-200 bg-white p-1">
-          {([["open", `Nog langs (${nogLangs})`], ["alles", `Alles (${opVolgorde.length})`]] as const).map(([k, label]) => (
-            <button key={k} type="button" onClick={() => setAlleen(k)}
-              className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${
-                alleen === k ? "bg-brand-600 text-white" : "text-ink-600 hover:bg-ink-50"}`}>
-              {label}
-            </button>
-          ))}
-        </div>
-        <div className="relative min-w-[9rem] flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" />
-          <input value={zoek} onChange={(e) => setZoek(e.target.value)} placeholder="Zoek huisnummer…"
-            className="w-full rounded-xl border border-ink-200 py-2 pl-9 pr-3 text-sm outline-none focus:border-brand-400" />
-        </div>
-      </div>
+      <Deur
+        key={huidig.id}
+        adres={huidig}
+        ronde={ronde}
+        respons={perAdres.get(huidig.id)}
+        onWijzig={onWijzig}
+        onVolgende={() => setNr((v) => Math.min(v + 1, rij.length - 1))}
+        onVorige={nr > 0 ? () => setNr((v) => Math.max(0, v - 1)) : undefined}
+      />
 
-      {zichtbaar.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-ink-300 bg-white px-6 py-10 text-center">
-          <Check className="mx-auto h-8 w-8 text-green-500" />
-          <p className="mt-2 text-sm font-semibold text-ink-800">
-            {alleen === "open" ? "Alle deuren zijn gehad." : "Geen adres gevonden."}
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {zichtbaar.map((a) => (
-            <Deur key={a.id} adres={a} ronde={ronde} respons={perAdres.get(a.id)} onWijzig={onWijzig} />
-          ))}
+      {/* De hele lijst, voor als je iets wilt opzoeken. Standaard dicht: onderweg leidt het af. */}
+      <button type="button" onClick={() => setLijstOpen((v) => !v)}
+        className="w-full rounded-xl border border-ink-200 bg-white px-4 py-2.5 text-sm font-semibold text-ink-600 hover:bg-ink-50">
+        {lijstOpen ? "Lijst verbergen" : `Alle ${opVolgorde.length} deuren tonen`}
+      </button>
+
+      {lijstOpen && (
+        <div className="space-y-1.5">
+          {opVolgorde.map((a, i) => {
+            const klaarMetDeze = !!a.telefoon.trim();
+            return (
+              <button key={a.id} type="button"
+                onClick={() => { const p = rij.findIndex((x) => x.id === a.id); if (p >= 0) setNr(p); setLijstOpen(false); }}
+                className="flex w-full items-center justify-between gap-3 rounded-xl border border-ink-200 bg-white px-4 py-2.5 text-left hover:bg-ink-50">
+                <span className="min-w-0">
+                  <span className="block truncate font-semibold text-ink-900">{adresTekst(a)}</span>
+                  <span className="block truncate text-xs text-ink-500">
+                    {a.telefoon || (a.kaartje_op ? `kaartje ${datumNL(a.kaartje_op)}` : "nog geen nummer")}
+                  </span>
+                </span>
+                <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${
+                  klaarMetDeze ? "bg-green-100 text-green-800" : a.kaartje_op ? "bg-amber-100 text-amber-800" : "bg-ink-100 text-ink-500"}`}>
+                  {klaarMetDeze ? "nummer" : a.kaartje_op ? "kaartje" : `${i + 1}`}
+                </span>
+              </button>
+            );
+          })}
         </div>
       )}
     </div>
@@ -150,11 +174,13 @@ export function SaneerOnderweg({ adressen, ronde, responsen, onWijzig }: {
 }
 
 // ── Eén voordeur ──
-function Deur({ adres, ronde, respons, onWijzig }: {
+function Deur({ adres, ronde, respons, onWijzig, onVolgende, onVorige }: {
   adres: FlowAdres;
   ronde: Ronde | null;
   respons?: Respons;
   onWijzig: () => void;
+  onVolgende?: () => void;
+  onVorige?: () => void;
 }) {
   const [tel, setTel] = useState(() => adres.telefoon || leesKlad(adres.id));
   const [bezig, setBezig] = useState("");
@@ -173,6 +199,7 @@ function Deur({ adres, ronde, respons, onWijzig }: {
       schrijfKlad(adres.id, "");
       setBezig("");
       onWijzig();
+      onVolgende?.();
     });
     return () => { actief = false; };
     /* eslint-disable-next-line react-hooks/exhaustive-deps */
@@ -247,10 +274,10 @@ function Deur({ adres, ronde, respons, onWijzig }: {
             <input
               value={tel}
               onChange={(e) => setTel(e.target.value)}
-              placeholder="Telefoonnummer van de bewoner"
+              placeholder="06 12 34 56 78"
               inputMode="tel"
               autoComplete="tel"
-              className="w-full rounded-xl border border-ink-200 px-4 py-3 text-base outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+              className="w-full rounded-xl border-2 border-ink-200 px-4 py-4 text-lg outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
             />
             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-ink-400">
               {bezig === "tel" ? <Loader2 className="h-4 w-4 animate-spin" /> : tel ? "wordt bewaard" : ""}
@@ -314,6 +341,22 @@ function Deur({ adres, ronde, respons, onWijzig }: {
           <Ban className="h-4 w-4" /> Werkt niet mee
         </button>
       </div>
+
+      {/* Doorlopen naar de volgende deur. Knoppen die je met een duim raakt, ook met handschoenen. */}
+      {(onVorige || onVolgende) && (
+        <div className="mt-3 flex gap-2 border-t border-ink-100 pt-3">
+          {onVorige && (
+            <button type="button" onClick={onVorige} className={`${knop} bg-white px-4 py-3 text-ink-600 ring-1 ring-ink-200 hover:bg-ink-50`}>
+              <ChevronLeft className="h-5 w-5" /> Vorige
+            </button>
+          )}
+          {onVolgende && (
+            <button type="button" onClick={onVolgende} className={`${knop} ml-auto bg-ink-800 px-5 py-3 text-white hover:bg-ink-900`}>
+              Volgende deur <ChevronRight className="h-5 w-5" />
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
