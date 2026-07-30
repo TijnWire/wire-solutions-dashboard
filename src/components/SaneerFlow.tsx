@@ -97,7 +97,8 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
   const af: Record<StapKey, boolean> = {
     inlezen: adressen.length > 0,
     verdelen: clusters.length > 0 && verdeeld === clusters.length,
-    deur: langs.length === 0,
+    // Pas af als er van elk adres een nummer is (of de bewoner werkt niet mee).
+    deur: langs.every((a) => a.telefoon.trim() || a.belstatus === "weigert"),
     bellen: bellen.length === 0 || bellen.every((a) => a.belstatus === "akkoord"),
     poster: taken.length > 0 && openTaken === 0,
     afronden: detail?.dossier.status === "afgerond" || detail?.dossier.status === "afgeboekt",
@@ -110,7 +111,7 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
   const samenvatting: Record<StapKey, string> = {
     inlezen: adressen.length ? `${adressen.length} adressen` : "nog leeg",
     verdelen: clusters.length ? `${verdeeld}/${clusters.length} verdeeld` : "geen groepen",
-    deur: langs.length ? `${langs.length} deuren` : "alles gehad",
+    deur: langs.length ? `${langs.length} zonder nummer` : "alle nummers binnen",
     bellen: bellen.length ? `${bellen.filter((a) => a.belstatus === "akkoord").length}/${bellen.length} afgesproken` : "geen",
     poster: taken.length ? `${taken.length - openTaken}/${taken.length}` : "—",
     afronden: STATUS_INFO[detail?.dossier.status ?? "nieuw"]?.label ?? "—",
@@ -260,8 +261,13 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
                         </span>
                       </div>
                       <div className="flex items-center gap-3 px-4 pb-3 text-xs">
-                        <span className="text-green-700">{nummer} nummer</span>
-                        <span className="text-amber-700">{kaartje} kaartje</span>
+                        {/* Het telefoonnummer is wat er per adres bij moet: zonder nummer kan niemand
+                            deze bewoner bellen voor de afspraak, en ook niet waarschuwen als de dag
+                            verschuift. Daarom staat de teller er als doel en niet als losse cijfer. */}
+                        <span className={nummer === inGroep.length ? "font-semibold text-green-700" : "font-semibold text-amber-700"}>
+                          {nummer} van de {inGroep.length} telefoonnummers
+                        </span>
+                        {kaartje > 0 && <span className="text-ink-500">{kaartje} kaartje</span>}
                         <span className="ml-auto font-semibold tabular-nums text-ink-400">{pct}%</span>
                       </div>
                       <div className="h-1.5 bg-ink-100">
@@ -400,8 +406,9 @@ function Afronden({ dossier, clusters, adressen, taken, onWijzig }: {
   const [fout, setFout] = useState("");
 
   const zonderDatum = clusters.filter((k) => !k.definitieve_datum);
+  const zonderNummer = adressen.filter((a) => !a.telefoon.trim() && a.belstatus !== "weigert");
   const openTaken = taken.filter((t) => !t.afgevinkt_op);
-  const klaar = clusters.length > 0 && zonderDatum.length === 0 && openTaken.length === 0;
+  const klaar = clusters.length > 0 && zonderDatum.length === 0 && openTaken.length === 0 && zonderNummer.length === 0;
 
   async function doe(soort: "afronden" | "afboeken") {
     setBezig(soort); setFout("");
@@ -442,6 +449,12 @@ function Afronden({ dossier, clusters, adressen, taken, onWijzig }: {
           <li>{clusters.length} groepen, {clusters.length - zonderDatum.length} met een definitieve datum</li>
           {zonderDatum.length > 0 && <li className="text-amber-800">{zonderDatum.map((k) => k.naam || k.postcode).join(", ")} — nog geen datum</li>}
           {openTaken.length > 0 && <li className="text-amber-800">{openTaken.length} poster(s) nog niet opgehangen</li>}
+          {zonderNummer.length > 0 && (
+            <li className="text-amber-800">
+              Van {zonderNummer.length} {zonderNummer.length === 1 ? "adres" : "adressen"} is geen telefoonnummer bekend —
+              daar is niemand te bereiken als de dag verschuift
+            </li>
+          )}
         </ul>
       </div>
 

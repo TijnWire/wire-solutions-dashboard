@@ -361,6 +361,10 @@ async function main() {
     {
       const teVroeg = await post("/saneer/afronden", baas, { pd_nummer: PD2 });
       check(teVroeg.status === 409, "afronden lukt niet zolang er werk openstaat");
+      // Zonder telefoonnummer is een bewoner niet te bereiken als de dag verschuift; daarom mag een
+      // dossier niet afgerond worden zolang er nummers ontbreken.
+      check((teVroeg.data.belet ?? []).some((b) => /telefoonnummer/i.test(b)),
+        "ontbrekende telefoonnummers houden het afronden tegen", JSON.stringify(teVroeg.data.belet));
       check((teVroeg.data.belet ?? []).some((b) => /poster/i.test(b)), "de reden staat erbij", JSON.stringify(teVroeg.data.belet));
 
       const taken = await get(`/saneer/taken?pd=${PD2}`, baas);

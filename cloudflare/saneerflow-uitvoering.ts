@@ -531,13 +531,19 @@ export async function saneerUitvoeringRoutes(
       "(select count(*) from saneer_clusters where pd_nummer = ?1 and verwijderd = 0 and definitieve_datum = '') as zonder_datum, " +
       "(select count(*) from saneer_clusters where pd_nummer = ?1 and verwijderd = 0 and ifnull(toegewezen_aan,'') = '') as onverdeeld, " +
       "(select count(*) from saneer_taken where pd_nummer = ?1 and afgevinkt_op = '') as taken_open, " +
-      "(select count(*) from saneer_afgekeurd where pd_nummer = ?1 and opgelost = 0) as afgekeurd"
+      "(select count(*) from saneer_afgekeurd where pd_nummer = ?1 and opgelost = 0) as afgekeurd, " +
+      // Zonder telefoonnummer kun je een bewoner niet bereiken voor de afspraak, en ook niet
+      // waarschuwen als de dag verschuift. Een dossier is dus niet af zolang er nummers ontbreken.
+      "(select count(*) from saneer_adressen where pd_nummer = ?1 and verwijderd = 0 and trim(telefoon) = '' and belstatus <> 'weigert') as zonder_nummer"
     ).bind(pd).first<Record<string, number>>();
 
     const belet: string[] = [];
     if (Number(gaten?.clusters ?? 0) === 0) belet.push("Er zijn nog geen clusters gemaakt.");
     if (Number(gaten?.zonder_datum ?? 0) > 0) belet.push(`${gaten!.zonder_datum} cluster(s) hebben nog geen definitieve datum.`);
     if (Number(gaten?.taken_open ?? 0) > 0) belet.push(`${gaten!.taken_open} poster(s) zijn nog niet opgehangen.`);
+    if (Number(gaten?.zonder_nummer ?? 0) > 0) {
+      belet.push(`Van ${gaten!.zonder_nummer} adres(sen) is geen telefoonnummer bekend — daar is niemand te bereiken.`);
+    }
 
     if (afboeken && dossier.status !== "afgerond") belet.push("Rond het dossier eerst af voordat je het afboekt.");
     // De reden staat ín de melding: de app krijgt bij een fout alleen de tekst mee, en dan moet daar
