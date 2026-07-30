@@ -171,7 +171,7 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
       {/* De kop blijft staan als je scrollt. Dit is een dossier waar je heen en weer in springt —
           van de bellijst naar een groep en terug — en dan wil je niet steeds omhoog moeten om bij de
           volgende stap te komen. */}
-      <div className="sticky top-0 z-20 -mx-4 -mt-4 border-b border-ink-200 bg-white/95 px-4 pb-2 pt-4 backdrop-blur sm:-mx-6 sm:px-6">
+      <div className="sticky top-0 z-20 -mx-4 -mt-4 border-b border-ink-200 bg-white/95 px-4 pb-3 pt-4 shadow-sm backdrop-blur sm:-mx-6 sm:px-6">
         <button type="button" onClick={onTerug} className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-700">
           <ArrowLeft className="h-4 w-4" /> Alle saneringen
         </button>
@@ -220,13 +220,16 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
             </div>
           ))}
         </div>
-      </div>
 
-      <div className="flex items-center gap-2.5 pt-2">
-        <span className="rounded-lg bg-brand-50 p-2 text-brand-600"><huidig.Icon className="h-5 w-5" /></span>
-        <div>
-          <h3 className="text-base font-bold text-ink-900">Stap {huidig.nr} — {huidig.titel}</h3>
-          <p className="text-sm text-ink-500">{huidig.uitleg}</p>
+        {/* De titel van de stap hoort bij de kop, niet bij de inhoud eronder. Stond hij erbuiten, dan
+            kreeg je twee blokken die net niet op elkaar aansloten: een balk over de volle breedte en
+            daaronder inhoud met marges ernaast. Nu is het één kop die met één lijn afsluit. */}
+        <div className="flex items-center gap-2.5 border-t border-ink-100 pt-3">
+          <span className="rounded-lg bg-brand-50 p-2 text-brand-600"><huidig.Icon className="h-5 w-5" /></span>
+          <div className="min-w-0">
+            <h3 className="text-base font-bold text-ink-900">Stap {huidig.nr} — {huidig.titel}</h3>
+            <p className="truncate text-sm text-ink-500">{huidig.uitleg}</p>
+          </div>
         </div>
       </div>
 
