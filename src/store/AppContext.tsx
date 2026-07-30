@@ -114,6 +114,21 @@ const migreerUren = (lijst: unknown): Urenregel[] => {
   return uit;
 };
 
+// ── Hoe vaak praten we met de server, en wanneer noemen we dit apparaat "gesynchroniseerd"? ──
+// Deze twee horen bij elkaar en zijn eerder uit elkaar gelopen: de poll stond op 60 seconden en de
+// gezondheidsgrens óók op 60 seconden. Dan valt de melding om vlak vóór elke ronde en zegt de app bij
+// iedereen "niet gesynct", terwijl er niets aan de hand is. Een melding die liegt is erger dan geen
+// melding — dan gaat het hele team ernaar handelen.
+//
+// Daarom staat de grens niet meer los ingesteld maar volgt hij uit de pollfrequentie. Ze kunnen niet
+// meer uit de pas lopen, ook niet als iemand later aan de tempo's draait.
+const POLL_MET_VERBINDING = 45_000;   // de WebSocket duwt zelf al; dit is het vangnet
+const POLL_ZONDER_START = 5_000;      // verbinding weg: eerst snel kijken…
+const POLL_ZONDER_MAX = 30_000;       // …en daarna rustiger, om de daglimiet niet op te souperen
+// Drie hele rondes speling: één gemiste poll (trage verbinding, telefoon in de zak) mag nooit
+// meteen "niet gesynchroniseerd" opleveren.
+const GEZOND_BINNEN = POLL_MET_VERBINDING * 3;
+
 const VS_SHARDS = 16;
 const vsShard = (id: string) => { let h = 0; for (let i = 0; i < id.length; i++) h = (Math.imul(h, 31) + id.charCodeAt(i)) >>> 0; return h % VS_SHARDS; };
 const vsKey = (i: number) => `voorschouwen_${i}`;
@@ -1013,8 +1028,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const url = cloudWsUrl();
       if (!url) { wsHerverbind = setTimeout(verbindWs, 3000); return; } // nog geen token → zo weer proberen
       try { ws = new WebSocket(url); } catch { wsHerverbind = setTimeout(verbindWs, backoff); backoff = Math.min(backoff * 2, 15000); return; }
-      ws.onopen = () => { wsStatus.verbonden = true; backoff = 1000; pollMislukt = 0; wsPing = setInterval(() => { try { ws?.send("ping"); } catch { /* noop */ } }, 25000); };
+      ws.onopen = () => { wsStatus.verbonden = true; backoff = 1000; pollMislukt = 0; sync.current.laatsteOk = Date.now(); wsPing = setInterval(() => { try { ws?.send("ping"); } catch { /* noop */ } }, 25000); };
       ws.onmessage = (ev) => {
+        // Er komt iets binnen, dus de verbinding leeft. Dat telt als teken van leven — anders hangt
+        // de melding volledig aan de poll, en die mag juist rustig zijn zolang de socket staat.
+        sync.current.laatsteOk = Date.now();
         try {
           const msg = JSON.parse(String(ev.data));
           if (msg?.type === "changed" && Array.isArray(msg.keys)) {
@@ -1083,9 +1101,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // halve minuut — genoeg om niets te missen, zonder de limiet op te souperen.
     let pollMislukt = 0;
     const pollPauze = () => {
-      if (wsStatus.verbonden) return 60000;
+      if (wsStatus.verbonden) return POLL_MET_VERBINDING;
       pollMislukt = Math.min(pollMislukt + 1, 6);
-      return Math.min(5000 * pollMislukt, 30000);
+      return Math.min(POLL_ZONDER_START * pollMislukt, POLL_ZONDER_MAX);
     };
 
     const planPoll = () => {
@@ -1130,7 +1148,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!supabaseAan) return;
     const meet = () => {
-      const gezond = sbSessie && sync.current.klaar && Date.now() - sync.current.laatsteOk < 60000;
+      const gezond = sbSessie && sync.current.klaar && Date.now() - sync.current.laatsteOk < GEZOND_BINNEN;
       setSyncGezond((was) => (was === gezond ? was : gezond));
     };
     meet();
