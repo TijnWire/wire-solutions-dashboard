@@ -80,7 +80,10 @@ export function WerklijstZeef({ adressen, beeld, setBeeld, zoek, setZoek }: {
           <span className={`rounded-full px-1.5 text-xs ${beeld === k ? "bg-white/25" : "bg-ink-100 text-ink-500"}`}>{n}</span>
         </button>
       ))}
-      <div className="relative ml-auto w-full sm:w-56">
+
+      {/* Zoeken staat links, direct boven de adressen waar het over gaat. Rechts naast de knoppen
+          keek je er telkens overheen — daar zit op een laptop een halve meter niets tussen. */}
+      <div className="relative w-full sm:w-72">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" />
         <input value={zoek} onChange={(e) => setZoek(e.target.value)} placeholder="Straat, bewoner of nummer…"
           className="w-full rounded-xl border border-ink-200 py-2 pl-9 pr-3 text-sm outline-none focus:border-brand-400" />
