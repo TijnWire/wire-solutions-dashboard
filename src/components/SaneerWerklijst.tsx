@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Phone, Check, Mail, Search, Loader2, MapPin, Navigation, Users, CalendarX, X } from "lucide-react";
+import { Phone, Check, Mail, Search, Loader2, MapPin, Navigation, Users, CalendarX, X, CheckSquare, Square } from "lucide-react";
 import { wijzigFlowAdres, startRonde, type FlowAdres } from "../lib/saneerflowWerk";
 import { DatumKiezer } from "./DatumKiezer";
 
@@ -119,6 +119,11 @@ export function SaneerWerklijst({ adressen, clusters, naamVan, onWijzig, beeld, 
   const [nieuweDag, setNieuweDag] = useState<{ clusterId: string; datum: string } | null>(null);
   const [dagBezig, setDagBezig] = useState(false);
   const [dagFout, setDagFout] = useState("");
+  // Meerdere adressen tegelijk. In een portiek doe je vaak in één keer dezelfde handeling — vier
+  // deuren op rij waar niemand thuis was, of een hele galerij die al akkoord is. Dat één voor één
+  // aantikken is werk dat de app hoort te doen.
+  const [sel, setSel] = useState<Set<string>>(new Set());
+  const [bulkBezig, setBulkBezig] = useState(false);
 
   // Het beeld waar niets meer in staat, hoef je niet open te houden. Heb je alle deuren gehad, dan
   // sta je vanzelf in de bellijst — dat is immers waar het werk dan ligt.
@@ -134,6 +139,32 @@ export function SaneerWerklijst({ adressen, clusters, naamVan, onWijzig, beeld, 
     .filter((a) => !q || `${adresTekst(a)} ${a.postcode} ${a.bewoner} ${a.telefoon}`.toLowerCase().includes(q));
 
   const clusterVan = (a: FlowAdres) => clusters.find((k) => k.id === a.cluster_id);
+
+  // We rekenen altijd met wat je nú ziet: wissel je van beeld of typ je in het zoekveld, dan neemt
+  // een selectie van daarvoor nooit stiekem iets mee dat buiten beeld staat.
+  const gekozen = lijst.filter((a) => sel.has(a.id));
+  const allesAan = lijst.length > 0 && gekozen.length === lijst.length;
+  const kies = (id: string) => setSel((p) => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const kiesAlles = () => setSel(allesAan ? new Set() : new Set(lijst.map((a) => a.id)));
+
+  const bulk = async (maak: (a: FlowAdres) => Partial<FlowAdres>) => {
+    setBulkBezig(true);
+    for (const a of gekozen) await wijzigFlowAdres(a.id, maak(a));
+    setBulkBezig(false);
+    setSel(new Set());
+    onWijzig();
+  };
+
+  // Google Maps doet maximaal tien stops per route: het laatste adres is de bestemming, de rest zijn
+  // tussenpunten. Zit je daarboven, dan zeggen we dat erbij in plaats van er stilletjes een paar weg
+  // te laten — een route die zegt "8 adressen" maar er 6 rijdt, kost je een tweede rit.
+  const MAX_STOPS = 10;
+  const routeVoorSelectie = () => {
+    const stops = gekozen.slice(0, MAX_STOPS).map((a) => `${adresTekst(a)}, ${a.postcode} ${a.plaats}`);
+    const bestemming = encodeURIComponent(stops[stops.length - 1] ?? "");
+    const tussen = stops.slice(0, -1).map(encodeURIComponent).join("|");
+    return `https://www.google.com/maps/dir/?api=1&destination=${bestemming}${tussen ? `&waypoints=${tussen}` : ""}&travelmode=driving`;
+  };
   const inGroep = (clusterId: string) => adressen.filter((a) => a.cluster_id === clusterId);
 
   // Een nieuwe ronde starten zet de hele groep terug op "nog af te spreken" en wist de oude dag.
@@ -171,6 +202,47 @@ export function SaneerWerklijst({ adressen, clusters, naamVan, onWijzig, beeld, 
 
   return (
     <div className="space-y-3">
+      {/* Selecteren en in één keer afhandelen. Dezelfde balk als bij Brieven & Routes, zodat je niet
+          per pagina hoeft te leren hoe selecteren werkt. */}
+      {lijst.length > 0 && (
+        <div className={`flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2.5 transition-colors ${
+          gekozen.length > 0 ? "border-brand-200 bg-brand-50" : "border-ink-200 bg-white"}`}>
+          <button type="button" onClick={kiesAlles}
+            className={`inline-flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm font-semibold transition-colors ${
+              allesAan ? "bg-brand-600 text-white" : "text-ink-700 hover:bg-ink-100"}`}>
+            {allesAan ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4 text-ink-400" />}
+            {allesAan ? "Alles deselecteren" : "Alles selecteren"}
+          </button>
+
+          {gekozen.length > 0 ? (
+            <>
+              <span className="inline-flex items-center rounded-full bg-white px-2.5 py-1 text-xs font-bold text-brand-800 ring-1 ring-brand-200">
+                {gekozen.length} geselecteerd
+              </span>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <button type="button" disabled={bulkBezig} onClick={() => void bulk(() => ({ belstatus: "akkoord" }))}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-green-700 disabled:opacity-50">
+                  {bulkBezig ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />} Afgesproken
+                </button>
+                <button type="button" disabled={bulkBezig}
+                  onClick={() => void bulk((a) => ({ kaartje_op: new Date().toISOString().slice(0, 10), bezoeken: (a.bezoeken || 0) + 1 }))}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-600 disabled:opacity-50">
+                  <Mail className="h-3.5 w-3.5" /> Kaartje in de bus
+                </button>
+                <a href={routeVoorSelectie()} target="_blank" rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 bg-white px-3 py-1.5 text-xs font-semibold text-ink-700 hover:bg-ink-50">
+                  <Navigation className="h-3.5 w-3.5" /> Route langs {Math.min(gekozen.length, MAX_STOPS)}
+                  {gekozen.length > MAX_STOPS ? ` van ${gekozen.length}` : ""}
+                </a>
+              </div>
+              <button type="button" onClick={() => setSel(new Set())} className="ml-auto rounded-lg px-2 py-1.5 text-xs font-medium text-ink-400 hover:text-ink-700">Wis selectie</button>
+            </>
+          ) : (
+            <span className="text-xs text-ink-500">Vink adressen aan om ze in één keer af te handelen of er een route langs te rijden.</span>
+          )}
+        </div>
+      )}
+
       {lijst.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-ink-300 bg-white p-10 text-center">
           <MapPin className="mx-auto h-8 w-8 text-ink-300" />
@@ -194,8 +266,12 @@ export function SaneerWerklijst({ adressen, clusters, naamVan, onWijzig, beeld, 
             const bezigNu = bezig === a.id;
             return (
               <div key={a.id} className={`rounded-2xl border bg-white p-4 shadow-sm transition-colors ${
-                b === "klaar" ? "border-green-200 bg-green-50/40" : a.kaartje_op ? "border-amber-200" : "border-ink-200"}`}>
+                sel.has(a.id) ? "border-brand-400 ring-2 ring-brand-200"
+                  : b === "klaar" ? "border-green-200 bg-green-50/40" : a.kaartje_op ? "border-amber-200" : "border-ink-200"}`}>
                 <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+                  <input type="checkbox" checked={sel.has(a.id)} onChange={() => kies(a.id)}
+                    aria-label={`${adresTekst(a)} selecteren`}
+                    className="mt-1 h-4 w-4 shrink-0 accent-brand-600" />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                       <span className="text-base font-bold text-ink-900">{adresTekst(a)}</span>
