@@ -73,6 +73,15 @@ export function WerklijstZeef({ adressen, beeld, setBeeld, zoek, setZoek }: {
         <input value={zoek} onChange={(e) => setZoek(e.target.value)} placeholder="Straat, bewoner of nummer…"
           className="w-full rounded-xl border border-ink-200 py-2 pl-9 pr-3 text-sm outline-none focus:border-brand-400" />
       </div>
+
+      {/* Wat je op dit beeld doet. Stond eerst in de lijst, en verdween dus half onder de kop zodra
+          je ging scrollen. Hij hoort bij de zeef: hij verandert mee met wat je aanklikt. */}
+      <p className="w-full text-sm text-ink-600">
+        {beeld === "deur" ? "Rijd langs deze deuren. Gaan ze akkoord met de dag? Vink af. Willen ze gebeld worden? Vul het nummer in. Niemand thuis? Kaartje in de bus."
+          : beeld === "bellen" ? "Van deze adressen heb je een nummer. Bel ze en spreek de dag af waarop iedereen thuis moet zijn."
+          : beeld === "klaar" ? "Hier is het rond. Blijft staan zodat je kunt terugkijken wat er is afgesproken."
+          : "Alle adressen van dit dossier bij elkaar."}
+      </p>
     </div>
   );
 }
@@ -125,14 +134,6 @@ export function SaneerWerklijst({ adressen, clusters, naamVan, onWijzig, beeld, 
 
   return (
     <div className="space-y-3">
-      {/* Wat je op dit beeld moet doen, in één zin. */}
-      <p className="text-sm text-ink-600">
-        {beeld === "deur" ? "Rijd langs deze deuren. Gaan ze akkoord met de dag? Vink af. Willen ze gebeld worden? Vul het nummer in. Niemand thuis? Kaartje in de bus."
-          : beeld === "bellen" ? "Van deze adressen heb je een nummer. Bel ze en spreek de dag af waarop iedereen thuis moet zijn."
-          : beeld === "klaar" ? "Hier is het rond. Blijft staan zodat je kunt terugkijken wat er is afgesproken."
-          : "Alle adressen van dit dossier bij elkaar."}
-      </p>
-
       {lijst.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-ink-300 bg-white p-10 text-center">
           <MapPin className="mx-auto h-8 w-8 text-ink-300" />

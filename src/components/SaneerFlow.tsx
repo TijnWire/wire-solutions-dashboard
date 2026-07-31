@@ -155,7 +155,14 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
   if (cluster) return <SaneerClusterWerk clusterId={cluster} onTerug={() => { setCluster(null); void laad(); }} />;
 
   return (
-    <div className="space-y-4">
+    // De scrollende kolom heeft zelf p-4 (md:p-6). Die trekken we hier één keer weg, zodat de kop
+    // aan de bovenkant van die kolom begint en niets meer hoeft te compenseren. De inhoud eronder
+    // krijgt de ruimte gewoon terug.
+    //
+    // Waarom niet met een negatieve marge óp de kop zelf, zoals eerst: een vastgezet element met een
+    // negatieve marge in een scrollende kolom mét padding gaat op twee plekken tegelijk rekenen — in
+    // rust staat hij ergens anders dan wanneer hij blijft plakken. Dat was het gat.
+    <div className="-mx-4 -mt-4 md:-mx-6 md:-mt-6">
       {/* De kop blijft staan als je scrollt. Dit is een dossier waar je heen en weer in springt —
           van de bellijst naar een groep en terug — en dan wil je niet steeds omhoog moeten.
 
@@ -170,7 +177,7 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
           De titel, de regel eronder en de zijpaden hangen alle drie aan hetzelfde raster: de
           terugpijl links, en daarnaast één kolom. Zo staat het PD-nummer altijd exact onder het
           gebouw, ook als de naam lang is of de knop van maat verandert. */}
-      <div className="sticky top-0 z-20 -mx-4 -mt-4 space-y-3 border-b border-ink-200 bg-white px-4 pb-3 pt-4 shadow-sm md:-mx-6 md:-mt-6 md:px-6 md:pt-6">
+      <div className="sticky top-0 z-20 space-y-3 border-b border-ink-200 bg-white px-4 pb-3 pt-4 shadow-sm md:px-6 md:pt-6">
         <div className="flex items-start gap-2">
           <button type="button" onClick={onTerug} title="Terug naar alle saneringen" aria-label="Terug naar alle saneringen"
             className="-ml-2 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-ink-400 hover:bg-ink-100 hover:text-ink-800">
@@ -214,6 +221,7 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
         )}
       </div>
 
+      <div className="space-y-4 p-4 md:p-6">
       {/* Zonder zijpad zie je waar je voor komt: de adressen. */}
       {!actief && (
         adressen.length === 0
@@ -241,6 +249,7 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
               tekst="Afboeken kan pas als de afspraken staan en het dossier is afgerond. Dat doe je bij Afronden."
               knop="Naar Afronden" onKlik={() => setStap("afronden")} />
       )}
+      </div>
     </div>
   );
 }
