@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState } from "react";
-import { ArrowLeft, Plus, FlaskConical, Trash2, MessageCircle, Phone, Navigation, FileDown, FileUp, Mail, Check, Wand2, ChevronRight, ChevronDown, X, UserPlus, RotateCcw, Footprints, Search, CalendarClock, Pencil, Archive } from "lucide-react";
+import { ArrowLeft, Plus, Shovel, Trash2, MessageCircle, Phone, Navigation, FileDown, FileUp, Mail, Check, Wand2, ChevronRight, ChevronDown, X, UserPlus, RotateCcw, Footprints, Search, CalendarClock, Pencil, Archive } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { useProjectFilter } from "../components/ProjectFilter";
 import { WerkTabs, type WerkTab } from "../components/WerkTabs";
@@ -620,7 +620,7 @@ function TauwDetail({ opdracht, onTerug }: { opdracht: TauwOpdracht; onTerug: ()
 
         <Card className="space-y-4 p-5">
           <div className="flex items-start gap-3">
-            <div className="rounded-xl bg-brand-50 p-3 text-brand-600"><FlaskConical className="h-6 w-6" /></div>
+            <div className="rounded-xl bg-brand-50 p-3 text-brand-600"><Shovel className="h-6 w-6" /></div>
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-lg font-bold text-ink-900">{titel}</h2>
@@ -972,7 +972,7 @@ export function Tauw({ initieelTauw }: { initieelTauw?: string }) {
 
       {zichtbaar.length === 0 ? (
         <Card className="p-10 text-center">
-          <FlaskConical className="mx-auto h-10 w-10 text-ink-300" />
+          <Shovel className="mx-auto h-10 w-10 text-ink-300" />
           <p className="mt-3 text-sm text-ink-500">
             {isLeiding ? "Nog geen opdrachten. Klik op " : "Geen opdrachten aan jou toegewezen."}
             {isLeiding && <span className="font-semibold">Nieuwe opdracht</span>}
@@ -1011,7 +1011,7 @@ export function Tauw({ initieelTauw }: { initieelTauw?: string }) {
                     return (
                       <div key={o.id} onClick={() => setOpenId(o.id)} className="cursor-pointer rounded-2xl border border-ink-200 bg-white p-4 text-left shadow-card transition-shadow hover:shadow-cardhover">
                         <div className="flex items-center gap-3">
-                          <div className="rounded-lg bg-brand-50 p-2.5 text-brand-600"><FlaskConical className="h-5 w-5" /></div>
+                          <div className="rounded-lg bg-brand-50 p-2.5 text-brand-600"><Shovel className="h-5 w-5" /></div>
                           <div className="min-w-0 flex-1">
                             <div className="truncate font-semibold text-ink-900">{titel}</div>
                             <div className="truncate text-xs text-ink-500">{[o.opdrachtgever ?? "TAUW", TAUW_TYPE_LABEL[o.type], o.regio, `${o.adressen.length} adressen`].filter(Boolean).join(" · ")}</div>

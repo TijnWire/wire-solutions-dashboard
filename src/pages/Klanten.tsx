@@ -2,7 +2,7 @@ import { useState } from "react";
 import {
   Search, Plus, ArrowLeft, MapPin, Phone, Mail, Trash2, X,
   CalendarCheck, Mailbox, ClipboardCheck, Database, Image as ImageIcon, Download,
-  ChevronRight, FlaskConical, Recycle, FolderArchive,
+  ChevronRight, Shovel, Building2, FolderArchive,
 } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { Card, Badge, Bevestig } from "../components/ui";
@@ -278,7 +278,7 @@ export function Klanten({ initieelKey }: { initieelKey?: string }) {
       }),
     },
     {
-      key: "saneren", label: "Saneren", Icon: Recycle,
+      key: "saneren", label: "Saneren", Icon: Building2,
       rijen: saneringen.map((s) => {
         const adr = s.adressen ?? [];
         return {
@@ -315,7 +315,7 @@ export function Klanten({ initieelKey }: { initieelKey?: string }) {
       }),
     },
     {
-      key: "tauw", label: "TAUW", Icon: FlaskConical,
+      key: "tauw", label: "TAUW", Icon: Shovel,
       rijen: tauwOpdrachten.map((o) => ({
         id: o.id,
         titel: o.referentie || o.regio || "TAUW-opdracht",

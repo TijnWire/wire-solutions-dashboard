@@ -1,6 +1,6 @@
 import { Fragment, useRef, useState } from "react";
 import {
-  ArrowLeft, Plus, Recycle, Trash2, MessageCircle, Phone, ChevronRight, ChevronDown,
+  ArrowLeft, Plus, Building2, Trash2, MessageCircle, Phone, ChevronRight, ChevronDown,
   X, Check, FileUp, Search, Loader2, Wand2, MapPin, UserPlus, RotateCcw, CalendarClock, Pencil, Send,
 } from "lucide-react";
 import { useApp } from "../store/AppContext";
@@ -561,7 +561,7 @@ function OudeSaneringen({ initieelSanering }: { initieelSanering?: string }) {
 
       {zichtbaar.length === 0 ? (
         <Card className="p-10 text-center">
-          <Recycle className="mx-auto h-10 w-10 text-ink-300" />
+          <Building2 className="mx-auto h-10 w-10 text-ink-300" />
           <p className="mt-3 text-sm text-ink-500">
             {isLeiding ? "Nog geen saneringsprojecten. Klik op " : "Geen saneringen aan jou toegewezen."}
             {isLeiding && <span className="font-semibold">Importeer Excel</span>}
@@ -599,7 +599,7 @@ function OudeSaneringen({ initieelSanering }: { initieelSanering?: string }) {
                     return (
                       <div key={s.id} onClick={() => setOpenId(s.id)} className="cursor-pointer rounded-2xl border border-ink-200 bg-white p-4 text-left shadow-card transition-shadow hover:shadow-cardhover">
                         <div className="flex items-center gap-3">
-                          <div className="rounded-lg bg-brand-50 p-2.5 text-brand-600"><Recycle className="h-5 w-5" /></div>
+                          <div className="rounded-lg bg-brand-50 p-2.5 text-brand-600"><Building2 className="h-5 w-5" /></div>
                           <div className="min-w-0 flex-1">
                             <div className="truncate font-semibold text-ink-900">{s.naam}</div>
                             <div className="truncate text-xs text-ink-500">{[s.regio, `${tot} adres${tot === 1 ? "" : "sen"}`].filter(Boolean).join(" · ")}</div>
@@ -649,7 +649,7 @@ function OudeSaneringen({ initieelSanering }: { initieelSanering?: string }) {
             <div className="space-y-2 border-t border-ink-100 p-4">
               {verwijderdeProjecten.map((s) => (
                 <div key={s.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-ink-200 bg-ink-50/50 px-3 py-2.5">
-                  <Recycle className="h-4 w-4 shrink-0 text-ink-400" />
+                  <Building2 className="h-4 w-4 shrink-0 text-ink-400" />
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-semibold text-ink-800">{s.naam}</div>
                     <div className="truncate text-xs text-ink-500">{s.adressen.length} adres{s.adressen.length === 1 ? "" : "sen"}{s.verwijderdOp ? ` · verwijderd op ${datumKort(s.verwijderdOp)}` : ""}</div>

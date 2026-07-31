@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CalendarCheck, Mailbox, Receipt, HardHat, MessageCircle, CheckCircle2, MapPin, Recycle, ClipboardList, CheckSquare, ArrowRight, Bell, Banknote, Plane, Send, Sparkles, Loader2 } from "lucide-react";
+import { CalendarCheck, Mailbox, Receipt, HardHat, MessageCircle, CheckCircle2, MapPin, Building2, ClipboardList, CheckSquare, ArrowRight, Bell, Banknote, Plane, Send, Sparkles, Loader2 } from "lucide-react";
 import {
   ResponsiveContainer,
   BarChart,
@@ -139,7 +139,7 @@ export function Overzicht() {
     { key: "voorschouwen", icon: ClipboardList, label: "Voorschouwen", waarde: vsIngediend, sub: `${vsConcept} concept · ${vsIngediend} ingediend` },
     { key: "brieven", icon: Mailbox, label: "Brieven & routes", waarde: actieveRondes.length, sub: `${gegooid}/${teBezorgen.length} gegooid` },
     { key: "buurtaanpak", icon: MapPin, label: "Buurtaanpak", waarde: actieveBuurt.length, sub: `${buurtBevestigd} bevestigd · ${buurtUitgevoerd} uitgevoerd` },
-    { key: "saneren", icon: Recycle, label: "Saneren", waarde: actieveSaneer.length, sub: `${saneerAdressen} adres${saneerAdressen === 1 ? "" : "sen"}` },
+    { key: "saneren", icon: Building2, label: "Saneren", waarde: actieveSaneer.length, sub: `${saneerAdressen} adres${saneerAdressen === 1 ? "" : "sen"}` },
     { key: "tauw", icon: HardHat, label: "TAUW", waarde: tauwOpen, sub: tauwControle > 0 ? `${tauwControle} ter controle` : "open opdrachten" },
     { key: "afspraken", icon: CalendarCheck, label: "Afspraken", waarde: afsprakenOpen, sub: `${afsprakenVandaag} vandaag` },
     { key: "facturen", icon: Receipt, label: "Facturen", waarde: openFacturen.length, sub: `${euro(openBedrag)} openstaand` },

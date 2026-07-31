@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Plus, ArrowLeft, Search, Loader2, AlertCircle,
-  FolderOpen, RotateCcw, Recycle,
+  FolderOpen, RotateCcw, Building2,
 } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { DatumKiezer } from "../components/DatumKiezer";
@@ -309,7 +309,7 @@ export function SaneerDossiers({ onEerder }: { onEerder: () => void }) {
                     plek, niet aan elf cijfers. Dus dat staat klein bij de details. */}
                 <div className="flex items-center gap-3">
                   <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
-                    <Recycle className="h-5 w-5" />
+                    <Building2 className="h-5 w-5" />
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-base font-bold text-ink-900">

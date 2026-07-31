@@ -1,5 +1,5 @@
 import { memo, useState } from "react";
-import { Search, Bell, Menu, Info, AlertTriangle, ChevronRight, X, FolderKanban, SearchX, Cloud, CloudOff, Mailbox, CalendarCheck, ClipboardCheck, Recycle, Cable, FlaskConical, Receipt, Plane, Settings, type LucideIcon } from "lucide-react";
+import { Search, Bell, Menu, Info, AlertTriangle, ChevronRight, X, FolderKanban, SearchX, Cloud, CloudOff, Mailbox, CalendarCheck, ClipboardCheck, Building2, Cable, Shovel, Receipt, Plane, Settings, type LucideIcon } from "lucide-react";
 import type { Melding } from "../lib/meldingen";
 import type { ZoekGroep, ZoekItem } from "../lib/zoeken";
 
@@ -8,10 +8,10 @@ import type { ZoekGroep, ZoekItem } from "../lib/zoeken";
 const MELDING_CAT: Record<string, { label: string; Icon: LucideIcon; prio: number }> = {
   brieven: { label: "Brieven & Routes", Icon: Mailbox, prio: 5 },
   afspraken: { label: "Afspraken", Icon: CalendarCheck, prio: 4 },
-  saneren: { label: "Saneren", Icon: Recycle, prio: 4 },
+  saneren: { label: "Saneren", Icon: Building2, prio: 4 },
   buurtaanpak: { label: "Buurtaanpak", Icon: Cable, prio: 4 },
   voorschouwen: { label: "Voorschouwen", Icon: ClipboardCheck, prio: 4 },
-  tauw: { label: "TAUW of Van der Helm", Icon: FlaskConical, prio: 4 },
+  tauw: { label: "TAUW of Van der Helm", Icon: Shovel, prio: 4 },
   projecten: { label: "Projecten", Icon: FolderKanban, prio: 6 },
   mijnwerk: { label: "Mijn werk", Icon: FolderKanban, prio: 6 },
   facturen: { label: "Boekhouding", Icon: Receipt, prio: 3 },

@@ -20,8 +20,8 @@ import {
   CalendarClock,
   Megaphone,
   Plane,
-  Recycle,
-  FlaskConical,
+  Building2,
+  Shovel,
   // Cable, — hoort bij Buurtaanpak; terug zodra die weer in het menu staat
   Briefcase,
   type LucideIcon,
@@ -64,10 +64,10 @@ export const NAV: NavItem[] = [
   // Buurtaanpak staat tijdelijk niet in het menu (30-07-2026, op verzoek). De pagina, de gegevens en
   // de code blijven bestaan: zodra dit project weer begint, hoeft alleen deze regel terug.
   // { key: "buurtaanpak", label: "Buurtaanpak", icon: Waypoints, group: "Projecten", roles: ALLE },
-  { key: "saneren", label: "Saneren", icon: Recycle, group: "Projecten", roles: ALLE },
+  { key: "saneren", label: "Saneren", icon: Building2, group: "Projecten", roles: ALLE },
   { key: "voorschouwen", label: "Voorschouwen", icon: ClipboardCheck, group: "Projecten", roles: ALLE },
   { key: "schouwafspraken", label: "Schouwafspraken", icon: CalendarClock, group: "Projecten", roles: ALLE },
-  { key: "tauw", label: "TAUW of Van der Helm", icon: FlaskConical, group: "Projecten", roles: ALLE },
+  { key: "tauw", label: "TAUW of Van der Helm", icon: Shovel, group: "Projecten", roles: ALLE },
 
   { key: "kennisbank", label: "Kennisbank", icon: BookOpen, group: "Vragen", roles: ALLE },
 

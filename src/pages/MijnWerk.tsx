@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ListTodo, Loader2, CheckCircle2, Plus, FolderKanban, Mailbox, CalendarCheck, ChevronRight, ChevronDown, FileScan, FlaskConical, ClipboardCheck, CalendarDays, CalendarClock, Mail, AlertTriangle, Cable, Phone, Check } from "lucide-react";
+import { ListTodo, Loader2, CheckCircle2, Plus, FolderKanban, Mailbox, CalendarCheck, ChevronRight, ChevronDown, FileScan, Shovel, ClipboardCheck, CalendarDays, CalendarClock, Mail, AlertTriangle, Cable, Phone, Check } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { useNav } from "../store/NavContext";
 import { TAUW_TYPE_LABEL } from "../lib/types";
@@ -161,7 +161,7 @@ export function MijnWerk({ initieelProject }: { initieelProject?: string }) {
     werkbonnen.push({
       key: "tauw-" + o.id,
       area: "tauw",
-      icon: FlaskConical,
+      icon: Shovel,
       type: `TAUW · ${TAUW_TYPE_LABEL[o.type]}`,
       titel: o.referentie || o.regio || "TAUW-opdracht",
       sub: o.regio || `${o.adressen.length} adressen`,
@@ -213,7 +213,7 @@ export function MijnWerk({ initieelProject }: { initieelProject?: string }) {
   const mapMeta: { area: WerkArea; label: string; icon: LucideIcon; navKey: string }[] = [
     { area: "brieven", label: "Brieven & routes", icon: Mailbox, navKey: "brieven" },
     { area: "afspraken", label: "Afspraken", icon: CalendarCheck, navKey: "afspraken" },
-    { area: "tauw", label: "TAUW", icon: FlaskConical, navKey: "tauw" },
+    { area: "tauw", label: "TAUW", icon: Shovel, navKey: "tauw" },
     { area: "buurtaanpak", label: "Buurtaanpak", icon: Cable, navKey: "buurtaanpak" },
     { area: "voorschouwen", label: "Voorschouwen", icon: ClipboardCheck, navKey: "voorschouwen" },
   ];
