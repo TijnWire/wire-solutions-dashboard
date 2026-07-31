@@ -261,6 +261,10 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
     } catch { return "open"; }
   });
   const [teVerwijderenMap, setTeVerwijderenMap] = useState<{ id: string; naam: string; aantal: number } | null>(null);
+  // Het adres dat op het punt staat verwijderd te worden. De browser-eigen confirm() vroeg dit ook
+  // wel, maar zag er op een telefoon uit als een storing en noemde het adres niet — je wist dus niet
+  // wat je wegklikte. Een voorschouw met foto's terugkrijgen kan niet.
+  const [teVerwijderen, setTeVerwijderen] = useState<Voorschouw | null>(null);
   const [tab, setTab] = useState<"overzicht" | "stedin" | "archief">("overzicht");
   const [alleenOpen, setAlleenOpen] = useState(false); // alleen adressen zónder foto tonen
   const [teVersturenMap, setTeVersturenMap] = useState<VoorschouwMap | null>(null); // bevestiging vóór versturen
@@ -530,8 +534,20 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
   const rij = (v: Voorschouw) => {
     const gekozen = selectie.has(v.id);
     return (
-      <Card key={v.id} className={`flex flex-wrap items-center gap-4 p-4 ${gekozen ? "ring-2 ring-brand-400" : ""}`}>
-        <input type="checkbox" checked={gekozen} onChange={() => toggle(v.id)} aria-label="Voorschouw selecteren" className="h-4 w-4 shrink-0 accent-brand-600" />
+      // De hele balk selecteert. Dat vakje is op een telefoon vier bij vier millimeter; ernaast
+      // tikken deed niets. De knoppen rechts houden hun eigen werking — daar wordt de klik
+      // tegengehouden, anders zou het openen van de kaart het adres ook selecteren.
+      <Card
+        key={v.id}
+        onClick={() => toggle(v.id)}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e: React.KeyboardEvent) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); toggle(v.id); } }}
+        aria-pressed={gekozen}
+        className={`flex cursor-pointer flex-wrap items-center gap-3 p-4 transition-colors ${
+          gekozen ? "bg-brand-50 ring-2 ring-brand-400" : "hover:bg-ink-50/60"}`}
+      >
+        <input type="checkbox" checked={gekozen} onChange={() => toggle(v.id)} onClick={(e) => e.stopPropagation()} aria-label="Voorschouw selecteren" className="h-4 w-4 shrink-0 accent-brand-600" />
         <div className="rounded-lg bg-ink-100 p-2.5 text-ink-600"><MapPin className="h-5 w-5" /></div>
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-semibold text-ink-900">
@@ -544,32 +560,35 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
           </div>
         </div>
 
-        <MapSelect value={v.mapId && geldigeMapIds.has(v.mapId) ? v.mapId : ""} mappen={gesorteerdeMappen} onKies={(w) => kiesMap(v, w)} />
+        {/* Alles wat je met dit adres kunt doen, in één groep — en met woorden erop in plaats van
+            losse pictogrammen. Een potloodje herkent alleen wie het al weet. De klik wordt hier
+            tegengehouden zodat je met een knop niet ook het adres selecteert. */}
+        <div className="flex flex-wrap items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+          <MapSelect value={v.mapId && geldigeMapIds.has(v.mapId) ? v.mapId : ""} mappen={gesorteerdeMappen} onKies={(w) => kiesMap(v, w)} />
 
-        {(!v.fotos || v.fotos.length === 0) && (
-          <span title="Er is geen foto toegevoegd bij deze voorschouw" className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700 ring-1 ring-amber-200">
-            <ImageOff className="h-3.5 w-3.5" /> Geen foto
-          </span>
-        )}
+          {(!v.fotos || v.fotos.length === 0) && (
+            <span title="Er is geen foto toegevoegd bij deze voorschouw" className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700 ring-1 ring-amber-200">
+              <ImageOff className="h-3.5 w-3.5" /> Geen foto
+            </span>
+          )}
 
-        <Badge tone={v.status === "Ingediend" ? "green" : "amber"}>{v.status}</Badge>
+          <Badge tone={v.status === "Ingediend" ? "green" : "amber"}>{v.status}</Badge>
 
-        <div className="flex items-center gap-1">
-          <button type="button" onClick={() => void downloadVoorschouwPdf(v)} title="Download PDF" className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-3 py-1.5 text-xs font-medium text-ink-700 hover:bg-ink-50">
+          <button type="button" onClick={() => open(v)}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-ink-800 px-3 py-2 text-xs font-bold text-white hover:bg-ink-900">
+            <Pencil className="h-3.5 w-3.5" /> Bewerken
+          </button>
+          <button type="button" onClick={() => void downloadVoorschouwPdf(v)}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-ink-200 bg-white px-3 py-2 text-xs font-semibold text-ink-700 hover:bg-ink-50">
             <Download className="h-3.5 w-3.5" /> PDF
           </button>
-          <button type="button" onClick={() => open(v)} title="Bewerken" className="rounded-lg p-2 text-ink-400 hover:bg-ink-100 hover:text-ink-700"><Pencil className="h-4 w-4" /></button>
           <button
             type="button"
-            onClick={() => {
-              if (confirm("Deze voorschouw verwijderen?")) {
-                deleteVoorschouw(v.id);
-                setSelectie((prev) => { const next = new Set(prev); next.delete(v.id); return next; });
-              }
-            }}
-            title="Verwijderen"
-            className="rounded-lg p-2 text-red-400 hover:bg-red-50 hover:text-red-600"
-          ><Trash2 className="h-4 w-4" /></button>
+            onClick={() => setTeVerwijderen(v)}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50"
+          >
+            <Trash2 className="h-3.5 w-3.5" /> Verwijderen
+          </button>
         </div>
       </Card>
     );
@@ -1103,6 +1122,28 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
         bevestigTone="rood"
         onBevestig={bevestigVerwijderMap}
         onAnnuleer={() => setTeVerwijderenMap(null)}
+      />
+
+      {/* Eén adres verwijderen. Noemt het adres en het aantal foto's, want dat is wat je kwijtraakt. */}
+      <Bevestig
+        open={!!teVerwijderen}
+        titel="Voorschouw verwijderen?"
+        tekst={
+          teVerwijderen
+            ? `${teVerwijderen.straatnaam || "Dit adres"}${teVerwijderen.postcode || teVerwijderen.plaats ? `, ${[teVerwijderen.postcode, teVerwijderen.plaats].filter(Boolean).join(" ")}` : ""} wordt verwijderd.${teVerwijderen.fotos.length ? ` Let op: de ${teVerwijderen.fotos.length} foto${teVerwijderen.fotos.length === 1 ? "" : "'s"} bij dit adres ${teVerwijderen.fotos.length === 1 ? "gaat" : "gaan"} mee en zijn niet terug te halen.` : ""}`
+            : ""
+        }
+        bevestigLabel="Ja, verwijderen"
+        bevestigTone="rood"
+        onBevestig={() => {
+          if (teVerwijderen) {
+            const id = teVerwijderen.id;
+            deleteVoorschouw(id);
+            setSelectie((prev) => { const next = new Set(prev); next.delete(id); return next; });
+          }
+          setTeVerwijderen(null);
+        }}
+        onAnnuleer={() => setTeVerwijderen(null)}
       />
 
       {/* Herkenning na het aanmaken van een map: adressen met een passende plaats erin zetten */}

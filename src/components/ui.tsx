@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { HTMLAttributes, ReactNode } from "react";
 
 // Markeert een "Let op: …"-waarschuwing in een bevestigingstekst oranje + vetgedrukt,
 // zodat in elke pop-up direct opvalt wat er mist of misgaat.
@@ -62,18 +62,17 @@ export function Bevestig({
   );
 }
 
+// Een kaart is gewoon een div met de huisstijl erop. De overige eigenschappen gaan er ongewijzigd
+// doorheen, zodat een kaart ook een aanklikbare rij kan zijn (onClick, role, tabIndex) zonder dat
+// je hem overal in een extra div hoeft te wikkelen.
 export function Card({
   children,
   className = "",
-  id,
-}: {
-  children: ReactNode;
-  className?: string;
-  id?: string;
-}) {
+  ...rest
+}: { children: ReactNode; className?: string } & Omit<HTMLAttributes<HTMLDivElement>, "className">) {
   return (
     <div
-      id={id}
+      {...rest}
       className={`rounded-2xl border border-ink-200 bg-white shadow-card transition-shadow hover:shadow-cardhover ${className}`}
     >
       {children}

@@ -226,6 +226,12 @@ function RondeDetail({ ronde, onTerug }: { ronde: Brievenronde; onTerug: () => v
   const [verwijder, setVerwijder] = useState(false);
   const [bevestigGereed, setBevestigGereed] = useState(false);
   const [selectie, setSelectie] = useState<Set<string>>(new Set());
+  // Twee soorten werk in één map, en ze hoorden niet door elkaar te staan. De administratie —
+  // vrijgeven, aanleveren ter controle, goedkeuren, naar de boekhouding — is van de beheerder en
+  // gebeurt een paar keer per ronde. De adressenlijst is van degene die loopt en gebeurt de hele dag.
+  // Die stond eerst onder een balk met vijf stappen die hem niet aangingen. Nu staat het uit elkaar,
+  // en begin je altijd bij het werk.
+  const [deel, setDeel] = useState<"werk" | "afhandeling">("werk");
 
   // Rol-gebaseerde levenscyclus (zelfde stappen als TAUW).
   const status = ronde.status;
@@ -345,6 +351,27 @@ function RondeDetail({ ronde, onTerug }: { ronde: Brievenronde; onTerug: () => v
         )}
       </div>
 
+      {/* Werk en administratie uit elkaar */}
+      <div className="flex gap-1 rounded-xl border border-ink-200 bg-ink-50 p-1">
+        {([
+          { k: "werk", label: "Het werk", bij: `${gegooid}/${teBezorgen.length} gegooid` },
+          { k: "afhandeling", label: "Afhandeling", bij: STATUS_LABEL[status] },
+        ] as const).map((t) => (
+          <button
+            key={t.k}
+            type="button"
+            onClick={() => setDeel(t.k)}
+            className={`flex-1 rounded-lg px-3 py-2 text-sm font-bold transition-colors ${
+              deel === t.k ? "bg-white text-ink-900 shadow-sm ring-1 ring-ink-200" : "text-ink-500 hover:text-ink-800"}`}
+          >
+            {t.label}
+            <span className={`ml-1.5 text-xs font-medium ${deel === t.k ? "text-ink-500" : "text-ink-400"}`}>· {t.bij}</span>
+          </button>
+        ))}
+      </div>
+
+      {deel === "afhandeling" && (
+      <div className="space-y-5">
       {/* Levenscyclus + rol-acties (zelfde flow als TAUW) */}
       <Card className="space-y-3 p-4">
         <div className="flex flex-wrap items-center gap-x-1 gap-y-2">
@@ -449,6 +476,11 @@ function RondeDetail({ ronde, onTerug }: { ronde: Brievenronde; onTerug: () => v
         </Card>
       )}
 
+      </div>
+      )}
+
+      {deel === "werk" && (
+      <div className="space-y-5">
       {/* Voortgang + chips */}
       <Card className="p-5">
         <div className="mb-3 flex items-center justify-between text-sm">
@@ -713,6 +745,26 @@ function RondeDetail({ ronde, onTerug }: { ronde: Brievenronde; onTerug: () => v
           </div>
         )}
       </div>
+
+      {/* Klaarmelden hoort bij de administratie, maar je bent er hier mee klaar — dus staat de knop
+          ook onderaan de lijst. Anders zou een werknemer hem op het andere tabblad moeten zoeken. */}
+      {status === "toegewezen" && magWerken && (
+        <Card className="flex flex-wrap items-center justify-between gap-3 border-brand-200 bg-brand-50 p-4">
+          <div className="min-w-0">
+            <div className="text-sm font-bold text-ink-900">Klaar met deze ronde?</div>
+            <p className="text-xs text-ink-600">
+              {openTeDoen > 0
+                ? `Er ${openTeDoen === 1 ? "staat" : "staan"} nog ${openTeDoen} adres${openTeDoen === 1 ? "" : "sen"} op ‘Te doen’.`
+                : "Alle adressen zijn afgehandeld. Meld het klaar, dan gaat het naar de controle."}
+            </p>
+          </div>
+          <button type="button" onClick={() => setBevestigGereed(true)} className={knopPrimair}>
+            <Check className="h-4 w-4" /> Brieven gegooid → naar controle
+          </button>
+        </Card>
+      )}
+      </div>
+      )}
 
       <Bevestig
         open={bevestigGereed}
