@@ -95,6 +95,9 @@ for (const [wat, naald] of [
   ["een deur tegelijk aan de deur", "Volgende deur"],
   ["lijst met adressen en de dag", "Alle adressen"],
   ["filterbalk op de projectpaginas", "nieuwste bovenaan"],
+  ["assistent wijkt voor een knop eronder", "elementsFromPoint"],
+  ["werk en afhandeling uit elkaar", "Afhandeling"],
+  ["verwijderen vraagt na met het adres erbij", "Voorschouw verwijderen?"],
 ]) check(code.includes(naald), wat, "zit niet in de uitgerolde bundel");
 
 console.log(`\n${geslaagd} geslaagd, ${gefaald} gefaald`);

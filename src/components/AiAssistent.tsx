@@ -7,6 +7,29 @@ import { vraagAssistent, aiResterend, AI_CAP_PER_DAG, type ChatBericht, type Pag
 
 // Zwevende AI-assistent: stel een vraag → de bot navigeert je naar de juiste pagina of stelt een
 // verduidelijkende vraag. Kostenbewust: goedkoop model + harde dag-cap (zie lib/ai.ts).
+//
+// ── DE KNOP GAAT OPZIJ VOOR ECHTE KNOPPEN ──
+// Hij zweeft rechtsonder, en precies daar zetten pagina's hun belangrijkste knop neer: "Brieven
+// gegooid → naar controle", "Opslaan", "Volgende deur". Scroll je zo'n knop in beeld, dan lag het
+// bolletje er half overheen en tikte je de assistent aan in plaats van je werk af te ronden.
+//
+// In plaats van per pagina uit te zoeken waar knoppen staan, kijkt hij het zelf na: wat ligt er op
+// dit moment onder mijn eigen vlak? Is dat iets aanklikbaars, dan vervaagt hij en laat hij zich niet
+// meer aantikken. Scroll je verder, dan komt hij vanzelf terug. Zo werkt het op elke pagina, ook op
+// pagina's die er nog niet zijn.
+
+// Ligt er op dit punt iets aanklikbaars, anders dan de assistent zelf?
+function ietsAanklikbaarsOnder(x: number, y: number, eigen: HTMLElement): boolean {
+  for (const el of document.elementsFromPoint(x, y)) {
+    // Onszelf overslaan: het vak, de knop erin, en alles waar het vak ín zit (body, html, de wikkel).
+    if (el === eigen || eigen.contains(el) || el.contains(eigen)) continue;
+    if ((el as HTMLElement).closest?.('button, a[href], input, select, textarea, label, [role="button"], [role="tab"], [role="link"]')) return true;
+    // Het eerste wat er echt onder ligt telt; wat daar weer achter zit is toch niet aan te tikken.
+    return false;
+  }
+  return false;
+}
+
 export function AiAssistent() {
   const { currentUser, instellingen } = useApp();
   const { navigeer } = useNav();
@@ -17,6 +40,8 @@ export function AiAssistent() {
   const [fout, setFout] = useState("");
   const [resterend, setResterend] = useState(0);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const vakRef = useRef<HTMLDivElement | null>(null);
+  const [wijkt, setWijkt] = useState(false);
 
   const apiKey = instellingen.claudeKey ?? "";
   const paginas: Pagina[] = useMemo(
@@ -26,6 +51,41 @@ export function AiAssistent() {
 
   useEffect(() => { if (currentUser) setResterend(aiResterend(currentUser.id)); }, [currentUser, open]);
   useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }); }, [berichten, bezig]);
+
+  // Bij elke scroll kijken of we iets bedekken. Het meten zelf gebeurt in een animatieframe, zodat
+  // scrollen op een telefoon soepel blijft. We kijken op vijf punten — het midden en de vier hoeken
+  // — want half over een knop liggen is net zo hinderlijk als er helemaal overheen.
+  useEffect(() => {
+    if (open) return;                       // paneel open: dan is er geen bolletje om weg te halen
+    let frame = 0;
+    const meet = () => {
+      frame = 0;
+      const el = vakRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      if (r.width === 0) return;
+      const punten: [number, number][] = [
+        [r.left + r.width / 2, r.top + r.height / 2],
+        [r.left + 5, r.top + 5],
+        [r.right - 5, r.top + 5],
+        [r.left + 5, r.bottom - 5],
+        [r.right - 5, r.bottom - 5],
+      ];
+      setWijkt(punten.some(([x, y]) => ietsAanklikbaarsOnder(x, y, el)));
+    };
+    const plan = () => { if (!frame) frame = requestAnimationFrame(meet); };
+    plan();
+    window.addEventListener("scroll", plan, { passive: true, capture: true });
+    window.addEventListener("resize", plan);
+    // De pagina kan ook zonder scrollen veranderen — een kaart die erbij komt, een lijst die laadt.
+    const tik = setInterval(plan, 600);
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", plan, { capture: true } as EventListenerOptions);
+      window.removeEventListener("resize", plan);
+      clearInterval(tik);
+    };
+  }, [open]);
 
   if (!currentUser) return null;
 
@@ -59,17 +119,24 @@ export function AiAssistent() {
 
   return (
     <>
-      {/* Zwevende knop */}
+      {/* Zwevende knop. Het vak eromheen staat stil en krimpt niet mee — daarop meten we, anders
+          zou een krimpende knop minder gaan bedekken, weer verschijnen, weer bedekken, en zichzelf
+          aan en uit knipperen. */}
       {!open && (
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className="fixed bottom-20 right-4 z-40 inline-flex h-14 w-14 items-center justify-center rounded-full bg-brand-600 text-white shadow-cardhover transition hover:bg-brand-700 sm:bottom-6 sm:right-6"
-          title="AI-assistent"
-          aria-label="AI-assistent openen"
-        >
-          <Sparkles className="h-6 w-6" />
-        </button>
+        <div ref={vakRef} className="pointer-events-none fixed bottom-20 right-4 z-40 h-14 w-14 sm:bottom-6 sm:right-6">
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            aria-hidden={wijkt}
+            tabIndex={wijkt ? -1 : 0}
+            className={`inline-flex h-full w-full items-center justify-center rounded-full bg-brand-600 text-white shadow-cardhover transition-all duration-200 hover:bg-brand-700 ${
+              wijkt ? "pointer-events-none scale-75 opacity-0" : "pointer-events-auto scale-100 opacity-100"}`}
+            title="AI-assistent"
+            aria-label="AI-assistent openen"
+          >
+            <Sparkles className="h-6 w-6" />
+          </button>
+        </div>
       )}
 
       {/* Chatpaneel */}
