@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Users, AlertTriangle, Loader2, ArrowLeft, Check, CheckCircle2, XCircle, DoorClosed, Ban,
   CalendarCheck, CalendarX2, Scissors, WifiOff, Clock, RefreshCw, ShieldAlert,
+  CheckSquare, Square, ChevronDown,
 } from "lucide-react";
 import { DatumKiezer } from "./DatumKiezer";
 import { SaneerOnderweg } from "./SaneerOnderweg";
@@ -51,6 +52,12 @@ export function SaneerVerdelen({ dossier, adressen, clusters, veldwerkers, naamV
   const [gekozen, setGekozen] = useState<Set<string>>(new Set());
   // De groepenlijst staat dicht: normaal gesproken hoef je er niet in.
   const [perGroep, setPerGroep] = useState(false);
+  // Groepen aanvinken en in één keer op een naam zetten. Per groep een keuzelijst opentrekken is bij
+  // 21 groepen 21 keer dezelfde handeling — en de kans dat je er één overslaat is dan groot.
+  const [selGroep, setSelGroep] = useState<Set<string>>(new Set());
+  // Welke groep staat open? Daarbinnen zie je de losse adressen, want soms moet er één huis naar een
+  // andere man en dan wil je niet de hele groep hoeven verzetten.
+  const [openGroep, setOpenGroep] = useState<string | null>(null);
 
   async function cluster() {
     setBezig(true); setFout("");
@@ -61,10 +68,6 @@ export function SaneerVerdelen({ dossier, adressen, clusters, veldwerkers, naamV
     onWijzig();
   }
 
-  async function wijs(id: string, userId: string) {
-    await wijzigCluster(id, { toegewezen_aan: userId });
-    onWijzig();
-  }
 
   // Het hele project naar één naam. Eén opdracht aan de server, dus of alles gaat mee of niets —
   // je kunt niet halverwege blijven steken met de helft verdeeld.
@@ -73,6 +76,17 @@ export function SaneerVerdelen({ dossier, adressen, clusters, veldwerkers, naamV
     const r = await wijsAllesToe(dossier.pd_nummer, userId);
     setBezig(false);
     if (!r.ok) { setFout(r.fout ?? "Verdelen mislukte."); return; }
+    onWijzig();
+  }
+
+  // De aangevinkte groepen in één keer op één naam. Eén voor één, want de server kent alleen een
+  // opdracht per groep; mislukt er één, dan zie je dat en staan de rest gewoon goed.
+  async function wijsSelectie(userId: string) {
+    if (selGroep.size === 0) return;
+    setBezig(true); setFout("");
+    for (const id of selGroep) await wijzigCluster(id, { toegewezen_aan: userId });
+    setBezig(false);
+    setSelGroep(new Set());
     onWijzig();
   }
 
@@ -199,31 +213,90 @@ export function SaneerVerdelen({ dossier, adressen, clusters, veldwerkers, naamV
           )}
 
           {perGroep && (
-          <div className="grid gap-3 lg:grid-cols-2">
-            {clusters.map((k) => (
-              <div key={k.id} className="rounded-2xl border border-ink-200 bg-white p-4">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="truncate font-semibold text-ink-900">{k.naam || k.postcode}</div>
-                    <div className="text-xs text-ink-500">{k.postcode} · {k.adressen} adressen</div>
-                  </div>
-                  {k.definitieve_datum
-                    ? <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${KLEUR.green}`}>{datumNL(k.definitieve_datum)}</span>
-                    : <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${KLEUR.slate}`}>geen datum</span>}
-                </div>
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <select value={k.toegewezen_aan ?? ""} onChange={(e) => void wijs(k.id, e.target.value)}
-                    className="flex-1 rounded-lg border border-ink-200 px-2.5 py-2 text-sm outline-none focus:border-brand-400">
-                    <option value="">— nog niemand —</option>
+          <div className="space-y-2">
+            {/* Aanvinken en in één keer toewijzen. Dezelfde balk als bij de adressen, zodat je niet
+                per pagina hoeft te leren hoe selecteren werkt. */}
+            <div className={`flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2.5 transition-colors ${
+              selGroep.size > 0 ? "border-brand-200 bg-brand-50" : "border-ink-200 bg-white"}`}>
+              <button type="button"
+                onClick={() => setSelGroep(selGroep.size === clusters.length ? new Set() : new Set(clusters.map((k) => k.id)))}
+                className={`inline-flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm font-semibold transition-colors ${
+                  selGroep.size === clusters.length && clusters.length > 0 ? "bg-brand-600 text-white" : "text-ink-700 hover:bg-ink-100"}`}>
+                {selGroep.size === clusters.length && clusters.length > 0 ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4 text-ink-400" />}
+                {selGroep.size === clusters.length && clusters.length > 0 ? "Alles deselecteren" : "Alles selecteren"}
+              </button>
+
+              {selGroep.size > 0 ? (
+                <>
+                  <span className="inline-flex items-center rounded-full bg-white px-2.5 py-1 text-xs font-bold text-brand-800 ring-1 ring-brand-200">
+                    {selGroep.size} geselecteerd
+                  </span>
+                  <span className="text-sm text-ink-600">Toewijzen aan:</span>
+                  <select value="" disabled={bezig} onChange={(e) => { if (e.target.value) void wijsSelectie(e.target.value); }}
+                    className="rounded-lg border border-ink-200 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-brand-400">
+                    <option value="">Kies een medewerker…</option>
                     {veldwerkers.map((u) => <option key={u.id} value={u.id}>{u.naam}</option>)}
                   </select>
-                  <button type="button" onClick={() => setSplitsen(k.id)} className="rounded-lg p-2 text-ink-500 hover:bg-ink-100" title="Groep splitsen">
-                    <Scissors className="h-4 w-4" />
-                  </button>
+                  <button type="button" onClick={() => setSelGroep(new Set())} className="ml-auto rounded-lg px-2 py-1.5 text-xs font-medium text-ink-400 hover:text-ink-700">Wis selectie</button>
+                </>
+              ) : (
+                <span className="text-xs text-ink-500">Vink groepen aan om ze in één keer op één naam te zetten.</span>
+              )}
+            </div>
+
+            {clusters.map((k) => {
+              const open = openGroep === k.id;
+              const inGroep = adressen.filter((a) => a.cluster_id === k.id);
+              return (
+                <div key={k.id} className={`rounded-2xl border bg-white transition-colors ${
+                  selGroep.has(k.id) ? "border-brand-400 ring-2 ring-brand-200" : "border-ink-200"}`}>
+                  {/* Eén regel per groep: aanvinken, naam, wie het doet, en of er al een dag staat. */}
+                  <div className="flex flex-wrap items-center gap-3 p-3">
+                    <input type="checkbox" checked={selGroep.has(k.id)}
+                      onChange={() => setSelGroep((s2) => { const n = new Set(s2); if (n.has(k.id)) n.delete(k.id); else n.add(k.id); return n; })}
+                      aria-label={`${k.naam || k.postcode} selecteren`}
+                      className="h-4 w-4 shrink-0 accent-brand-600" />
+                    <button type="button" onClick={() => setOpenGroep(open ? null : k.id)}
+                      className="flex min-w-0 flex-1 items-center gap-2 text-left" aria-expanded={open}>
+                      <ChevronDown className={`h-4 w-4 shrink-0 text-ink-400 transition-transform ${open ? "" : "-rotate-90"}`} />
+                      <span className="min-w-0">
+                        <span className="block truncate font-semibold text-ink-900">{k.naam || k.postcode}</span>
+                        <span className="block truncate text-xs text-ink-500">
+                          {k.postcode} · {k.adressen} adressen · {k.toegewezen_aan ? naamVan(k.toegewezen_aan) : "nog niemand"}
+                        </span>
+                      </span>
+                    </button>
+                    {k.definitieve_datum
+                      ? <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${KLEUR.green}`}>{datumNL(k.definitieve_datum)}</span>
+                      : <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${KLEUR.slate}`}>geen datum</span>}
+                  </div>
+
+                  {/* De adressen zelf. Soms moet er één huis naar een andere man — dan zet je dat hier
+                      apart, en wordt het een eigen groep die je gewoon kunt toewijzen. */}
+                  {open && (
+                    <div className="border-t border-ink-100 p-3">
+                      <div className="max-h-72 space-y-1 overflow-y-auto">
+                        {inGroep.map((a) => (
+                          <label key={a.id} className="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-ink-50">
+                            <input type="checkbox" checked={gekozen.has(a.id)}
+                              onChange={(e) => setGekozen((s2) => { const n = new Set(s2); if (e.target.checked) n.add(a.id); else n.delete(a.id); return n; })}
+                              className="h-4 w-4 shrink-0 accent-brand-600" />
+                            <span className="min-w-0 truncate text-sm text-ink-800">{adresTekst(a)} · {a.postcode}</span>
+                          </label>
+                        ))}
+                      </div>
+                      <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-ink-100 pt-2">
+                        <button type="button" disabled={bezig || gekozen.size === 0} onClick={() => void splitsNu()}
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-ink-800 px-3 py-2 text-xs font-bold text-white hover:bg-ink-900 disabled:opacity-40">
+                          <Scissors className="h-3.5 w-3.5" /> Apart zetten als eigen groep{gekozen.size ? ` (${gekozen.size})` : ""}
+                        </button>
+                        <span className="text-xs text-ink-500">Handig bij een flat waar de begane grond op een andere dag kan dan de verdiepingen.</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                {k.toegewezen_aan && <p className="mt-1.5 text-xs text-ink-500">Hele groep bij {naamVan(k.toegewezen_aan)} — nooit half.</p>}
-              </div>
-            ))}
+              );
+            })}
           </div>
           )}
         </>

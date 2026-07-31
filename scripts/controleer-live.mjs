@@ -85,6 +85,7 @@ for (const [wat, naald] of [
   ["saneren: meerdere adressen tegelijk", "Route langs "],
   ["saneren: adres eruit halen vraagt na", "Adres uit de lijst halen?"],
   ["saneren: geen gehoor vraagt na", "Geen gehoor noteren?"],
+  ["verdelen: groepen aanvinken en toewijzen", "Vink groepen aan om ze in één keer"],
   ["hele groep opnieuw bij een afzegging", "gaat niet door"],
   ["een man op het hele project", "Wie voert dit werk uit?"],
   ["checklist voor de schouwer", "Checklists schouwer"],
