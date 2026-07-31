@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Phone, Check, Mail, Search, Loader2, MapPin, Navigation, Users, CalendarX, X, CheckSquare, Square, Trash2 } from "lucide-react";
+import { Phone, Check, Mail, Search, Loader2, MapPin, Navigation, Users, CalendarX, X, CheckSquare, Square, Trash2, Pencil } from "lucide-react";
 import { wijzigFlowAdres, startRonde, type FlowAdres } from "../lib/saneerflowWerk";
 import { DatumKiezer } from "./DatumKiezer";
 import { Bevestig } from "./ui";
@@ -133,6 +133,13 @@ export function SaneerWerklijst({ adressen, clusters, naamVan, onWijzig, beeld, 
   // gebeurt vanzelf — maar dan verdwijnt de regel onder je handen, en zonder bericht lijkt het alsof
   // je invoer weg is. Dit meldt kort waar hij gebleven is.
   const [verhuisd, setVerhuisd] = useState("");
+  // Welk nummer sta je te wijzigen? Een nummer kan verkeerd zijn overgenomen of veranderd zijn, en
+  // dan moet je er gewoon bij kunnen — zonder het adres eerst ergens anders te moeten opzoeken.
+  const [telBewerk, setTelBewerk] = useState("");
+  // Geen gehoor telt een belpoging. Die stond op één tik, en dan staat er na een middag met de
+  // telefoon in je zak zomaar "(18)" — een getal waar niemand meer iets aan heeft. Er komt nu een
+  // vraag overheen.
+  const [geenGehoor, setGeenGehoor] = useState<FlowAdres | null>(null);
 
   // Het beeld waar niets meer in staat, hoef je niet open te houden. Heb je alle deuren gehad, dan
   // sta je vanzelf in de bellijst — dat is immers waar het werk dan ligt.
@@ -206,8 +213,13 @@ export function SaneerWerklijst({ adressen, clusters, naamVan, onWijzig, beeld, 
     timers.current[a.id] = window.setTimeout(() => {
       void zet(a, { telefoon: waarde.trim() });
       setConcept((c) => { const n = { ...c }; delete n[a.id]; return n; });
-      setVerhuisd(adresTekst(a));
-      window.setTimeout(() => setVerhuisd(""), 5000);
+      // Bij een nieuw nummer verhuist het adres naar de bellijst; bij een correctie verandert er
+      // niets aan waar het staat, en dan is een melding daarover alleen maar ruis.
+      if (!a.telefoon.trim()) {
+        setVerhuisd(adresTekst(a));
+        window.setTimeout(() => setVerhuisd(""), 5000);
+      }
+      setTelBewerk("");
     }, 600);
   };
 
@@ -296,6 +308,13 @@ export function SaneerWerklijst({ adressen, clusters, naamVan, onWijzig, beeld, 
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                       <span className="text-base font-bold text-ink-900">{adresTekst(a)}</span>
+                      {a.telefoon.trim() && (
+                        <button type="button" title="Telefoonnummer wijzigen" aria-label={`Telefoonnummer van ${adresTekst(a)} wijzigen`}
+                          onClick={(e) => { e.stopPropagation(); setTelBewerk(a.id); setConcept((c) => ({ ...c, [a.id]: a.telefoon })); }}
+                          className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-ink-300 hover:bg-ink-100 hover:text-ink-700">
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                      )}
                       {b === "klaar" && (
                         <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-bold text-green-800">
                           <Check className="h-3 w-3" /> {a.belstatus === "weigert" ? "Werkt niet mee" : "Afgesproken"}
@@ -331,7 +350,7 @@ export function SaneerWerklijst({ adressen, clusters, naamVan, onWijzig, beeld, 
                 <div className="mt-3 flex flex-wrap items-center gap-2" onClick={(e) => e.stopPropagation()}>
                   {b !== "klaar" && (
                     <>
-                      {a.telefoon.trim() ? (
+                      {a.telefoon.trim() && telBewerk !== a.id ? (
                         <a href={`tel:${a.telefoon}`} className="inline-flex items-center gap-2 rounded-xl bg-white px-3.5 py-2.5 font-mono text-sm font-bold text-green-700 ring-1 ring-green-200 hover:bg-green-50">
                           <Phone className="h-4 w-4" /> {a.telefoon}
                         </a>
@@ -369,7 +388,7 @@ export function SaneerWerklijst({ adressen, clusters, naamVan, onWijzig, beeld, 
                       )}
 
                       {b === "bellen" && (
-                        <button type="button" disabled={bezigNu} onClick={() => void zet(a, { belstatus: "geen_gehoor", belpogingen: (a.belpogingen || 0) + 1 })}
+                        <button type="button" disabled={bezigNu} onClick={() => setGeenGehoor(a)}
                           className="inline-flex items-center gap-1.5 rounded-xl bg-white px-3.5 py-2.5 text-sm font-semibold text-ink-700 ring-1 ring-ink-200 hover:bg-ink-50 disabled:opacity-50">
                           Geen gehoor{a.belpogingen ? ` (${a.belpogingen})` : ""}
                         </button>
@@ -453,6 +472,24 @@ export function SaneerWerklijst({ adressen, clusters, naamVan, onWijzig, beeld, 
           </div>
         </div>
       )}
+
+      {/* Geen gehoor is een aantekening over een echt telefoongesprek, geen teller om op te tikken. */}
+      <Bevestig
+        open={!!geenGehoor}
+        titel="Geen gehoor noteren?"
+        tekst={geenGehoor
+          ? `Er wordt een belpoging bijgeschreven bij ${adresTekst(geenGehoor)}${
+              geenGehoor.belpogingen ? ` — dat wordt poging ${geenGehoor.belpogingen + 1}` : ""}. Het adres blijft in de bellijst staan, dus je kunt het later opnieuw proberen.`
+          : ""}
+        bevestigLabel="Ja, geen gehoor"
+        bevestigTone="brand"
+        onBevestig={() => {
+          const a = geenGehoor;
+          setGeenGehoor(null);
+          if (a) void zet(a, { belstatus: "geen_gehoor", belpogingen: (a.belpogingen || 0) + 1 });
+        }}
+        onAnnuleer={() => setGeenGehoor(null)}
+      />
 
       {/* Wat je kwijtraakt staat erin: het adres, en of er al een telefoonnummer of een afspraak bij
           stond. Dat is precies het verschil tussen "een dubbele regel weghalen" en "het werk van een
