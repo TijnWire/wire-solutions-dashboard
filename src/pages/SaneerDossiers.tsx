@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Plus, ArrowLeft, Search, Loader2, AlertCircle,
-  FolderOpen, RotateCcw, Building2,
+  FolderOpen, RotateCcw, Building2, ChevronRight,
 } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { DatumKiezer } from "../components/DatumKiezer";
@@ -32,11 +32,12 @@ const VOORTGANG: Record<string, number> = {
   datum_akkoord: 75, poster_geplaatst: 90, afgerond: 100, afgeboekt: 100,
 };
 
+// Dezelfde vorm als de Badge bij Brieven & Routes en TAUW: een zachte vulling met een dunne ring.
 const STATUS_KLEUR: Record<string, string> = {
-  slate: "bg-ink-100 text-ink-600",
-  indigo: "bg-brand-100 text-brand-800",
-  amber: "bg-amber-100 text-amber-800",
-  green: "bg-green-100 text-green-800",
+  slate: "bg-ink-100 text-ink-600 ring-ink-200",
+  indigo: "bg-brand-50 text-brand-700 ring-brand-200",
+  amber: "bg-amber-50 text-amber-700 ring-amber-200",
+  green: "bg-green-50 text-green-700 ring-green-200",
 };
 
 const datumNL = (iso: string) => {
@@ -302,37 +303,34 @@ export function SaneerDossiers({ onEerder }: { onEerder: () => void }) {
                 key={d.pd_nummer}
                 type="button"
                 onClick={() => setOpen(d.pd_nummer)}
-                className="rounded-2xl border border-ink-200 bg-white p-4 text-left shadow-sm transition-shadow hover:shadow-md"
+                className="w-full rounded-2xl border border-ink-200 bg-white p-4 text-left shadow-card transition-shadow hover:shadow-cardhover"
               >
                 {/* Zelfde opbouw als bij TAUW: een icoon, de naam van de locatie groot, en de rest
                     eronder. Het PD-nummer is een administratief kenmerk — je herkent een klus aan de
                     plek, niet aan elf cijfers. Dus dat staat klein bij de details. */}
                 <div className="flex items-center gap-3">
-                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
-                    <Building2 className="h-5 w-5" />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-base font-bold text-ink-900">
-                      {d.gebouw || d.omschrijving || d.pd_nummer}
-                    </span>
-                    <span className="block truncate text-xs text-ink-500">
+                  <div className="rounded-lg bg-brand-50 p-2.5 text-brand-600"><Building2 className="h-5 w-5" /></div>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate font-semibold text-ink-900">{d.gebouw || d.omschrijving || d.pd_nummer}</div>
+                    <div className="truncate text-xs text-ink-500">
                       <span className="font-mono">{d.pd_nummer}</span>
                       {d.opdrachtgever ? ` · ${d.opdrachtgever}` : ""}
                       {d.regio ? ` · ${d.regio}` : ""}
                       {d.adressen ? ` · ${d.adressen} adressen` : ""}
-                    </span>
-                  </span>
-                  <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${STATUS_KLEUR[info.kleur]}`}>{info.label}</span>
+                    </div>
+                  </div>
+                  <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${STATUS_KLEUR[info.kleur]}`}>{info.label}</span>
+                  <ChevronRight className="h-5 w-5 shrink-0 text-ink-300" />
                 </div>
 
-                <div className="mt-2.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs">
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs">
                   <span className="font-semibold text-brand-700">{info.volgende}</span>
                   <span className="text-ink-500">
                     {d.uitvoering_van ? `uitvoering ${datumNL(d.uitvoering_van)}` : "nog geen dag"}
                     {` · ${d.starttijd || "08:00"}–16:00`}
                   </span>
                 </div>
-                <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-ink-100">
+                <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-ink-100">
                   <div className="h-full rounded-full bg-green-500 transition-all"
                     style={{ width: `${Math.round(((VOORTGANG[d.status] ?? 0) / 100) * 100)}%` }} />
                 </div>
