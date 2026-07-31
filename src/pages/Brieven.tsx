@@ -254,7 +254,12 @@ function RondeDetail({ ronde, onTerug }: { ronde: Brievenronde; onTerug: () => v
 
   // Levenscyclus-overgangen (rol-gebonden) — identiek aan TAUW/Saneren.
   const toewijzen = (id: string) => updateRonde(ronde.id, { toegewezenAan: id || undefined, status: id ? "toegewezen" : "nieuw", toegewezenOp: id ? nu() : undefined });
-  const naarControle = () => updateRonde(ronde.id, { status: "ter_controle" });
+  // Klaarmelden boekt de ronde meteen af. Wie een straat loopt gooit alles en tikt onderweg niets
+  // aan — dertig huisnummers los aanvinken doet niemand. Bleef dat staan, dan ging de ronde ter
+  // controle met negen adressen op "Te doen" en moest de beheerder gaan raden of die vergeten of
+  // overgeslagen waren. Wat je zélf op blanco of niet thuis hebt gezet blijft staan: dat heb je
+  // bewust vastgelegd, en dat is iets anders dan niet aangetikt.
+  const naarControle = () => updateRonde(ronde.id, { adressen: alsGedaan(ronde.adressen), status: "ter_controle" });
   const terugNaarWerknemer = () => updateRonde(ronde.id, { status: "toegewezen", gecontroleerdDoor: undefined, gecontroleerdOp: undefined, verstuurdOp: undefined, boekhouding: undefined, doorgestuurdOp: undefined, gefactureerdOp: undefined });
   const goedkeuren = () => updateRonde(ronde.id, { status: "gecontroleerd", gecontroleerdDoor: currentUser?.id, gecontroleerdOp: nu() });
   // Afronden = klaar → meteen door naar de boekhouding (verschijnt bij Facturen + als melding).
@@ -754,7 +759,7 @@ function RondeDetail({ ronde, onTerug }: { ronde: Brievenronde; onTerug: () => v
             <div className="text-sm font-bold text-ink-900">Klaar met deze ronde?</div>
             <p className="text-xs text-ink-600">
               {openTeDoen > 0
-                ? `Er ${openTeDoen === 1 ? "staat" : "staan"} nog ${openTeDoen} adres${openTeDoen === 1 ? "" : "sen"} op ‘Te doen’.`
+                ? `Er ${openTeDoen === 1 ? "staat" : "staan"} nog ${openTeDoen} adres${openTeDoen === 1 ? "" : "sen"} op ‘Te doen’ — ${openTeDoen === 1 ? "die wordt" : "die worden"} bij het klaarmelden vanzelf afgeboekt.`
                 : "Alle adressen zijn afgehandeld. Meld het klaar, dan gaat het naar de controle."}
             </p>
           </div>
@@ -770,8 +775,8 @@ function RondeDetail({ ronde, onTerug }: { ronde: Brievenronde; onTerug: () => v
         open={bevestigGereed}
         titel="Brieven klaar melden?"
         tekst={openTeDoen > 0
-          ? `Let op: er ${openTeDoen === 1 ? "staat" : "staan"} nog ${openTeDoen} adres${openTeDoen === 1 ? "" : "sen"} op 'Te doen'. Weet je zeker dat je de ronde gereed meldt voor controle? De beheerder controleert je werk.`
-          : `Alle ${teBezorgen.length} adressen zijn afgehandeld. Weet je zeker dat je de ronde gereed meldt voor controle?`}
+          ? `Let op: de ${openTeDoen} adres${openTeDoen === 1 ? "" : "sen"} die nog op ‘Te doen’ ${openTeDoen === 1 ? "staat" : "staan"} ${openTeDoen === 1 ? "wordt" : "worden"} meteen afgeboekt als gegooid, zodat er niets blijft openstaan. Wat je zelf op blanco of niet thuis hebt gezet blijft staan. Daarna gaat de ronde naar de beheerder ter controle.`
+          : `Alle ${teBezorgen.length} adressen zijn afgehandeld. De ronde gaat naar de beheerder ter controle.`}
         bevestigLabel="Ja, klaar melden"
         bevestigTone="brand"
         onBevestig={() => { setBevestigGereed(false); naarControle(); }}

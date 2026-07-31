@@ -211,13 +211,27 @@ export function SaneerDossiers({ onEerder }: { onEerder: () => void }) {
   const [zoek, setZoek] = useState("");
   // Welk dossier staat open? Eén tegelijk — daarbinnen loopt de stappenflow.
   const [open, setOpen] = useState<string | null>(null);
+  // Dezelfde drie beelden als bij Brieven & Routes en Voorschouwen: waar wordt aan gewerkt, wat kan
+  // naar Stedin, en wat is afgehandeld. Het is geen apart vinkje maar precies de stand die de
+  // knoppen al zetten — anders houd je twee dingen bij die uit de pas gaan lopen.
+  const [tab, setTab] = useState<"overzicht" | "stedin" | "archief">("overzicht");
 
   const laad = () => { void haalDossiers().then(setDossiers); };
   useEffect(laad, []);
 
   const isLeiding = currentUser?.rol === "eigenaar" || currentUser?.rol === "beheer" || currentUser?.rol === "hr";
 
-  const filter = useProjectFilter(dossiers ?? [], {
+  // De telling moet over álle dossiers gaan, niet over wat er na de periodefilter overblijft —
+  // anders zegt het tabblad "Archief (0)" terwijl er van vorig jaar tientallen in staan.
+  const alle = dossiers ?? [];
+  const klaarLijst = useMemo(() => alle.filter((d) => d.status === "afgerond"), [alle]);
+  const archiefLijst = useMemo(() => alle.filter((d) => d.status === "afgeboekt"), [alle]);
+  const inTab = useMemo(
+    () => (tab === "stedin" ? klaarLijst : tab === "archief" ? archiefLijst : alle.filter((d) => d.status !== "afgerond" && d.status !== "afgeboekt")),
+    [alle, tab, klaarLijst, archiefLijst]
+  );
+
+  const filter = useProjectFilter(inTab, {
     datum: (d) => (d.uitvoering_van || d.aangemaakt_op || "").slice(0, 10),
     isOpen: (d) => d.status !== "afgerond" && d.status !== "afgeboekt",
   });
@@ -231,8 +245,22 @@ export function SaneerDossiers({ onEerder }: { onEerder: () => void }) {
   if (nieuw) return <NieuwDossier onAnnuleer={() => setNieuw(false)} onKlaar={(pd) => { setNieuw(false); laad(); setOpen(pd); }} />;
   if (open) return <SaneerFlow pd={open} onTerug={() => { setOpen(null); laad(); }} />;
 
+  const tabKnop = (k: typeof tab, tekst: string, n?: number) => (
+    <button type="button" onClick={() => setTab(k)}
+      className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
+        tab === k ? "bg-brand-600 text-white" : "text-ink-600 hover:bg-ink-50"}`}>
+      {tekst}{n ? ` (${n})` : ""}
+    </button>
+  );
+
   return (
     <div className="space-y-5">
+      <div className="flex gap-1 rounded-xl border border-ink-200 bg-white p-1 shadow-card">
+        {tabKnop("overzicht", "Overzicht")}
+        {tabKnop("stedin", "Klaar voor Stedin", klaarLijst.length)}
+        {tabKnop("archief", "Archief", archiefLijst.length)}
+      </div>
+
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold text-ink-900">Saneren</h2>
@@ -270,7 +298,10 @@ export function SaneerDossiers({ onEerder }: { onEerder: () => void }) {
         <div className="rounded-2xl border border-dashed border-ink-300 bg-white p-12 text-center">
           <FolderOpen className="mx-auto h-10 w-10 text-ink-300" />
           <p className="mt-3 text-sm text-ink-500">
-            {zoek ? `Geen dossier gevonden voor "${zoek}".` : isLeiding ? "Nog geen dossiers. Maak er een aan met het PD-nummer van de opdracht." : "Er zijn nog geen dossiers."}
+            {zoek ? `Geen dossier gevonden voor "${zoek}".`
+              : tab === "stedin" ? "Nog niets klaar voor Stedin. Zodra het werk van een dossier is afgerond, staat het hier klaar om af te boeken."
+              : tab === "archief" ? "Het archief is nog leeg. Hier komen de dossiers die op hun PD-nummer zijn afgeboekt."
+              : isLeiding ? "Nog geen dossiers. Maak er een aan met het PD-nummer van de opdracht." : "Er zijn nog geen dossiers."}
           </p>
         </div>
       ) : (

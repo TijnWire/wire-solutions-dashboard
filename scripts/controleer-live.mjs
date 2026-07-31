@@ -79,7 +79,7 @@ for (const [wat, naald] of [
   ["uitvoering is een dag, geen periode", "Geplande uitvoeringsdag"],
   ["het sleepvak in de saneerflow", "de kolommen worden zelf herkend"],
   ["postcodes opzoeken bij ontbreken", "Postcodes opzoeken"],
-  ["kop met voorbereiden en uitvoeren", "Voorbereiden"],
+  ["saneren splitst werk en afhandeling", "Het werk is nog niet afgerond"],
   ["hele groep opnieuw bij een afzegging", "gaat niet door"],
   ["een man op het hele project", "Wie voert dit werk uit?"],
   ["checklist voor de schouwer", "Checklists schouwer"],
@@ -98,6 +98,9 @@ for (const [wat, naald] of [
   ["assistent wijkt voor een knop eronder", "elementsFromPoint"],
   ["werk en afhandeling uit elkaar", "Afhandeling"],
   ["verwijderen vraagt na met het adres erbij", "Voorschouw verwijderen?"],
+  ["saneren: werk en afhandeling uit elkaar", "Afboeken op het PD-nummer"],
+  ["saneren: klaar voor Stedin en archief", "Het archief is nog leeg"],
+  ["klaarmelden boekt de rest af", "afgeboekt als gegooid"],
 ]) check(code.includes(naald), wat, "zit niet in de uitgerolde bundel");
 
 console.log(`\n${geslaagd} geslaagd, ${gefaald} gefaald`);
