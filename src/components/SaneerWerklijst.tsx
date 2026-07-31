@@ -270,15 +270,20 @@ export function SaneerWerklijst({ adressen, clusters, naamVan, onWijzig, beeld, 
             const dag = k?.definitieve_datum || uitvoering;
             const bezigNu = bezig === a.id;
             return (
-              <div key={a.id} className={`rounded-2xl border bg-white p-4 shadow-sm transition-colors ${
+              // Een tik op de regel selecteert hem. Dat vakje links is op een telefoon vier bij vier
+              // millimeter; ernaast tikken deed niets. De knoppen houden hun eigen werking — daar
+              // wordt de tik tegengehouden, anders zou "Route" het adres ook aanvinken.
+              <div key={a.id} onClick={() => kies(a.id)} role="button" tabIndex={0} aria-pressed={sel.has(a.id)}
+                onKeyDown={(e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); kies(a.id); } }}
+                className={`cursor-pointer rounded-2xl border bg-white p-4 shadow-sm transition-colors ${
                 sel.has(a.id) ? "border-brand-400 ring-2 ring-brand-200"
                   : b === "klaar" ? "border-green-200 bg-green-50/40" : a.kaartje_op ? "border-amber-200" : "border-ink-200"}`}>
                 <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
-                  <input type="checkbox" checked={sel.has(a.id)} onChange={() => kies(a.id)}
+                  <input type="checkbox" checked={sel.has(a.id)} onChange={() => kies(a.id)} onClick={(e) => e.stopPropagation()}
                     aria-label={`${adresTekst(a)} selecteren`}
                     className="mt-1 h-4 w-4 shrink-0 accent-brand-600" />
                   <a href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${adresTekst(a)}, ${a.postcode} ${a.plaats}`)}`}
-                    target="_blank" rel="noopener noreferrer" title="Route hierheen" aria-label={`Route naar ${adresTekst(a)}`}
+                    target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} title="Route hierheen" aria-label={`Route naar ${adresTekst(a)}`}
                     className="order-last inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-ink-400 hover:bg-brand-50 hover:text-brand-700">
                     <Navigation className="h-4 w-4" />
                   </a>
@@ -317,7 +322,7 @@ export function SaneerWerklijst({ adressen, clusters, naamVan, onWijzig, beeld, 
                 )}
 
                 {/* De handelingen. Alleen die van dit adres — een gebeld adres heeft geen kaartje nodig. */}
-                <div className="mt-3 flex flex-wrap items-center gap-2">
+                <div className="mt-3 flex flex-wrap items-center gap-2" onClick={(e) => e.stopPropagation()}>
                   {b !== "klaar" && (
                     <>
                       {a.telefoon.trim() ? (
@@ -395,7 +400,7 @@ export function SaneerWerklijst({ adressen, clusters, naamVan, onWijzig, beeld, 
                 {/* Wat er gaat gebeuren staat er voluit, want dit raakt niet alleen dit adres maar
                     iedereen in het portiek. Je leest het voor je op de knop drukt. */}
                 {k && nieuweDag?.clusterId === k.id && (
-                  <div className="mt-3 rounded-xl border border-red-200 bg-red-50/60 p-3">
+                  <div className="mt-3 rounded-xl border border-red-200 bg-red-50/60 p-3" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="text-sm font-bold text-ink-900">Nieuwe dag voor het hele portiek</div>
