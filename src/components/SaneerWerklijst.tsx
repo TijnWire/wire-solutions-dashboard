@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Phone, Check, Mail, Search, Loader2, MapPin, Navigation, Users, CalendarX, X } from "lucide-react";
 import { wijzigFlowAdres, startRonde, type FlowAdres } from "../lib/saneerflowWerk";
+import { DatumKiezer } from "./DatumKiezer";
 
 // Alleen wat we van een groep nodig hebben. Het dossier levert een lichtere vorm dan de volledige
 // Cluster, en die hoeven we hier niet compleet te maken om een naam en een datum te tonen.
@@ -321,10 +322,11 @@ export function SaneerWerklijst({ adressen, clusters, naamVan, onWijzig, beeld, 
                     </div>
 
                     <div className="mt-3 flex flex-wrap items-center gap-2">
-                      <input type="date" value={nieuweDag.datum} min={new Date().toISOString().slice(0, 10)}
-                        onChange={(e) => setNieuweDag({ clusterId: k.id, datum: e.target.value })}
-                        aria-label="Nieuwe uitvoeringsdag"
-                        className="rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-400" />
+                      {/* De datumkiezer van het dashboard, niet die van de browser. Die laatste ziet er
+                          op elk apparaat anders uit — en op een telefoon totaal anders dan hier. */}
+                      <div className="w-48">
+                        <DatumKiezer value={nieuweDag.datum} onChange={(iso) => setNieuweDag({ clusterId: k.id, datum: iso })} placeholder="Kies de nieuwe dag" />
+                      </div>
                       <button type="button" disabled={!nieuweDag.datum || dagBezig} onClick={() => void startNieuweDag()}
                         className="inline-flex items-center gap-1.5 rounded-xl bg-red-600 px-3.5 py-2.5 text-sm font-bold text-white hover:bg-red-700 disabled:opacity-50">
                         {dagBezig ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarX className="h-4 w-4" />}
