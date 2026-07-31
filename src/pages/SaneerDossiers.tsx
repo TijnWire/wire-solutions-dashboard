@@ -7,6 +7,7 @@ import { useApp } from "../store/AppContext";
 import { DatumKiezer } from "../components/DatumKiezer";
 import { SaneerFlow } from "../components/SaneerFlow";
 import { useProjectFilter } from "../components/ProjectFilter";
+import { WerkTabs, type WerkTab } from "../components/WerkTabs";
 import {
   haalDossiers, bewaarDossier, verwijderDossier, netPd, pdGeldig,
   REGIOS, STATUS_INFO, type Dossier, type Regio,
@@ -214,7 +215,7 @@ export function SaneerDossiers({ onEerder }: { onEerder: () => void }) {
   // Dezelfde drie beelden als bij Brieven & Routes en Voorschouwen: waar wordt aan gewerkt, wat kan
   // naar Stedin, en wat is afgehandeld. Het is geen apart vinkje maar precies de stand die de
   // knoppen al zetten — anders houd je twee dingen bij die uit de pas gaan lopen.
-  const [tab, setTab] = useState<"overzicht" | "stedin" | "archief">("overzicht");
+  const [tab, setTab] = useState<WerkTab>("overzicht");
 
   const laad = () => { void haalDossiers().then(setDossiers); };
   useEffect(laad, []);
@@ -245,21 +246,9 @@ export function SaneerDossiers({ onEerder }: { onEerder: () => void }) {
   if (nieuw) return <NieuwDossier onAnnuleer={() => setNieuw(false)} onKlaar={(pd) => { setNieuw(false); laad(); setOpen(pd); }} />;
   if (open) return <SaneerFlow pd={open} onTerug={() => { setOpen(null); laad(); }} />;
 
-  const tabKnop = (k: typeof tab, tekst: string, n?: number) => (
-    <button type="button" onClick={() => setTab(k)}
-      className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
-        tab === k ? "bg-brand-600 text-white" : "text-ink-600 hover:bg-ink-50"}`}>
-      {tekst}{n ? ` (${n})` : ""}
-    </button>
-  );
-
   return (
     <div className="space-y-5">
-      <div className="flex gap-1 rounded-xl border border-ink-200 bg-white p-1 shadow-card">
-        {tabKnop("overzicht", "Overzicht")}
-        {tabKnop("stedin", "Klaar voor Stedin", klaarLijst.length)}
-        {tabKnop("archief", "Archief", archiefLijst.length)}
-      </div>
+      <WerkTabs tab={tab} setTab={setTab} klaar={klaarLijst.length} archief={archiefLijst.length} />
 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>

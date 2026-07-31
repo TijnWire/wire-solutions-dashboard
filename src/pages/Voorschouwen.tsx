@@ -29,6 +29,7 @@ import {
 import { useApp } from "../store/AppContext";
 import { legArchiefVast, fotoUrl } from "../lib/fotoOpslag";
 import { useProjectFilter } from "../components/ProjectFilter";
+import { WerkTabs } from "../components/WerkTabs";
 import { mapPastBijPlaats } from "../lib/voorschouwGroep";
 import { scrollNaarBoven } from "../lib/scroll";
 import { Card, Badge, Bevestig } from "../components/ui";
@@ -598,7 +599,7 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
   if (tab === "archief" && isLeiding) {
     return (
       <div key="archief" className="space-y-6 animate-slide-in-right">
-        <button type="button" onClick={() => setTab("overzicht")} className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-500 hover:text-ink-800"><ArrowLeft className="h-4 w-4" /> Terug naar overzicht</button>
+        <WerkTabs tab={tab} setTab={setTab} klaar={gereedeMappen.length} archief={gearchiveerdeMappen.length} />
         <div>
           <h2 className="text-xl font-bold text-ink-900">Archief</h2>
           <p className="text-sm text-ink-500">Mappen die je hebt afgerond of gearchiveerd. Ze staan niet meer in het overzicht, maar blijven bewaard — zet ze met één klik terug.</p>
@@ -648,7 +649,7 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
   if (tab === "stedin" && isLeiding) {
     return (
       <div key="stedin" className="space-y-6 animate-slide-in-right">
-        <button type="button" onClick={() => setTab("overzicht")} className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-500 hover:text-ink-800"><ArrowLeft className="h-4 w-4" /> Terug naar overzicht</button>
+        <WerkTabs tab={tab} setTab={setTab} klaar={gereedeMappen.length} archief={gearchiveerdeMappen.length} />
         <div>
           <h2 className="text-xl font-bold text-ink-900">Klaar voor Stedin</h2>
           <p className="text-sm text-ink-500">Controleer elke map en verstuur 'm dan. Op de telefoon voegt de deel-knop de PDF's meteen als bijlage toe in je mail-app; op de laptop download ik de map (ZIP) en open ik een kant-en-klaar mailconcept.</p>
@@ -817,6 +818,10 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
 
   return (
     <div key="overzicht" className="space-y-6 animate-slide-in-left">
+      {/* Boven de titel, net als bij TAUW en de rest. Hij stond hier eronder, en dan lees je eerst
+          een kop en pas daarna dat je op een ander beeld kunt staan. */}
+      {isLeiding && <WerkTabs tab={tab} setTab={setTab} klaar={gereedeMappen.length} archief={gearchiveerdeMappen.length} />}
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold text-ink-900">Voorschouwen</h2>
@@ -837,14 +842,6 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
           </button>
         </div>
       </div>
-
-      {isLeiding && (
-        <div className="flex gap-1 rounded-xl border border-ink-200 bg-white p-1 shadow-card">
-          <button type="button" onClick={() => setTab("overzicht")} className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${tab === "overzicht" ? "bg-brand-600 text-white" : "text-ink-600 hover:bg-ink-50"}`}>Overzicht</button>
-          <button type="button" onClick={() => setTab("stedin")} className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${tab === "stedin" ? "bg-brand-600 text-white" : "text-ink-600 hover:bg-ink-50"}`}>Klaar voor Stedin{gereedeMappen.length ? ` (${gereedeMappen.length})` : ""}</button>
-          <button type="button" onClick={() => setTab("archief")} className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${tab === "archief" ? "bg-brand-600 text-white" : "text-ink-600 hover:bg-ink-50"}`}>Archief{gearchiveerdeMappen.length ? ` (${gearchiveerdeMappen.length})` : ""}</button>
-        </div>
-      )}
 
       {/* Mini-overzicht */}
       <div className="grid grid-cols-3 gap-4">

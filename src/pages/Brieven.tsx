@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { Navigation, ExternalLink, FileUp, Folder, Pencil, Send, CheckCircle2, Archive } from "lucide-react";
 import { useProjectFilter } from "../components/ProjectFilter";
+import { WerkTabs } from "../components/WerkTabs";
 import { useApp } from "../store/AppContext";
 import { useNav } from "../store/NavContext";
 import { Keuze } from "../components/Keuze";
@@ -1255,28 +1256,6 @@ function MapDetail({ naam, rondes, isLeiding, onOpenRonde, onTerug }: { naam: st
 }
 
 // De balk boven de pagina. Dezelfde als bij Voorschouwen — één plek leren klikken is genoeg.
-function TabBalk({ tab, setTab, klaar, archief }: {
-  tab: "overzicht" | "stedin" | "archief";
-  setTab: (t: "overzicht" | "stedin" | "archief") => void;
-  klaar: number;
-  archief: number;
-}) {
-  const knop = (k: typeof tab, label: string, n?: number) => (
-    <button type="button" onClick={() => setTab(k)}
-      className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
-        tab === k ? "bg-brand-600 text-white" : "text-ink-600 hover:bg-ink-50"}`}>
-      {label}{n ? ` (${n})` : ""}
-    </button>
-  );
-  return (
-    <div className="flex gap-1 rounded-xl border border-ink-200 bg-white p-1 shadow-card">
-      {knop("overzicht", "Overzicht")}
-      {knop("stedin", "Klaar voor Stedin", klaar)}
-      {knop("archief", "Archief", archief)}
-    </div>
-  );
-}
-
 export function Brieven({ initieelRonde, initieelMap }: { initieelRonde?: string; initieelMap?: string }) {
   const { rondes, currentUser, updateRonde } = useApp();
   const [openId, setOpenId] = useState<string | null>(initieelRonde ?? null);
@@ -1426,7 +1405,7 @@ export function Brieven({ initieelRonde, initieelMap }: { initieelRonde?: string
     const groepen = perMap(klaarRondes);
     return (
       <div className="space-y-5">
-        <TabBalk tab={tab} setTab={setTab} klaar={klaarRondes.length} archief={archiefRondes.length} />
+        <WerkTabs tab={tab} setTab={setTab} klaar={klaarRondes.length} archief={archiefRondes.length} />
         <div>
           <h2 className="text-xl font-bold text-ink-900">Klaar voor Stedin</h2>
           <p className="text-sm text-ink-500">Mappen die volledig zijn afgegooid en naar de boekhouding zijn gestuurd. Hier pakt de administratie ze op: factureren en klaar.</p>
@@ -1480,7 +1459,7 @@ export function Brieven({ initieelRonde, initieelMap }: { initieelRonde?: string
     const groepen = perMap(archiefRondes);
     return (
       <div className="space-y-5">
-        <TabBalk tab={tab} setTab={setTab} klaar={klaarRondes.length} archief={archiefRondes.length} />
+        <WerkTabs tab={tab} setTab={setTab} klaar={klaarRondes.length} archief={archiefRondes.length} />
         <div>
           <h2 className="text-xl font-bold text-ink-900">Archief</h2>
           <p className="text-sm text-ink-500">Afgehandeld werk. Alles blijft bewaard in de database — terugzetten kan altijd.</p>
@@ -1557,7 +1536,7 @@ export function Brieven({ initieelRonde, initieelMap }: { initieelRonde?: string
 
   return (
     <div className="space-y-6">
-      <TabBalk tab={tab} setTab={setTab} klaar={klaarRondes.length} archief={archiefRondes.length} />
+      <WerkTabs tab={tab} setTab={setTab} klaar={klaarRondes.length} archief={archiefRondes.length} />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
