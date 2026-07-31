@@ -22,6 +22,7 @@ import { aantalWachtendFlow } from "../lib/saneerflowWerk";
 
 const HOE_VAAK = 10 * 60 * 1000;   // hoe vaak we kijken of er iets nieuws klaarstaat
 const RUST = 45 * 1000;            // zo lang niets doen telt als "nu komt het uit"
+const GEDULD = 4 * 60 * 1000;      // zo lang wachten we op een wachtrij die niet leegloopt
 
 // Staat iemand te typen? Dan is dit geen moment om de pagina onder hem vandaan te trekken.
 function ietsInGebruik(): boolean {
@@ -98,7 +99,13 @@ export function NieuweVersie() {
     meetWachtrij();
     const wachtIv = setInterval(meetWachtrij, 5000);
 
-    const magNu = () => !ietsInGebruik() && inDeWacht === 0;
+    // Wachten op een lege wachtrij mag nooit voor altijd zijn. De wachtrij staat in IndexedDB en
+    // overleeft een herlaad gewoon — er gaat dus niets verloren. Blijft hij hangen omdat de server
+    // onbereikbaar is of omdat er één regel is die het niet doet, dan zou de app nóóit meer bijwerken
+    // en zit iemand weken op een oude versie te kijken. Precies dat is op 31-07-2026 gebeurd.
+    // Dus: eerst een paar minuten netjes proberen te legen, en daarna toch bijwerken.
+    const gezienOp = Date.now();
+    const magNu = () => !ietsInGebruik() && (inDeWacht === 0 || Date.now() - gezienOp > GEDULD);
 
     // Meteen proberen; lukt het niet, dan blijft hij het elke vijf seconden opnieuw afwegen, en
     // grijpt hij het eerste rustige moment. Ook als de app naar de achtergrond gaat is het veilig:

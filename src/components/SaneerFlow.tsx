@@ -177,7 +177,11 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
           De titel, de regel eronder en de zijpaden hangen alle drie aan hetzelfde raster: de
           terugpijl links, en daarnaast één kolom. Zo staat het PD-nummer altijd exact onder het
           gebouw, ook als de naam lang is of de knop van maat verandert. */}
-      <div className="sticky top-0 z-20 space-y-3 border-b border-ink-200 bg-white px-4 pb-3 pt-4 shadow-sm md:px-6 md:pt-6">
+      {/* De witte strook loopt door tot boven de kop. De pagina zit in een scrollende kolom met eigen
+          padding, en hoe die padding en een vastgezette kop op elkaar uitkomen verschilt per browser
+          — dat gaf een grijs randje tussen de Saneren-balk en deze kop. Dit dekt die strook af, in
+          rust én tijdens het scrollen, zonder van die maten afhankelijk te zijn. */}
+      <div className="sticky top-0 z-20 space-y-3 border-b border-ink-200 bg-white px-4 pb-3 pt-4 shadow-sm before:pointer-events-none before:absolute before:inset-x-0 before:bottom-full before:h-10 before:bg-white md:px-6 md:pt-6">
         <div className="flex items-start gap-2">
           <button type="button" onClick={onTerug} title="Terug naar alle saneringen" aria-label="Terug naar alle saneringen"
             className="-ml-2 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-ink-400 hover:bg-ink-100 hover:text-ink-800">
