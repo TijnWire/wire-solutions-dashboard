@@ -28,6 +28,15 @@ export type Beeld = "deur" | "bellen" | "klaar" | "alles";
 
 const adresTekst = (a: FlowAdres) => `${a.straat} ${a.huisnummer}${a.toevoeging}`.replace(/\s+/g, " ").trim();
 
+// "di 14 sep" — kort genoeg voor op een knop, en met de weekdag erbij, want dát is wat een bewoner
+// aan de deur onthoudt. Een datum in cijfers zegt niemand iets als je hem hardop moet uitspreken.
+const dagKort = (iso: string) => {
+  if (!iso) return "";
+  const d = new Date(`${iso.slice(0, 10)}T12:00:00Z`);
+  return Number.isNaN(d.getTime()) ? iso
+    : d.toLocaleDateString("nl-NL", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+};
+
 // Een Nederlands nummer is 10 cijfers vanaf de 0, of 11 vanaf 31. Zodra het compleet is hoeft er
 // niemand meer op "bewaren" te drukken — aan een deur, met een telefoon in je hand, is dat precies
 // de handeling die je vergeet.
@@ -88,9 +97,11 @@ export function WerklijstZeef({ adressen, beeld, setBeeld, zoek, setZoek }: {
   );
 }
 
-export function SaneerWerklijst({ adressen, clusters, naamVan, onWijzig, beeld, setBeeld, zoek }: {
+export function SaneerWerklijst({ adressen, clusters, naamVan, onWijzig, beeld, setBeeld, zoek, uitvoering, starttijd }: {
   adressen: FlowAdres[];
   clusters: WerkGroep[];
+  uitvoering: string;   // de dag die op het dossier staat, zolang de groep er zelf nog geen heeft
+  starttijd: string;
   naamVan: (id?: string | null) => string;
   onWijzig: () => void;
   beeld: Beeld; setBeeld: (b: Beeld) => void;
@@ -153,6 +164,9 @@ export function SaneerWerklijst({ adressen, clusters, naamVan, onWijzig, beeld, 
             const b = beeldVan(a);
             const k = clusterVan(a);
             const waarde = concept[a.id] ?? a.telefoon;
+            // De groep bepaalt de dag; heeft die er nog geen, dan staat de dag van het dossier er als
+            // voorstel, met erbij dat hij nog niet vaststaat.
+            const dag = k?.definitieve_datum || uitvoering;
             const bezigNu = bezig === a.id;
             return (
               <div key={a.id} className={`rounded-2xl border bg-white p-4 shadow-sm transition-colors ${
@@ -178,12 +192,19 @@ export function SaneerWerklijst({ adressen, clusters, naamVan, onWijzig, beeld, 
                     </div>
                   </div>
 
-                  <a href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${adresTekst(a)}, ${a.postcode} ${a.plaats}`)}`}
-                    target="_blank" rel="noopener noreferrer" title="Route hierheen"
-                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-ink-400 hover:bg-ink-100 hover:text-brand-600">
-                    <Navigation className="h-4 w-4" />
-                  </a>
                 </div>
+
+                {/* Wanneer moet iedereen thuis zijn? Dat is geen bijzaak maar de kern van de
+                    afspraak: het hele portiek moet op dezelfde dag thuis zijn, want er wordt in één
+                    keer gesaneerd. Zonder die dag op de regel sta je aan een deur iets te beloven
+                    wat je zelf niet weet. */}
+                {dag && (
+                  <div className="mt-2 inline-flex flex-wrap items-center gap-1.5 rounded-lg bg-ink-50 px-2.5 py-1.5 text-xs text-ink-600">
+                    <Users className="h-3.5 w-3.5 shrink-0 text-ink-400" />
+                    <span>Hele portiek thuis op <span className="font-bold text-ink-900">{dagKort(dag)}</span>, {starttijd || "08:00"}–16:00</span>
+                    {!k?.definitieve_datum && <span className="text-ink-400">(nog niet definitief)</span>}
+                  </div>
+                )}
 
                 {/* De handelingen. Alleen die van dit adres — een gebeld adres heeft geen kaartje nodig. */}
                 <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -204,15 +225,25 @@ export function SaneerWerklijst({ adressen, clusters, naamVan, onWijzig, beeld, 
                         />
                       )}
 
+                      {/* De dag staat óp de knop. Je drukt hem in terwijl je met de bewoner praat, en
+                          dan moet er geen twijfel zijn waar hij ja tegen zegt. */}
                       <button type="button" disabled={bezigNu} onClick={() => void zet(a, { belstatus: "akkoord" })}
                         className="inline-flex items-center gap-1.5 rounded-xl bg-green-600 px-3.5 py-2.5 text-sm font-bold text-white hover:bg-green-700 disabled:opacity-50">
-                        {bezigNu ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Afgesproken
+                        {bezigNu ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                        Afgesproken{dag ? ` · ${dagKort(dag)}` : ""}
                       </button>
 
-                      {b === "deur" && !a.kaartje_op && (
-                        <button type="button" disabled={bezigNu} onClick={() => void zet(a, { kaartje_op: new Date().toISOString().slice(0, 10), bezoeken: (a.bezoeken || 0) + 1 })}
-                          className="inline-flex items-center gap-1.5 rounded-xl bg-white px-3.5 py-2.5 text-sm font-semibold text-ink-700 ring-1 ring-ink-200 hover:bg-ink-50 disabled:opacity-50">
-                          <Mail className="h-4 w-4" /> Kaartje in de bus
+                      {/* Een keuze die je aan en uit zet. Hij verdween eerst zodra je hem aantikte, en
+                          dan kon je een vergissing niet meer terugdraaien — terwijl je juist met een
+                          telefoon in je hand op een galerij staat. */}
+                      {b === "deur" && (
+                        <button type="button" disabled={bezigNu} aria-pressed={!!a.kaartje_op}
+                          onClick={() => void zet(a, a.kaartje_op
+                            ? { kaartje_op: "" }
+                            : { kaartje_op: new Date().toISOString().slice(0, 10), bezoeken: (a.bezoeken || 0) + 1 })}
+                          className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2.5 text-sm font-semibold transition-colors disabled:opacity-50 ${
+                            a.kaartje_op ? "bg-amber-500 text-white hover:bg-amber-600" : "bg-white text-ink-700 ring-1 ring-ink-200 hover:bg-ink-50"}`}>
+                          {a.kaartje_op ? <Check className="h-4 w-4" /> : <Mail className="h-4 w-4" />} Kaartje in de bus
                         </button>
                       )}
 
@@ -232,11 +263,13 @@ export function SaneerWerklijst({ adressen, clusters, naamVan, onWijzig, beeld, 
                     </button>
                   )}
 
-                  {k?.definitieve_datum && (
-                    <span className="ml-auto inline-flex items-center gap-1.5 text-xs font-semibold text-ink-500">
-                      <Users className="h-3.5 w-3.5" /> uitvoering {k.definitieve_datum.slice(0, 10).split("-").reverse().map(Number).join("-")}
-                    </span>
-                  )}
+                  {/* De route hoort tussen de handelingen en niet als pictogrammetje in een hoek: op
+                      een dag langs de deuren is dit de knop die je het vaakst nodig hebt. */}
+                  <a href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${adresTekst(a)}, ${a.postcode} ${a.plaats}`)}`}
+                    target="_blank" rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-white px-3.5 py-2.5 text-sm font-semibold text-ink-700 ring-1 ring-ink-200 hover:bg-brand-50 hover:text-brand-700">
+                    <Navigation className="h-4 w-4" /> Route
+                  </a>
                 </div>
               </div>
             );

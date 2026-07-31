@@ -234,7 +234,7 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
           ? <Leeg Icon={ListPlus} titel="Nog geen adressen"
               tekst="Lees eerst het adressenbestand van de opdrachtgever in. De app haalt daar de adressen en de telefoonnummers uit, en zet de rest apart zodat je weet waar je langs moet."
               knop="Bestand inlezen" onKlik={() => setStap("inlezen")} />
-          : <SaneerWerklijst adressen={adressen} clusters={clusters} naamVan={naamVan} onWijzig={() => void laad()} beeld={beeld} setBeeld={setBeeld} zoek={zoek} />
+          : <SaneerWerklijst adressen={adressen} clusters={clusters} naamVan={naamVan} onWijzig={() => void laad()} beeld={beeld} setBeeld={setBeeld} zoek={zoek} uitvoering={dossier.uitvoering_van} starttijd={dossier.starttijd} />
       )}
 
       {actief === "inlezen" && <SaneerImport dossier={dossier} aantalNu={adressen.length} onKlaar={() => void laad()} />}
