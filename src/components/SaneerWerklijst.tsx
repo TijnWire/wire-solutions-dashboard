@@ -52,11 +52,13 @@ export function WerklijstZeef({ adressen, beeld, setBeeld, zoek, setZoek }: {
   zoek: string; setZoek: (z: string) => void;
 }) {
   const tel = (b: Exclude<Beeld, "alles">) => adressen.filter((a) => beeldVan(a) === b).length;
+  // Eerst het geheel, dan de volgorde waarin het werk loopt: langs de deur, daarna bellen, en dan is
+  // het klaar. Zo lees je de balk van links naar rechts als het verloop van een dossier.
   const knopjes = ([
+    ["alles", "Alles", adressen.length],
     ["deur", "Langs de deur", tel("deur")],
     ["bellen", "Te bellen", tel("bellen")],
     ["klaar", "Klaar", tel("klaar")],
-    ["alles", "Alles", adressen.length],
   ] as const);
   return (
     <div className="flex flex-wrap items-center gap-2">
