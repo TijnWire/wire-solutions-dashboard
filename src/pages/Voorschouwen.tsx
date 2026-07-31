@@ -1056,21 +1056,22 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
                         )}
                       </button>
                       <div className="flex w-full items-center gap-2 sm:w-auto">
-                        {isLeiding && g.map && (
+                        {isLeiding && g.map && eigenModus && (
                           <>
-                            {eigenModus && (
-                              <>
-                                <button type="button" onClick={() => verplaatsMap(g.map!.id, "omhoog")} disabled={idx <= 0} title="Map omhoog" aria-label="Map omhoog verplaatsen" className="shrink-0 rounded-lg p-2 text-ink-400 hover:bg-ink-100 hover:text-ink-700 disabled:cursor-not-allowed disabled:opacity-30"><ArrowUp className="h-4 w-4" /></button>
-                                <button type="button" onClick={() => verplaatsMap(g.map!.id, "omlaag")} disabled={idx < 0 || idx >= eigenVolgordeIds.length - 1} title="Map omlaag" aria-label="Map omlaag verplaatsen" className="shrink-0 rounded-lg p-2 text-ink-400 hover:bg-ink-100 hover:text-ink-700 disabled:cursor-not-allowed disabled:opacity-30"><ArrowDown className="h-4 w-4" /></button>
-                              </>
-                            )}
-                            <button type="button" onClick={() => verwijderMap(g.map!.id, g.map!.naam, g.items.length)} title="Map verwijderen" aria-label="Map verwijderen" className="shrink-0 rounded-lg p-2 text-red-400 hover:bg-red-50 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
+                            <button type="button" onClick={() => verplaatsMap(g.map!.id, "omhoog")} disabled={idx <= 0} title="Map omhoog" aria-label="Map omhoog verplaatsen" className="shrink-0 rounded-lg p-2 text-ink-400 hover:bg-ink-100 hover:text-ink-700 disabled:cursor-not-allowed disabled:opacity-30"><ArrowUp className="h-4 w-4" /></button>
+                            <button type="button" onClick={() => verplaatsMap(g.map!.id, "omlaag")} disabled={idx < 0 || idx >= eigenVolgordeIds.length - 1} title="Map omlaag" aria-label="Map omlaag verplaatsen" className="shrink-0 rounded-lg p-2 text-ink-400 hover:bg-ink-100 hover:text-ink-700 disabled:cursor-not-allowed disabled:opacity-30"><ArrowDown className="h-4 w-4" /></button>
                           </>
                         )}
                         <button type="button" onClick={() => void downloadMap(g.body)} disabled={g.body.length === 0 || bezig} title="Download deze map (ZIP)" className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-ink-200 px-3 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50 disabled:cursor-not-allowed disabled:opacity-40 sm:flex-none sm:py-2">
                           {bezig ? <Loader2 className="h-4 w-4 animate-spin" /> : <FolderArchive className="h-4 w-4 shrink-0" />}
                           Download
                         </button>
+                        {/* Weggooien staat helemaal rechts, buiten de knoppen die je de hele dag
+                            gebruikt. Het stond ervóór, en dan zit het gevaarlijkste knopje precies
+                            op de plek waar je duim naar Download gaat. */}
+                        {isLeiding && g.map && (
+                          <button type="button" onClick={() => verwijderMap(g.map!.id, g.map!.naam, g.items.length)} title="Map verwijderen" aria-label="Map verwijderen" className="shrink-0 rounded-lg p-2 text-red-400 hover:bg-red-50 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
+                        )}
                       </div>
                     </>
                   )}
