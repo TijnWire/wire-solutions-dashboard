@@ -174,7 +174,10 @@ export function SyncBackup() {
         )}
       </Card>
 
-      {/* De twee databases naast elkaar: Cloudflare is de baas, Supabase is de tweede kopie. */}
+      {/* De twee databases naast elkaar: Cloudflare is de baas, Supabase is de tweede kopie.
+          Alleen voor de leiding: hier zit ook het terugzetten van de spiegel, en dat raakt het werk
+          van het hele team. Een werknemer hoeft alleen te weten of zijn eigen telefoon meeloopt. */}
+      {isLeiding && (
       <Card className="p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -252,6 +255,8 @@ export function SyncBackup() {
         {spiegelMelding && <div className="mt-2 rounded-lg bg-ink-50 px-3 py-2 text-xs text-ink-700">{spiegelMelding}</div>}
       </Card>
 
+      )}
+
       {/* Automatische veiligheidskopie */}
       <Card className="flex flex-wrap items-center gap-3 px-4 py-3.5">
         <div className="rounded-lg bg-ink-100 p-2 text-ink-600"><Database className="h-5 w-5" /></div>
@@ -263,7 +268,9 @@ export function SyncBackup() {
               : "Nog geen back-up — wordt automatisch gemaakt zodra er gegevens zijn."}
           </div>
         </div>
-        {backupInfo && (
+        {/* Terugzetten haalt verdwenen records terug voor het hele bedrijf. Dat is een beslissing van
+            de leiding, niet iets wat je per ongeluk aantikt terwijl je een adres zoekt. */}
+        {backupInfo && isLeiding && (
           <button type="button" onClick={() => setHerstelVraag(true)} className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-50">
             <RotateCcw className="h-4 w-4" /> Herstellen
           </button>

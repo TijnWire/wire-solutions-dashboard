@@ -101,6 +101,9 @@ for (const [wat, naald] of [
   ["saneren: werk en afhandeling uit elkaar", "Afboeken op het PD-nummer"],
   ["saneren: klaar voor Stedin en archief", "Het archief is nog leeg"],
   ["klaarmelden boekt de rest af", "afgeboekt als gegooid"],
+  ["drie beelden ook bij schouwafspraken", "Uitgevoerde en geannuleerde afspraken"],
+  ["werknemer ziet alleen zijn eigen loonstrook", "Jouw loonstroken"],
+  ["werknemer mag de sync nakijken", "Of dit apparaat meeloopt met de rest"],
 ]) check(code.includes(naald), wat, "zit niet in de uitgerolde bundel");
 
 console.log(`\n${geslaagd} geslaagd, ${gefaald} gefaald`);

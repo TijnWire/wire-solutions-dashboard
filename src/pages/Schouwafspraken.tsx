@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
-import { Plus, X, Trash2, MapPin, Phone, CalendarClock, Search, Pencil } from "lucide-react";
+import { Plus, X, Trash2, MapPin, Phone, CalendarClock, Search, Pencil, Archive, RotateCcw } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { useProjectFilter } from "../components/ProjectFilter";
+import { WerkTabs, type WerkTab } from "../components/WerkTabs";
 import { Card, Badge } from "../components/ui";
 import { WerknemerKiezer } from "../components/WerknemerKiezer";
 import { DatumKiezer } from "../components/DatumKiezer";
@@ -31,8 +32,21 @@ export function Schouwafspraken() {
   const [form, setForm] = useState<typeof leegForm | null>(null);
   const [bewerkId, setBewerkId] = useState<string | null>(null);
   const [zoek, setZoek] = useState("");
+  // Dezelfde drie beelden als op de andere projectpagina's. Uitgevoerd = klaar, dus klaar om door te
+  // geven; gearchiveerd = afgehandeld en uit beeld, maar nog steeds in de database.
+  const [tab, setTab] = useState<WerkTab>("overzicht");
 
-  const filter = useProjectFilter(schouwafspraken, {
+  // Tellen doen we over alles, niet over wat er na de periodefilter overblijft — anders zegt de balk
+  // "Archief (0)" terwijl er van vorig jaar tientallen in staan.
+  const mijne = schouwafspraken.filter((s) =>
+    currentUser?.rol === "eigenaar" || currentUser?.rol === "beheer" || currentUser?.rol === "hr" || s.toegewezenAan === currentUser?.id);
+  const klaarLijst = mijne.filter((s) => !s.gearchiveerd && s.status === "Uitgevoerd");
+  const archiefLijst = mijne.filter((s) => s.gearchiveerd);
+  const inTab = tab === "stedin" ? klaarLijst
+    : tab === "archief" ? archiefLijst
+    : mijne.filter((s) => !s.gearchiveerd && s.status !== "Uitgevoerd");
+
+  const filter = useProjectFilter(inTab, {
     datum: (s) => s.datum || s.aangemaakt,
     isOpen: (s) => !s.datum,          // nog geen afspraak gepland = nog te doen
   });
@@ -45,7 +59,6 @@ export function Schouwafspraken() {
   const zichtbaar = useMemo(() => {
     const q = zoek.trim().toLowerCase();
     return filter.zichtbaar
-      .filter((s) => isLeiding || s.toegewezenAan === currentUser?.id)
       .filter((s) => !q || `${s.straat} ${s.huisnummer} ${s.postcode} ${s.plaats} ${s.contactNaam}`.toLowerCase().includes(q))
       .sort((a, b) => {
         // Ingeplande met datum vooraan (op datum/tijd), daarna de rest op aanmaakmoment.
@@ -85,10 +98,15 @@ export function Schouwafspraken() {
     sluit();
   };
 
-  const telPer = (st: SchouwStatus) => schouwafspraken.filter((s) => (isLeiding || s.toegewezenAan === currentUser.id) && s.status === st).length;
+  // De tellers gaan over het beeld dat openstaat — anders tel je het archief mee in "In te plannen".
+  const telPer = (st: SchouwStatus) => inTab.filter((s) => s.status === st).length;
+
+  const nu = () => new Date().toISOString();
 
   return (
     <div className="space-y-5">
+      <WerkTabs tab={tab} setTab={setTab} klaar={klaarLijst.length} archief={archiefLijst.length} />
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold text-ink-900">Schouwafspraken</h2>
@@ -153,7 +171,11 @@ export function Schouwafspraken() {
       {zichtbaar.length === 0 ? (
         <Card className="p-10 text-center">
           <CalendarClock className="mx-auto h-10 w-10 text-ink-300" />
-          <p className="mt-3 text-sm text-ink-500">{schouwafspraken.length === 0 ? "Nog geen schouwafspraken." : "Geen resultaten."}</p>
+          <p className="mt-3 text-sm text-ink-500">
+            {tab === "stedin" ? "Nog niets klaar voor Stedin. Zodra een afspraak op Uitgevoerd staat, komt hij hier."
+              : tab === "archief" ? "Het archief is nog leeg. Uitgevoerde en geannuleerde afspraken kun je hier opbergen."
+              : schouwafspraken.length === 0 ? "Nog geen schouwafspraken." : "Geen resultaten."}
+          </p>
         </Card>
       ) : (
         <div className="space-y-3">
@@ -184,6 +206,13 @@ export function Schouwafspraken() {
                       <>
                         <WerknemerKiezer value={s.toegewezenAan ?? ""} onChange={(id) => updateSchouw(s.id, { toegewezenAan: id || undefined })} users={users} leegLabel="Niet toegewezen" />
                         <button type="button" onClick={() => openBewerk(s)} className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-3 py-2 text-sm font-medium text-ink-700 hover:bg-ink-50"><Pencil className="h-3.5 w-3.5" /> Bewerken</button>
+                        {/* Archiveren in plaats van weggooien: de afspraak verdwijnt uit het
+                            overzicht maar blijft in de database staan, en is met één klik terug. */}
+                        {s.gearchiveerd ? (
+                          <button type="button" onClick={() => updateSchouw(s.id, { gearchiveerd: false, gearchiveerdOp: undefined })} className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-3 py-2 text-sm font-medium text-ink-700 hover:bg-ink-50"><RotateCcw className="h-3.5 w-3.5" /> Terugzetten</button>
+                        ) : (s.status === "Uitgevoerd" || s.status === "Geannuleerd") && (
+                          <button type="button" onClick={() => updateSchouw(s.id, { gearchiveerd: true, gearchiveerdOp: nu() })} className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-3 py-2 text-sm font-medium text-ink-700 hover:bg-ink-50"><Archive className="h-3.5 w-3.5" /> Naar archief</button>
+                        )}
                         <button type="button" onClick={() => { if (confirm(`Schouwafspraak ${s.straat} ${s.huisnummer} verwijderen?`)) deleteSchouw(s.id); }} className="ml-auto rounded-lg p-2 text-red-400 hover:bg-red-50 hover:text-red-600" title="Verwijderen"><Trash2 className="h-4 w-4" /></button>
                       </>
                     )}

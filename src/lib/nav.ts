@@ -77,10 +77,13 @@ export const NAV: NavItem[] = [
   { key: "projectbeheer", label: "Projectbeheer", icon: Briefcase, group: "Boekhouding", roles: LEIDING },
   { key: "facturen", label: "Facturen", icon: Receipt, group: "Boekhouding", roles: LEIDING },
   { key: "urenstaat", label: "Urenstaat", icon: Clock, group: "Boekhouding", roles: LEIDING },
-  { key: "loonstroken", label: "Loonstroken", icon: Wallet, group: "Boekhouding", roles: LEIDING },
+  // Loonstroken en Boetes staan ook bij de werknemer in het menu. De pagina's laten hem uitsluitend
+  // zijn eigen regels zien (filter op medewerkerId) en alle knoppen om iets aan te maken, te wijzigen
+  // of te verwijderen zijn leiding-only. Je eigen loonstrook is van jou; die van een ander niet.
+  { key: "loonstroken", label: "Loonstroken", icon: Wallet, group: "Boekhouding", roles: ALLE },
   { key: "vrijedagen", label: "Vrije dagen", icon: Sun, group: "Boekhouding", roles: LEIDING },
   { key: "verlof", label: "Verlof", icon: Plane, group: "Boekhouding", roles: LEIDING },
-  { key: "boetes", label: "Boetes", icon: AlertTriangle, group: "Boekhouding", roles: LEIDING },
+  { key: "boetes", label: "Boetes", icon: AlertTriangle, group: "Boekhouding", roles: ALLE },
   { key: "medewerkers", label: "Medewerkers", icon: Users, group: "Boekhouding", roles: LEIDING },
   { key: "communicatie", label: "Communicatie", icon: MessagesSquare, badge: "AI", group: "Operatie", roles: ALLE },
 
@@ -88,7 +91,9 @@ export const NAV: NavItem[] = [
   { key: "team", label: "Team", icon: Users, group: "Systeem", roles: LEIDING },
   { key: "klanten", label: "Klanten & Database", icon: Database, group: "Systeem", roles: LEIDING },
   { key: "beheer", label: "Gebruikers & toegang", icon: UserCog, group: "Systeem", roles: LEIDING },
-  { key: "instellingen", label: "Instellingen", icon: Settings, group: "Systeem", roles: LEIDING },
+  // Bij de werknemer staat hier alleen het tabblad Sync & back-up: kan mijn telefoon bij de gegevens
+  // van het team? Dat wil je zelf kunnen nakijken zonder eerst iemand te moeten bellen.
+  { key: "instellingen", label: "Instellingen", icon: Settings, group: "Systeem", roles: ALLE },
 ];
 
 export const GROUPS: NavGroup[] = ["Werk", "Projecten", "Vragen", "Operatie", "Boekhouding", "Systeem"];

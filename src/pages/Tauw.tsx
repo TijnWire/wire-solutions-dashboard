@@ -1,7 +1,8 @@
 import { Fragment, useEffect, useState } from "react";
-import { ArrowLeft, Plus, FlaskConical, Trash2, MessageCircle, Phone, Navigation, FileDown, FileUp, Mail, Check, Wand2, ChevronRight, ChevronDown, X, UserPlus, RotateCcw, Footprints, Search, CalendarClock, Pencil } from "lucide-react";
+import { ArrowLeft, Plus, FlaskConical, Trash2, MessageCircle, Phone, Navigation, FileDown, FileUp, Mail, Check, Wand2, ChevronRight, ChevronDown, X, UserPlus, RotateCcw, Footprints, Search, CalendarClock, Pencil, Archive } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { useProjectFilter } from "../components/ProjectFilter";
+import { WerkTabs, type WerkTab } from "../components/WerkTabs";
 import { WerknemerKiezer } from "../components/WerknemerKiezer";
 import { DatumKiezer } from "../components/DatumKiezer";
 import { TijdKiezer } from "../components/TijdKiezer";
@@ -864,11 +865,12 @@ const isOpenMap = (o: TauwOpdracht) => o.status !== "verstuurd";
 
 // ── Hoofdcomponent ──
 export function Tauw({ initieelTauw }: { initieelTauw?: string }) {
-  const { tauwOpdrachten, currentUser } = useApp();
+  const { tauwOpdrachten, currentUser, updateTauw } = useApp();
   const [openId, setOpenId] = useState<string | null>(initieelTauw ?? null);
   const [nieuw, setNieuw] = useState(false);
   const [nieuwType] = useState<TauwType>("bodemonderzoek");
   const [ogFilter, setOgFilter] = useState<"alle" | TauwOpdrachtgever>("alle");
+  const [tab, setTab] = useState<WerkTab>("overzicht");
   // Importeren zit nu in het aanmaakscherm zelf: één knop "Nieuwe opdracht", en daarbinnen kies je of je
   // een bestand inleest of alles zelf invult.
 
@@ -880,7 +882,15 @@ export function Tauw({ initieelTauw }: { initieelTauw?: string }) {
     o.toegewezenAan === currentUser?.id ||
     (o.team ?? []).includes(currentUser?.id ?? "") ||
     o.adressen.some((a) => a.toegewezenAan === currentUser?.id);
-  const metRol = (isLeiding ? tauwOpdrachten : tauwOpdrachten.filter(hoortBijMij)).filter((o) => !o.gearchiveerd);
+  // Dezelfde drie beelden als op de andere projectpagina's. "Verstuurd" betekent hier: het werk is
+  // terug bij de opdrachtgever, dus klaar om door te geven. Gearchiveerd is afgehandeld en uit beeld
+  // — maar nooit weg: de map blijft in de database staan en is met één klik terug.
+  const vanMij = isLeiding ? tauwOpdrachten : tauwOpdrachten.filter(hoortBijMij);
+  const klaarLijst = vanMij.filter((o) => !o.gearchiveerd && o.status === "verstuurd");
+  const archiefLijst = vanMij.filter((o) => o.gearchiveerd);
+  const metRol = tab === "stedin" ? klaarLijst
+    : tab === "archief" ? archiefLijst
+    : vanMij.filter((o) => !o.gearchiveerd && o.status !== "verstuurd");
   const toonOgFilter = new Set(metRol.map((o) => o.opdrachtgever ?? "TAUW")).size > 1;
   const naOpdrachtgever = ogFilter === "alle" ? metRol : metRol.filter((o) => (o.opdrachtgever ?? "TAUW") === ogFilter);
   // Zelfde filterbalk als op de andere projectpagina's: periode, alleen wat openstaat, nieuwste bovenaan.
@@ -895,7 +905,9 @@ export function Tauw({ initieelTauw }: { initieelTauw?: string }) {
 
   if (nieuw) return <TauwIntake type={nieuwType} onKlaar={(id) => { setNieuw(false); if (id) setOpenId(id); }} />;
 
-  const open = zichtbaar.find((o) => o.id === openId);
+  // Zoeken in álle mappen, niet alleen in het beeld dat toevallig openstaat. Anders geeft een link
+  // naar een afgeronde map een leeg scherm omdat je op "Overzicht" stond.
+  const open = vanMij.find((o) => o.id === openId);
   if (open) return <TauwDetail opdracht={open} onTerug={() => setOpenId(null)} />;
 
   // Mappen sorteren op werkweek (peildatum) en groeperen, met open-tellingen voor één-oogopslag-overzicht.
@@ -919,6 +931,8 @@ export function Tauw({ initieelTauw }: { initieelTauw?: string }) {
 
   return (
     <div className="space-y-6">
+      <WerkTabs tab={tab} setTab={setTab} klaar={klaarLijst.length} archief={archiefLijst.length} />
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold text-ink-900">TAUW of Van der Helm</h2>
@@ -1012,6 +1026,25 @@ export function Tauw({ initieelTauw }: { initieelTauw?: string }) {
                         <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-ink-100">
                           <div className="h-full rounded-full bg-green-500" style={{ width: `${totaalA ? Math.round((klaarA / totaalA) * 100) : 0}%` }} />
                         </div>
+
+                        {/* Opbergen in plaats van weggooien. De map verdwijnt uit het overzicht maar
+                            blijft in de database staan en is met één klik terug. De klik hier mag de
+                            map niet openen — vandaar dat hij wordt tegengehouden. */}
+                        {isLeiding && (o.gearchiveerd || o.status === "verstuurd") && (
+                          <div className="mt-2.5 border-t border-ink-100 pt-2.5" onClick={(e) => e.stopPropagation()}>
+                            {o.gearchiveerd ? (
+                              <button type="button" onClick={() => updateTauw(o.id, { gearchiveerd: false, gearchiveerdOp: undefined })}
+                                className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 bg-white px-3 py-1.5 text-xs font-semibold text-ink-700 hover:bg-ink-50">
+                                <RotateCcw className="h-3.5 w-3.5" /> Terugzetten
+                              </button>
+                            ) : (
+                              <button type="button" onClick={() => updateTauw(o.id, { gearchiveerd: true, gearchiveerdOp: new Date().toISOString() })}
+                                className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 bg-white px-3 py-1.5 text-xs font-semibold text-ink-700 hover:bg-ink-50">
+                                <Archive className="h-3.5 w-3.5" /> Naar archief
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </div>
                     );
                   })}

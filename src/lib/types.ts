@@ -485,6 +485,8 @@ export type Schouwafspraak = {
   status: SchouwStatus;
   notitie: string;
   aangemaakt: string; // ISO
+  gearchiveerd?: boolean;   // uit de actieve lijst, bewaard onder "Archief" — nooit weggegooid
+  gearchiveerdOp?: string;  // ISO
 };
 
 // ── Klanten & Database ──

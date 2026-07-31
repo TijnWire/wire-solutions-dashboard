@@ -154,46 +154,44 @@ export function Instellingen() {
   if (!currentUser) return null;
   const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr";
 
-  // Instellingen zijn alleen voor de leiding — werknemers krijgen geen toegang.
-  if (!isLeiding) {
-    return (
-      <div className="mx-auto max-w-md py-16 text-center">
-        <Lock className="mx-auto h-10 w-10 text-ink-300" />
-        <h2 className="mt-3 text-lg font-bold text-ink-900">Geen toegang</h2>
-        <p className="mt-1 text-sm text-ink-500">Instellingen zijn alleen voor de beheerder en eigenaar.</p>
-      </div>
-    );
-  }
+  // De werknemer krijgt hier één tabblad: Sync & back-up. Loopt zijn telefoon mee met de rest? Dat
+  // wil je zelf kunnen nakijken, aan een deur, zonder eerst iemand te bellen. De rest blijft dicht —
+  // daar staan bedrijfsgegevens en API-sleutels, en dat gaat hem niet aan.
+  const tabs = ([
+    { key: "bedrijf", label: "Bedrijf & logo", icon: Building2, leiding: true },
+    { key: "api", label: "API-sleutels", icon: Plug, leiding: true },
+    { key: "sync", label: "Sync & back-up", icon: RefreshCw, leiding: false },
+    { key: "systeem", label: "Systeem & meldingen", icon: Activity, leiding: true },
+  ] as const).filter((t) => isLeiding || !t.leiding);
 
-  const tabs = [
-    { key: "bedrijf", label: "Bedrijf & logo", icon: Building2 },
-    { key: "api", label: "API-sleutels", icon: Plug },
-    { key: "sync", label: "Sync & back-up", icon: RefreshCw },
-    { key: "systeem", label: "Systeem & meldingen", icon: Activity },
-  ] as const;
+  // Is het geopende tabblad niet (meer) van jou, dan valt hij terug op het eerste dat wél mag.
+  // Anders zou een werknemer een leeg scherm zien omdat "bedrijf" de begintoestand is.
+  const tabNu = tabs.some((t) => t.key === tab) ? tab : tabs[0].key;
 
   return (
     <div className="space-y-5">
       <div>
         <h2 className="text-xl font-bold text-ink-900">Instellingen</h2>
-        <p className="text-sm text-ink-500">Bedrijfsgegevens, API-sleutels, sync &amp; back-up en de systeemstatus van de app.</p>
+        <p className="text-sm text-ink-500">
+          {isLeiding ? "Bedrijfsgegevens, API-sleutels, sync & back-up en de systeemstatus van de app." : "Of dit apparaat meeloopt met de rest van het team."}
+        </p>
       </div>
 
       <div className="flex flex-wrap gap-2 border-b border-ink-200">
         {tabs.map((t) => {
           const Icon = t.icon;
           return (
-            <button key={t.key} type="button" onClick={() => setTab(t.key)} className={`-mb-px inline-flex items-center gap-2 border-b-2 px-3 py-2.5 text-sm font-semibold ${tab === t.key ? "border-brand-600 text-brand-700" : "border-transparent text-ink-500 hover:text-ink-800"}`}>
+            <button key={t.key} type="button" onClick={() => setTab(t.key)} className={`-mb-px inline-flex items-center gap-2 border-b-2 px-3 py-2.5 text-sm font-semibold ${tabNu === t.key ? "border-brand-600 text-brand-700" : "border-transparent text-ink-500 hover:text-ink-800"}`}>
               <Icon className="h-4 w-4" /> {t.label}
             </button>
           );
         })}
       </div>
 
-      {tab === "bedrijf" && <BedrijfTab isLeiding={isLeiding} />}
-      {tab === "api" && <ApiSleutels />}
-      {tab === "sync" && <SyncBackup />}
-      {tab === "systeem" && <SysteemTab />}
+      {tabNu === "bedrijf" && <BedrijfTab isLeiding={isLeiding} />}
+      {tabNu === "api" && <ApiSleutels />}
+      {tabNu === "sync" && <SyncBackup />}
+      {tabNu === "systeem" && <SysteemTab />}
     </div>
   );
 }
