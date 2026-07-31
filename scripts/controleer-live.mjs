@@ -83,6 +83,7 @@ for (const [wat, naald] of [
   ["saneren: hele portiek op dezelfde dag", "Hele portiek thuis op"],
   ["saneren: nieuwe dag voor het hele portiek", "Alles opnieuw met deze dag"],
   ["saneren: meerdere adressen tegelijk", "Route langs "],
+  ["saneren: adres eruit halen vraagt na", "Adres uit de lijst halen?"],
   ["hele groep opnieuw bij een afzegging", "gaat niet door"],
   ["een man op het hele project", "Wie voert dit werk uit?"],
   ["checklist voor de schouwer", "Checklists schouwer"],

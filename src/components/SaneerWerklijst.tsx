@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { Phone, Check, Mail, Search, Loader2, MapPin, Navigation, Users, CalendarX, X, CheckSquare, Square } from "lucide-react";
+import { Phone, Check, Mail, Search, Loader2, MapPin, Navigation, Users, CalendarX, X, CheckSquare, Square, Trash2 } from "lucide-react";
 import { wijzigFlowAdres, startRonde, type FlowAdres } from "../lib/saneerflowWerk";
 import { DatumKiezer } from "./DatumKiezer";
+import { Bevestig } from "./ui";
 
 // Alleen wat we van een groep nodig hebben. Het dossier levert een lichtere vorm dan de volledige
 // Cluster, en die hoeven we hier niet compleet te maken om een naam en een datum te tonen.
@@ -124,6 +125,10 @@ export function SaneerWerklijst({ adressen, clusters, naamVan, onWijzig, beeld, 
   // aantikken is werk dat de app hoort te doen.
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [bulkBezig, setBulkBezig] = useState(false);
+  // Welk adres staat op het punt uit de lijst te gaan? Verwijderen is hier zacht — de regel blijft in
+  // de database — maar uit de lijst is uit de lijst, en dat wil je niet per ongeluk doen terwijl je
+  // met een telefoon in je hand op een galerij staat.
+  const [teVerwijderen, setTeVerwijderen] = useState<FlowAdres | null>(null);
 
   // Het beeld waar niets meer in staat, hoef je niet open te houden. Heb je alle deuren gehad, dan
   // sta je vanzelf in de bellijst — dat is immers waar het werk dan ligt.
@@ -272,6 +277,11 @@ export function SaneerWerklijst({ adressen, clusters, naamVan, onWijzig, beeld, 
                   <input type="checkbox" checked={sel.has(a.id)} onChange={() => kies(a.id)}
                     aria-label={`${adresTekst(a)} selecteren`}
                     className="mt-1 h-4 w-4 shrink-0 accent-brand-600" />
+                  <a href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${adresTekst(a)}, ${a.postcode} ${a.plaats}`)}`}
+                    target="_blank" rel="noopener noreferrer" title="Route hierheen" aria-label={`Route naar ${adresTekst(a)}`}
+                    className="order-last inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-ink-400 hover:bg-brand-50 hover:text-brand-700">
+                    <Navigation className="h-4 w-4" />
+                  </a>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                       <span className="text-base font-bold text-ink-900">{adresTekst(a)}</span>
@@ -373,13 +383,13 @@ export function SaneerWerklijst({ adressen, clusters, naamVan, onWijzig, beeld, 
                     </button>
                   )}
 
-                  {/* De route hoort tussen de handelingen en niet als pictogrammetje in een hoek: op
-                      een dag langs de deuren is dit de knop die je het vaakst nodig hebt. */}
-                  <a href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${adresTekst(a)}, ${a.postcode} ${a.plaats}`)}`}
-                    target="_blank" rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 rounded-xl bg-white px-3.5 py-2.5 text-sm font-semibold text-ink-700 ring-1 ring-ink-200 hover:bg-brand-50 hover:text-brand-700">
-                    <Navigation className="h-4 w-4" /> Route
-                  </a>
+                  {/* Uit de lijst halen staat rechtsonder, los van de knoppen die je de hele dag
+                      gebruikt. Er komt eerst een vraag overheen — zie onderaan dit bestand. */}
+                  <button type="button" onClick={() => setTeVerwijderen(a)}
+                    title="Adres uit de lijst halen" aria-label={`${adresTekst(a)} uit de lijst halen`}
+                    className="ml-auto inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-ink-300 hover:bg-red-50 hover:text-red-600">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
                 </div>
 
                 {/* Wat er gaat gebeuren staat er voluit, want dit raakt niet alleen dit adres maar
@@ -420,6 +430,27 @@ export function SaneerWerklijst({ adressen, clusters, naamVan, onWijzig, beeld, 
           })}
         </div>
       )}
+
+      {/* Wat je kwijtraakt staat erin: het adres, en of er al een telefoonnummer of een afspraak bij
+          stond. Dat is precies het verschil tussen "een dubbele regel weghalen" en "het werk van een
+          middag weggooien". */}
+      <Bevestig
+        open={!!teVerwijderen}
+        titel="Adres uit de lijst halen?"
+        tekst={teVerwijderen
+          ? `${adresTekst(teVerwijderen)} verdwijnt uit dit dossier.${
+              teVerwijderen.telefoon.trim() ? ` Let op: het telefoonnummer ${teVerwijderen.telefoon} gaat mee uit beeld.` : ""}${
+              teVerwijderen.belstatus === "akkoord" ? " Bij dit adres stond al een afspraak." : ""} De regel blijft in de database staan, dus terugzetten kan later nog.`
+          : ""}
+        bevestigLabel="Ja, eruit halen"
+        bevestigTone="rood"
+        onBevestig={() => {
+          const a = teVerwijderen;
+          setTeVerwijderen(null);
+          if (a) void zet(a, { verwijderd: 1 });
+        }}
+        onAnnuleer={() => setTeVerwijderen(null)}
+      />
     </div>
   );
 }

@@ -20,6 +20,7 @@ export type FlowAdres = {
   telefoon_bij_import: number; belstatus: string; belpogingen: number;
   kaartje_op: string;   // ISO-datum: kaartje in de bus gedaan
   bezoeken: number;     // hoe vaak er is aangebeld
+  verwijderd?: number;  // zacht verwijderd: uit de lijst, maar de regel blijft in de database
   cluster_naam?: string; definitieve_datum?: string;
 };
 

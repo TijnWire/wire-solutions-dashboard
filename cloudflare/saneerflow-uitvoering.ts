@@ -399,11 +399,19 @@ export async function saneerUitvoeringRoutes(
     // Wat er aan de deur gebeurde: kaartje in de bus, en hoe vaak er is aangebeld.
     if (patch.kaartje_op !== undefined) { zetten.push(`kaartje_op = ?${zetten.length + 2}`); w.push(String(patch.kaartje_op ?? "")); }
     if (patch.bezoeken !== undefined) { zetten.push(`bezoeken = ?${zetten.length + 2}`); w.push(Number(patch.bezoeken) || 0); }
+    // Zacht verwijderen. Het adres verdwijnt uit de lijsten maar de regel blijft staan, met wat er
+    // over de bewoner bekend was en een aantekening in het logboek. Een adres dat per ongeluk weg is
+    // getikt is dan terug te halen; een echte delete zou dat onmogelijk maken.
+    if (patch.verwijderd !== undefined) { zetten.push(`verwijderd = ?${zetten.length + 2}`); w.push(patch.verwijderd ? 1 : 0); }
     if (!zetten.length) return json({ ok: true });
     await env.DB.prepare(`update saneer_adressen set ${zetten.join(", ")}, bijgewerkt_op = ?${zetten.length + 2} where id = ?1`)
       .bind(id, ...w, nuISO).run();
     if (patch.belstatus !== undefined) {
       c.log({ pd: String(adres.pd_nummer), adresId: id, gebeurtenis: "belstatus", oud: String(adres.belstatus ?? ""), nieuw: String(patch.belstatus) });
+    }
+    if (patch.verwijderd) {
+      c.log({ pd: String(adres.pd_nummer), adresId: id, gebeurtenis: "adres_verwijderd",
+        oud: `${adres.straat} ${adres.huisnummer}${adres.toevoeging ?? ""}`, nieuw: "uit de lijst gehaald" });
     }
     return json({ ok: true });
   }
