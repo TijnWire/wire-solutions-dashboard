@@ -294,6 +294,13 @@ export async function saneerUitvoeringRoutes(
       "update saneer_adressen set belstatus = '', bijgewerkt_op = ?2 where cluster_id = ?1 and verwijderd = 0 and belstatus <> ''"
     ).bind(clusterId, nuISO).run();
 
+    // De vastgelegde dag gaat er ook af. Die dag gáát niet door — dat is de reden dat deze ronde
+    // begint. Bleef hij staan, dan zou de app aan de deur nog steeds de oude dag noemen terwijl
+    // iedereen opnieuw gebeld moet worden, en dan beloof je bewoners iets wat niet meer geldt.
+    await env.DB.prepare(
+      "update saneer_clusters set definitieve_datum = '' where id = ?1 and definitieve_datum <> ''"
+    ).bind(clusterId).run();
+
     c.log({ pd, clusterId, gebeurtenis: "ronde_gestart", nieuw: `ronde ${nummer}${datum ? ` — voorstel ${datum}` : ""}, ${Number(terug.meta?.changes ?? 0)} adressen weer te bellen` });
     // Boven het ingestelde aantal ronden gaat dit cluster naar de leiding. Dat leiden we af uit het
     // rondenummer; een apart vlaggetje in de database zou alleen maar uit de pas kunnen gaan lopen.

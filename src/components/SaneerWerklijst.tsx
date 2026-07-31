@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Phone, Check, Mail, Search, Loader2, MapPin, Navigation, Users } from "lucide-react";
-import { wijzigFlowAdres, type FlowAdres } from "../lib/saneerflowWerk";
+import { Phone, Check, Mail, Search, Loader2, MapPin, Navigation, Users, CalendarX, X } from "lucide-react";
+import { wijzigFlowAdres, startRonde, type FlowAdres } from "../lib/saneerflowWerk";
 
 // Alleen wat we van een groep nodig hebben. Het dossier levert een lichtere vorm dan de volledige
 // Cluster, en die hoeven we hier niet compleet te maken om een naam en een datum te tonen.
@@ -110,6 +110,11 @@ export function SaneerWerklijst({ adressen, clusters, naamVan, onWijzig, beeld, 
   const [bezig, setBezig] = useState<string>("");
   const [concept, setConcept] = useState<Record<string, string>>({});
   const timers = useRef<Record<string, number>>({});
+  // Eén bewoner die niet kan, maakt de dag voor het hele portiek ongeldig — er wordt in één keer
+  // gesaneerd, dus half is niets. Dit houdt bij welke groep een nieuwe dag zoekt.
+  const [nieuweDag, setNieuweDag] = useState<{ clusterId: string; datum: string } | null>(null);
+  const [dagBezig, setDagBezig] = useState(false);
+  const [dagFout, setDagFout] = useState("");
 
   // Het beeld waar niets meer in staat, hoef je niet open te houden. Heb je alle deuren gehad, dan
   // sta je vanzelf in de bellijst — dat is immers waar het werk dan ligt.
@@ -125,6 +130,21 @@ export function SaneerWerklijst({ adressen, clusters, naamVan, onWijzig, beeld, 
     .filter((a) => !q || `${adresTekst(a)} ${a.postcode} ${a.bewoner} ${a.telefoon}`.toLowerCase().includes(q));
 
   const clusterVan = (a: FlowAdres) => clusters.find((k) => k.id === a.cluster_id);
+  const inGroep = (clusterId: string) => adressen.filter((a) => a.cluster_id === clusterId);
+
+  // Een nieuwe ronde starten zet de hele groep terug op "nog af te spreken" en wist de oude dag.
+  // Telefoonnummers, namen en het kaartje in de bus blijven staan: die hangen aan het adres en niet
+  // aan de dag, dus je hoeft nooit opnieuw langs de deur voor een nummer dat je al had.
+  const startNieuweDag = async () => {
+    if (!nieuweDag?.datum) return;
+    setDagBezig(true); setDagFout("");
+    const r = await startRonde(nieuweDag.clusterId, nieuweDag.datum);
+    setDagBezig(false);
+    if (!r.ok) { setDagFout(r.fout ?? "Het starten van een nieuwe ronde mislukte."); return; }
+    setNieuweDag(null);
+    setBeeld("bellen");
+    onWijzig();
+  };
 
   const zet = async (a: FlowAdres, patch: Partial<FlowAdres>) => {
     setBezig(a.id);
@@ -263,6 +283,16 @@ export function SaneerWerklijst({ adressen, clusters, naamVan, onWijzig, beeld, 
                     </button>
                   )}
 
+                  {/* Eén bewoner die niet kan, en de dag is voor iedereen van de baan. Dit is de knop
+                      die je op dat moment nodig hebt: je staat aan die ene deur of hebt die ene aan
+                      de lijn, en van daaruit zet je de hele groep in één keer terug. */}
+                  {k && dag && b !== "klaar" && (
+                    <button type="button" onClick={() => { setNieuweDag({ clusterId: k.id, datum: "" }); setDagFout(""); }}
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-white px-3.5 py-2.5 text-sm font-semibold text-red-600 ring-1 ring-red-200 hover:bg-red-50">
+                      <CalendarX className="h-4 w-4" /> Kan niet op die dag
+                    </button>
+                  )}
+
                   {/* De route hoort tussen de handelingen en niet als pictogrammetje in een hoek: op
                       een dag langs de deuren is dit de knop die je het vaakst nodig hebt. */}
                   <a href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${adresTekst(a)}, ${a.postcode} ${a.plaats}`)}`}
@@ -271,6 +301,39 @@ export function SaneerWerklijst({ adressen, clusters, naamVan, onWijzig, beeld, 
                     <Navigation className="h-4 w-4" /> Route
                   </a>
                 </div>
+
+                {/* Wat er gaat gebeuren staat er voluit, want dit raakt niet alleen dit adres maar
+                    iedereen in het portiek. Je leest het voor je op de knop drukt. */}
+                {k && nieuweDag?.clusterId === k.id && (
+                  <div className="mt-3 rounded-xl border border-red-200 bg-red-50/60 p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-sm font-bold text-ink-900">Nieuwe dag voor het hele portiek</div>
+                        <p className="mt-0.5 text-xs text-ink-600">
+                          {dagKort(dag)} gaat niet door. Alle {inGroep(k.id).length} adressen van {k.naam || "deze groep"} gaan
+                          terug naar ‘nog af te spreken’ en moeten opnieuw benaderd worden.
+                          <span className="font-semibold text-ink-800"> De telefoonnummers die je al hebt blijven staan</span> —
+                          je hoeft dus niet opnieuw langs de deur voor een nummer.
+                        </p>
+                      </div>
+                      <button type="button" onClick={() => setNieuweDag(null)} aria-label="Sluiten"
+                        className="shrink-0 rounded-lg p-1 text-ink-400 hover:bg-white hover:text-ink-700"><X className="h-4 w-4" /></button>
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <input type="date" value={nieuweDag.datum} min={new Date().toISOString().slice(0, 10)}
+                        onChange={(e) => setNieuweDag({ clusterId: k.id, datum: e.target.value })}
+                        aria-label="Nieuwe uitvoeringsdag"
+                        className="rounded-xl border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-brand-400" />
+                      <button type="button" disabled={!nieuweDag.datum || dagBezig} onClick={() => void startNieuweDag()}
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-red-600 px-3.5 py-2.5 text-sm font-bold text-white hover:bg-red-700 disabled:opacity-50">
+                        {dagBezig ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarX className="h-4 w-4" />}
+                        Alles opnieuw met deze dag
+                      </button>
+                    </div>
+                    {dagFout && <p className="mt-2 text-xs font-semibold text-red-700">{dagFout}</p>}
+                  </div>
+                )}
               </div>
             );
           })}
