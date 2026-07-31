@@ -169,9 +169,14 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
   return (
     <div className="space-y-4">
       {/* De kop blijft staan als je scrollt. Dit is een dossier waar je heen en weer in springt —
-          van de bellijst naar een groep en terug — en dan wil je niet steeds omhoog moeten om bij de
-          volgende stap te komen. */}
-      <div className="sticky top-0 z-20 -mx-4 -mt-4 border-b border-ink-200 bg-white/95 px-4 pb-3 pt-4 shadow-sm backdrop-blur sm:-mx-6 sm:px-6">
+          van de bellijst naar een groep en terug — en dan wil je niet steeds omhoog moeten.
+
+          Let op de maten: de pagina eromheen heeft p-4, en vanaf md p-6. De kop trekt zichzelf met
+          negatieve marges precies zo ver op, anders blijft er een strook paginarand over waar de
+          inhoud doorheen scrollt. Die stond op -mt-4 terwijl een laptop 24 px ruimte heeft; die
+          8 px was het gat. De achtergrond is bovendien dekkend — met bg-white/95 en een waas zie je
+          de kaarten er gewoon doorheen komen. */}
+      <div className="sticky top-0 z-20 -mx-4 -mt-4 border-b border-ink-200 bg-white px-4 pb-3 pt-4 shadow-sm md:-mx-6 md:-mt-6 md:px-6 md:pt-6">
         <button type="button" onClick={onTerug} className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-700">
           <ArrowLeft className="h-4 w-4" /> Alle saneringen
         </button>
