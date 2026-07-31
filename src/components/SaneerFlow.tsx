@@ -225,7 +225,9 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
         )}
       </div>
 
-      <div className="space-y-4 p-4 md:p-6">
+      {/* Wat lucht tussen de kop en het eerste adres. Zonder die ruimte plakt de eerste kaart tegen
+          de balk aan en lijkt hij erbij te horen. */}
+      <div className="space-y-4 p-4 pt-7 md:p-6 md:pt-9">
       {/* Zonder zijpad zie je waar je voor komt: de adressen. */}
       {!actief && (
         adressen.length === 0
