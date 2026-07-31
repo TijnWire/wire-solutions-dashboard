@@ -4,7 +4,7 @@ import {
   Loader2, AlertTriangle, CalendarCheck, ChevronRight, FileSpreadsheet, FileText, ShieldAlert, ClipboardList,
 } from "lucide-react";
 import { useApp } from "../store/AppContext";
-import { SaneerWerklijst } from "./SaneerWerklijst";
+import { SaneerWerklijst, WerklijstZeef, type Beeld } from "./SaneerWerklijst";
 import { SaneerImport } from "./SaneerImport";
 import { SaneerVerdelen, SaneerClusterWerk } from "./SaneerCluster";
 import { haalDossier, STATUS_INFO, type Dossier, type DossierDetail } from "../lib/saneerflow";
@@ -79,6 +79,10 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
   const [laden, setLaden] = useState(true);
   const [cluster, setCluster] = useState<string | null>(null);
   const [stap, setStap] = useState<StapKey | null>(null);
+  // De zeef staat in de kop maar hoort bij de lijst, dus de stand ervan woont hier — dan blijft hij
+  // ook staan als je even een zijpad in duikt en terugkomt.
+  const [beeld, setBeeld] = useState<Beeld>("deur");
+  const [zoek, setZoek] = useState("");
 
   const isLeiding = currentUser?.rol === "eigenaar" || currentUser?.rol === "beheer" || currentUser?.rol === "hr";
   const veldwerkers = useMemo(() => users.filter((u) => u.rol === "monteur" || u.werknemer), [users]);
@@ -160,39 +164,54 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
           inhoud doorheen scrollt. Die stond op -mt-4 terwijl een laptop 24 px ruimte heeft; die
           8 px was het gat. De achtergrond is bovendien dekkend — met bg-white/95 en een waas zie je
           de kaarten er gewoon doorheen komen. */}
-      <div className="sticky top-0 z-20 -mx-4 -mt-4 border-b border-ink-200 bg-white px-4 pb-3 pt-4 shadow-sm md:-mx-6 md:-mt-6 md:px-6 md:pt-6">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <button type="button" onClick={onTerug} title="Terug naar alle saneringen"
+      {/* Kop en zeef zijn één blok dat blijft staan. Stonden ze los, dan schoof de zeef bij het
+          scrollen onder de kop door en zag je hem half — dat was precies wat er niet klopte.
+
+          De titel, de regel eronder en de zijpaden hangen alle drie aan hetzelfde raster: de
+          terugpijl links, en daarnaast één kolom. Zo staat het PD-nummer altijd exact onder het
+          gebouw, ook als de naam lang is of de knop van maat verandert. */}
+      <div className="sticky top-0 z-20 -mx-4 -mt-4 space-y-3 border-b border-ink-200 bg-white px-4 pb-3 pt-4 shadow-sm md:-mx-6 md:-mt-6 md:px-6 md:pt-6">
+        <div className="flex items-start gap-2">
+          <button type="button" onClick={onTerug} title="Terug naar alle saneringen" aria-label="Terug naar alle saneringen"
             className="-ml-2 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-ink-400 hover:bg-ink-100 hover:text-ink-800">
             <ArrowLeft className="h-5 w-5" />
           </button>
-          {/* De plek staat groot, het PD-nummer klein. Je herkent een klus aan het gebouw, niet aan
-              elf cijfers — en die cijfers heb je alleen nodig als je gaat afboeken. */}
-          <h2 className="min-w-0 truncate text-xl font-bold text-ink-900">{dossier.gebouw || dossier.omschrijving || dossier.pd_nummer}</h2>
-          <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${KLEUR[STATUS_INFO[dossier.status]?.kleur ?? "slate"]}`}>
-            {STATUS_INFO[dossier.status]?.label}
-          </span>
 
-          {/* De zijpaden. Klein en rechts, want je komt hier voor de adressen. */}
-          <div className="ml-auto flex flex-wrap items-center gap-1">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+              {/* De plek staat groot, het PD-nummer klein eronder. Je herkent een klus aan het
+                  gebouw, niet aan elf cijfers — die heb je pas nodig als je gaat afboeken. */}
+              <h2 className="min-w-0 truncate text-xl font-bold leading-7 text-ink-900">{dossier.gebouw || dossier.omschrijving || dossier.pd_nummer}</h2>
+              <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-bold ${KLEUR[STATUS_INFO[dossier.status]?.kleur ?? "slate"]}`}>
+                {STATUS_INFO[dossier.status]?.label}
+              </span>
+            </div>
+            <p className="mt-0.5 truncate text-xs text-ink-500">
+              <span className="font-mono">{dossier.pd_nummer}</span>
+              {[dossier.opdrachtgever, dossier.regio].filter(Boolean).map((t) => ` · ${t}`).join("")}
+              {dossier.uitvoering_van && ` · uitvoering ${kortNL(dossier.uitvoering_van)}`}
+            </p>
+          </div>
+
+          {/* De zijpaden: klein en rechts, want je komt hier voor de adressen. */}
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
             {EXTRAS.map((x) => (
               <button key={x.key} type="button" onClick={() => { setStap(actief === x.key ? null : x.key); setCluster(null); }}
                 title={x.titel}
                 className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors ${
                   actief === x.key ? "bg-brand-600 text-white" : "text-ink-500 hover:bg-ink-100 hover:text-ink-800"}`}>
                 <x.Icon className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">{x.titel}</span>
+                <span className="hidden lg:inline">{x.titel}</span>
                 {af[x.key] && actief !== x.key && <Check className="h-3 w-3 text-green-500" />}
               </button>
             ))}
           </div>
         </div>
 
-        <p className="mt-0.5 truncate pl-7 text-xs text-ink-500">
-          <span className="font-mono">{dossier.pd_nummer}</span>
-          {[dossier.opdrachtgever, dossier.regio].filter(Boolean).map((t) => ` · ${t}`).join("")}
-          {dossier.uitvoering_van && ` · uitvoering ${kortNL(dossier.uitvoering_van)}`}
-        </p>
+        {/* De zeef hoort bij de kop: hij blijft staan terwijl je door 52 adressen scrollt. */}
+        {!actief && adressen.length > 0 && (
+          <WerklijstZeef adressen={adressen} beeld={beeld} setBeeld={setBeeld} zoek={zoek} setZoek={setZoek} />
+        )}
       </div>
 
       {/* Zonder zijpad zie je waar je voor komt: de adressen. */}
@@ -201,7 +220,7 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
           ? <Leeg Icon={ListPlus} titel="Nog geen adressen"
               tekst="Lees eerst het adressenbestand van de opdrachtgever in. De app haalt daar de adressen en de telefoonnummers uit, en zet de rest apart zodat je weet waar je langs moet."
               knop="Bestand inlezen" onKlik={() => setStap("inlezen")} />
-          : <SaneerWerklijst adressen={adressen} clusters={clusters} naamVan={naamVan} onWijzig={() => void laad()} />
+          : <SaneerWerklijst adressen={adressen} clusters={clusters} naamVan={naamVan} onWijzig={() => void laad()} beeld={beeld} setBeeld={setBeeld} zoek={zoek} />
       )}
 
       {actief === "inlezen" && <SaneerImport dossier={dossier} aantalNu={adressen.length} onKlaar={() => void laad()} />}

@@ -43,14 +43,48 @@ export function beeldVan(a: FlowAdres): Exclude<Beeld, "alles"> {
   return a.telefoon.trim() ? "bellen" : "deur";
 }
 
-export function SaneerWerklijst({ adressen, clusters, naamVan, onWijzig }: {
+// De zeef hoort bij de kop en niet bij de lijst: staat hij in de lijst, dan schuift hij bij het
+// scrollen onder de vastgezette kop door en zie je hem half. Hij wordt daarom apart aangeleverd en
+// bovenin meegezet, zodat kop en zeef één blok zijn dat blijft staan.
+export function WerklijstZeef({ adressen, beeld, setBeeld, zoek, setZoek }: {
+  adressen: FlowAdres[];
+  beeld: Beeld; setBeeld: (b: Beeld) => void;
+  zoek: string; setZoek: (z: string) => void;
+}) {
+  const tel = (b: Exclude<Beeld, "alles">) => adressen.filter((a) => beeldVan(a) === b).length;
+  const knopjes = ([
+    ["deur", "Langs de deur", tel("deur")],
+    ["bellen", "Te bellen", tel("bellen")],
+    ["klaar", "Klaar", tel("klaar")],
+    ["alles", "Alles", adressen.length],
+  ] as const);
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {knopjes.map(([k, label, n]) => (
+        <button key={k} type="button" onClick={() => setBeeld(k)}
+          className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-bold transition-colors ${
+            beeld === k ? "bg-brand-600 text-white" : "bg-white text-ink-600 ring-1 ring-ink-200 hover:bg-ink-50"}`}>
+          {label}
+          <span className={`rounded-full px-1.5 text-xs ${beeld === k ? "bg-white/25" : "bg-ink-100 text-ink-500"}`}>{n}</span>
+        </button>
+      ))}
+      <div className="relative ml-auto w-full sm:w-56">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" />
+        <input value={zoek} onChange={(e) => setZoek(e.target.value)} placeholder="Straat, bewoner of nummer…"
+          className="w-full rounded-xl border border-ink-200 py-2 pl-9 pr-3 text-sm outline-none focus:border-brand-400" />
+      </div>
+    </div>
+  );
+}
+
+export function SaneerWerklijst({ adressen, clusters, naamVan, onWijzig, beeld, setBeeld, zoek }: {
   adressen: FlowAdres[];
   clusters: WerkGroep[];
   naamVan: (id?: string | null) => string;
   onWijzig: () => void;
+  beeld: Beeld; setBeeld: (b: Beeld) => void;
+  zoek: string;
 }) {
-  const [beeld, setBeeld] = useState<Beeld>("deur");
-  const [zoek, setZoek] = useState("");
   const [bezig, setBezig] = useState<string>("");
   const [concept, setConcept] = useState<Record<string, string>>({});
   const timers = useRef<Record<string, number>>({});
@@ -58,7 +92,7 @@ export function SaneerWerklijst({ adressen, clusters, naamVan, onWijzig }: {
   // Het beeld waar niets meer in staat, hoef je niet open te houden. Heb je alle deuren gehad, dan
   // sta je vanzelf in de bellijst — dat is immers waar het werk dan ligt.
   const inBeeld = (b: Exclude<Beeld, "alles">) => adressen.filter((a) => beeldVan(a) === b);
-  const telDeur = inBeeld("deur").length, telBellen = inBeeld("bellen").length, telKlaar = inBeeld("klaar").length;
+  const telDeur = inBeeld("deur").length, telBellen = inBeeld("bellen").length;
   useEffect(() => {
     if (beeld === "deur" && telDeur === 0 && telBellen > 0) setBeeld("bellen");
   }, [beeld, telDeur, telBellen]);
@@ -89,32 +123,8 @@ export function SaneerWerklijst({ adressen, clusters, naamVan, onWijzig }: {
     }, 600);
   };
 
-  const knopjes = ([
-    ["deur", "Langs de deur", telDeur],
-    ["bellen", "Te bellen", telBellen],
-    ["klaar", "Klaar", telKlaar],
-    ["alles", "Alles", adressen.length],
-  ] as const);
-
   return (
     <div className="space-y-3">
-      {/* Geen stappen meer, alleen een zeef. Je blijft op dezelfde pagina staan. */}
-      <div className="flex flex-wrap items-center gap-2">
-        {knopjes.map(([k, label, n]) => (
-          <button key={k} type="button" onClick={() => setBeeld(k)}
-            className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-bold transition-colors ${
-              beeld === k ? "bg-brand-600 text-white" : "bg-white text-ink-600 ring-1 ring-ink-200 hover:bg-ink-50"}`}>
-            {label}
-            <span className={`rounded-full px-1.5 text-xs ${beeld === k ? "bg-white/25" : "bg-ink-100 text-ink-500"}`}>{n}</span>
-          </button>
-        ))}
-        <div className="relative ml-auto w-full sm:w-64">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" />
-          <input value={zoek} onChange={(e) => setZoek(e.target.value)} placeholder="Straat, bewoner of nummer…"
-            className="w-full rounded-xl border border-ink-200 py-2 pl-9 pr-3 text-sm outline-none focus:border-brand-400" />
-        </div>
-      </div>
-
       {/* Wat je op dit beeld moet doen, in één zin. */}
       <p className="text-sm text-ink-600">
         {beeld === "deur" ? "Rijd langs deze deuren. Gaan ze akkoord met de dag? Vink af. Willen ze gebeld worden? Vul het nummer in. Niemand thuis? Kaartje in de bus."
