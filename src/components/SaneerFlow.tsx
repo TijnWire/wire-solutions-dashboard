@@ -111,18 +111,54 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
     poster: taken.length > 0 && openTaken === 0,
     afronden: detail?.dossier.status === "afgerond" || detail?.dossier.status === "afgeboekt",
   };
+  // Wat moet je op deze stap doen? Niet de naam van de stap, maar de eerstvolgende handeling, in de
+  // woorden die je aan een nieuwe collega zou gebruiken. Dit staat groot bovenaan elke stap, want
+  // "Bellen — geen" zegt iemand die hier net werkt helemaal niets.
+  const watNu: Record<StapKey, string> = {
+    inlezen: adressen.length === 0
+      ? "Sleep het adressenbestand van de opdrachtgever in het vak hieronder."
+      : `Er staan ${adressen.length} adressen klaar. Ga door naar Verdelen, of lees nog een bestand in.`,
+    verdelen: clusters.length === 0
+      ? "Klik op ‘Groepen maken’. De adressen worden dan per postcode bij elkaar gezet."
+      : verdeeld < clusters.length
+        ? "Kies hierboven wie dit project doet. Eén klik zet alle groepen op die naam."
+        : "Alles is verdeeld. Ga door naar Langs de deur.",
+    deur: langs.length === 0
+      ? "Van elk adres is een telefoonnummer bekend. Hier hoef je niet meer heen."
+      : `Bij ${langs.length} ${langs.length === 1 ? "adres" : "adressen"} is geen telefoonnummer bekend. Rijd erheen en vraag het aan de deur; is er niemand thuis, gooi dan een kaartje in de bus.`,
+    bellen: bellen.length === 0
+      ? "Er is nog van niemand een telefoonnummer. Haal die eerst op bij Langs de deur."
+      : bellen.every((a) => a.belstatus === "akkoord")
+        ? "Met iedereen is een afspraak gemaakt. Ga door naar Afronden."
+        : `Bel de bewoners en spreek de dag af waarop iedereen thuis moet zijn. Nog ${bellen.filter((a) => a.belstatus !== "akkoord").length} te gaan.`,
+    afronden: "Loop de lijst na: staat bij elk adres een telefoonnummer en een dag? Klopt het, dan kun je het dossier afronden.",
+    poster: taken.length === 0
+      ? "Zodra met een groep een dag is afgesproken, komt hier vanzelf de taak om de aankondiging op te hangen."
+      : openTaken > 0
+        ? `Hang de aankondiging op in ${openTaken === 1 ? "het gebouw" : `${openTaken} gebouwen`} en vink hem hier af.`
+        : "Alle posters hangen. Het dossier kan afgeboekt worden.",
+  };
+
+  // Een groen vinkje moet "dit is gedaan" betekenen. Bij een stap waar toevallig niets te doen is
+  // — geen telefoonnummers, dus niets te bellen — leest dat als "klaar, goed bezig", en dat is
+  // misleidend. Zo'n stap blijft grijs met de reden erbij.
+  const nietsTeDoen: Partial<Record<StapKey, boolean>> = {
+    deur: adressen.length > 0 && langs.length === 0,
+    bellen: bellen.length === 0,
+    poster: taken.length === 0,
+  };
   const eerste = STAPPEN.find((s) => !af[s.key])?.key ?? "afronden";
   const actief = stap ?? eerste;
   const index = STAPPEN.findIndex((s) => s.key === actief);
   const huidig = STAPPEN[index];
 
   const samenvatting: Record<StapKey, string> = {
-    inlezen: adressen.length ? `${adressen.length} adressen` : "nog leeg",
-    verdelen: clusters.length ? `${verdeeld}/${clusters.length} verdeeld` : "geen groepen",
-    deur: langs.length ? `${langs.length} zonder nummer` : "alle nummers binnen",
-    bellen: bellen.length ? `${bellen.filter((a) => a.belstatus === "akkoord").length}/${bellen.length} afgesproken` : "geen",
-    poster: taken.length ? `${taken.length - openTaken}/${taken.length}` : "—",
-    afronden: STATUS_INFO[detail?.dossier.status ?? "nieuw"]?.label ?? "—",
+    inlezen: adressen.length ? `${adressen.length} adressen` : "nog geen bestand",
+    verdelen: clusters.length ? `${verdeeld} van de ${clusters.length} groepen verdeeld` : "nog geen groepen",
+    deur: langs.length ? `${langs.length} nog langs` : "alle nummers binnen",
+    bellen: bellen.length ? `${bellen.filter((a) => a.belstatus === "akkoord").length} van de ${bellen.length} afgesproken` : "nog niemand",
+    poster: taken.length ? `${taken.length - openTaken} van de ${taken.length} opgehangen` : "nog niet nodig",
+    afronden: STATUS_INFO[detail?.dossier.status ?? "nieuw"]?.label ?? "nog niet",
   };
 
   if (laden) return <div className="flex items-center justify-center gap-2 py-20 text-sm text-ink-400"><Loader2 className="h-4 w-4 animate-spin" /> Bezig met ophalen…</div>;
@@ -211,8 +247,9 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
                       className={`flex shrink-0 items-center gap-2.5 rounded-xl border-2 px-3.5 py-2 text-left transition-colors ${
                         isNu ? "border-brand-500 bg-brand-50" : "border-ink-200 bg-white hover:border-brand-300 hover:bg-brand-50/50"}`}>
                       <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
-                        af[x.key] ? "bg-green-500 text-white" : isNu ? "bg-brand-600 text-white" : "bg-ink-200 text-ink-500"}`}>
-                        {af[x.key] ? <Check className="h-4 w-4" /> : x.nr}
+                        af[x.key] && !nietsTeDoen[x.key] ? "bg-green-500 text-white"
+                          : isNu ? "bg-brand-600 text-white" : "bg-ink-200 text-ink-500"}`}>
+                        {af[x.key] && !nietsTeDoen[x.key] ? <Check className="h-4 w-4" /> : x.nr}
                       </span>
                       <span className="min-w-0">
                         <span className={`block text-sm font-bold ${isNu ? "text-brand-800" : "text-ink-800"}`}>{x.titel}</span>
@@ -229,11 +266,13 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
         {/* De titel van de stap hoort bij de kop, niet bij de inhoud eronder. Stond hij erbuiten, dan
             kreeg je twee blokken die net niet op elkaar aansloten: een balk over de volle breedte en
             daaronder inhoud met marges ernaast. Nu is het één kop die met één lijn afsluit. */}
-        <div className="flex items-center gap-2.5 border-t border-ink-100 pt-3">
-          <span className="rounded-lg bg-brand-50 p-2 text-brand-600"><huidig.Icon className="h-5 w-5" /></span>
+        <div className="flex items-start gap-2.5 border-t border-ink-100 pt-3">
+          <span className="mt-0.5 shrink-0 rounded-lg bg-brand-50 p-2 text-brand-600"><huidig.Icon className="h-5 w-5" /></span>
           <div className="min-w-0">
             <h3 className="text-base font-bold text-ink-900">Stap {huidig.nr} — {huidig.titel}</h3>
-            <p className="truncate text-sm text-ink-500">{huidig.uitleg}</p>
+            {/* Wat er nú moet gebeuren, in gewone taal. Dit is voor iemand die hier net werkt het
+                enige wat hij hoeft te lezen. */}
+            <p className="text-sm text-ink-700">{watNu[actief]}</p>
           </div>
         </div>
       </div>

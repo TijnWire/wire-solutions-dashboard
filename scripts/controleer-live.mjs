@@ -90,6 +90,7 @@ for (const [wat, naald] of [
   ["telefoonnummer bewaart zichzelf", "wordt bewaard"],
   ["sync-test met stappen", "Gegevens opslaan"],
   ["app werkt zichzelf bij", "wordt geladen"],
+  ["elke stap zegt wat er te doen is", "Rijd erheen en vraag het aan de deur"],
   ["telefoonnummer per adres verplicht", "telefoonnummers"],
   ["een deur tegelijk aan de deur", "Volgende deur"],
   ["lijst met adressen en de dag", "Alle adressen"],
