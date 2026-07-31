@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Check, ArrowLeft, ListPlus, Users, Footprints, PhoneCall, StickyNote, FileCheck2,
+  Check, ArrowLeft, ListPlus, Users, StickyNote, FileCheck2,
   Loader2, AlertTriangle, CalendarCheck, ChevronRight, FileSpreadsheet, FileText, ShieldAlert, ClipboardList,
 } from "lucide-react";
 import { useApp } from "../store/AppContext";
+import { SaneerWerklijst } from "./SaneerWerklijst";
 import { SaneerImport } from "./SaneerImport";
 import { SaneerVerdelen, SaneerClusterWerk } from "./SaneerCluster";
 import { haalDossier, STATUS_INFO, type Dossier, type DossierDetail } from "../lib/saneerflow";
 import {
-  haalFlowAdressen, haalBellijst, haalTaken, vinkTaak, wijzigFlowAdres, rondDossierAf,
-  haalExport, BELSTATUS_INFO, type FlowAdres, type Taak,
+  haalFlowAdressen, haalTaken, vinkTaak, rondDossierAf,
+  haalExport, type FlowAdres, type Taak,
 } from "../lib/saneerflowWerk";
 import { exporteerSaneerExcel, exporteerSaneerPdf } from "../lib/saneerflowExport";
 import { maakChecklists } from "../lib/saneerChecklist";
@@ -21,30 +22,22 @@ import { maakChecklists } from "../lib/saneerChecklist";
 // groep moet gelden. Vandaar de stap "Bellen" (adressen waar al een nummer van bekend is hoeven niet
 // langs) en de stap "Poster" (die moet binnen twee weken na de afspraak in het gebouw hangen).
 
-type StapKey = "inlezen" | "verdelen" | "afboeken" | "deur" | "bellen" | "poster" | "afronden";
-
-// De stappen vallen in twee helften, en dat is precies hoe het werk ook loopt:
+// Wat er náást de werklijst nog te doen is. Dit zijn geen stappen meer maar zijpaden: dingen die
+// je één keer per dossier doet, aan een bureau. Het werk zelf — de adressen — is de pagina.
 //
-//   BEHEER      het bestand inlezen en het werk verdelen. Doe je één keer, achter een bureau.
-//   UITVOERING  wat de medewerker de hele week doet. Twee lijsten die elkaar aanvullen:
-//               zonder telefoonnummer moet je langs de deur; mét nummer kun je bellen.
-//               Haal je aan de deur een nummer op, dan schuift dat adres vanzelf naar Bellen.
-// De volgorde hieronder is de volgorde in de tijd. De nummers tellen per pagina, want elke pagina is
-// een eigen rijtje van begin tot eind — "stap 5 van 6" zei niets meer zodra je maar de helft ziet.
-const STAPPEN: { key: StapKey; nr: number; titel: string; uitleg: string; groep: "beheer" | "werk"; Icon: typeof ListPlus }[] = [
-  { key: "inlezen",  nr: 1, titel: "Inlezen",       uitleg: "Adressenbestand van de opdrachtgever", groep: "beheer", Icon: ListPlus },
-  { key: "verdelen", nr: 2, titel: "Verdelen",      uitleg: "Groepen op postcode, naar één medewerker", groep: "beheer", Icon: Users },
-  { key: "deur",     nr: 1, titel: "Langs de deur", uitleg: "Geen telefoonnummer bekend — hier moet iemand naartoe", groep: "werk", Icon: Footprints },
-  { key: "bellen",   nr: 2, titel: "Bellen",        uitleg: "Nummer bekend — hier maak je de afspraak", groep: "werk", Icon: PhoneCall },
-  // Afronden komt direct na het bellen: zodra de afspraken staan wil je de lijst zien en controleren.
-  // De poster volgt daarna — die hangt pas ná de afspraak, dus dat is ook in de tijd de laatste stap.
-  { key: "afronden", nr: 3, titel: "Afronden",      uitleg: "De lijst met adressen, nummers en de dag", groep: "werk", Icon: FileCheck2 },
-  { key: "poster",   nr: 4, titel: "Poster",        uitleg: "Binnen twee weken na de afspraak in het gebouw", groep: "werk", Icon: StickyNote },
-  // Het sluitstuk, en het enige wat ná het werk nog aan een bureau gebeurt: afboeken op het
-  // PD-nummer. Daarna staat het dossier bij Klaar voor Stedin en kan de facturatie erop.
-  { key: "afboeken", nr: 3, titel: "Afboeken",      uitleg: "Op het PD-nummer — daarmee is het dossier afgehandeld", groep: "beheer", Icon: FileCheck2 },
+// Er stond hier eerst een stappenbalk van zes blokken met een tabbalk erboven en een kop eronder.
+// Vier regels beeldscherm voordat je één adres zag, en op een telefoon was dat de halve pagina. En
+// erger: "Langs de deur" en "Bellen" waren aparte stappen, terwijl het hetzelfde adres is — vul je
+// aan de deur een nummer in, dan schoof het onder je handen naar een andere pagina.
+type StapKey = "inlezen" | "verdelen" | "poster" | "afronden" | "afboeken";
+
+const EXTRAS: { key: StapKey; titel: string; Icon: typeof ListPlus }[] = [
+  { key: "inlezen",  titel: "Inlezen",  Icon: ListPlus },
+  { key: "verdelen", titel: "Verdelen", Icon: Users },
+  { key: "poster",   titel: "Poster",   Icon: StickyNote },
+  { key: "afronden", titel: "Afronden", Icon: FileCheck2 },
+  { key: "afboeken", titel: "Afboeken", Icon: FileCheck2 },
 ];
-const GROEP_LABEL: Record<"beheer" | "werk", string> = { beheer: "Afhandeling", werk: "Het werk" };
 const knop = "inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors";
 const knop2 = knop;
 const KLEUR: Record<string, string> = {
@@ -86,11 +79,6 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
   const [laden, setLaden] = useState(true);
   const [cluster, setCluster] = useState<string | null>(null);
   const [stap, setStap] = useState<StapKey | null>(null);
-  // Twee soorten werk, en ze hoorden niet in één balk. Afhandeling is van het kantoor: het bestand
-  // inlezen, het werk verdelen, en aan het eind afboeken op het PD-nummer. Het werk is van degene die
-  // de wijk in gaat. Zes stappen door elkaar dwongen iedereen om eerst uit te zoeken welke van hem
-  // waren. Nu kies je één keer je kant en zie je alleen nog jouw rijtje.
-  const [deel, setDeel] = useState<"werk" | "afhandeling" | null>(null);
 
   const isLeiding = currentUser?.rol === "eigenaar" || currentUser?.rol === "beheer" || currentUser?.rol === "hr";
   const veldwerkers = useMemo(() => users.filter((u) => u.rol === "monteur" || u.werknemer), [users]);
@@ -106,85 +94,20 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
   const clusters = detail?.clusters ?? [];
   const verdeeld = clusters.filter((k) => k.toegewezen_aan).length;
   const openTaken = taken.filter((t) => !t.afgevinkt_op).length;
-  // De twee lijsten van de uitvoering, en ze schuiven in elkaar over: zodra er bij een adres een
-  // telefoonnummer staat, hoeft er niemand meer langs en kan het gebeld worden.
-  const bellen = adressen.filter((a) => a.telefoon.trim());
-  const langs = adressen.filter((a) => !a.telefoon.trim());
 
   // Wanneer is een stap af? Puur informatief — je mag altijd overal heen.
   const af: Record<StapKey, boolean> = {
     inlezen: adressen.length > 0,
     verdelen: clusters.length > 0 && verdeeld === clusters.length,
-    // Pas af als er van elk adres een nummer is (of de bewoner werkt niet mee).
-    deur: langs.every((a) => a.telefoon.trim() || a.belstatus === "weigert"),
-    bellen: bellen.length === 0 || bellen.every((a) => a.belstatus === "akkoord"),
     poster: taken.length > 0 && openTaken === 0,
     afronden: detail?.dossier.status === "afgerond" || detail?.dossier.status === "afgeboekt",
     afboeken: detail?.dossier.status === "afgeboekt",
   };
-  // Wat moet je op deze stap doen? Niet de naam van de stap, maar de eerstvolgende handeling, in de
-  // woorden die je aan een nieuwe collega zou gebruiken. Dit staat groot bovenaan elke stap, want
-  // "Bellen — geen" zegt iemand die hier net werkt helemaal niets.
-  const watNu: Record<StapKey, string> = {
-    inlezen: adressen.length === 0
-      ? "Sleep het adressenbestand van de opdrachtgever in het vak hieronder."
-      : `Er staan ${adressen.length} adressen klaar. Ga door naar Verdelen, of lees nog een bestand in.`,
-    verdelen: clusters.length === 0
-      ? "Klik op ‘Groepen maken’. De adressen worden dan per postcode bij elkaar gezet."
-      : verdeeld < clusters.length
-        ? "Kies hierboven wie dit project doet. Eén klik zet alle groepen op die naam."
-        : "Alles is verdeeld. Ga door naar Langs de deur.",
-    deur: langs.length === 0
-      ? "Van elk adres is een telefoonnummer bekend. Hier hoef je niet meer heen."
-      : `Bij ${langs.length} ${langs.length === 1 ? "adres" : "adressen"} is geen telefoonnummer bekend. Rijd erheen en vraag het aan de deur; is er niemand thuis, gooi dan een kaartje in de bus.`,
-    bellen: bellen.length === 0
-      ? "Er is nog van niemand een telefoonnummer. Haal die eerst op bij Langs de deur."
-      : bellen.every((a) => a.belstatus === "akkoord")
-        ? "Met iedereen is een afspraak gemaakt. Ga door naar Afronden."
-        : `Bel de bewoners en spreek de dag af waarop iedereen thuis moet zijn. Nog ${bellen.filter((a) => a.belstatus !== "akkoord").length} te gaan.`,
-    afronden: "Loop de lijst na: staat bij elk adres een telefoonnummer en een dag? Klopt het, dan kun je het dossier afronden.",
-    afboeken: detail?.dossier.status === "afgeboekt"
-      ? "Dit dossier is afgeboekt en staat in het archief. Je kunt hem nog inzien, niet meer wijzigen."
-      : detail?.dossier.status === "afgerond"
-        ? "Het werk is klaar en het dossier staat bij Klaar voor Stedin. Boek het af op het PD-nummer, dan is het afgehandeld en gaat het naar het archief."
-        : "Het werk moet eerst afgerond worden. Dat gebeurt bij Het werk, op de laatste stap.",
-    poster: taken.length === 0
-      ? "Zodra met een groep een dag is afgesproken, komt hier vanzelf de taak om de aankondiging op te hangen."
-      : openTaken > 0
-        ? `Hang de aankondiging op in ${openTaken === 1 ? "het gebouw" : `${openTaken} gebouwen`} en vink hem hier af.`
-        : "Alle posters hangen. Het dossier kan afgeboekt worden.",
-  };
 
-  // Een groen vinkje moet "dit is gedaan" betekenen. Bij een stap waar toevallig niets te doen is
-  // — geen telefoonnummers, dus niets te bellen — leest dat als "klaar, goed bezig", en dat is
-  // misleidend. Zo'n stap blijft grijs met de reden erbij.
-  const nietsTeDoen: Partial<Record<StapKey, boolean>> = {
-    deur: adressen.length > 0 && langs.length === 0,
-    bellen: bellen.length === 0,
-    poster: taken.length === 0,
-    afboeken: detail?.dossier.status !== "afgerond" && detail?.dossier.status !== "afgeboekt",
-  };
-  // Welke kant sta je op? Zolang er niets is ingelezen of verdeeld valt er in het veld niets te doen,
-  // dus begin je dan bij de afhandeling. Daarna opent hij altijd op het werk — dat is waar de dag
-  // in zit.
-  const deelActief = deel ?? (adressen.length === 0 || clusters.length === 0 ? "afhandeling" : "werk");
-  const stappenNu = STAPPEN.filter((x) => x.groep === (deelActief === "werk" ? "werk" : "beheer"));
-  // De eerste stap op deze pagina die nog niet af is. Wissel je van pagina, dan hoort de stap van de
-  // andere kant er niet meer bij en springt hij vanzelf naar het eerstvolgende dat er wél toe doet.
-  const eerste = stappenNu.find((x) => !af[x.key])?.key ?? stappenNu[stappenNu.length - 1].key;
-  const actief = stap && stappenNu.some((x) => x.key === stap) ? stap : eerste;
-  const huidig = stappenNu.find((x) => x.key === actief) ?? stappenNu[0];
+  // Geen stap is het gewone geval: dan zie je de werklijst. Een zijpad kies je bewust, en met de
+  // kruisknop ben je zo weer terug bij de adressen.
+  const actief = stap;
 
-  const samenvatting: Record<StapKey, string> = {
-    inlezen: adressen.length ? `${adressen.length} adressen` : "nog geen bestand",
-    verdelen: clusters.length ? `${verdeeld} van de ${clusters.length} groepen verdeeld` : "nog geen groepen",
-    deur: langs.length ? `${langs.length} nog langs` : "alle nummers binnen",
-    bellen: bellen.length ? `${bellen.filter((a) => a.belstatus === "akkoord").length} van de ${bellen.length} afgesproken` : "nog niemand",
-    poster: taken.length ? `${taken.length - openTaken} van de ${taken.length} opgehangen` : "nog niet nodig",
-    afronden: STATUS_INFO[detail?.dossier.status ?? "nieuw"]?.label ?? "nog niet",
-    afboeken: detail?.dossier.status === "afgeboekt" ? "afgeboekt"
-      : detail?.dossier.status === "afgerond" ? "klaar om af te boeken" : "nog niet aan toe",
-  };
 
   if (laden) return <div className="flex items-center justify-center gap-2 py-20 text-sm text-ink-400"><Loader2 className="h-4 w-4 animate-spin" /> Bezig met ophalen…</div>;
   if (!detail) return (
@@ -238,86 +161,48 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
           8 px was het gat. De achtergrond is bovendien dekkend — met bg-white/95 en een waas zie je
           de kaarten er gewoon doorheen komen. */}
       <div className="sticky top-0 z-20 -mx-4 -mt-4 border-b border-ink-200 bg-white px-4 pb-3 pt-4 shadow-sm md:-mx-6 md:-mt-6 md:px-6 md:pt-6">
-        <button type="button" onClick={onTerug} className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-700">
-          <ArrowLeft className="h-4 w-4" /> Alle saneringen
-        </button>
-
-        <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
-            <h2 className="font-mono text-xl font-bold tracking-wide text-ink-900">{dossier.pd_nummer}</h2>
-            <p className="text-sm text-ink-500">
-              {[dossier.opdrachtgever, dossier.gebouw, dossier.regio].filter(Boolean).join(" · ")}
-              {dossier.uitvoering_van && ` · uitvoering ${kortNL(dossier.uitvoering_van)}`}
-            </p>
-          </div>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <button type="button" onClick={onTerug} title="Terug naar alle saneringen"
+            className="-ml-2 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-ink-400 hover:bg-ink-100 hover:text-ink-800">
+            <ArrowLeft className="h-5 w-5" />
+          </button>
+          {/* De plek staat groot, het PD-nummer klein. Je herkent een klus aan het gebouw, niet aan
+              elf cijfers — en die cijfers heb je alleen nodig als je gaat afboeken. */}
+          <h2 className="min-w-0 truncate text-xl font-bold text-ink-900">{dossier.gebouw || dossier.omschrijving || dossier.pd_nummer}</h2>
           <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${KLEUR[STATUS_INFO[dossier.status]?.kleur ?? "slate"]}`}>
             {STATUS_INFO[dossier.status]?.label}
           </span>
-        </div>
 
-        {/* Eerst kiezen welke kant van het werk je doet, dan pas de stappen. Alle zes door elkaar in
-            één balk betekende dat iedereen eerst moest uitzoeken welke stappen van hem waren. */}
-        <div className="mt-2.5 flex gap-1 rounded-xl border border-ink-200 bg-ink-50 p-1">
-          {(["werk", "afhandeling"] as const).map((k) => {
-            const groep = k === "werk" ? "werk" : "beheer";
-            const bij = k === "werk"
-              ? (adressen.length === 0 ? "nog geen adressen" : `${bellen.filter((a) => a.belstatus === "akkoord").length} van de ${adressen.length} afgesproken`)
-              : (STATUS_INFO[dossier.status]?.label ?? "");
-            const isNu = deelActief === k;
-            // Het bolletje telt hoeveel stappen op die kant nog te doen zijn. Zo zie je op de andere
-            // pagina dat er iets ligt zonder erheen te hoeven.
-            const teDoen = STAPPEN.filter((x) => x.groep === groep && !af[x.key] && !nietsTeDoen[x.key]).length;
-            return (
-              <button key={k} type="button" onClick={() => { setDeel(k); setStap(null); setCluster(null); }}
-                className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-bold transition-colors ${
-                  isNu ? "bg-white text-ink-900 shadow-sm ring-1 ring-ink-200" : "text-ink-500 hover:text-ink-800"}`}>
-                {GROEP_LABEL[groep]}
-                <span className={`text-xs font-medium ${isNu ? "text-ink-500" : "text-ink-400"}`}>· {bij}</span>
-                {!isNu && teDoen > 0 && (
-                  <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-brand-600 px-1.5 text-[11px] font-bold text-white">{teDoen}</span>
-                )}
+          {/* De zijpaden. Klein en rechts, want je komt hier voor de adressen. */}
+          <div className="ml-auto flex flex-wrap items-center gap-1">
+            {EXTRAS.map((x) => (
+              <button key={x.key} type="button" onClick={() => { setStap(actief === x.key ? null : x.key); setCluster(null); }}
+                title={x.titel}
+                className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors ${
+                  actief === x.key ? "bg-brand-600 text-white" : "text-ink-500 hover:bg-ink-100 hover:text-ink-800"}`}>
+                <x.Icon className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">{x.titel}</span>
+                {af[x.key] && actief !== x.key && <Check className="h-3 w-3 text-green-500" />}
               </button>
-            );
-          })}
-        </div>
-
-        {/* De stappen van de kant die openstaat. Klikken kan overal naartoe — niets zit op slot, want
-            ook halverwege moet je iets kunnen bijstellen. Op een telefoon schuift de balk zijwaarts;
-            is er breedte, dan breekt hij netjes af in plaats van achter de rand door te lopen. */}
-        <div className="-mx-4 mt-2.5 flex gap-2 overflow-x-auto px-4 pb-2 sm:-mx-6 sm:flex-wrap sm:overflow-visible sm:px-6">
-          {stappenNu.map((x) => {
-            const isNu = x.key === actief;
-            return (
-              <button key={x.key} type="button" onClick={() => { setStap(x.key); setCluster(null); }} aria-current={isNu ? "step" : undefined}
-                className={`flex shrink-0 items-center gap-2.5 rounded-xl border-2 px-3.5 py-2 text-left transition-colors ${
-                  isNu ? "border-brand-500 bg-brand-50" : "border-ink-200 bg-white hover:border-brand-300 hover:bg-brand-50/50"}`}>
-                <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
-                  af[x.key] && !nietsTeDoen[x.key] ? "bg-green-500 text-white"
-                    : isNu ? "bg-brand-600 text-white" : "bg-ink-200 text-ink-500"}`}>
-                  {af[x.key] && !nietsTeDoen[x.key] ? <Check className="h-4 w-4" /> : x.nr}
-                </span>
-                <span className="min-w-0">
-                  <span className={`block text-sm font-bold ${isNu ? "text-brand-800" : "text-ink-800"}`}>{x.titel}</span>
-                  <span className="block text-[11px] text-ink-500">{samenvatting[x.key]}</span>
-                </span>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* De titel van de stap hoort bij de kop, niet bij de inhoud eronder. Stond hij erbuiten, dan
-            kreeg je twee blokken die net niet op elkaar aansloten: een balk over de volle breedte en
-            daaronder inhoud met marges ernaast. Nu is het één kop die met één lijn afsluit. */}
-        <div className="flex items-start gap-2.5 border-t border-ink-100 pt-3">
-          <span className="mt-0.5 shrink-0 rounded-lg bg-brand-50 p-2 text-brand-600"><huidig.Icon className="h-5 w-5" /></span>
-          <div className="min-w-0">
-            <h3 className="text-base font-bold text-ink-900">Stap {huidig.nr} van {stappenNu.length} — {huidig.titel}</h3>
-            {/* Wat er nú moet gebeuren, in gewone taal. Dit is voor iemand die hier net werkt het
-                enige wat hij hoeft te lezen. */}
-            <p className="text-sm text-ink-700">{watNu[actief]}</p>
+            ))}
           </div>
         </div>
+
+        <p className="mt-0.5 truncate pl-7 text-xs text-ink-500">
+          <span className="font-mono">{dossier.pd_nummer}</span>
+          {[dossier.opdrachtgever, dossier.regio].filter(Boolean).map((t) => ` · ${t}`).join("")}
+          {dossier.uitvoering_van && ` · uitvoering ${kortNL(dossier.uitvoering_van)}`}
+        </p>
       </div>
+
+      {/* Zonder zijpad zie je waar je voor komt: de adressen. */}
+      {!actief && (
+        adressen.length === 0
+          ? <Leeg Icon={ListPlus} titel="Nog geen adressen"
+              tekst="Lees eerst het adressenbestand van de opdrachtgever in. De app haalt daar de adressen en de telefoonnummers uit, en zet de rest apart zodat je weet waar je langs moet."
+              knop="Bestand inlezen" onKlik={() => setStap("inlezen")} />
+          : <SaneerWerklijst adressen={adressen} clusters={clusters} naamVan={naamVan} onWijzig={() => void laad()} />
+      )}
 
       {actief === "inlezen" && <SaneerImport dossier={dossier} aantalNu={adressen.length} onKlaar={() => void laad()} />}
 
@@ -327,59 +212,6 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
           : <SaneerVerdelen dossier={dossier} adressen={adressen} clusters={clusters} veldwerkers={veldwerkers} naamVan={naamVan} onWijzig={() => void laad()} />
       )}
 
-      {actief === "deur" && (
-        clusters.length === 0
-          ? <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">Maak eerst groepen in stap 2.</p>
-          : (
-              <div className="space-y-2">
-                {clusters.map((k) => {
-                  // Per groep laten zien hoe ver het veldwerk staat. "Geen datum" zei niets over wat
-                  // er nog te doen was; dít is waar je op stuurt: bij hoeveel deuren heb je een
-                  // telefoonnummer, waar ligt een kaartje, en waar moet je nog heen.
-                  const inGroep = adressen.filter((a) => a.cluster_id === k.id);
-                  const nummer = inGroep.filter((a) => a.telefoon.trim()).length;
-                  const kaartje = inGroep.filter((a) => !a.telefoon.trim() && a.kaartje_op).length;
-                  const open = inGroep.length - nummer - kaartje;   // hier moet nog iemand naartoe
-                  const pct = inGroep.length ? Math.round(((nummer + kaartje) / inGroep.length) * 100) : 0;
-                  return (
-                    <button key={k.id} type="button" onClick={() => setCluster(k.id)}
-                      className="block w-full overflow-hidden rounded-2xl border border-ink-200 bg-white text-left transition-shadow hover:shadow-md">
-                      <div className="flex items-center justify-between gap-3 px-4 pb-2.5 pt-3">
-                        <span className="min-w-0">
-                          <span className="block truncate font-semibold text-ink-900">{k.naam || k.postcode}</span>
-                          <span className="block text-xs text-ink-500">
-                            {inGroep.length} deuren · {naamVan(k.toegewezen_aan)}
-                            {k.definitieve_datum ? ` · uitvoering ${kortNL(k.definitieve_datum)}` : ""}
-                          </span>
-                        </span>
-                        <span className="flex shrink-0 items-center gap-1.5">
-                          {open === 0
-                            ? <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${KLEUR.green}`}>gehad</span>
-                            : <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${KLEUR.slate}`}>{open} nog langs</span>}
-                          <ChevronRight className="h-5 w-5 text-ink-400" />
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-3 px-4 pb-3 text-xs">
-                        {/* Het telefoonnummer is wat er per adres bij moet: zonder nummer kan niemand
-                            deze bewoner bellen voor de afspraak, en ook niet waarschuwen als de dag
-                            verschuift. Daarom staat de teller er als doel en niet als losse cijfer. */}
-                        <span className={nummer === inGroep.length ? "font-semibold text-green-700" : "font-semibold text-amber-700"}>
-                          {nummer} van de {inGroep.length} telefoonnummers
-                        </span>
-                        {kaartje > 0 && <span className="text-ink-500">{kaartje} kaartje</span>}
-                        <span className="ml-auto font-semibold tabular-nums text-ink-400">{pct}%</span>
-                      </div>
-                      <div className="h-1.5 bg-ink-100">
-                        <div className="h-full bg-green-500 transition-all" style={{ width: `${pct}%` }} />
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )
-      )}
-
-      {actief === "bellen" && <Bellijst pd={pd} onWijzig={() => void laad()} />}
       {actief === "poster" && <Posters taken={taken} naamVan={naamVan} onWijzig={() => void laad()} />}
       {actief === "afronden" && <Afronden dossier={dossier} clusters={clusters} adressen={adressen} taken={taken} onWijzig={() => void laad()} />}
 
@@ -387,73 +219,13 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
         dossier.status === "afgerond" || dossier.status === "afgeboekt"
           ? <Afboeken dossier={dossier} onWijzig={() => void laad()} />
           : <Leeg Icon={FileCheck2} titel="Het werk is nog niet afgerond"
-              tekst="Afboeken kan pas als de afspraken staan en het dossier is afgerond. Dat gebeurt op de laatste stap van Het werk."
-              knop="Naar Het werk" onKlik={() => { setDeel("werk"); setStap("afronden"); }} />
+              tekst="Afboeken kan pas als de afspraken staan en het dossier is afgerond. Dat doe je bij Afronden."
+              knop="Naar Afronden" onKlik={() => setStap("afronden")} />
       )}
     </div>
   );
 }
 
-// ── Stap 4 — de bellijst ──
-// Adressen waarvan de opdrachtgever al een nummer aanleverde. Terugbellen staat bovenaan: dat is een
-// afspraak met een bewoner, geen wenslijst.
-function Bellijst({ pd, onWijzig }: { pd: string; onWijzig: () => void }) {
-  const [lijst, setLijst] = useState<FlowAdres[] | null>(null);
-  const laad = useCallback(async () => setLijst(await haalBellijst(pd)), [pd]);
-  useEffect(() => { void laad(); }, [laad]);
-
-  async function zet(a: FlowAdres, belstatus: string) {
-    await wijzigFlowAdres(a.id, { belstatus, belpogingen: (a.belpogingen ?? 0) + (belstatus === "geen_gehoor" ? 1 : 0) });
-    void laad(); onWijzig();
-  }
-
-  if (!lijst) return <div className="flex items-center gap-2 py-10 text-sm text-ink-400"><Loader2 className="h-4 w-4 animate-spin" /> Bezig…</div>;
-  if (lijst.length === 0) return <Leeg Icon={PhoneCall} titel="Nog niemand te bellen" tekst="Zodra er bij een adres een telefoonnummer bekend is — aangeleverd of aan de deur genoteerd — verschijnt het hier vanzelf." />;
-
-  const terugbellen = lijst.filter((a) => a.belstatus === "terugbellen");
-
-  return (
-    <div className="space-y-3">
-      <div className="rounded-xl bg-brand-50 px-4 py-3 text-sm text-brand-900">
-        Alle adressen waarvan het nummer bekend is. Wat aan de deur al is afgesproken staat groen —
-        daar hoef je niet meer achteraan.
-      </div>
-
-      {terugbellen.length > 0 && (
-        <div className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-800">
-          <b>{terugbellen.length} bewoner(s)</b> wachten op een terugbelafspraak. Die staan hieronder bovenaan.
-        </div>
-      )}
-      {lijst.map((a) => {
-        const info = BELSTATUS_INFO[a.belstatus] ?? BELSTATUS_INFO[""];
-        return (
-          <div key={a.id} className="rounded-2xl border border-ink-200 bg-white p-4">
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <div className="min-w-0">
-                <div className="font-semibold text-ink-900">{`${a.straat} ${a.huisnummer}${a.toevoeging}`.trim()}</div>
-                <div className="text-xs text-ink-500">{a.bewoner || "naam onbekend"} · {a.cluster_naam || a.postcode}</div>
-              </div>
-              <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${KLEUR[info.kleur]}`}>
-                {info.label}{a.belpogingen > 0 ? ` (${a.belpogingen}×)` : ""}
-              </span>
-            </div>
-            <a href={`tel:${a.telefoon}`} className={`${knop} mt-3 w-full bg-brand-600 text-white hover:bg-brand-700`}>
-              <PhoneCall className="h-4 w-4" /> {a.telefoon}
-            </a>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {(["gebeld", "geen_gehoor", "terugbellen", "akkoord"] as const).map((s) => (
-                <button key={s} type="button" onClick={() => void zet(a, s)}
-                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${a.belstatus === s ? KLEUR[BELSTATUS_INFO[s].kleur] : "bg-ink-50 text-ink-600 hover:bg-ink-100"}`}>
-                  {BELSTATUS_INFO[s].label}
-                </button>
-              ))}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
 
 // ── Poster ──
 // De taak ontstaat vanzelf zodra een groep een datum heeft. Ophangen moet binnen twee weken ná die
