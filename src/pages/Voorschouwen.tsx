@@ -966,7 +966,10 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
 
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-sm font-bold text-ink-700">Adressen in mappen</h3>
-            <button type="button" onClick={nieuweMap} className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 bg-white px-3 py-1.5 text-xs font-semibold text-ink-700 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700">
+            {/* Een map aanmaken is hier de handeling waarmee je begint, dus die knop hoort er ook
+                uit te zien als een knop en niet als een randje. Zelfde maat en kleur als "Nieuwe
+                voorschouw" bovenaan. */}
+            <button type="button" onClick={nieuweMap} className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700">
               <FolderPlus className="h-4 w-4" /> Nieuwe map
             </button>
           </div>
