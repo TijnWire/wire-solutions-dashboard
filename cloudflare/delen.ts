@@ -46,6 +46,12 @@ const deelSleutel = (key: string, gen: string, i: number, oud = false) =>
 // voorkomt, dus dit is geen naamafspraak die per ongeluk kan botsen.
 export const isDeelSleutel = (key: string) => key.includes(SCHEIDING) || key.includes(OUDE_SCHEIDING);
 
+// Van welk onderdeel is dit een brok? Beide scheidingstekens tellen mee: er staan nog brokken in de
+// database van vóór de reparatie van 30-07-2026, met een NUL-byte als scheiding. Wie die niet
+// terugrekent, gaat onderhoud doen op een halve brok in plaats van op het onderdeel zelf.
+export const basisSleutel = (key: string) =>
+  key.split(SCHEIDING)[0].split(OUDE_SCHEIDING)[0];
+
 type Markering = { [MARKERING]: 1; delen: number; gen: string; tekens: number };
 const isMarkering = (v: unknown): v is Markering =>
   !!v && typeof v === "object" && (v as Record<string, unknown>)[MARKERING] === 1;

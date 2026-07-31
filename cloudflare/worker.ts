@@ -37,7 +37,7 @@ import {
   spiegelAan, spiegelUpsert, spiegelVerwijder, spiegelInsert, spiegelSelect,
   spiegelStatus, herspiegelAlles, type SpiegelEnv,
 } from "./spiegel";
-import { schrijfGesplitst, herstelAllemaal, isDeelSleutel } from "./delen";
+import { schrijfGesplitst, herstelAllemaal, isDeelSleutel, basisSleutel } from "./delen";
 import { fotoRoutes, verhuisFotos } from "./fotos";
 import { saneerRoutes } from "./saneerflow";
 
@@ -348,11 +348,25 @@ export default {
     if (env.FOTOS) {
       ctx.waitUntil((async () => {
         try {
-          const { results } = await env.DB.prepare("select key from wire_state").all<{ key: string }>();
-          const kandidaten = (results ?? [])
-            .map((r) => r.key)
-            .filter((k) => !isDeelSleutel(k) && k.startsWith("voorschouwen"))
-            .slice(0, 4);
+          // Kies onderdelen waar ook echt nog foto's in zitten. Stond hier eerder simpelweg "de
+          // eerste vier", en dat liep vast: zodra die vier schoon waren schreef de verhuizing niets
+          // meer, bleef hun plek in de lijst hetzelfde, en pakte hij elke nacht opnieuw diezelfde
+          // vier. De andere 56 onderdelen zijn zo nooit aan de beurt geweest — 132 van de 133 MB
+          // stond na weken nog steeds als tekst in de database.
+          //
+          // Let op: bij een gesplitst onderdeel is de hoofdregel leeg en zitten de foto's in de
+          // brokken eronder. We kijken dus naar alle regels en rekenen ze terug naar hun hoofdsleutel.
+          const { results } = await env.DB.prepare(
+            "select key, instr(data, 'data:image') as foto from wire_state"
+          ).all<{ key: string; foto: number }>();
+          const nogTeDoen = new Set<string>();
+          for (const r of results ?? []) {
+            if (!r.foto) continue;
+            const basis = basisSleutel(r.key);
+            if (basis.startsWith("voorschouwen")) nogTeDoen.add(basis);
+          }
+          // Een paar per nacht: één ronde mag nooit zo lang duren dat hij zichzelf afkapt.
+          const kandidaten = [...nogTeDoen].sort().slice(0, 4);
           for (const key of kandidaten) {
             const uit = await verhuisFotos(
               env,
