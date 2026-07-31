@@ -129,6 +129,10 @@ export function SaneerWerklijst({ adressen, clusters, naamVan, onWijzig, beeld, 
   // de database — maar uit de lijst is uit de lijst, en dat wil je niet per ongeluk doen terwijl je
   // met een telefoon in je hand op een galerij staat.
   const [teVerwijderen, setTeVerwijderen] = useState<FlowAdres | null>(null);
+  // Zodra er een nummer staat, hoort dit adres niet meer bij de deuren maar bij de bellijst. Dat
+  // gebeurt vanzelf — maar dan verdwijnt de regel onder je handen, en zonder bericht lijkt het alsof
+  // je invoer weg is. Dit meldt kort waar hij gebleven is.
+  const [verhuisd, setVerhuisd] = useState("");
 
   // Het beeld waar niets meer in staat, hoef je niet open te houden. Heb je alle deuren gehad, dan
   // sta je vanzelf in de bellijst — dat is immers waar het werk dan ligt.
@@ -202,6 +206,8 @@ export function SaneerWerklijst({ adressen, clusters, naamVan, onWijzig, beeld, 
     timers.current[a.id] = window.setTimeout(() => {
       void zet(a, { telefoon: waarde.trim() });
       setConcept((c) => { const n = { ...c }; delete n[a.id]; return n; });
+      setVerhuisd(adresTekst(a));
+      window.setTimeout(() => setVerhuisd(""), 5000);
     }, 600);
   };
 
@@ -433,6 +439,18 @@ export function SaneerWerklijst({ adressen, clusters, naamVan, onWijzig, beeld, 
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Waar het adres gebleven is. Eén regel, verdwijnt vanzelf, en je kunt er meteen heen. */}
+      {verhuisd && (
+        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[60] flex justify-center p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+          <div className="pointer-events-auto flex items-center gap-3 rounded-full bg-ink-900/95 px-4 py-2.5 text-sm text-white shadow-xl">
+            <Phone className="h-4 w-4 shrink-0 text-green-400" />
+            <span><span className="font-semibold">{verhuisd}</span> staat nu bij Te bellen</span>
+            <button type="button" onClick={() => { setBeeld("bellen"); setVerhuisd(""); }}
+              className="rounded-full bg-white/15 px-3 py-1 text-xs font-bold hover:bg-white/25">Erheen</button>
+          </div>
         </div>
       )}
 
