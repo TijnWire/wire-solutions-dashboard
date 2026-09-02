@@ -368,7 +368,13 @@ function LoonstrookGenerator({ startWeek, onKlaar }: { startWeek?: string; onKla
                     <td className="px-4 py-2.5 font-medium text-ink-800">{r.u.naam}</td>
                     <td className="px-4 py-2.5 text-ink-500">{r.u.functie || "—"}</td>
                     <td className="px-4 py-2.5 text-right font-medium text-ink-800 tabular-nums">{r.uren ? `${uurTekst(r.uren)} u` : "0 u"}</td>
-                    <td className="px-4 py-2.5 text-right tabular-nums">{euro(r.u.contract?.bruto ?? 0)}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums">
+                      {(r.u.contract?.bruto ?? 0) === 0 ? (
+                        <span className="inline-flex items-center gap-1 text-amber-600" title="Geen bruto in het contract — de loonstrook wordt €0. Vul het contract in bij Medewerkers.">
+                          <AlertTriangle className="h-3.5 w-3.5" /> {euro(0)}
+                        </span>
+                      ) : euro(r.u.contract?.bruto ?? 0)}
+                    </td>
                     <td className="px-4 py-2.5 text-right tabular-nums">{euro(r.u.contract?.netto ?? 0)}</td>
                     <td className="px-4 py-2.5 text-center">
                       {r.bestaat ? (
