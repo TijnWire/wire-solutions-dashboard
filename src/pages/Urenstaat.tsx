@@ -327,7 +327,9 @@ function WeekRooster({ weekDate, medewerker, regels, vorigeWeekRegels, uursoorte
     });
   };
 
-  const kolommen = "grid grid-cols-[132px_88px_88px_76px_84px_minmax(0,1fr)_36px] items-center gap-2";
+  // 7-koloms raster alleen vanaf sm: (desktop). Op mobiel blijft de rij een flex-kolom
+  // (gestapeld kaartje), dus geen van deze grid-utilities mag naar mobiel lekken.
+  const kolommenSm = "sm:grid sm:grid-cols-[132px_88px_88px_76px_84px_minmax(0,1fr)_36px] sm:items-center sm:gap-2";
   const usOpties = [{ waarde: "", label: "—" }, ...uursoorten.map((u) => ({ waarde: u.id, label: uursoortLabel(u) }))];
   const projOpties = [{ waarde: "", label: "Algemeen" }, ...WERK_CATEGORIEEN.map((c) => ({ waarde: c.id, label: c.naam }))];
 
@@ -382,17 +384,14 @@ function WeekRooster({ weekDate, medewerker, regels, vorigeWeekRegels, uursoorte
         </div>
       </div>
 
-      {/* Op mobiel te breed voor het scherm → horizontaal scrollbaar, zodat geen enkel veld
-          wegvalt. Op desktop is er ruimte zat en zie je alles in één keer. */}
-      <div className="overflow-x-auto">
-        <div className="min-w-[600px]">
-          {/* Kolomkoppen */}
-          <div className={`${kolommen} border-b border-ink-100 px-5 py-2 text-[11px] font-bold uppercase tracking-wide text-ink-400`}>
-            <span>Dag</span><span>Begin</span><span>Eind</span><span>Pauze</span><span>Totaal</span><span>Uursoort · project · opmerking</span><span />
-          </div>
+      {/* Kolomkoppen — alleen op desktop; op mobiel heeft elke dag zijn eigen labels. */}
+      <div className={`${kolommenSm} hidden border-b border-ink-100 px-5 py-2 text-[11px] font-bold uppercase tracking-wide text-ink-400`}>
+        <span>Dag</span><span>Begin</span><span>Eind</span><span>Pauze</span><span>Totaal</span><span>Uursoort · project · opmerking</span><span />
+      </div>
 
-      {/* De zeven dagen */}
-      <div className="divide-y divide-ink-50">
+      {/* De zeven dagen. Op mobiel is elke dag een gestapeld kaartje (velden onder elkaar met labels);
+          op desktop (sm+) één platte rij via het 7-koloms raster. */}
+      <div className="divide-y divide-ink-100 sm:divide-ink-50">
         {dagen.map((iso, i) => {
           const weekend = i >= 5;
           const dr = regelsVanDag(iso);
@@ -401,51 +400,70 @@ function WeekRooster({ weekDate, medewerker, regels, vorigeWeekRegels, uursoorte
           const vrij = verlof.find((v) => v.medewerkerId === medewerker.id && v.status === "Goedgekeurd" && v.van <= iso && v.tot >= iso);
           const datumLabel = d.toLocaleDateString("nl-NL", { day: "numeric", month: "short" });
           const dagVol = ["Maandag", "Dinsdag", "Woensdag", "Donderdag", "Vrijdag", "Zaterdag", "Zondag"][i];
+          // Klein label boven een veld op mobiel (op desktop verborgen; daar staan de kolomkoppen al).
+          const veldLabel = (t: string) => <span className="mb-0.5 block text-[10px] font-semibold uppercase tracking-wide text-ink-400 sm:hidden">{t}</span>;
 
           if (dr.length === 0) {
-            // Lege dag: werkdag = snel toevoegen; weekend = uitgeschakeld met schakelaar aan te zetten.
+            // Lege dag: werkdag = snel toevoegen; weekend = grijs met "werkdag toevoegen".
             return (
-              <div key={iso} className={`${kolommen} px-5 py-2.5 ${weekend ? "bg-ink-50/50" : ""}`}>
+              <div key={iso} className={`flex flex-col gap-2 px-4 py-3 ${kolommenSm} sm:px-5 sm:py-2.5 ${weekend ? "bg-ink-50/50" : ""}`}>
                 <div>
                   <div className={`text-sm font-bold ${weekend ? "text-ink-400" : "text-ink-700"}`}>{dagVol}</div>
                   <div className="text-[11px] text-ink-400">{datumLabel}{fd ? ` · ${fd}` : ""}{vrij ? ` · ${vrij.type}` : ""}</div>
                 </div>
-                <div className="col-span-5 text-sm text-ink-400">
+                <div className="flex flex-wrap items-center gap-2 text-sm text-ink-400 sm:col-span-5">
                   {weekend ? "Vrij" : fd ? fd : vrij ? `${vrij.type} (verlof)` : "Geen uren"}
-                  <button type="button" onClick={() => maakRegel(iso)} className="ml-2 inline-flex items-center gap-1 rounded-lg border border-ink-200 bg-white px-2 py-1 text-xs font-semibold text-brand-600 hover:bg-brand-50">
+                  <button type="button" onClick={() => maakRegel(iso)} className="inline-flex items-center gap-1 rounded-lg border border-ink-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-brand-600 hover:bg-brand-50">
                     <Plus className="h-3.5 w-3.5" /> {weekend ? "Werkdag toevoegen" : "Toevoegen"}
                   </button>
                 </div>
-                <div />
+                <div className="hidden sm:block" />
               </div>
             );
           }
 
-          // Eén of meer periodes op deze dag. De dagnaam staat alleen bij de eerste; extra periodes zijn ingesprongen.
+          // Eén of meer periodes op deze dag. De dagnaam staat alleen bij de eerste; extra periodes ingesprongen.
           return (
             <div key={iso} className={fd || vrij ? "bg-amber-50/40" : ""}>
               {dr.map((r, idx) => (
-                <div key={r.id} className={`${kolommen} px-5 py-2`}>
-                  <div>
-                    {idx === 0 ? (
-                      <>
-                        <div className="text-sm font-bold text-ink-900">{dagVol}</div>
-                        <div className="text-[11px] text-ink-400">{datumLabel}{fd ? ` · ${fd}` : ""}{vrij ? ` · ${vrij.type}` : ""}</div>
-                      </>
-                    ) : (
-                      <div className="text-[11px] italic text-ink-400">— extra periode</div>
-                    )}
+                <div key={r.id} className={`flex flex-col gap-2.5 px-4 py-3 ${kolommenSm} sm:gap-2 sm:px-5 sm:py-2`}>
+                  {/* Dag (+ op mobiel de acties rechtsboven) */}
+                  <div className="flex items-start justify-between sm:block">
+                    <div>
+                      {idx === 0 ? (
+                        <>
+                          <div className="text-sm font-bold text-ink-900">{dagVol}</div>
+                          <div className="text-[11px] text-ink-400">{datumLabel}{fd ? ` · ${fd}` : ""}{vrij ? ` · ${vrij.type}` : ""}</div>
+                        </>
+                      ) : (
+                        <div className="text-[11px] italic text-ink-400">— extra periode</div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-0.5 sm:hidden">
+                      {idx === dr.length - 1 && (
+                        <button type="button" onClick={() => maakRegel(iso, { begin: r.eind ?? STANDAARD_BEGIN, eind: eindNa(r.eind ?? STANDAARD_BEGIN, STANDAARD_DAG, 0), pauze: 0 })} title="Extra periode op deze dag" className="rounded-lg p-2 text-ink-400 hover:bg-ink-100 hover:text-brand-600"><Plus className="h-4 w-4" /></button>
+                      )}
+                      <button type="button" onClick={() => deleteUren(r.id)} title="Periode verwijderen" className="rounded-lg p-2 text-red-400 hover:bg-red-50 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
+                    </div>
                   </div>
-                  <TijdKiezer value={r.begin ?? ""} onChange={(t) => zet(r, { begin: t })} size="rij" placeholder="--:--" title="Begintijd" />
-                  <TijdKiezer value={r.eind ?? ""} onChange={(t) => zet(r, { eind: t })} size="rij" placeholder="--:--" title="Eindtijd" />
-                  <input inputMode="numeric" value={r.pauze ?? 0} onChange={(e) => { const n = parseInt(e.target.value.replace(/\D/g, ""), 10); zet(r, { pauze: Number.isFinite(n) ? n : 0 }); }} aria-label="Pauze in minuten" className={veld} />
-                  <input inputMode="decimal" value={uurTekst(Number(r.uren) || 0)} onChange={(e) => { const n = parseFloat(e.target.value.replace(",", ".")); updateUren(r.id, { uren: Number.isFinite(n) && n >= 0 ? n : 0 }); }} aria-label="Totaal uren" className={veld + " bg-ink-50 font-semibold"} />
+
+                  {/* Begin/Eind/Pauze/Totaal — mobiel als 4-koloms grid met labels; desktop als losse cellen. */}
+                  <div className="grid grid-cols-4 gap-2 sm:contents">
+                    <div>{veldLabel("Begin")}<TijdKiezer value={r.begin ?? ""} onChange={(t) => zet(r, { begin: t })} size="rij" placeholder="--:--" title="Begintijd" /></div>
+                    <div>{veldLabel("Eind")}<TijdKiezer value={r.eind ?? ""} onChange={(t) => zet(r, { eind: t })} size="rij" placeholder="--:--" title="Eindtijd" /></div>
+                    <div>{veldLabel("Pauze")}<input inputMode="numeric" value={r.pauze ?? 0} onChange={(e) => { const n = parseInt(e.target.value.replace(/\D/g, ""), 10); zet(r, { pauze: Number.isFinite(n) ? n : 0 }); }} aria-label="Pauze in minuten" className={veld} /></div>
+                    <div>{veldLabel("Totaal")}<input inputMode="decimal" value={uurTekst(Number(r.uren) || 0)} onChange={(e) => { const n = parseFloat(e.target.value.replace(",", ".")); updateUren(r.id, { uren: Number.isFinite(n) && n >= 0 ? n : 0 }); }} aria-label="Totaal uren" className={veld + " bg-ink-50 font-semibold"} /></div>
+                  </div>
+
+                  {/* Uursoort / project / opmerking */}
                   <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                    <div className="w-32"><Keuze value={r.uursoortId ?? ""} onChange={(w) => zet(r, { uursoortId: w || undefined })} size="rij" opties={usOpties} title="Uursoort" /></div>
-                    <div className="w-32"><Keuze value={r.projectId ?? ""} onChange={(w) => zet(r, { projectId: w || undefined })} size="rij" opties={projOpties} title="Project" /></div>
-                    <input value={r.notitie ?? ""} onChange={(e) => zet(r, { notitie: e.target.value })} placeholder="Opmerking…" className={veld + " min-w-[7rem] flex-1"} />
+                    <div className="w-full sm:w-32"><Keuze value={r.uursoortId ?? ""} onChange={(w) => zet(r, { uursoortId: w || undefined })} size="rij" opties={usOpties} title="Uursoort" /></div>
+                    <div className="w-full sm:w-32"><Keuze value={r.projectId ?? ""} onChange={(w) => zet(r, { projectId: w || undefined })} size="rij" opties={projOpties} title="Project" /></div>
+                    <input value={r.notitie ?? ""} onChange={(e) => zet(r, { notitie: e.target.value })} placeholder="Opmerking…" className={veld + " w-full min-w-0 flex-1 sm:min-w-[7rem]"} />
                   </div>
-                  <div className="flex items-center justify-end gap-0.5">
+
+                  {/* Acties — alleen op desktop (op mobiel staan ze bovenaan de kaart) */}
+                  <div className="hidden items-center justify-end gap-0.5 sm:flex">
                     {idx === dr.length - 1 && (
                       <button type="button" onClick={() => maakRegel(iso, { begin: r.eind ?? STANDAARD_BEGIN, eind: eindNa(r.eind ?? STANDAARD_BEGIN, STANDAARD_DAG, 0), pauze: 0 })} title="Extra periode op deze dag" className="rounded-lg p-1.5 text-ink-400 hover:bg-ink-100 hover:text-brand-600"><Plus className="h-4 w-4" /></button>
                     )}
@@ -456,8 +474,6 @@ function WeekRooster({ weekDate, medewerker, regels, vorigeWeekRegels, uursoorte
             </div>
           );
         })}
-      </div>
-        </div>
       </div>
 
       <div className="flex items-center justify-between border-t border-ink-200 bg-ink-50/60 px-5 py-3 text-sm">
