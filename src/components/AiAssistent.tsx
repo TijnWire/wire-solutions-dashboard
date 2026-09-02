@@ -43,6 +43,7 @@ export function AiAssistent() {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const vakRef = useRef<HTMLDivElement | null>(null);
   const [wijkt, setWijkt] = useState(false);
+  const [verborgenDoorScroll, setVerborgenDoorScroll] = useState(false);
 
   const apiKey = instellingen.claudeKey ?? "";
   const aiAan = aiBeschikbaar();
@@ -89,6 +90,36 @@ export function AiAssistent() {
     };
   }, [open]);
 
+  // Verbergen bij naar beneden scrollen, terug bij omhoog scrollen (zoals veel apps). Zo staat het
+  // bolletje nooit permanent voor je inhoud — ook niet onderaan een pagina waar je niet verder kunt.
+  // We luisteren op de hoofd-scrollcontainer én op het venster (niet elke pagina scrollt hetzelfde).
+  useEffect(() => {
+    if (open) return;
+    let vorige = 0;
+    let frame = 0;
+    const bepaal = () => {
+      frame = 0;
+      const hoofd = document.getElementById("hoofdinhoud");
+      const top = hoofd ? hoofd.scrollTop : (window.scrollY || document.documentElement.scrollTop || 0);
+      const verschil = top - vorige;
+      // Kleine schokjes negeren; pas reageren vanaf ~8px beweging. Bovenaan altijd tonen.
+      if (top <= 4) setVerborgenDoorScroll(false);
+      else if (verschil > 8) setVerborgenDoorScroll(true);   // naar beneden → weg
+      else if (verschil < -8) setVerborgenDoorScroll(false); // naar boven → terug
+      vorige = top;
+    };
+    const plan = () => { if (!frame) frame = requestAnimationFrame(bepaal); };
+    const hoofd = document.getElementById("hoofdinhoud");
+    vorige = hoofd ? hoofd.scrollTop : (window.scrollY || 0);
+    hoofd?.addEventListener("scroll", plan, { passive: true });
+    window.addEventListener("scroll", plan, { passive: true });
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      hoofd?.removeEventListener("scroll", plan);
+      window.removeEventListener("scroll", plan);
+    };
+  }, [open]);
+
   if (!currentUser) return null;
 
   const verstuur = async () => {
@@ -129,10 +160,10 @@ export function AiAssistent() {
           <button
             type="button"
             onClick={() => setOpen(true)}
-            aria-hidden={wijkt}
-            tabIndex={wijkt ? -1 : 0}
+            aria-hidden={wijkt || verborgenDoorScroll}
+            tabIndex={wijkt || verborgenDoorScroll ? -1 : 0}
             className={`inline-flex h-full w-full items-center justify-center rounded-full bg-brand-600 text-white shadow-cardhover transition-all duration-200 hover:bg-brand-700 ${
-              wijkt ? "pointer-events-none scale-75 opacity-0" : "pointer-events-auto scale-100 opacity-100"}`}
+              wijkt || verborgenDoorScroll ? "pointer-events-none scale-75 opacity-0" : "pointer-events-auto scale-100 opacity-100"}`}
             title="AI-assistent"
             aria-label="AI-assistent openen"
           >
