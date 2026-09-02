@@ -268,7 +268,7 @@ function OpdrachtgeverBeheer({ onKlaar }: { onKlaar: () => void }) {
   };
 
   return (
-    <div className="mx-auto max-w-2xl space-y-5">
+    <div className="space-y-5">
       <button type="button" onClick={onKlaar} className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-500 hover:text-ink-800"><ArrowLeft className="h-4 w-4" /> Terug naar facturen</button>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
@@ -314,9 +314,9 @@ function OpdrachtgeverBeheer({ onKlaar }: { onKlaar: () => void }) {
       {opdrachtgevers.length === 0 ? (
         <Card className="p-8 text-center text-sm text-ink-500">Nog geen opdrachtgevers.</Card>
       ) : (
-        <div className="space-y-2">
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
           {opdrachtgevers.map((o) => (
-            <Card key={o.id} className="flex flex-wrap items-center gap-3 p-4">
+            <Card key={o.id} className="flex items-center gap-3 p-4">
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-semibold text-ink-900">{o.naam}</span>
@@ -325,7 +325,7 @@ function OpdrachtgeverBeheer({ onKlaar }: { onKlaar: () => void }) {
                 </div>
                 <div className="truncate text-xs text-ink-500">{[o.afdeling, o.tav ? `t.a.v. ${o.tav}` : "", o.adres, o.postcodePlaats, o.email].filter(Boolean).join(" · ")}</div>
               </div>
-              <div className="flex items-center gap-1">
+              <div className="flex shrink-0 items-center gap-1">
                 <button type="button" onClick={() => start(o)} className="rounded-lg p-2 text-ink-400 hover:bg-ink-100 hover:text-brand-600" title="Bewerken"><Pencil className="h-4 w-4" /></button>
                 <button type="button" onClick={() => deleteOpdrachtgever(o.id)} className="rounded-lg p-2 text-red-400 hover:bg-red-50 hover:text-red-600" title="Verwijderen"><Trash2 className="h-4 w-4" /></button>
               </div>
