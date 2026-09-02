@@ -27,6 +27,7 @@ import { ROL_LABEL, BEHEER_GEBIEDEN, type Role, type User } from "../lib/types";
 import { magBoekhouding, magAlles } from "../lib/rechten";
 import { supabaseAan, bewaarSyncCred } from "../lib/supabase";
 import { logAudit, syncAppRole, resetAuthWachtwoord, wijzigAuthEmail, verwijderAuthAccount } from "../lib/adminAccount";
+import { wachtwoordMailTekst, wachtwoordMailOnderwerp } from "../lib/wachtwoordMail";
 
 const ROLLEN: Role[] = ["eigenaar", "beheer", "hr", "monteur"];
 const rolTone: Record<Role, string> = { eigenaar: "green", beheer: "amber", hr: "indigo", monteur: "slate" };
@@ -517,47 +518,20 @@ function WachtwoordResetModal({ gebruiker, onSluit }: { gebruiker: User; onSluit
   };
 
   // Opent een kant-en-klare e-mail naar de medewerker met de inloggegevens (via de eigen mailapp).
-  // Nette, strak opgemaakte platte-tekst-layout in Wire Solutions-stijl (mailto ondersteunt geen HTML).
+  // De tekst komt uit de gedeelde template (src/lib/wachtwoordMail.ts) zodat mailto én de latere
+  // grafische HTML-mail altijd dezelfde inhoud/huisstijl gebruiken.
   const mailNaar = () => {
-    const url = window.location.origin;
-    const bedrijfsnaam = bedrijf?.naam || "Wire Solutions";
-    const afzender = currentUser?.naam || bedrijfsnaam;
-    const lijn = "═══════════════════════════════════";
-    const onderwerp = `Je inloggegevens voor het ${bedrijfsnaam} dashboard`;
-    const body = [
-      lijn,
-      `  ${bedrijfsnaam.toUpperCase()} · DASHBOARD-TOEGANG`,
-      lijn,
-      "",
-      `Hoi ${gebruiker.naam},`,
-      "",
-      `Er is een nieuw wachtwoord voor je klaargezet voor het ${bedrijfsnaam} dashboard.`,
-      "Met de onderstaande gegevens kun je direct inloggen.",
-      "",
-      "  ┌─────────────────────────────────",
-      "  │  JOUW INLOGGEGEVENS",
-      "  ├─────────────────────────────────",
-      `  │  Website      : ${url}`,
-      `  │  E-mailadres  : ${gebruiker.email}`,
-      `  │  Wachtwoord   : ${temp}`,
-      "  └─────────────────────────────────",
-      "",
-      "▸ Het wachtwoord werkt meteen — op elk apparaat.",
-      "▸ Wijzig het na je eerste login naar iets persoonlijks",
-      "  (Instellingen ▸ Wachtwoord wijzigen).",
-      "▸ Deel dit wachtwoord met niemand.",
-      "",
-      "Lukt het inloggen niet? Stuur even een bericht terug,",
-      "dan helpen we je op weg.",
-      "",
-      "Met vriendelijke groet,",
-      afzender,
-      bedrijfsnaam,
-      "",
-      lijn,
-      `Deze mail is automatisch opgesteld vanuit het ${bedrijfsnaam} dashboard.`,
-      lijn,
-    ].join("\n");
+    const d = {
+      naam: gebruiker.naam,
+      email: gebruiker.email,
+      wachtwoord: temp,
+      url: window.location.origin,
+      bedrijfsnaam: bedrijf?.naam || "Wire Solutions",
+      afzender: currentUser?.naam || (bedrijf?.naam || "Wire Solutions"),
+      telefoon: bedrijf?.telefoon,
+    };
+    const onderwerp = wachtwoordMailOnderwerp(d);
+    const body = wachtwoordMailTekst(d);
     window.location.href = `mailto:${encodeURIComponent(gebruiker.email)}?subject=${encodeURIComponent(onderwerp)}&body=${encodeURIComponent(body)}`;
   };
 
