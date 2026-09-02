@@ -482,7 +482,7 @@ function VerwijderWaarschuwing({
 // eigen wachtwoordwissel af bij de volgende login, en toont het tijdelijke wachtwoord ÉÉNMALIG aan de
 // beheerder (kopieerveld dat daarna verdwijnt). Nergens wordt een leesbaar wachtwoord bewaard.
 function WachtwoordResetModal({ gebruiker, onSluit }: { gebruiker: User; onSluit: () => void }) {
-  const { updateUser, currentUser } = useApp();
+  const { updateUser, currentUser, bedrijf } = useApp();
   const [fase, setFase] = useState<"bevestig" | "klaar">("bevestig");
   const [bezig, setBezig] = useState(false);
   const [temp, setTemp] = useState("");
@@ -517,22 +517,46 @@ function WachtwoordResetModal({ gebruiker, onSluit }: { gebruiker: User; onSluit
   };
 
   // Opent een kant-en-klare e-mail naar de medewerker met de inloggegevens (via de eigen mailapp).
+  // Nette, strak opgemaakte platte-tekst-layout in Wire Solutions-stijl (mailto ondersteunt geen HTML).
   const mailNaar = () => {
     const url = window.location.origin;
-    const onderwerp = "Je inloggegevens voor het Wire Solutions dashboard";
+    const bedrijfsnaam = bedrijf?.naam || "Wire Solutions";
+    const afzender = currentUser?.naam || bedrijfsnaam;
+    const lijn = "═══════════════════════════════════";
+    const onderwerp = `Je inloggegevens voor het ${bedrijfsnaam} dashboard`;
     const body = [
+      lijn,
+      `  ${bedrijfsnaam.toUpperCase()} · DASHBOARD-TOEGANG`,
+      lijn,
+      "",
       `Hoi ${gebruiker.naam},`,
       "",
-      "Je kunt inloggen op het Wire Solutions dashboard met deze gegevens:",
+      `Er is een nieuw wachtwoord voor je klaargezet voor het ${bedrijfsnaam} dashboard.`,
+      "Met de onderstaande gegevens kun je direct inloggen.",
       "",
-      `Website: ${url}`,
-      `E-mail: ${gebruiker.email}`,
-      `Wachtwoord: ${temp}`,
+      "  ┌─────────────────────────────────",
+      "  │  JOUW INLOGGEGEVENS",
+      "  ├─────────────────────────────────",
+      `  │  Website      : ${url}`,
+      `  │  E-mailadres  : ${gebruiker.email}`,
+      `  │  Wachtwoord   : ${temp}`,
+      "  └─────────────────────────────────",
       "",
-      "Dit wachtwoord werkt meteen. Je kunt het later zelf wijzigen.",
+      "▸ Het wachtwoord werkt meteen — op elk apparaat.",
+      "▸ Wijzig het na je eerste login naar iets persoonlijks",
+      "  (Instellingen ▸ Wachtwoord wijzigen).",
+      "▸ Deel dit wachtwoord met niemand.",
       "",
-      "Groet,",
-      "Wire Solutions",
+      "Lukt het inloggen niet? Stuur even een bericht terug,",
+      "dan helpen we je op weg.",
+      "",
+      "Met vriendelijke groet,",
+      afzender,
+      bedrijfsnaam,
+      "",
+      lijn,
+      `Deze mail is automatisch opgesteld vanuit het ${bedrijfsnaam} dashboard.`,
+      lijn,
     ].join("\n");
     window.location.href = `mailto:${encodeURIComponent(gebruiker.email)}?subject=${encodeURIComponent(onderwerp)}&body=${encodeURIComponent(body)}`;
   };
