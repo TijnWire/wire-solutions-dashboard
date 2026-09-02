@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Download, FileSpreadsheet, ArrowUp, ArrowDown, Search, ChevronDown } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { Keuze } from "../components/Keuze";
-import { exporteerExcel } from "../lib/excel";
+import { exporteerDocumentenExcel } from "../lib/excel";
 
 type Item = { id: string; data: Record<string, string | number> };
 type CatKey = "afspraken" | "voorschouwen" | "brieven";
@@ -14,7 +14,7 @@ const CATS: { key: CatKey; label: string; primair: string; groep: string; bestan
 ];
 
 export function Documenten() {
-  const { afspraken, voorschouwen, rondes, users } = useApp();
+  const { afspraken, voorschouwen, rondes, users, bedrijf, currentUser } = useApp();
   const naamVan = (id?: string) => users.find((u) => u.id === id)?.naam ?? "";
 
   const [cat, setCat] = useState<CatKey>("afspraken");
@@ -101,7 +101,12 @@ export function Documenten() {
   const exporteer = () => {
     const gekozen = gesorteerd.filter((i) => sel.has(i.id));
     if (gekozen.length === 0) return;
-    exporteerExcel(gekozen.map((i) => i.data), huidige.bestand, huidige.label);
+    exporteerDocumentenExcel(gekozen.map((i) => i.data), {
+      bedrijfsnaam: bedrijf.naam,
+      titel: huidige.label,
+      bestandsnaam: `${huidige.bestand}_${new Date().toISOString().slice(0, 10)}`,
+      opsteller: currentUser?.naam,
+    });
   };
 
   return (
