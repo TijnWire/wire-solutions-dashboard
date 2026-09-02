@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { Plus, ArrowLeft, Download, Pencil, Trash2, Upload, Wallet, Car, AlertTriangle, Clock, Wand2, Check, CheckSquare, Square } from "lucide-react";
+import { Plus, ArrowLeft, Download, Pencil, Trash2, Upload, Wallet, Car, AlertTriangle, Clock, Wand2, Check, CheckSquare, Square, ClipboardList } from "lucide-react";
 import { useApp } from "../store/AppContext";
+import { useNav } from "../store/NavContext";
 import { DatumKiezer } from "../components/DatumKiezer";
 import { Keuze } from "../components/Keuze";
 import { Card, Badge, Bevestig } from "../components/ui";
@@ -230,6 +231,7 @@ function LoonstrookForm({ bestaande, onKlaar }: { bestaande?: Loonstrook; onKlaa
 // ── Automatisch loonstroken aanmaken op basis van de gewerkte uren (Urenstaat) ──
 function LoonstrookGenerator({ startWeek, onKlaar }: { startWeek?: string; onKlaar: () => void }) {
   const { users, urenstaat, loonstroken, addLoonstrook } = useApp();
+  const { navigeer } = useNav();
   const [periodeType, setPeriodeType] = useState<PeriodeType>("Maand");
   const [anker, setAnker] = useState(() => startWeek || new Date().toISOString().slice(0, 10));
   const [gekozen, setGekozen] = useState<Set<string>>(new Set());
@@ -302,7 +304,12 @@ function LoonstrookGenerator({ startWeek, onKlaar }: { startWeek?: string; onKla
 
   return (
     <div className="space-y-5">
-      <button type="button" onClick={onKlaar} className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-500 hover:text-ink-800"><ArrowLeft className="h-4 w-4" /> Terug naar loonstroken</button>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <button type="button" onClick={onKlaar} className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-500 hover:text-ink-800"><ArrowLeft className="h-4 w-4" /> Terug naar loonstroken</button>
+        <button type="button" onClick={() => navigeer("urenstaat")} className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 bg-white px-3 py-1.5 text-xs font-semibold text-ink-600 hover:bg-ink-50" title="Uren controleren of aanvullen in de urenstaat">
+          <ClipboardList className="h-3.5 w-3.5 text-brand-600" /> Naar urenstaat
+        </button>
+      </div>
       <div>
         <h2 className="text-xl font-bold text-ink-900">Loonstroken uit urenstaat</h2>
         <p className="text-sm text-ink-500">Kies een periode. De app telt de gewerkte uren per medewerker uit de Urenstaat en maakt per persoon een concept-loonstrook (met bruto/netto/bijtelling uit hun contract). Alles blijft daarna handmatig aanpasbaar.</p>
@@ -370,9 +377,9 @@ function LoonstrookGenerator({ startWeek, onKlaar }: { startWeek?: string; onKla
                     <td className="px-4 py-2.5 text-right font-medium text-ink-800 tabular-nums">{r.uren ? `${uurTekst(r.uren)} u` : "0 u"}</td>
                     <td className="px-4 py-2.5 text-right tabular-nums">
                       {(r.u.contract?.bruto ?? 0) === 0 ? (
-                        <span className="inline-flex items-center gap-1 text-amber-600" title="Geen bruto in het contract — de loonstrook wordt €0. Vul het contract in bij Medewerkers.">
+                        <button type="button" onClick={() => navigeer("medewerkers", { medewerker: r.u.id })} className="inline-flex items-center gap-1 rounded-lg px-1.5 py-0.5 text-amber-600 hover:bg-amber-50" title="Geen bruto in het contract — klik om het contract van deze medewerker in te vullen.">
                           <AlertTriangle className="h-3.5 w-3.5" /> {euro(0)}
-                        </span>
+                        </button>
                       ) : euro(r.u.contract?.bruto ?? 0)}
                     </td>
                     <td className="px-4 py-2.5 text-right tabular-nums">{euro(r.u.contract?.netto ?? 0)}</td>
