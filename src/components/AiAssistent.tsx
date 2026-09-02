@@ -92,35 +92,28 @@ export function AiAssistent() {
 
   // Verbergen bij naar beneden scrollen, terug bij omhoog scrollen (zoals veel apps). Zo staat het
   // bolletje nooit permanent voor je inhoud — ook niet onderaan een pagina waar je niet verder kunt.
-  // We vangen scroll in de CAPTURE-fase op window: dat pakt élke scrollende container (de app scrollt
-  // niet op window maar op een bin-container), net als de bestaande "wijkt"-logica hierboven.
+  // We POLLEN de scrollpositie i.p.v. op scroll-events te luisteren: de app scrollt in een geneste
+  // container waarvan het scroll-event window niet altijd bereikt (capture mist 'm op sommige toestellen).
+  // Pollen is toestel-onafhankelijk en betrouwbaar; 120ms is ruim vloeiend genoeg voor deze knop.
   useEffect(() => {
     if (open) return;
     let vorige = -1;
-    let frame = 0;
-    const bepaal = (bron: EventTarget | null) => {
-      frame = 0;
-      // Scrollpositie van het element dat net scrollde (of van de hoofdcontainer/venster als terugval).
-      let top = 0;
-      const el = bron as HTMLElement | Document | null;
-      if (el instanceof HTMLElement) top = el.scrollTop;
-      else {
-        const hoofd = document.getElementById("hoofdinhoud");
-        top = hoofd ? hoofd.scrollTop : (window.scrollY || document.documentElement.scrollTop || 0);
-      }
+    const huidigeTop = () => {
+      const hoofd = document.getElementById("hoofdinhoud");
+      return hoofd ? hoofd.scrollTop : (window.scrollY || document.documentElement.scrollTop || 0);
+    };
+    const meet = () => {
+      const top = huidigeTop();
       if (vorige < 0) { vorige = top; return; }
       const verschil = top - vorige;
-      if (top <= 4) setVerborgenDoorScroll(false);          // bovenaan → altijd tonen
-      else if (verschil > 8) setVerborgenDoorScroll(true);   // naar beneden → weg
-      else if (verschil < -8) setVerborgenDoorScroll(false); // naar boven → terug
+      if (top <= 4) setVerborgenDoorScroll(false);           // bovenaan → altijd tonen
+      else if (verschil > 6) setVerborgenDoorScroll(true);    // naar beneden → weg
+      else if (verschil < -6) setVerborgenDoorScroll(false);  // naar boven → terug
       vorige = top;
     };
-    const plan = (e: Event) => { const bron = e.target; if (!frame) frame = requestAnimationFrame(() => bepaal(bron)); };
-    window.addEventListener("scroll", plan, { passive: true, capture: true });
-    return () => {
-      if (frame) cancelAnimationFrame(frame);
-      window.removeEventListener("scroll", plan, { capture: true } as EventListenerOptions);
-    };
+    vorige = huidigeTop();
+    const tik = setInterval(meet, 120);
+    return () => clearInterval(tik);
   }, [open]);
 
   if (!currentUser) return null;
