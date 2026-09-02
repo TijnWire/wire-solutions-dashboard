@@ -92,31 +92,34 @@ export function AiAssistent() {
 
   // Verbergen bij naar beneden scrollen, terug bij omhoog scrollen (zoals veel apps). Zo staat het
   // bolletje nooit permanent voor je inhoud — ook niet onderaan een pagina waar je niet verder kunt.
-  // We luisteren op de hoofd-scrollcontainer én op het venster (niet elke pagina scrollt hetzelfde).
+  // We vangen scroll in de CAPTURE-fase op window: dat pakt élke scrollende container (de app scrollt
+  // niet op window maar op een bin-container), net als de bestaande "wijkt"-logica hierboven.
   useEffect(() => {
     if (open) return;
-    let vorige = 0;
+    let vorige = -1;
     let frame = 0;
-    const bepaal = () => {
+    const bepaal = (bron: EventTarget | null) => {
       frame = 0;
-      const hoofd = document.getElementById("hoofdinhoud");
-      const top = hoofd ? hoofd.scrollTop : (window.scrollY || document.documentElement.scrollTop || 0);
+      // Scrollpositie van het element dat net scrollde (of van de hoofdcontainer/venster als terugval).
+      let top = 0;
+      const el = bron as HTMLElement | Document | null;
+      if (el instanceof HTMLElement) top = el.scrollTop;
+      else {
+        const hoofd = document.getElementById("hoofdinhoud");
+        top = hoofd ? hoofd.scrollTop : (window.scrollY || document.documentElement.scrollTop || 0);
+      }
+      if (vorige < 0) { vorige = top; return; }
       const verschil = top - vorige;
-      // Kleine schokjes negeren; pas reageren vanaf ~8px beweging. Bovenaan altijd tonen.
-      if (top <= 4) setVerborgenDoorScroll(false);
+      if (top <= 4) setVerborgenDoorScroll(false);          // bovenaan → altijd tonen
       else if (verschil > 8) setVerborgenDoorScroll(true);   // naar beneden → weg
       else if (verschil < -8) setVerborgenDoorScroll(false); // naar boven → terug
       vorige = top;
     };
-    const plan = () => { if (!frame) frame = requestAnimationFrame(bepaal); };
-    const hoofd = document.getElementById("hoofdinhoud");
-    vorige = hoofd ? hoofd.scrollTop : (window.scrollY || 0);
-    hoofd?.addEventListener("scroll", plan, { passive: true });
-    window.addEventListener("scroll", plan, { passive: true });
+    const plan = (e: Event) => { const bron = e.target; if (!frame) frame = requestAnimationFrame(() => bepaal(bron)); };
+    window.addEventListener("scroll", plan, { passive: true, capture: true });
     return () => {
       if (frame) cancelAnimationFrame(frame);
-      hoofd?.removeEventListener("scroll", plan);
-      window.removeEventListener("scroll", plan);
+      window.removeEventListener("scroll", plan, { capture: true } as EventListenerOptions);
     };
   }, [open]);
 
