@@ -298,7 +298,7 @@ export function SaneerImport({ dossier, aantalNu, onKlaar }: {
             </div>
           )}
 
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="rounded-2xl border border-ink-200 bg-white p-4">
               <div className="flex items-center gap-2 text-brand-700"><Phone className="h-4 w-4" /><span className="text-sm font-semibold">Naar de bellijst</span></div>
               <div className="mt-1 text-3xl font-bold text-ink-900">{metTelefoon}</div>

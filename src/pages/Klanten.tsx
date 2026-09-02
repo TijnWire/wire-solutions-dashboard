@@ -42,7 +42,7 @@ function KlantForm({ onKlaar }: { onKlaar: () => void }) {
       <button type="button" onClick={onKlaar} className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-500 hover:text-ink-800"><ArrowLeft className="h-4 w-4" /> Terug</button>
       <h2 className="text-xl font-bold text-ink-900">Nieuwe klant / adres</h2>
       <Card className="space-y-4 p-5">
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div><label className={labelCls}>Naam</label><input value={d.naam} onChange={(e) => set({ naam: e.target.value })} placeholder="Naam klant" className={veld} /></div>
           <div><label className={labelCls}>Telefoon</label><input value={d.telefoon} onChange={(e) => set({ telefoon: e.target.value })} placeholder="06 …" className={veld} /></div>
           <div><label className={labelCls}>Straat</label><input value={d.straat} onChange={(e) => set({ straat: e.target.value })} placeholder="Straatnaam" className={veld} /></div>
@@ -163,7 +163,7 @@ export function Klanten({ initieelKey }: { initieelKey?: string }) {
             <h3 className="text-sm font-bold text-ink-900">Contactgegevens</h3>
             {!h.klant && <span className="text-xs text-ink-400">Wordt opgeslagen in de database</span>}
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="block">
               <span className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-ink-600"><Phone className="h-3.5 w-3.5" /> Telefoon</span>
               <input value={h.klant?.telefoon ?? open.telefoon ?? ""} onChange={(e) => { const id = zorgKlant(); updateKlant(id, { telefoon: e.target.value }); }} placeholder="06-…" inputMode="tel" className={veld} />

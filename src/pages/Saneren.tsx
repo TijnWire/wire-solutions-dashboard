@@ -589,7 +589,7 @@ function OudeSaneringen({ initieelSanering }: { initieelSanering?: string }) {
                   <h3 className="text-sm font-bold text-ink-700">{wg.label}</h3>
                   <span className="text-xs font-medium text-ink-500">{openInWeek} open · {wg.items.length} {wg.items.length === 1 ? "project" : "projecten"}</span>
                 </div>
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   {wg.items.map((s) => {
                     const tot = s.adressen.length;
                     const klaarA = tot - openAdressen(s);

@@ -50,7 +50,7 @@ export function MededelingComposer({ className = "" }: { className?: string }) {
         placeholder="Wat moet er gebeuren? Wees zo duidelijk mogelijk — wat, waar en waar moet het team op letten…"
         className="w-full resize-none rounded-lg border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
       />
-      <div className="grid gap-2.5 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
         <label className="block">
           <span className="mb-1 flex items-center gap-1 text-[11px] font-semibold text-ink-500">{gerichtAan ? <User className="h-3 w-3" /> : <Users2 className="h-3 w-3" />} Voor wie?</span>
           <Keuze value={gerichtAan} onChange={setGerichtAan} altijdZoeken opties={[{ waarde: "", label: "Hele team" }, ...users.filter((u) => u.id !== currentUser.id).map((u) => ({ waarde: u.id, label: u.naam }))]} />

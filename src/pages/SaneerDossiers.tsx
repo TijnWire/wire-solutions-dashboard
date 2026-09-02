@@ -141,7 +141,7 @@ function NieuwDossier({ onKlaar, onAnnuleer }: { onKlaar: (pd: string) => void; 
           </div>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:col-span-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:col-span-2">
           <label className="block">
             <span className={label}>Opdrachtgever</span>
             <input value={opdrachtgever} onChange={(e) => setOpdrachtgever(e.target.value)} placeholder="bijv. Stedin" className={veld} />
@@ -295,7 +295,7 @@ export function SaneerDossiers({ onEerder }: { onEerder: () => void }) {
           </p>
         </div>
       ) : (
-        <div className="grid gap-3 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
           {zichtbaar.map((d) => {
             const info = STATUS_INFO[d.status] ?? STATUS_INFO.nieuw;
             return (

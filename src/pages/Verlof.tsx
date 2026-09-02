@@ -83,7 +83,7 @@ export function Verlof() {
       {/* Aanvragen */}
       <Card className="space-y-3 p-4">
         <h3 className="flex items-center gap-2 text-sm font-bold text-ink-900"><Plane className="h-4 w-4 text-brand-600" /> {magBoek ? "Verlof inplannen / aanvragen" : "Verlof aanvragen"}</h3>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <label className={labelCls}>Medewerker</label>
             <Keuze

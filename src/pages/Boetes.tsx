@@ -57,7 +57,7 @@ function BoeteForm({ bestaande, onKlaar }: { bestaande?: Boete; onKlaar: () => v
       <h2 className="text-xl font-bold text-ink-900">{bestaande ? "Boete bewerken" : "Nieuwe boete"}</h2>
 
       <Card className="space-y-4 p-4">
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <label className={labelCls}>Medewerker</label>
             <Keuze value={d.medewerkerId} onChange={(w) => set({ medewerkerId: w })} altijdZoeken opties={users.map((u) => ({ waarde: u.id, label: u.naam }))} title="Medewerker" />
@@ -71,7 +71,7 @@ function BoeteForm({ bestaande, onKlaar }: { bestaande?: Boete; onKlaar: () => v
           <label className={labelCls}>Omschrijving</label>
           <input value={d.omschrijving} onChange={(e) => set({ omschrijving: e.target.value })} placeholder="bijv. Parkeerboete bedrijfsbus" className={veld} />
         </div>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <label className={labelCls}>Bedrag (€)</label>
             {/* Leeg als er nog niets is ingevuld — een voorgevulde 0 moet je eerst wegpoetsen. */}
@@ -97,7 +97,7 @@ function BoeteForm({ bestaande, onKlaar }: { bestaande?: Boete; onKlaar: () => v
             <div className="flex items-center gap-1.5 text-xs font-bold text-amber-700">
               <Wallet className="h-3.5 w-3.5" /> Inhouden via het loon
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <label className={labelCls}>Per loonstrook inhouden (€)</label>
                 <input

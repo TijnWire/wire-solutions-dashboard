@@ -136,7 +136,7 @@ function BedrijfTab({ isLeiding }: { isLeiding: boolean }) {
             )}
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {rij("Bedrijfsnaam", "naam")}
             {rij("E-mail", "email")}
             {rij("Adres", "adres")}

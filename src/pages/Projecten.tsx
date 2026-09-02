@@ -165,7 +165,7 @@ function ProjectKaart({ project, initieelProject, onScan }: { project: Project; 
           {/* Koppelen aan werk uit andere onderdelen */}
           <div className="space-y-2 border-b border-ink-100 px-5 py-3">
             <span className="text-xs font-semibold text-ink-500">Gekoppeld werk</span>
-            <div className="grid gap-2 lg:grid-cols-2">
+            <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
               <KoppelRij label="Brieven & Routes" value={project.koppelingen?.brievenronde ?? ""} opties={rondeOpties} onKies={(v) => zetKoppeling("brievenronde", v)} onOpen={() => navigeer("brieven", { ronde: project.koppelingen?.brievenronde })} />
               <KoppelRij label="Saneren" value={project.koppelingen?.sanering ?? ""} opties={saneringOpties} onKies={(v) => zetKoppeling("sanering", v)} onOpen={() => navigeer("saneren", { saneringId: project.koppelingen?.sanering })} />
               <KoppelRij label="Voorschouwen" value={project.koppelingen?.voorschouwMap ?? ""} opties={voorschouwOpties} onKies={(v) => zetKoppeling("voorschouwMap", v)} onOpen={() => navigeer("voorschouwen")} />
@@ -324,7 +324,7 @@ export function Projecten({ initieelProject }: { initieelProject?: string }) {
               placeholder="Projectnaam (bijv. Stedin-batch Delft)"
               className="w-full rounded-lg border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
             />
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <input
                 value={projWijk}
                 onChange={(e) => setProjWijk(e.target.value)}
@@ -338,7 +338,7 @@ export function Projecten({ initieelProject }: { initieelProject?: string }) {
                 className="rounded-lg border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
               />
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <span className="mb-1 block text-xs font-semibold text-ink-500">Uurtarief (€ excl. btw)</span>
                 <input

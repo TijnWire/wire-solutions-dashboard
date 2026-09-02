@@ -173,7 +173,7 @@ function RegelEditor({
               <input value={regel.straat} onChange={(e) => onChange({ straat: e.target.value })} placeholder="Straatnaam" className={veld} />
             </div>
           )}
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <div>
               <label className={labelCls}>Naam klant</label>
               <input value={regel.klantNaam} onChange={(e) => onChange({ klantNaam: e.target.value })} placeholder="Naam" className={veld} />
@@ -386,7 +386,7 @@ function NieuweGroep({ onKlaar }: { onKlaar: () => void }) {
             ))}
           </div>
         </div>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <label className={labelCls}>Naam {soort === "woonwijk" ? "wijk" : soort === "appartement" ? "complex" : "straat"}</label>
             <input value={naam} onChange={(e) => setNaam(e.target.value)} placeholder={soort === "woonwijk" ? "bijv. Lindebuurt" : soort === "appartement" ? "bijv. Flat De Es" : "bijv. Kerkstraat"} className={veld} />
@@ -747,7 +747,7 @@ export function Afspraken({ initieelLocatie }: { initieelLocatie?: string }) {
                   <h3 className="text-sm font-bold text-ink-700">{wg.label}</h3>
                   <span className="text-xs font-medium text-ink-500">{openInWeek} open · {wg.groepen.length} {wg.groepen.length === 1 ? "locatie" : "locaties"}</span>
                 </div>
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   {wg.groepen.map((g) => {
                     const soort = g.rijen[0].soort;
                     const bevestigd = g.rijen.filter((a) => a.status === "Bevestigd" || a.status === "Afgerond").length;

@@ -1602,7 +1602,7 @@ export function Brieven({ initieelRonde, initieelMap }: { initieelRonde?: string
                     <MapRij key={`map-${m.naam}`} naam={m.naam} rondes={m.items} isLeiding={isLeiding} onOpen={() => setMapDetail(m.naam)} />
                   ))}
                   {g.rondes.length > 0 && (
-                    <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                       {g.rondes.map((r) => rondeKaart(r))}
                     </div>
                   )}

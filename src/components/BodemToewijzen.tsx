@@ -78,7 +78,7 @@ export function BodemToewijzen({ adressen, users, team, onWijzig }: {
       </div>
 
       {/* Filters */}
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" />
           <input value={zoek} onChange={(e) => setZoek(e.target.value)} placeholder="Straat, plaats of bewoner…"

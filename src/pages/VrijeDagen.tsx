@@ -76,7 +76,7 @@ export function VrijeDagen() {
         </div>
 
         {/* Bewerkbaar: contract + vrije dagen/jaar */}
-        <Card className="grid gap-3 p-4 sm:grid-cols-2">
+        <Card className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2">
           <label className="space-y-1">
             <span className="block text-xs font-semibold text-ink-500">Contract (uur/week)</span>
             <input inputMode="numeric" value={String(contractUren(u))} onChange={(e) => { const n = parseInt(e.target.value.replace(/\D/g, ""), 10); updateUser(u.id, { contract: { ...(u.contract ?? {}), uren: Number.isFinite(n) ? n : 0 } }); }} className={inputCls} />
@@ -140,7 +140,7 @@ export function VrijeDagen() {
       {medewerkers.length === 0 ? (
         <Card className="p-8 text-center text-sm text-ink-500">Nog geen medewerkers. Voeg ze toe bij Gebruikersbeheer.</Card>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {medewerkers.map((u) => {
             const totaal = vrijeDagen(u);
             const op = opgenomenDagen(verlof, u.id, jaarStart, jaarEind);

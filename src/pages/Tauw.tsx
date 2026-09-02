@@ -1002,7 +1002,7 @@ export function Tauw({ initieelTauw }: { initieelTauw?: string }) {
                   <h3 className="text-sm font-bold text-ink-700">{g.label}</h3>
                   <span className="text-xs font-medium text-ink-500">{openInWeek} open · {g.maps.length} {g.maps.length === 1 ? "map" : "mappen"}</span>
                 </div>
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   {g.maps.map((o) => {
                     const totaalA = o.adressen.length;
                     const klaarA = o.adressen.filter((a) => a.bevestigd).length;

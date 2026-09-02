@@ -230,7 +230,7 @@ function GebruikerEditor({
         </button>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <label className="block">
           <span className="mb-1.5 block text-sm font-medium text-ink-700">Naam</span>
           <input value={naam} onChange={(e) => setNaam(e.target.value)} placeholder="Voor- en achternaam" className={inputCls} />
@@ -322,7 +322,7 @@ function GebruikerEditor({
             <ShieldCheck className="h-4 w-4 text-brand-600" /> Mag beheren
             {!magRol && <span className="text-xs font-normal text-ink-400">(alleen de eigenaar en HR wijzen dit toe)</span>}
           </span>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {BEHEER_GEBIEDEN.map((g) => (
               <label key={g.key} className={`flex items-center gap-2.5 rounded-lg border p-2.5 text-sm ${rechten.has(g.key) ? "border-brand-300 bg-brand-50" : "border-ink-200 hover:bg-ink-50"} ${magRol ? "cursor-pointer" : "cursor-not-allowed opacity-70"}`}>
                 <input type="checkbox" checked={rechten.has(g.key)} disabled={!magRol} onChange={() => toggleRecht(g.key)} className="h-4 w-4 accent-brand-600" />
@@ -342,7 +342,7 @@ function GebruikerEditor({
         {projects.length === 0 ? (
           <p className="text-sm text-ink-400">Er zijn nog geen projecten.</p>
         ) : (
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {projects.map((p) => (
               <label
                 key={p.id}

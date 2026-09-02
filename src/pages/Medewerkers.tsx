@@ -61,7 +61,7 @@ function ContractKaart({ user }: { user: User }) {
       ) : (
         <>
       <p className="mb-3 mt-1 text-xs text-ink-500">Vul dit één keer in. Bij een nieuwe loonstrook voor {user.naam.split(" ")[0]} staan deze bedragen er dan automatisch al in — je hoeft het alleen nog na te checken.</p>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
           <label className={labelMini}>Periode</label>
           <div className="flex gap-1.5">
@@ -185,7 +185,7 @@ function MedewerkerDetail({ user, onTerug }: { user: User; onTerug: () => void }
         {mijnRondes.length === 0 && afspraakLocaties.length === 0 ? (
           <p className="text-sm text-ink-400">Geen werk toegewezen.</p>
         ) : (
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {mijnRondes.map((r) => {
               const teBezorgen = r.adressen.filter((a) => !a.ontbreekt);
               const gegooid = teBezorgen.filter((a) => a.status === "Gegooid").length;
@@ -218,7 +218,7 @@ function MedewerkerDetail({ user, onTerug }: { user: User; onTerug: () => void }
         )}
       </Card>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* Loonstroken */}
         <Card className="p-5">
           <div className="mb-3 flex items-center justify-between">
@@ -312,7 +312,7 @@ export function Medewerkers({ initieelMedewerker }: { initieelMedewerker?: strin
         <p className="text-sm text-ink-500">Persoonlijk dashboard per medewerker — klik op iemand voor het volledige overzicht.</p>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {users.map((u) => {
           const openTaken = taken.filter((t) => (t.toegewezenAan === u.id || t.toegewezenAan === "") && t.status !== "Klaar").length; // "" = hele team
           const werk = rondes.filter((r) => r.toegewezenAan === u.id).length + new Set(afspraken.filter((a) => a.toegewezenAan === u.id).map((a) => a.locatie)).size;

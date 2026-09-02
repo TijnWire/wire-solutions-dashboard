@@ -130,7 +130,7 @@ function LoonstrookForm({ bestaande, onKlaar }: { bestaande?: Loonstrook; onKlaa
           <Keuze value={d.medewerkerId} onChange={(w) => { set({ medewerkerId: w, boetes: 0, bestand: undefined, bestandsnaam: undefined, ...contractWaarden(users.find((u) => u.id === w)) }); setVerreken(new Set()); }} altijdZoeken opties={users.map((u) => ({ waarde: u.id, label: u.naam }))} title="Medewerker" />
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <label className={labelCls}>Periode</label>
             <div className="flex gap-1.5">
@@ -148,7 +148,7 @@ function LoonstrookForm({ bestaande, onKlaar }: { bestaande?: Loonstrook; onKlaa
         </div>
         <p className="-mt-2 text-xs text-ink-500">Periode wordt: <span className="font-semibold text-ink-700">{periodeLabel(d.periodeType, d.refDatum) || "—"}</span></p>
 
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div>
             <label className={labelCls}>Bruto (€)</label>
             <input type="number" step="0.01" value={d.bruto || ""} onChange={(e) => set({ bruto: e.target.value === "" ? 0 : Number(e.target.value) })} className={veld} />

@@ -135,7 +135,7 @@ export function Schouwafspraken() {
             <h3 className="text-sm font-bold text-ink-900">{bewerkId ? "Schouwafspraak bewerken" : "Nieuwe schouwafspraak"}</h3>
             <button type="button" onClick={sluit} className="text-ink-400 hover:text-ink-600"><X className="h-5 w-5" /></button>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div><label className={labelCls}>Straat</label><input value={form.straat} onChange={(e) => set({ straat: e.target.value })} placeholder="Straatnaam" className={veld} /></div>
             <div><label className={labelCls}>Huisnummer</label><input value={form.huisnummer} onChange={(e) => set({ huisnummer: e.target.value })} placeholder="12" className={veld} /></div>
             <div><label className={labelCls}>Postcode</label><input value={form.postcode} onChange={(e) => set({ postcode: e.target.value })} placeholder="1234 AB" className={veld} /></div>

@@ -250,7 +250,7 @@ export function Agenda() {
             <h3 className="text-sm font-bold text-ink-900">Verlof aanvragen</h3>
             <button type="button" onClick={() => setFormOpen(false)} className="text-ink-400 hover:text-ink-600" title="Sluiten"><X className="h-5 w-5" /></button>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className={labelCls}>Medewerker</label>
               <Keuze value={isLeiding ? vMedewerker : currentUser.id} onChange={isLeiding ? setVMedewerker : () => {}} altijdZoeken opties={isLeiding ? users.map((u) => ({ waarde: u.id, label: u.naam })) : [{ waarde: currentUser.id, label: currentUser.naam }]} disabled={!isLeiding} title="Medewerker" />

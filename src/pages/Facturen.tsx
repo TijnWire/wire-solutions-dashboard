@@ -102,7 +102,7 @@ function FactuurForm({ bestaande, initieel, onKlaar, onOpgeslagen }: { bestaande
       <h2 className="text-xl font-bold text-ink-900">{bestaande ? "Factuur bewerken" : "Nieuwe factuur"}</h2>
 
       <Card className="space-y-4 p-4">
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div>
             <label className={labelCls}>Factuurnummer</label>
             <input value={f.nummer} onChange={(e) => set({ nummer: e.target.value })} className={veld} />
@@ -116,7 +116,7 @@ function FactuurForm({ bestaande, initieel, onKlaar, onOpgeslagen }: { bestaande
             <Keuze value={f.status} onChange={(w) => set({ status: w as FactuurStatus })} opties={FACTUUR_STATUSSEN.map((s) => ({ waarde: s, label: s, kleur: statusKleur[s] }))} title="Status" />
           </div>
         </div>
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div>
             <label className={labelCls}>Relatienummer</label>
             <input value={f.relatienummer ?? ""} onChange={(e) => set({ relatienummer: e.target.value })} placeholder="20200015" className={veld} />
@@ -137,7 +137,7 @@ function FactuurForm({ bestaande, initieel, onKlaar, onOpgeslagen }: { bestaande
           </div>
           <span className="text-xs text-ink-400">vult de klantgegevens automatisch in</span>
         </div>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <label className={labelCls}>Klantnaam</label>
             <input value={f.klantNaam} onChange={(e) => set({ klantNaam: e.target.value })} placeholder="Stedin Netbeheer B.V." className={veld} />
@@ -294,7 +294,7 @@ function OpdrachtgeverBeheer({ onKlaar }: { onKlaar: () => void }) {
       {bewerkId !== null && (
         <Card className="space-y-3 p-4">
           <h3 className="text-sm font-bold text-ink-900">{bewerkId === "nieuw" ? "Nieuwe opdrachtgever" : "Opdrachtgever bewerken"}</h3>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div><label className={labelCls}>Naam</label><input value={d.naam} onChange={(e) => set({ naam: e.target.value })} placeholder="Stedin Netbeheer B.V." className={veld} /></div>
             <div><label className={labelCls}>Afdeling <span className="font-normal text-ink-400">(optioneel)</span></label><input value={d.afdeling} onChange={(e) => set({ afdeling: e.target.value })} placeholder="bijv. Aansluitingen / Sanering" className={veld} /></div>
             <div><label className={labelCls}>Relatienummer</label><input value={d.relatienummer} onChange={(e) => set({ relatienummer: e.target.value })} placeholder="20200015" className={veld} /></div>
@@ -314,7 +314,7 @@ function OpdrachtgeverBeheer({ onKlaar }: { onKlaar: () => void }) {
       {opdrachtgevers.length === 0 ? (
         <Card className="p-8 text-center text-sm text-ink-500">Nog geen opdrachtgevers.</Card>
       ) : (
-        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
           {opdrachtgevers.map((o) => (
             <Card key={o.id} className="flex items-center gap-3 p-4">
               <div className="min-w-0 flex-1">
@@ -389,7 +389,7 @@ function UrenFactuur({ facturenCount, opdrachtgevers, users, urenstaat, onGenere
       </div>
 
       <Card className="space-y-4 p-4">
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="sm:col-span-2"><label className={labelCls}>Opdrachtgever</label>
             <Keuze value={ogId} onChange={setOgId} altijdZoeken opties={opdrachtgevers.length ? opdrachtgevers.map((o) => ({ waarde: o.id, label: opdrachtgeverLabel(o) })) : [{ waarde: "", label: "Nog geen opdrachtgevers" }]} title="Opdrachtgever" />
           </div>

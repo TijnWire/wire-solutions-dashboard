@@ -122,7 +122,7 @@ export function SyncBackup() {
           </button>
         </div>
         {(testBezig || test) && (
-          <div className="mt-3 grid gap-2 sm:grid-cols-3">
+          <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
             {STAP_LABELS.map(([sleutel, label], i) => {
               const uitslag = stappen[sleutel];
               // Welke stap is nu aan de beurt? De eerste waarvan de uitslag nog niet binnen is.
@@ -198,7 +198,7 @@ export function SyncBackup() {
 
         {dbs && !("fout" in dbs) && (
           <>
-            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
               <div className={`rounded-lg border p-3 ${dbs.cloudflare.gezond ? "border-green-300 bg-green-50/60" : "border-red-300 bg-red-50/60"}`}>
                 <div className="flex items-center gap-2 text-sm font-bold text-ink-900">
                   <Database className="h-4 w-4" /> Cloudflare {dbs.cloudflare.gezond ? "✓" : "✗"}

@@ -193,7 +193,7 @@ export function Buurtaanpak({ initieelId }: { initieelId?: string }) {
       {nieuw && (
         <Card className="space-y-3 p-4">
           <h3 className="text-sm font-bold text-ink-900">Nieuwe buurtaanpak</h3>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <input autoFocus value={naam} onChange={(e) => setNaam(e.target.value)} placeholder="Naam (bijv. Buurtaanpak Klaverruiter)" className={veld} />
             <input value={regio} onChange={(e) => setRegio(e.target.value)} placeholder="Wijk / plaats" className={veld} />
           </div>
@@ -317,7 +317,7 @@ function Detail({ project, onTerug, isLeiding }: { project: BuurtaanpakT; onTeru
     if (!draft) return null;
     return (
       <div className="space-y-3 rounded-xl border border-brand-200 bg-brand-50/40 p-3">
-        <div className="grid gap-2 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           <input autoFocus value={draft.straat} onChange={(e) => setDraftVeld({ straat: e.target.value })} placeholder="Straat" className={veld} />
           <input value={draft.huisnummer} onChange={(e) => setDraftVeld({ huisnummer: e.target.value })} placeholder="Huisnummer" className={veld} />
           <input value={draft.postcode} onChange={(e) => setDraftVeld({ postcode: e.target.value })} placeholder="Postcode" className={veld} />
@@ -454,7 +454,7 @@ function Detail({ project, onTerug, isLeiding }: { project: BuurtaanpakT; onTeru
       {isLeiding && (
         <Card className="space-y-3 p-4">
           {/* Naam + toewijzen + opdrachtgever */}
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-xs font-semibold text-ink-600">Projectnaam</label>
               <input value={project.naam} onChange={(e) => updateBuurtaanpak(project.id, { naam: e.target.value })} placeholder="Naam van de buurtaanpak" className={veld} />

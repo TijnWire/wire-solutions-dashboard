@@ -92,7 +92,7 @@ export function ApiSleutels() {
             </div>
             {i.velden && (
               <div className="mt-3">
-                <div className="grid gap-2 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {i.velden.map(([k, ph]) => {
                     const echteWaarde = (instellingen[k] ?? "") as string;
                     const zichtbaar = !!toon[k];
