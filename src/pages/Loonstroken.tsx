@@ -301,86 +301,102 @@ function LoonstrookGenerator({ startWeek, onKlaar }: { startWeek?: string; onKla
   };
 
   return (
-    <div className="mx-auto max-w-2xl space-y-5">
+    <div className="space-y-5">
       <button type="button" onClick={onKlaar} className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-500 hover:text-ink-800"><ArrowLeft className="h-4 w-4" /> Terug naar loonstroken</button>
       <div>
         <h2 className="text-xl font-bold text-ink-900">Loonstroken uit urenstaat</h2>
         <p className="text-sm text-ink-500">Kies een periode. De app telt de gewerkte uren per medewerker uit de Urenstaat en maakt per persoon een concept-loonstrook (met bruto/netto/bijtelling uit hun contract). Alles blijft daarna handmatig aanpasbaar.</p>
       </div>
 
-      <Card className="space-y-4 p-4">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <label className={labelCls}>Periode</label>
-            <div className="flex gap-1.5">
-              {PERIODE_TYPES.map((p) => (
-                <button key={p} type="button" onClick={() => setPeriodeType(p)} className={`flex-1 rounded-lg px-2 py-2 text-sm font-semibold ${periodeType === p ? "bg-brand-600 text-white" : "bg-ink-100 text-ink-600 hover:bg-ink-200"}`}>{p}</button>
-              ))}
+      <div className="grid gap-5 lg:grid-cols-[340px_1fr]">
+        {/* Linkerkolom: periode kiezen + live samenvatting + actieknop. Blijft in beeld tijdens scrollen. */}
+        <div className="space-y-4 lg:sticky lg:top-4 lg:self-start">
+          <Card className="space-y-4 p-4">
+            <div>
+              <label className={labelCls}>Periode</label>
+              <div className="flex gap-1.5">
+                {PERIODE_TYPES.map((p) => (
+                  <button key={p} type="button" onClick={() => setPeriodeType(p)} className={`flex-1 rounded-lg px-2 py-2 text-sm font-semibold ${periodeType === p ? "bg-brand-600 text-white" : "bg-ink-100 text-ink-600 hover:bg-ink-200"}`}>{p}</button>
+                ))}
+              </div>
             </div>
-          </div>
-          <div>
-            <label className={labelCls}>Datum in periode</label>
-            <DatumKiezer value={anker} onChange={setAnker} />
-          </div>
-        </div>
-        <p className="-mt-1 text-xs text-ink-500">Periode wordt: <span className="font-semibold text-ink-700">{label}</span> <span className="text-ink-400">({new Date(van + "T00:00:00").toLocaleDateString("nl-NL")} – {new Date(tot + "T00:00:00").toLocaleDateString("nl-NL")})</span></p>
+            <div>
+              <label className={labelCls}>Datum in periode</label>
+              <DatumKiezer value={anker} onChange={setAnker} />
+            </div>
+            <p className="text-xs text-ink-500">Periode wordt: <span className="font-semibold text-ink-700">{label}</span><br /><span className="text-ink-400">{new Date(van + "T00:00:00").toLocaleDateString("nl-NL")} – {new Date(tot + "T00:00:00").toLocaleDateString("nl-NL")}</span></p>
+          </Card>
 
-        <div className="overflow-hidden rounded-xl border border-ink-200">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-ink-50/60 text-xs text-ink-500">
-                <th className="px-3 py-2 text-left font-semibold">Medewerker</th>
-                <th className="px-3 py-2 text-right font-semibold">Uren</th>
-                <th className="px-3 py-2 text-right font-semibold">Bruto (contract)</th>
-                <th className="px-3 py-2 text-right font-semibold">Netto</th>
-                <th className="px-3 py-2 text-center font-semibold">
-                  <button type="button" onClick={toggleAlles} disabled={kandidaten.length === 0} className="inline-flex items-center gap-1 font-semibold text-ink-500 hover:text-brand-600 disabled:opacity-40">
-                    {allesAan ? <CheckSquare className="h-4 w-4 text-brand-600" /> : <Square className="h-4 w-4" />} Allen
-                  </button>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {rijen.map((r) => (
-                <tr key={r.u.id} className={`border-t border-ink-100 ${r.uren === 0 && !r.bestaat ? "text-ink-300" : ""} ${gekozen.has(r.u.id) && !r.bestaat ? "bg-brand-50/40" : ""}`}>
-                  <td className="px-3 py-2">{r.u.naam}</td>
-                  <td className="px-3 py-2 text-right font-medium text-ink-800">{r.uren ? `${uurTekst(r.uren)} u` : "0 u"}</td>
-                  <td className="px-3 py-2 text-right">{euro(r.u.contract?.bruto ?? 0)}</td>
-                  <td className="px-3 py-2 text-right">{euro(r.u.contract?.netto ?? 0)}</td>
-                  <td className="px-3 py-2 text-center">
-                    {r.bestaat ? (
-                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600"><Check className="h-3.5 w-3.5" /> al aangemaakt</span>
-                    ) : (
-                      <button type="button" onClick={() => toggle(r.u.id)} aria-label={`${r.u.naam} ${gekozen.has(r.u.id) ? "niet" : "wel"} aanmaken`} className="inline-flex">
-                        {gekozen.has(r.u.id) ? <CheckSquare className="h-5 w-5 text-brand-600" /> : <Square className="h-5 w-5 text-ink-300" />}
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-            {gekozenRijen.length > 0 && (
-              <tfoot>
-                <tr className="border-t-2 border-ink-200 bg-ink-50/80 text-sm font-bold text-ink-900">
-                  <td className="px-3 py-2.5">Totaal ({gekozenRijen.length} geselecteerd)</td>
-                  <td className="px-3 py-2.5 text-right">{uurTekst(somUren)} u</td>
-                  <td className="px-3 py-2.5 text-right">{euro(somBruto)}</td>
-                  <td className="px-3 py-2.5 text-right">{euro(somNetto)}</td>
-                  <td />
-                </tr>
-              </tfoot>
-            )}
-          </table>
+          {/* Samenvatting van de selectie */}
+          <Card className="space-y-3 p-4">
+            <h3 className="text-sm font-bold text-ink-900">Samenvatting</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <div><div className="text-2xl font-bold text-brand-700 tabular-nums">{gekozenRijen.length}</div><div className="text-xs text-ink-500">geselecteerd</div></div>
+              <div><div className="text-2xl font-bold text-ink-900 tabular-nums">{uurTekst(somUren)}</div><div className="text-xs text-ink-500">totaal uren</div></div>
+              <div><div className="text-lg font-bold text-ink-900 tabular-nums">{euro(somBruto)}</div><div className="text-xs text-ink-500">bruto (contract)</div></div>
+              <div><div className="text-lg font-bold text-ink-900 tabular-nums">{euro(somNetto)}</div><div className="text-xs text-ink-500">netto</div></div>
+            </div>
+            <button type="button" onClick={genereer} disabled={teMaken === 0} className="flex w-full items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-3 text-sm font-bold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-40">
+              <Wand2 className="h-4 w-4" /> {teMaken} loonstro{teMaken === 1 ? "ok" : "ken"} aanmaken
+            </button>
+            {klaar > 0 && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">✓ {klaar} loonstro{klaar === 1 ? "ok" : "ken"} aangemaakt — bewerk ze in de lijst.</p>}
+            <p className="text-xs text-ink-400">Bruto/netto/bijtelling komen uit het contract (Medewerkers). Uren uit de Urenstaat. Elke strook blijft daarna aanpasbaar.</p>
+          </Card>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 border-t border-ink-100 pt-3">
-          <button type="button" onClick={genereer} disabled={teMaken === 0} className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-40">
-            <Wand2 className="h-4 w-4" /> {teMaken} loonstro{teMaken === 1 ? "ok" : "ken"} aanmaken
-          </button>
-          {klaar > 0 && <span className="text-sm font-semibold text-emerald-600">✓ {klaar} loonstro{klaar === 1 ? "ok" : "ken"} aangemaakt — bewerk ze in de lijst.</span>}
-        </div>
-      </Card>
-      <p className="text-xs text-ink-400">Bruto, netto en bijtelling komen uit het contract van de medewerker (Medewerkers-pagina). De uren komen uit de Urenstaat. Pas elke loonstrook daarna nog aan waar nodig.</p>
+        {/* Rechterkolom: de brede medewerkerstabel over de volle breedte */}
+        <Card className="overflow-hidden p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-ink-50/60 text-xs text-ink-500">
+                  <th className="px-4 py-3 text-left font-semibold">Medewerker</th>
+                  <th className="px-4 py-3 text-left font-semibold">Functie</th>
+                  <th className="px-4 py-3 text-right font-semibold">Uren</th>
+                  <th className="px-4 py-3 text-right font-semibold">Bruto (contract)</th>
+                  <th className="px-4 py-3 text-right font-semibold">Netto</th>
+                  <th className="px-4 py-3 text-center font-semibold">
+                    <button type="button" onClick={toggleAlles} disabled={kandidaten.length === 0} className="inline-flex items-center gap-1 font-semibold text-ink-500 hover:text-brand-600 disabled:opacity-40">
+                      {allesAan ? <CheckSquare className="h-4 w-4 text-brand-600" /> : <Square className="h-4 w-4" />} Allen
+                    </button>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {rijen.map((r) => (
+                  <tr key={r.u.id} className={`border-t border-ink-100 ${r.uren === 0 && !r.bestaat ? "text-ink-300" : ""} ${gekozen.has(r.u.id) && !r.bestaat ? "bg-brand-50/40" : ""}`}>
+                    <td className="px-4 py-2.5 font-medium text-ink-800">{r.u.naam}</td>
+                    <td className="px-4 py-2.5 text-ink-500">{r.u.functie || "—"}</td>
+                    <td className="px-4 py-2.5 text-right font-medium text-ink-800 tabular-nums">{r.uren ? `${uurTekst(r.uren)} u` : "0 u"}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums">{euro(r.u.contract?.bruto ?? 0)}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums">{euro(r.u.contract?.netto ?? 0)}</td>
+                    <td className="px-4 py-2.5 text-center">
+                      {r.bestaat ? (
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600"><Check className="h-3.5 w-3.5" /> al aangemaakt</span>
+                      ) : (
+                        <button type="button" onClick={() => toggle(r.u.id)} aria-label={`${r.u.naam} ${gekozen.has(r.u.id) ? "niet" : "wel"} aanmaken`} className="inline-flex">
+                          {gekozen.has(r.u.id) ? <CheckSquare className="h-5 w-5 text-brand-600" /> : <Square className="h-5 w-5 text-ink-300" />}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              {gekozenRijen.length > 0 && (
+                <tfoot>
+                  <tr className="border-t-2 border-ink-200 bg-ink-50/80 text-sm font-bold text-ink-900">
+                    <td className="px-4 py-3" colSpan={2}>Totaal ({gekozenRijen.length} geselecteerd)</td>
+                    <td className="px-4 py-3 text-right tabular-nums">{uurTekst(somUren)} u</td>
+                    <td className="px-4 py-3 text-right tabular-nums">{euro(somBruto)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">{euro(somNetto)}</td>
+                    <td />
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
+        </Card>
+      </div>
     </div>
   );
 }
