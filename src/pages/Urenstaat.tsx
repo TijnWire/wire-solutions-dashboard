@@ -698,12 +698,16 @@ export function Urenstaat() {
           verlof: verlof.find((v) => v.medewerkerId === u.id && v.status === "Goedgekeurd" && v.van <= r.datum && v.tot >= r.datum)?.type ?? "",
         })),
       }));
+    // Bestandsnaam: hele team → "… Team"; precies één medewerker → diens naam erachter; anders "Team".
+    const enkeleNaam = personen.length === 1 ? personen[0].naam : null;
+    const wie = heleTeam ? "Team" : (enkeleNaam ?? "Team");
     exporteerUrenstaat({
       bedrijfsnaam: bedrijf.naam,
       weekNr: weekNr(weekDate),
       jaar: weekDate.getFullYear(),
       periodeLabel: weekLabel,
       opsteller: currentUser.naam,
+      bestandsnaam: `Urenstaat Week ${weekNr(weekDate)} - ${wie}`,
       personen,
     });
   };

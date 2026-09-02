@@ -34,6 +34,7 @@ export type UrenExportData = {
   periodeLabel: string;
   opdrachtgever?: string;
   opsteller?: string;
+  bestandsnaam?: string; // eigen .xlsx-naam (zonder extensie); anders "Urenstaat_week{nr}_{jaar}"
   personen: UrenExportPersoon[];
 };
 
@@ -220,5 +221,7 @@ export function exporteerUrenstaat(data: UrenExportData): void {
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, `Week ${data.weekNr}`);
-  XLSX.writeFile(wb, `Urenstaat_week${data.weekNr}_${data.jaar}.xlsx`);
+  // Ongeldige bestandsnaam-tekens (\ / : * ? " < > |) vervangen door een spatie.
+  const veiligeNaam = (data.bestandsnaam ?? `Urenstaat_week${data.weekNr}_${data.jaar}`).replace(/[\\/:*?"<>|]/g, " ").trim();
+  XLSX.writeFile(wb, `${veiligeNaam}.xlsx`);
 }
