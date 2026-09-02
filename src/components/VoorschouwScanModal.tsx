@@ -4,6 +4,7 @@ import { useApp } from "../store/AppContext";
 import { useNav } from "../store/NavContext";
 import { FotoKnoppen } from "./FotoKnoppen";
 import { leesVoorschouwViaFotos } from "../lib/voorschouwScan";
+import { aiBeschikbaar } from "../lib/aiTransport";
 import type { Voorschouw } from "../lib/types";
 
 type Fase = "idle" | "bezig" | "geenSleutel";
@@ -28,7 +29,7 @@ export function VoorschouwScanModal({ open, onSluit, onResultaat }: {
   }, [open]);
 
   if (!open) return null;
-  const heeftSleutel = !!instellingen.claudeKey.trim();
+  const heeftSleutel = aiBeschikbaar();
 
   const voegToe = (files: FileList | null) => {
     if (!files?.length) return;

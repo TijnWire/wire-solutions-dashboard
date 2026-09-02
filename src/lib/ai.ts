@@ -1,12 +1,12 @@
 // AI-assistent voor het dashboard — kostenbewust.
-// • Model: het goedkope Claude Haiku (niet Opus).
+// • Model: het goedkope model dat de server via OpenRouter kiest (OPENROUTER_MODEL, standaard Gemini Flash).
 // • Harde dag-cap per gebruiker (lokaal bijgehouden) zodat het tokengebruik/kosten beperkt blijven.
-// • Loopt via de server-proxy (aiTransport): de API-sleutel blijft server-side. Terugval op de
-//   client-sleutel uit Instellingen zolang de server nog geen CLAUDE_KEY heeft.
-import { postClaude } from "./aiTransport";
+// • Loopt via de server-proxy (aiTransport): de API-sleutel blijft server-side, nooit op een toestel.
+import { postClaude, aiBeschikbaar } from "./aiTransport";
 
-// Kostenefficiënt model (Haiku), bewust niet Opus.
-const AI_MODEL = "claude-haiku-4-5-20251001";
+// Het 'model'-veld dat de app meestuurt is enkel een hint; de server bepaalt het echte model
+// (OPENROUTER_MODEL). We laten hier een goedkoop model staan voor de terugval-situatie.
+const AI_MODEL = "google/gemini-2.5-flash";
 
 // ── Harde dag-limiet per gebruiker (lokaal per apparaat) ──
 export const AI_CAP_PER_DAG = 20;
@@ -45,7 +45,7 @@ export type ChatBericht = { rol: "user" | "assistant"; tekst: string };
 
 // Stelt de assistent een vraag. Kiest óf een pagina om naartoe te navigeren, óf een verduidelijkende vraag.
 export async function vraagAssistent(apiKey: string, paginas: Pagina[], geschiedenis: ChatBericht[], userId: string): Promise<AssistentResultaat> {
-  if (!apiKey.trim()) return { soort: "fout", fout: "Er is nog geen Claude-sleutel ingesteld (Instellingen → Integraties)." };
+  if (!aiBeschikbaar()) return { soort: "fout", fout: "AI is niet beschikbaar. Log in en zorg dat de centrale database aanstaat." };
   if (aiResterend(userId) <= 0) return { soort: "fout", fout: `Je dag-limiet van ${AI_CAP_PER_DAG} AI-berichten is bereikt. Morgen kan het weer.` };
 
   const paginaLijst = paginas.map((p) => `- ${p.key} — ${p.label} (${p.groep})`).join("\n");
@@ -85,7 +85,7 @@ export async function vraagAssistent(apiKey: string, paginas: Pagina[], geschied
 
 // Korte, optionele analyse "wat kan beter" op basis van een samenvatting van het dashboard.
 export async function analyseerDashboard(apiKey: string, samenvatting: string, userId: string): Promise<{ ok: true; tekst: string } | { ok: false; fout: string }> {
-  if (!apiKey.trim()) return { ok: false, fout: "Er is nog geen Claude-sleutel ingesteld (Instellingen → Integraties)." };
+  if (!aiBeschikbaar()) return { ok: false, fout: "AI is niet beschikbaar. Log in en zorg dat de centrale database aanstaat." };
   if (aiResterend(userId) <= 0) return { ok: false, fout: `Je dag-limiet van ${AI_CAP_PER_DAG} AI-berichten is bereikt. Morgen kan het weer.` };
 
   const r = await claudeHaiku(apiKey, {

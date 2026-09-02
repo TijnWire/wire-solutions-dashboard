@@ -37,7 +37,7 @@ export function ApiSleutels() {
     { id: "idb", naam: "Lokale opslag (IndexedDB)", beschr: "Alles wordt veilig op dit apparaat bewaard.", status: "actief" },
     { id: "supabase", naam: "Centrale database (Supabase)", beschr: "Deelt en synchroniseert gegevens tussen alle apparaten en het hele team.", status: instellingen.supabaseUrl ? "ingesteld" : "niet", velden: [["supabaseUrl", "Project-URL"], ["supabaseKey", "Anon key"]] },
     { id: "maps", naam: "Google Maps", beschr: "Nu: gratis kaartlinks voor navigatie. Met API-sleutel: echte route-optimalisatie.", status: instellingen.googleMapsKey ? "ingesteld" : "demo", velden: [["googleMapsKey", "API-sleutel"]] },
-    { id: "claude", naam: "Claude (AI & vertaling)", beschr: "Slimme vertaling en AI-chat. Nu een gratis vertaaldienst als demo.", status: instellingen.claudeKey ? "ingesteld" : "demo", velden: [["claudeKey", "API-sleutel"]] },
+    { id: "ai", naam: "AI (OpenRouter, server-side)", beschr: "Slimme scan van PDF's/formulieren en de assistent. De sleutel staat veilig op de server (OpenRouter); er hoeft niets op dit apparaat te worden ingevuld.", status: "actief" },
     { id: "speech", naam: "Spraakherkenning (browser)", beschr: "Voor de live vertaling aan de deur. Werkt het best in Chrome/Edge.", status: speechOK ? "actief" : "niet" },
   ];
 

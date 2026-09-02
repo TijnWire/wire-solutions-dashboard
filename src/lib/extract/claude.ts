@@ -1,6 +1,6 @@
-// PDF-extractie via de Anthropic Messages API (native PDF-input + geforceerde tool-use).
-// Loopt via de server-proxy (aiTransport) zodat de API-sleutel server-side blijft; valt terug op de
-// client-sleutel uit Instellingen zolang de server nog geen CLAUDE_KEY heeft.
+// PDF-extractie via de server-proxy (aiTransport → OpenRouter, goedkoop multimodaal model).
+// De API-sleutel blijft server-side; deze module bouwt het verzoek nog in het Anthropic-formaat en de
+// Worker vertaalt het naar OpenRouter.
 import { postClaude } from "../aiTransport";
 
 type ClaudeRij = {
@@ -88,9 +88,9 @@ export async function leesPdfViaClaude(file: File, apiKey: string, signal?: Abor
   const antwoord = await postClaude(
     apiKey,
     {
-      model: "claude-opus-4-8",
+      model: "google/gemini-2.5-flash",
       max_tokens: 16000,
-      system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
+      system: [{ type: "text", text: SYSTEM_PROMPT }],
       tools: [ADRES_TOOL],
       tool_choice: { type: "tool", name: "lever_adressen" },
       messages: [

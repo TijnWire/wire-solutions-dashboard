@@ -1,9 +1,10 @@
 import { useMemo, useRef, useState, useEffect } from "react";
-import { Sparkles, X, Send, Loader2, ArrowRight, Bot } from "lucide-react";
+import { Sparkles, X, Send, Loader2, Bot } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { useNav } from "../store/NavContext";
 import { NAV, magZien } from "../lib/nav";
 import { vraagAssistent, aiResterend, AI_CAP_PER_DAG, type ChatBericht, type Pagina } from "../lib/ai";
+import { aiBeschikbaar } from "../lib/aiTransport";
 
 // Zwevende AI-assistent: stel een vraag → de bot navigeert je naar de juiste pagina of stelt een
 // verduidelijkende vraag. Kostenbewust: goedkoop model + harde dag-cap (zie lib/ai.ts).
@@ -44,6 +45,7 @@ export function AiAssistent() {
   const [wijkt, setWijkt] = useState(false);
 
   const apiKey = instellingen.claudeKey ?? "";
+  const aiAan = aiBeschikbaar();
   const paginas: Pagina[] = useMemo(
     () => (currentUser ? NAV.filter((n) => magZien(currentUser, n)).map((n) => ({ key: n.key, label: n.label, groep: n.group })) : []),
     [currentUser]
@@ -166,10 +168,10 @@ export function AiAssistent() {
               ))}
               {bezig && <div className="flex justify-start"><div className="inline-flex items-center gap-2 rounded-2xl bg-ink-100 px-3.5 py-2 text-sm text-ink-500"><Loader2 className="h-4 w-4 animate-spin" /> Aan het nadenken…</div></div>}
               {fout && <div className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{fout}</div>}
-              {!apiKey && (
-                <button type="button" onClick={() => { setOpen(false); navigeer("instellingen"); }} className="inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-100">
-                  Stel eerst de Claude-sleutel in bij Instellingen <ArrowRight className="h-3.5 w-3.5" />
-                </button>
+              {!aiAan && (
+                <div className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700">
+                  AI staat nog niet aan. Log in en zorg dat de centrale database beschikbaar is.
+                </div>
               )}
             </div>
 
@@ -179,11 +181,11 @@ export function AiAssistent() {
                   value={invoer}
                   onChange={(e) => setInvoer(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") void verstuur(); }}
-                  disabled={bezig || resterend <= 0 || !apiKey}
+                  disabled={bezig || resterend <= 0 || !aiAan}
                   placeholder={resterend <= 0 ? "Dag-limiet bereikt" : "Stel je vraag…"}
                   className="min-w-0 flex-1 rounded-xl border border-ink-200 px-3.5 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100 disabled:bg-ink-50"
                 />
-                <button type="button" onClick={() => void verstuur()} disabled={bezig || resterend <= 0 || !apiKey || !invoer.trim()} className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-40" title="Versturen" aria-label="Versturen"><Send className="h-4 w-4" /></button>
+                <button type="button" onClick={() => void verstuur()} disabled={bezig || resterend <= 0 || !aiAan || !invoer.trim()} className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-40" title="Versturen" aria-label="Versturen"><Send className="h-4 w-4" /></button>
               </div>
             </div>
           </div>

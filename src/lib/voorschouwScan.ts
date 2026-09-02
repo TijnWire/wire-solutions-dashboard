@@ -3,7 +3,7 @@
 // Loopt via de server-proxy (aiTransport) zodat de API-sleutel server-side blijft; terugval op de
 // client-sleutel uit Instellingen zolang de server nog geen CLAUDE_KEY heeft.
 import { fileNaarDataUrl } from "./image";
-import { postClaude } from "./aiTransport";
+import { postClaude, aiBeschikbaar } from "./aiTransport";
 import type { Voorschouw } from "./types";
 
 type VoorschouwVelden = Pick<
@@ -66,7 +66,7 @@ function foutTekst(status: number, detail: string): string {
 }
 
 export async function leesVoorschouwViaFotos(files: File[], apiKey: string, signal?: AbortSignal): Promise<VoorschouwScanResultaat> {
-  if (!apiKey.trim()) return { ok: false, fout: "Voor het scannen van een ingevuld formulier is een Claude API-sleutel nodig (Instellingen → Integraties)." };
+  if (!aiBeschikbaar()) return { ok: false, fout: "AI is niet beschikbaar. Log in en zorg dat de centrale database aanstaat." };
   if (!files.length) return { ok: false, fout: "Geen foto gekozen." };
 
   let fotos: string[];
@@ -80,7 +80,7 @@ export async function leesVoorschouwViaFotos(files: File[], apiKey: string, sign
   const antwoord = await postClaude(
     apiKey,
     {
-      model: "claude-opus-4-8",
+      model: "google/gemini-2.5-flash",
       max_tokens: 4000,
       system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
       tools: [TOOL],

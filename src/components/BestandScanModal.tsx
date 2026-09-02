@@ -5,6 +5,7 @@ import { useNav } from "../store/NavContext";
 import { Keuze } from "./Keuze";
 import { bestandsoort, verwerkBestand, bevestigOpslaan } from "../lib/extract/importeer";
 import { valideer } from "../lib/extract/normaliseer";
+import { aiBeschikbaar } from "../lib/aiTransport";
 import type { ImportDoel, ScanRij, WoningType } from "../lib/extract/types";
 
 type Fase = "idle" | "bezig" | "geenSleutel" | "review" | "klaar";
@@ -139,7 +140,7 @@ export function BestandScanModal({ open, projectId, projectNaam, onSluit }: { op
   }, [open]);
 
   if (!open) return null;
-  const heeftSleutel = !!instellingen.claudeKey.trim();
+  const heeftSleutel = aiBeschikbaar();
   const isPdf = bestandsnaam.toLowerCase().endsWith(".pdf");
 
   const reset = () => {
