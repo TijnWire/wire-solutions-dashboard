@@ -2,7 +2,11 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import { AppProvider } from "./store/AppContext";
+import { installSelectOnFocus } from "./lib/selectOnFocus";
 import "./index.css";
+
+// Cijfervelden bij focus/klik meteen volledig selecteren (hele dashboard).
+installSelectOnFocus();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
