@@ -272,11 +272,202 @@ function MedewerkerKiezer({ medewerkers, waarde, onKies, urenVan, contractVan, s
   );
 }
 
+// ── Weekrooster: één medewerker, één rij per dag (ma t/m zo). Geen herhaalde Medewerker/Datum-
+// kolommen meer. Uursoort/project/tijden zet je één keer bovenaan en pas je "toe op alle dagen";
+// per dag blijft alles los aanpasbaar. Onderliggend blijft elke dag gewoon een Urenregel — dit is
+// puur een andere weergave/invoer, er verandert niets aan hoe de uren worden opgeslagen. ──
+function WeekRooster({ weekDate, medewerker, regels, vorigeWeekRegels, uursoorten, verlof, addUren, updateUren, deleteUren, zet }: {
+  weekDate: Date;
+  medewerker: User;
+  regels: Urenregel[];            // regels van deze medewerker, deze week (alle projecten)
+  vorigeWeekRegels: Urenregel[];  // idem, week ervoor (voor "kopieer vorige week")
+  uursoorten: Uursoort[];
+  verlof: { medewerkerId: string; status: string; van: string; tot: string; type: string }[];
+  addUren: (r: Omit<Urenregel, "id">) => void;
+  updateUren: (id: string, patch: Partial<Urenregel>) => void;
+  deleteUren: (id: string) => void;
+  zet: (r: Urenregel, patch: Partial<Urenregel>) => void;
+}) {
+  const [toepas, setToepas] = useState({ uursoortId: uursoorten[0]?.id as string | undefined, projectId: "", begin: STANDAARD_BEGIN, eind: STANDAARD_EIND, pauze: STANDAARD_PAUZE });
+
+  const dagen = Array.from({ length: 7 }, (_, i) => { const d = new Date(weekDate); d.setDate(d.getDate() + i); return toISO(d); });
+  const regelsVanDag = (iso: string) => regels.filter((r) => r.datum === iso).sort((a, b) => (a.begin ?? "").localeCompare(b.begin ?? ""));
+  const weekTotaal = regels.reduce((s, r) => s + (Number(r.uren) || 0), 0);
+
+  const maakRegel = (iso: string, patch?: Partial<Urenregel>) => addUren({
+    medewerkerId: medewerker.id,
+    datum: iso,
+    uursoortId: toepas.uursoortId,
+    projectId: toepas.projectId || undefined,
+    begin: toepas.begin,
+    eind: toepas.eind,
+    pauze: toepas.pauze,
+    uren: berekenUren(toepas.begin, toepas.eind, toepas.pauze) ?? 0,
+    notitie: "",
+    ...patch,
+  });
+
+  // Zet de weekinstelling op elke werkdag (ma t/m vr): bestaande dagen bijwerken, lege dagen aanmaken.
+  const toepassenOpAlle = () => {
+    for (let i = 0; i < 5; i++) {
+      const iso = dagen[i];
+      const dr = regelsVanDag(iso);
+      if (dr.length === 0) maakRegel(iso);
+      else dr.forEach((r) => zet(r, { begin: toepas.begin, eind: toepas.eind, pauze: toepas.pauze, uursoortId: toepas.uursoortId, projectId: toepas.projectId || undefined }));
+    }
+  };
+
+  // Neemt de vorige week één-op-één over (zelfde tijden/projecten, +7 dagen). Alleen aan te klikken
+  // als deze week nog leeg is, zodat het nooit dubbele uren oplevert.
+  const kopieerVorige = () => {
+    vorigeWeekRegels.forEach((r) => {
+      const d = new Date(r.datum + "T00:00:00"); d.setDate(d.getDate() + 7);
+      const { id: _id, ...rest } = r; void _id;
+      addUren({ ...rest, datum: toISO(d) });
+    });
+  };
+
+  const kolommen = "grid grid-cols-[132px_88px_88px_76px_84px_minmax(0,1fr)_36px] items-center gap-2";
+  const usOpties = [{ waarde: "", label: "—" }, ...uursoorten.map((u) => ({ waarde: u.id, label: uursoortLabel(u) }))];
+  const projOpties = [{ waarde: "", label: "Algemeen" }, ...WERK_CATEGORIEEN.map((c) => ({ waarde: c.id, label: c.naam }))];
+
+  return (
+    <Card className="overflow-hidden">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-ink-100 bg-ink-50/60 px-5 py-3">
+        <div className="flex items-center gap-2">
+          <CalendarCheck className="h-4 w-4 text-brand-600" />
+          <h3 className="text-sm font-bold text-ink-900">Weekrooster · {medewerker.naam}</h3>
+        </div>
+        <button
+          type="button"
+          onClick={kopieerVorige}
+          disabled={regels.length > 0 || vorigeWeekRegels.length === 0}
+          title={regels.length > 0 ? "Deze week heeft al uren" : vorigeWeekRegels.length === 0 ? "Vorige week is leeg" : "Neem de vorige week over"}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 bg-white px-3 py-1.5 text-xs font-semibold text-ink-600 hover:bg-ink-50 disabled:opacity-40"
+        >
+          <Copy className="h-3.5 w-3.5" /> Kopieer vorige week
+        </button>
+      </div>
+
+      {/* Week-brede instelling: één keer zetten → op alle werkdagen toepassen */}
+      <div className="border-b border-ink-100 p-3">
+        <div className="rounded-xl border border-brand-100 bg-brand-50 p-3">
+          <div className="flex flex-wrap items-end gap-3">
+            <span className="pb-1.5 text-xs font-bold uppercase tracking-wide text-brand-700">Voor de hele week</span>
+            <div className="w-40">
+              <label className="mb-1 block text-[11px] font-semibold text-ink-500">Uursoort</label>
+              <Keuze value={toepas.uursoortId ?? ""} onChange={(w) => setToepas((t) => ({ ...t, uursoortId: w || undefined }))} size="rij" opties={usOpties} title="Uursoort" />
+            </div>
+            <div className="w-40">
+              <label className="mb-1 block text-[11px] font-semibold text-ink-500">Project</label>
+              <Keuze value={toepas.projectId} onChange={(w) => setToepas((t) => ({ ...t, projectId: w }))} size="rij" opties={projOpties} title="Project" />
+            </div>
+            <div className="w-24">
+              <label className="mb-1 block text-[11px] font-semibold text-ink-500">Begin</label>
+              <TijdKiezer value={toepas.begin} onChange={(t) => setToepas((s) => ({ ...s, begin: t }))} size="rij" title="Begintijd" />
+            </div>
+            <div className="w-24">
+              <label className="mb-1 block text-[11px] font-semibold text-ink-500">Eind</label>
+              <TijdKiezer value={toepas.eind} onChange={(t) => setToepas((s) => ({ ...s, eind: t }))} size="rij" title="Eindtijd" />
+            </div>
+            <div className="w-20">
+              <label className="mb-1 block text-[11px] font-semibold text-ink-500">Pauze</label>
+              <input inputMode="numeric" value={toepas.pauze} onChange={(e) => { const n = parseInt(e.target.value.replace(/\D/g, ""), 10); setToepas((s) => ({ ...s, pauze: Number.isFinite(n) ? n : 0 })); }} className={veld} />
+            </div>
+            <button type="button" onClick={toepassenOpAlle} className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3.5 py-2 text-sm font-bold text-white hover:bg-brand-700">
+              <CalendarCheck className="h-4 w-4" /> Toepassen op alle dagen
+            </button>
+          </div>
+          <p className="mt-2 text-[11px] text-ink-400">Zet je hier iets, dan geldt het voor elke werkdag (ma t/m vr). Per dag pas je het daarna los aan als het afwijkt.</p>
+        </div>
+      </div>
+
+      {/* Kolomkoppen */}
+      <div className={`${kolommen} border-b border-ink-100 px-5 py-2 text-[11px] font-bold uppercase tracking-wide text-ink-400`}>
+        <span>Dag</span><span>Begin</span><span>Eind</span><span>Pauze</span><span>Totaal</span><span>Uursoort · project · opmerking</span><span />
+      </div>
+
+      {/* De zeven dagen */}
+      <div className="divide-y divide-ink-50">
+        {dagen.map((iso, i) => {
+          const weekend = i >= 5;
+          const dr = regelsVanDag(iso);
+          const d = new Date(iso + "T00:00:00");
+          const fd = feestdagNaam(iso);
+          const vrij = verlof.find((v) => v.medewerkerId === medewerker.id && v.status === "Goedgekeurd" && v.van <= iso && v.tot >= iso);
+          const datumLabel = d.toLocaleDateString("nl-NL", { day: "numeric", month: "short" });
+          const dagVol = ["Maandag", "Dinsdag", "Woensdag", "Donderdag", "Vrijdag", "Zaterdag", "Zondag"][i];
+
+          if (dr.length === 0) {
+            // Lege dag: werkdag = snel toevoegen; weekend = uitgeschakeld met schakelaar aan te zetten.
+            return (
+              <div key={iso} className={`${kolommen} px-5 py-2.5 ${weekend ? "bg-ink-50/50" : ""}`}>
+                <div>
+                  <div className={`text-sm font-bold ${weekend ? "text-ink-400" : "text-ink-700"}`}>{dagVol}</div>
+                  <div className="text-[11px] text-ink-400">{datumLabel}{fd ? ` · ${fd}` : ""}{vrij ? ` · ${vrij.type}` : ""}</div>
+                </div>
+                <div className="col-span-5 text-sm text-ink-400">
+                  {weekend ? "Vrij" : fd ? fd : vrij ? `${vrij.type} (verlof)` : "Geen uren"}
+                  <button type="button" onClick={() => maakRegel(iso)} className="ml-2 inline-flex items-center gap-1 rounded-lg border border-ink-200 bg-white px-2 py-1 text-xs font-semibold text-brand-600 hover:bg-brand-50">
+                    <Plus className="h-3.5 w-3.5" /> {weekend ? "Werkdag toevoegen" : "Toevoegen"}
+                  </button>
+                </div>
+                <div />
+              </div>
+            );
+          }
+
+          // Eén of meer periodes op deze dag. De dagnaam staat alleen bij de eerste; extra periodes zijn ingesprongen.
+          return (
+            <div key={iso} className={fd || vrij ? "bg-amber-50/40" : ""}>
+              {dr.map((r, idx) => (
+                <div key={r.id} className={`${kolommen} px-5 py-2`}>
+                  <div>
+                    {idx === 0 ? (
+                      <>
+                        <div className="text-sm font-bold text-ink-900">{dagVol}</div>
+                        <div className="text-[11px] text-ink-400">{datumLabel}{fd ? ` · ${fd}` : ""}{vrij ? ` · ${vrij.type}` : ""}</div>
+                      </>
+                    ) : (
+                      <div className="text-[11px] italic text-ink-400">— extra periode</div>
+                    )}
+                  </div>
+                  <TijdKiezer value={r.begin ?? ""} onChange={(t) => zet(r, { begin: t })} size="rij" placeholder="--:--" title="Begintijd" />
+                  <TijdKiezer value={r.eind ?? ""} onChange={(t) => zet(r, { eind: t })} size="rij" placeholder="--:--" title="Eindtijd" />
+                  <input inputMode="numeric" value={r.pauze ?? 0} onChange={(e) => { const n = parseInt(e.target.value.replace(/\D/g, ""), 10); zet(r, { pauze: Number.isFinite(n) ? n : 0 }); }} aria-label="Pauze in minuten" className={veld} />
+                  <input inputMode="decimal" value={uurTekst(Number(r.uren) || 0)} onChange={(e) => { const n = parseFloat(e.target.value.replace(",", ".")); updateUren(r.id, { uren: Number.isFinite(n) && n >= 0 ? n : 0 }); }} aria-label="Totaal uren" className={veld + " bg-ink-50 font-semibold"} />
+                  <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                    <div className="w-32"><Keuze value={r.uursoortId ?? ""} onChange={(w) => zet(r, { uursoortId: w || undefined })} size="rij" opties={usOpties} title="Uursoort" /></div>
+                    <div className="w-32"><Keuze value={r.projectId ?? ""} onChange={(w) => zet(r, { projectId: w || undefined })} size="rij" opties={projOpties} title="Project" /></div>
+                    <input value={r.notitie ?? ""} onChange={(e) => zet(r, { notitie: e.target.value })} placeholder="Opmerking…" className={veld + " min-w-[7rem] flex-1"} />
+                  </div>
+                  <div className="flex items-center justify-end gap-0.5">
+                    {idx === dr.length - 1 && (
+                      <button type="button" onClick={() => maakRegel(iso, { begin: r.eind ?? STANDAARD_BEGIN, eind: eindNa(r.eind ?? STANDAARD_BEGIN, STANDAARD_DAG, 0), pauze: 0 })} title="Extra periode op deze dag" className="rounded-lg p-1.5 text-ink-400 hover:bg-ink-100 hover:text-brand-600"><Plus className="h-4 w-4" /></button>
+                    )}
+                    <button type="button" onClick={() => deleteUren(r.id)} title="Periode verwijderen" className="rounded-lg p-1.5 text-red-400 hover:bg-red-50 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="flex items-center justify-between border-t border-ink-200 bg-ink-50/60 px-5 py-3 text-sm">
+        <span className="font-bold text-ink-900">Totaal week</span>
+        <span className="font-bold text-ink-900">{uurTekst(weekTotaal)} u</span>
+      </div>
+    </Card>
+  );
+}
+
 export function Urenstaat() {
   const { users, bedrijf, updateBedrijf, urenstaat, verlof, currentUser, addUren, updateUren, deleteUren, syncKlaar } = useApp();
   const { navigeer } = useNav();
   const [weekISO, setWeekISO] = useState(() => toISO(maandagVan(new Date())));
   const [modus, setModus] = useState<"lijst" | "uursoorten">("lijst");
+  const [weergave, setWeergave] = useState<"rooster" | "lijst">("rooster"); // rooster = weekrooster per medewerker; lijst = platte tabel (Iedereen)
   const [vraagVullen, setVraagVullen] = useState(false); // bevestiging vóór de week volgens contract te vullen
   const [filterPersoon, setFilterPersoon] = useState(() => [...users].sort((a, b) => a.naam.localeCompare(b.naam, "nl"))[0]?.id ?? ""); // standaard één medewerker; "" = iedereen
   const [filterProject, setFilterProject] = useState(""); // "" = alle projecten
@@ -332,6 +523,14 @@ export function Urenstaat() {
   }, [urenstaat, weekISO]);
 
   const medewerkers = [...users].sort((a, b) => a.naam.localeCompare(b.naam, "nl"));
+  const gekozenMedewerker = medewerkers.find((u) => u.id === filterPersoon) ?? null;
+  const roosterActief = weergave === "rooster" && !!gekozenMedewerker; // rooster kan alleen per medewerker
+  // Regels van de gekozen medewerker deze week (alle projecten) + de week ervoor, voor het weekrooster.
+  const vorigeMaandagISO = (() => { const d = new Date(weekDate); d.setDate(d.getDate() - 7); return toISO(d); })();
+  const roosterRegels = gekozenMedewerker ? weekRegels.filter((r) => r.medewerkerId === filterPersoon) : [];
+  const vorigeWeekRegels = gekozenMedewerker
+    ? urenstaat.filter((r) => r.medewerkerId === filterPersoon && r.datum >= vorigeMaandagISO && r.datum < weekISO)
+    : [];
   const uursoorten = uursoortenVan(bedrijf);
   const urenVanPersoon = (id: string) => weekRegels.filter((r) => r.medewerkerId === id).reduce((s, r) => s + (Number(r.uren) || 0), 0);
   // Uren per project, binnen de medewerker die je nu bekijkt (of iedereen).
@@ -595,7 +794,44 @@ export function Urenstaat() {
         </div>
       </Card>
 
-      {/* Werk periodes */}
+      {/* Weergave-schakelaar: weekrooster (per medewerker) of de platte lijst (iedereen) */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="inline-flex rounded-xl border border-ink-200 bg-white p-0.5">
+          <button
+            type="button"
+            onClick={() => setWeergave("rooster")}
+            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition-colors ${weergave === "rooster" ? "bg-brand-600 text-white" : "text-ink-600 hover:bg-ink-50"}`}
+          >
+            <CalendarCheck className="h-3.5 w-3.5" /> Weekrooster
+          </button>
+          <button
+            type="button"
+            onClick={() => setWeergave("lijst")}
+            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition-colors ${weergave === "lijst" ? "bg-brand-600 text-white" : "text-ink-600 hover:bg-ink-50"}`}
+          >
+            <Users2 className="h-3.5 w-3.5" /> Iedereen (lijst)
+          </button>
+        </div>
+        {weergave === "rooster" && !gekozenMedewerker && (
+          <span className="text-xs text-amber-600">Kies hierboven één medewerker voor het weekrooster.</span>
+        )}
+      </div>
+
+      {roosterActief && gekozenMedewerker ? (
+        <WeekRooster
+          weekDate={weekDate}
+          medewerker={gekozenMedewerker}
+          regels={roosterRegels}
+          vorigeWeekRegels={vorigeWeekRegels}
+          uursoorten={uursoorten}
+          verlof={verlof}
+          addUren={addUren}
+          updateUren={updateUren}
+          deleteUren={deleteUren}
+          zet={zet}
+        />
+      ) : (
+      /* Werk periodes — platte lijst (iedereen, of terugval als er geen medewerker gekozen is) */
       <Card className="overflow-hidden">
         <div className="flex flex-wrap items-center gap-2 border-b border-ink-100 bg-ink-50/60 px-5 py-3">
           <Clock className="h-4 w-4 text-brand-600" />
@@ -698,6 +934,8 @@ export function Urenstaat() {
           <span className="text-xs text-ink-400">De lopende week staat vanzelf op ma t/m vr, {STANDAARD_BEGIN}–{STANDAARD_EIND} met {STANDAARD_PAUZE} min pauze; alles blijft aanpasbaar. Wijzigingen worden meteen opgeslagen en gedeeld met het team.</span>
         </div>
       </Card>
+
+      )}
 
       <p className="text-xs text-ink-400">Het totaal wordt berekend uit begintijd − eindtijd − pauze; je kunt het altijd handmatig overschrijven. Feestdagen en goedgekeurd verlof worden bij de datum getoond. Contracturen stel je per persoon in bij <span className="font-semibold text-ink-500">Medewerkers</span>; staat er niets, dan rekenen we met {STANDAARD_CONTRACT} uur.</p>
 
