@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { Plug, Pencil, Save, Lock } from "lucide-react";
+import { Plug, Pencil, Save, Lock, Eye, EyeOff } from "lucide-react";
 import { useApp } from "../store/AppContext";
-import { Card } from "../components/ui";
+import { Card, Bevestig } from "../components/ui";
 import type { Instellingen as InstellingenT } from "../lib/types";
 
 const veld = "w-full rounded-xl border border-ink-200 px-3.5 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100";
@@ -13,10 +13,21 @@ const statusInfo: Record<string, { label: string; cls: string }> = {
   niet: { label: "Niet ingesteld", cls: "bg-ink-100 text-ink-500 ring-ink-200" },
 };
 
+// Toon een sleutel afgeschermd: alleen bolletjes met de laatste 4 tekens als herkenningshint.
+// Zo staat een geheime sleutel nooit zomaar leesbaar op het scherm (ook niet als iemand meekijkt).
+function maskeer(waarde: string): string {
+  if (!waarde) return "";
+  if (waarde.length <= 4) return "••••";
+  return "••••••••" + waarde.slice(-4);
+}
+
 // Aparte pagina: alle koppelingen/API-sleutels en hun status.
 export function ApiSleutels() {
   const { instellingen, updateInstellingen, currentUser } = useApp();
   const [bewerkId, setBewerkId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<Partial<InstellingenT>>({});
+  const [toon, setToon] = useState<Record<string, boolean>>({}); // per veld: geheime waarde tijdelijk zichtbaar?
+  const [bevestig, setBevestig] = useState<{ id: string; naam: string } | null>(null);
 
   if (!currentUser) return null;
   const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr";
@@ -41,11 +52,32 @@ export function ApiSleutels() {
     { id: "speech", naam: "Spraakherkenning (browser)", beschr: "Voor de live vertaling aan de deur. Werkt het best in Chrome/Edge.", status: speechOK ? "actief" : "niet" },
   ];
 
+  const startBewerken = (i: Integratie) => {
+    // Zet het concept op de huidige echte waarden, zodat bewerken vanaf de bestaande sleutels vertrekt.
+    const d: Partial<InstellingenT> = {};
+    i.velden!.forEach(([k]) => { (d as Record<string, unknown>)[k] = instellingen[k]; });
+    setDraft(d);
+    setToon({});
+    setBewerkId(i.id);
+  };
+
+  const annuleer = () => { setBewerkId(null); setDraft({}); setToon({}); };
+
+  // Pas na bevestiging schrijven we de nieuwe waarden echt weg.
+  const bevestigOpslaan = () => {
+    updateInstellingen(draft);
+    setBewerkId(null);
+    setDraft({});
+    setToon({});
+    setBevestig(null);
+  };
+
   return (
     <div className="space-y-3">
-      <p className="text-sm text-ink-500">Overzicht van alle koppelingen en hun status. Vul de sleutels in om de bijbehorende functies aan te zetten.</p>
+      <p className="text-sm text-ink-500">Overzicht van alle koppelingen en hun status. De sleutels staan afgeschermd — klik op Wijzigen om ze aan te passen.</p>
       {integraties.map((i) => {
         const si = statusInfo[i.status];
+        const open = bewerkId === i.id;
         return (
           <Card key={i.id} className="p-4">
             <div className="flex flex-wrap items-start justify-between gap-2">
@@ -58,39 +90,78 @@ export function ApiSleutels() {
               </div>
               <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${si.cls}`}>{si.label}</span>
             </div>
-            {i.velden && (() => {
-              const open = bewerkId === i.id;
-              return (
-                <div className="mt-3">
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    {i.velden!.map(([k, ph]) => (
-                      <input
-                        key={k}
-                        value={instellingen[k]}
-                        onChange={(e) => updateInstellingen({ [k]: e.target.value })}
-                        placeholder={ph}
-                        disabled={!open}
-                        className={veld + (open ? "" : " cursor-not-allowed bg-ink-50 text-ink-500")}
-                      />
-                    ))}
-                  </div>
-                  <div className="mt-2 flex justify-end">
-                    {open ? (
-                      <button type="button" onClick={() => setBewerkId(null)} className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700">
-                        <Save className="h-3.5 w-3.5" /> Klaar
-                      </button>
-                    ) : (
-                      <button type="button" onClick={() => setBewerkId(i.id)} className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-3 py-1.5 text-xs font-semibold text-ink-600 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700">
-                        <Pencil className="h-3.5 w-3.5" /> Wijzigen
-                      </button>
-                    )}
-                  </div>
+            {i.velden && (
+              <div className="mt-3">
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {i.velden.map(([k, ph]) => {
+                    const echteWaarde = (instellingen[k] ?? "") as string;
+                    const zichtbaar = !!toon[k];
+                    if (!open) {
+                      // Dicht: afgeschermde, niet-bewerkbare weergave (bolletjes + laatste 4 tekens).
+                      return (
+                        <input
+                          key={k}
+                          value={echteWaarde ? maskeer(echteWaarde) : ""}
+                          placeholder={ph + " — niet ingesteld"}
+                          disabled
+                          className={veld + " cursor-not-allowed bg-ink-50 font-mono tracking-wide text-ink-500"}
+                        />
+                      );
+                    }
+                    // Open (bewerken): bewerkbaar veld, standaard verborgen, met oog-knop om te tonen.
+                    return (
+                      <div key={k} className="relative">
+                        <input
+                          type={zichtbaar ? "text" : "password"}
+                          value={(draft[k] ?? "") as string}
+                          onChange={(e) => setDraft((d) => ({ ...d, [k]: e.target.value }))}
+                          placeholder={ph}
+                          autoComplete="off"
+                          className={veld + " pr-10"}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setToon((t) => ({ ...t, [k]: !t[k] }))}
+                          className="absolute inset-y-0 right-0 flex items-center px-3 text-ink-400 hover:text-ink-700"
+                          title={zichtbaar ? "Verbergen" : "Tonen"}
+                        >
+                          {zichtbaar ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
-              );
-            })()}
+                <div className="mt-2 flex justify-end gap-2">
+                  {open ? (
+                    <>
+                      <button type="button" onClick={annuleer} className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-3 py-1.5 text-xs font-semibold text-ink-600 hover:bg-ink-50">
+                        Annuleren
+                      </button>
+                      <button type="button" onClick={() => setBevestig({ id: i.id, naam: i.naam })} className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700">
+                        <Save className="h-3.5 w-3.5" /> Opslaan
+                      </button>
+                    </>
+                  ) : (
+                    <button type="button" onClick={() => startBewerken(i)} className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-3 py-1.5 text-xs font-semibold text-ink-600 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700">
+                      <Pencil className="h-3.5 w-3.5" /> Wijzigen
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
           </Card>
         );
       })}
+
+      <Bevestig
+        open={!!bevestig}
+        titel="Weet je het zeker?"
+        tekst={`Je staat op het punt de sleutel(s) van "${bevestig?.naam ?? ""}" aan te passen. Een verkeerde sleutel kan deze koppeling voor het hele team stilleggen. Weet je zeker dat je dit wilt opslaan?`}
+        bevestigLabel="Ja, opslaan"
+        bevestigTone="brand"
+        onBevestig={bevestigOpslaan}
+        onAnnuleer={() => setBevestig(null)}
+      />
     </div>
   );
 }
