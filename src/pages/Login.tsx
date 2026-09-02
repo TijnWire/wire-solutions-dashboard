@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { LogIn, AlertCircle, Loader2 } from "lucide-react";
 import { useApp } from "../store/AppContext";
+import { logoSrc } from "../lib/logo";
 
 export function Login() {
-  const { login } = useApp();
+  const { login, bedrijf } = useApp();
   const [email, setEmail] = useState("");
   const [wachtwoord, setWachtwoord] = useState("");
   const [fout, setFout] = useState("");
@@ -26,7 +27,7 @@ export function Login() {
       {/* Linkerkant — merk */}
       <div className="relative hidden flex-col justify-between overflow-hidden bg-gradient-to-br from-orange-500 to-orange-700 p-12 text-white md:flex">
         <div className="inline-flex rounded-2xl bg-white p-4 shadow-lg">
-          <img src="/wire-logo.png" alt="Wire Solutions" className="h-16 w-auto" />
+          <img src={logoSrc(bedrijf)} alt={bedrijf.naam || "Logo"} className="h-16 w-auto" />
         </div>
 
         <div className="max-w-md">
@@ -49,7 +50,7 @@ export function Login() {
       {/* Rechterkant — formulier */}
       <div className="flex items-center justify-center p-6 sm:p-12">
         <div className="w-full max-w-md">
-          <img src="/wire-logo.png" alt="Wire Solutions" className="mb-8 h-20 w-auto" />
+          <img src={logoSrc(bedrijf)} alt={bedrijf.naam || "Logo"} className="mb-8 h-20 w-auto" />
 
           <h1 className="text-3xl font-bold text-ink-900">Inloggen</h1>
           <p className="mt-2 text-ink-500">Log in met je werkaccount.</p>

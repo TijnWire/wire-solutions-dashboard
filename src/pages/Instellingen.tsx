@@ -1,17 +1,68 @@
-import { useEffect, useState } from "react";
-import { Building2, Activity, CheckCircle2, Info, AlertTriangle, Database, Pencil, Save, Lock, Plug, RefreshCw } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Building2, Activity, CheckCircle2, Info, AlertTriangle, Database, Pencil, Save, Lock, Plug, RefreshCw, Upload, Eye, ChevronRight, RotateCcw } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { Card } from "../components/ui";
 import { berekenMeldingen } from "../lib/meldingen";
 import { APP_VERSIE } from "../lib/versie";
+import { logoSrc, logoNaarDataUrl } from "../lib/logo";
 import { ApiSleutels } from "./ApiSleutels";
 import { SyncBackup } from "./SyncBackup";
 
 const veld = "w-full rounded-xl border border-ink-200 px-3.5 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100";
 const labelCls = "mb-1 block text-xs font-semibold text-ink-600";
 
+// ── Logo-kaart: toont het huidige logo en laat de leiding het vervangen (of terugzetten). ──
+function LogoKaart({ isLeiding }: { isLeiding: boolean }) {
+  const { bedrijf, updateBedrijf } = useApp();
+  const invoer = useRef<HTMLInputElement | null>(null);
+  const [fout, setFout] = useState("");
+  const [bezig, setBezig] = useState(false);
+
+  const kies = async (file?: File | null) => {
+    if (!file) return;
+    setFout("");
+    if (!file.type.startsWith("image/")) { setFout("Kies een afbeelding (PNG of JPG)."); return; }
+    setBezig(true);
+    try {
+      const dataUrl = await logoNaarDataUrl(file);
+      updateBedrijf({ logo: dataUrl });
+    } catch {
+      setFout("Kon dit bestand niet als logo gebruiken. Probeer een andere afbeelding.");
+    } finally {
+      setBezig(false);
+    }
+  };
+
+  return (
+    <Card className="flex flex-wrap items-center gap-4 p-5">
+      <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-ink-50 p-1">
+        <img src={logoSrc(bedrijf)} alt="Bedrijfslogo" className="max-h-full max-w-full object-contain" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="text-sm font-bold text-ink-900">Bedrijfslogo</div>
+        <p className="text-xs text-ink-500">Dit logo staat op het dashboard, het inlogscherm en de sidebar. {isLeiding ? "Kies hieronder een eigen logo — het verschijnt meteen bij het hele team." : "Alleen de leiding kan dit wijzigen."}</p>
+        {fout && <p className="mt-1 text-xs text-red-600">{fout}</p>}
+      </div>
+      {isLeiding && (
+        <div className="flex items-center gap-2">
+          <input ref={invoer} type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; void kies(f); }} />
+          <button type="button" onClick={() => invoer.current?.click()} disabled={bezig} className="inline-flex items-center gap-2 rounded-lg border border-ink-200 px-4 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-50 disabled:opacity-60">
+            <Upload className="h-4 w-4" /> {bezig ? "Bezig…" : "Logo kiezen"}
+          </button>
+          {bedrijf.logo && (
+            <button type="button" onClick={() => updateBedrijf({ logo: "" })} className="inline-flex items-center gap-2 rounded-lg border border-ink-200 px-3 py-2 text-sm font-semibold text-ink-600 hover:bg-ink-50" title="Terug naar het standaardlogo">
+              <RotateCcw className="h-4 w-4" /> Standaard
+            </button>
+          )}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 function BedrijfTab({ isLeiding }: { isLeiding: boolean }) {
   const { bedrijf, updateBedrijf } = useApp();
+  const [open, setOpen] = useState(false);   // bedrijfsgegevens zijn eerst verborgen; pas na een klik zichtbaar
   const [bewerk, setBewerk] = useState(false);
   const [draft, setDraft] = useState(bedrijf);
 
@@ -20,6 +71,7 @@ function BedrijfTab({ isLeiding }: { isLeiding: boolean }) {
 
   const opslaan = () => { updateBedrijf(draft); setBewerk(false); };
   const annuleren = () => { setDraft(bedrijf); setBewerk(false); };
+  const sluit = () => { setBewerk(false); setDraft(bedrijf); setOpen(false); };
 
   const rij = (label: string, key: keyof typeof bedrijf, ph = "") => (
     <div>
@@ -36,19 +88,30 @@ function BedrijfTab({ isLeiding }: { isLeiding: boolean }) {
 
   return (
     <div className="space-y-4">
-      <Card className="flex flex-wrap items-center gap-4 p-5">
-        <img src="/wire-logo.png" alt="Wire Solutions" className="h-16 w-auto" />
-        <div className="min-w-0 flex-1">
-          <div className="text-sm font-bold text-ink-900">Bedrijfslogo</div>
-          <p className="text-xs text-ink-500">Dit logo staat op het dashboard, het inlogscherm en de facturen. Wil je het wijzigen? Vervang dan <code className="rounded bg-ink-100 px-1">public/wire-logo.png</code> (of laat het mij doen).</p>
-        </div>
-      </Card>
+      <LogoKaart isLeiding={isLeiding} />
 
       {!isLeiding ? (
         <Card className="flex items-center gap-3 p-6 text-sm text-ink-500">
           <Lock className="h-5 w-5 text-ink-400" />
           Alleen de beheerder heeft toegang tot de bedrijfsgegevens.
         </Card>
+      ) : !open ? (
+        // De bedrijfsgegevens (IBAN, BTW, KvK…) staan niet meteen open — je klikt deze kaart eerst open.
+        // Zo liggen ze niet zomaar op het scherm als je Instellingen opent (bijv. met iemand mee-kijkend).
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="w-full rounded-2xl border border-ink-200 bg-white p-5 text-left shadow-card transition-colors hover:border-brand-300 hover:bg-brand-50/40"
+        >
+          <div className="flex items-center gap-4">
+            <div className="rounded-xl bg-ink-100 p-2.5 text-ink-600"><Lock className="h-5 w-5" /></div>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-bold text-ink-900">Bedrijfsgegevens</div>
+              <p className="text-xs text-ink-500">Verborgen. Klik om de gegevens (IBAN, BTW, KvK…) te bekijken en te bewerken.</p>
+            </div>
+            <span className="inline-flex items-center gap-1 text-sm font-semibold text-brand-700"><Eye className="h-4 w-4" /> Bekijken <ChevronRight className="h-4 w-4" /></span>
+          </div>
+        </button>
       ) : (
         <Card className="space-y-4 p-5">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -64,9 +127,12 @@ function BedrijfTab({ isLeiding }: { isLeiding: boolean }) {
                 </button>
               </div>
             ) : (
-              <button type="button" onClick={() => setBewerk(true)} className="inline-flex items-center gap-2 rounded-lg border border-ink-200 px-4 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-50">
-                <Pencil className="h-4 w-4" /> Wijzigen
-              </button>
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={() => setBewerk(true)} className="inline-flex items-center gap-2 rounded-lg border border-ink-200 px-4 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-50">
+                  <Pencil className="h-4 w-4" /> Wijzigen
+                </button>
+                <button type="button" onClick={sluit} className="rounded-lg px-3 py-2 text-sm font-semibold text-ink-500 hover:bg-ink-50">Verbergen</button>
+              </div>
             )}
           </div>
 
@@ -83,7 +149,7 @@ function BedrijfTab({ isLeiding }: { isLeiding: boolean }) {
           </div>
 
           <p className="text-xs text-ink-400">
-            {bewerk ? "Klik op Opslaan om de wijzigingen te bewaren." : "Klik op Wijzigen om de gegevens aan te passen."}
+            {bewerk ? "Klik op Opslaan om de wijzigingen te bewaren." : "Klik op Wijzigen om de gegevens aan te passen, of op Verbergen om ze weer te verbergen."}
           </p>
         </Card>
       )}

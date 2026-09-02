@@ -2,6 +2,8 @@ import { memo, useMemo } from "react";
 import { LogOut } from "lucide-react";
 import { NAV, GROUPS, magZien } from "../lib/nav";
 import { ROL_LABEL, type User } from "../lib/types";
+import { useApp } from "../store/AppContext";
+import { logoSrc } from "../lib/logo";
 
 export const Sidebar = memo(function Sidebar({
   active,
@@ -18,12 +20,13 @@ export const Sidebar = memo(function Sidebar({
 }) {
   const items = useMemo(() => (currentUser ? NAV.filter((n) => magZien(currentUser, n)) : []), [currentUser]);
   const groups = useMemo(() => GROUPS.filter((g) => items.some((i) => i.group === g)), [items]);
+  const { bedrijf } = useApp();
   if (!currentUser) return null;
 
   return (
     <aside className="flex h-full w-64 shrink-0 flex-col border-r border-ink-200 bg-white pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] text-ink-600">
       <div className="flex items-center justify-center px-5 py-5">
-        <img src="/wire-logo.png" alt="Wire Solutions" className="h-16 w-auto" />
+        <img src={logoSrc(bedrijf)} alt={bedrijf.naam || "Logo"} className="h-16 w-auto" />
       </div>
 
       <nav className="scrollbar-thin flex-1 space-y-6 overflow-y-auto px-3 pb-6">

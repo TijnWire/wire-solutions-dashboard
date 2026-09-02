@@ -302,6 +302,7 @@ export type Bedrijf = {
   btw: string;
   iban: string;
   bic?: string;
+  logo?: string; // eigen logo als data-URL (instelbaar in de app); leeg = het standaard wire-logo.png
   factuurPresets?: FactuurPreset[]; // standaard factuurregels (Brieven, Uren, …) met aanpasbare prijs
   uursoorten?: Uursoort[];          // zelf beheerde uursoorten voor de urenstaat
 };
