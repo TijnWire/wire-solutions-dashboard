@@ -43,8 +43,11 @@ const NKOL = 10;
 const K_BEGIN = 4, K_EIND = 5, K_PAUZE = 6, K_TOTAAL = 7;
 const LINKS = [0, 2, 3, 9]; // kolommen die links uitgelijnd staan; de rest gecentreerd
 
-const INK = "111827";
-const GRIJS = "F3F4F6";
+const INK = "1e293b";          // ink-800, tekst
+const GRIJS = "f1f5f9";         // ink-100, gemarkeerde regels
+const BRAND = "ea580c";         // Wire Solutions oranje (brand-600)
+const BRAND_DONKER = "c2410c";  // brand-700
+const BRAND_LICHT = "fff7ed";   // brand-50, zachte accentvulling
 const rand = { style: "thin" as const, color: { rgb: "D1D5DB" } };
 const alleRanden = { top: rand, bottom: rand, left: rand, right: rand };
 
@@ -65,13 +68,17 @@ export function exporteerUrenstaat(data: UrenExportData): void {
   const merges: XLSX.Range[] = [];
   const setStijl = (r: number, c: number, s: Record<string, unknown>) => stijlen.push({ addr: enc(r, c), s });
 
-  // ── Koptekst ──
+  // ── Koptekst — Wire Solutions huisstijl ──
   aoa.push([data.bedrijfsnaam]);
-  setStijl(0, 0, { font: { bold: true, sz: 16, color: { rgb: INK } } });
+  setStijl(0, 0, { font: { bold: true, sz: 18, color: { rgb: BRAND } } });
   aoa.push(["Urenstaat"]);
-  setStijl(1, 0, { font: { bold: true, sz: 12, color: { rgb: "374151" } } });
+  setStijl(1, 0, { font: { bold: true, sz: 12, color: { rgb: INK } } });
+  // Oranje merkband onder de titel (dunne gekleurde rij over de volle breedte).
+  aoa.push([""]);
+  for (let c = 0; c < NKOL; c++) setStijl(2, c, { fill: { fgColor: { rgb: BRAND } } });
+  merges.push({ s: { r: 2, c: 0 }, e: { r: 2, c: NKOL - 1 } });
   aoa.push([`Week ${data.weekNr} · ${data.jaar}`, data.periodeLabel]);
-  setStijl(2, 0, { font: { bold: true, sz: 11 } });
+  setStijl(3, 0, { font: { bold: true, sz: 11 } });
   aoa.push([`Opdrachtgever / project: ${data.opdrachtgever ?? ""}`, "", "", "", `Opsteller: ${data.opsteller ?? ""}`]);
   aoa.push([]);
   let R = aoa.length;
@@ -81,7 +88,7 @@ export function exporteerUrenstaat(data: UrenExportData): void {
 
   for (const p of data.personen) {
     aoa.push([`Medewerker: ${p.naam}`, "", `Functie: ${p.functie || "—"}`, "", `Pers.nr: ${p.persnr}`]);
-    setStijl(R, 0, { font: { bold: true, sz: 11, color: { rgb: INK } } });
+    setStijl(R, 0, { font: { bold: true, sz: 11, color: { rgb: BRAND_DONKER } } });
     R++;
 
     const kop = ["Datum", "Dag", "Uursoort", "Project", "Begin", "Eind", "Pauze (min)", "Totaal (u)", "Bijzonder", "Omschrijving werkzaamheden"];
@@ -90,7 +97,7 @@ export function exporteerUrenstaat(data: UrenExportData): void {
     for (let c = 0; c < NKOL; c++) {
       setStijl(kopRij, c, {
         font: { bold: true, sz: 10, color: { rgb: "FFFFFF" } },
-        fill: { fgColor: { rgb: INK } },
+        fill: { fgColor: { rgb: BRAND } },
         alignment: { horizontal: LINKS.includes(c) ? "left" : "center", vertical: "center", wrapText: true },
         border: alleRanden,
       });
@@ -134,8 +141,8 @@ export function exporteerUrenstaat(data: UrenExportData): void {
     }
     for (let c = 0; c < NKOL; c++) {
       setStijl(totRij, c, {
-        font: { bold: true, sz: 10, color: { rgb: INK } },
-        fill: { fgColor: { rgb: "E5E7EB" } },
+        font: { bold: true, sz: 10, color: { rgb: BRAND_DONKER } },
+        fill: { fgColor: { rgb: BRAND_LICHT } },
         alignment: { horizontal: c === 0 ? "left" : "center" },
         border: alleRanden,
       });
@@ -151,8 +158,8 @@ export function exporteerUrenstaat(data: UrenExportData): void {
   const grpRij = R;
   aoa.push(["TOTAAL alle medewerkers (uren)", weekTotaalCellen.length ? 0 : ""]);
   if (weekTotaalCellen.length) formules.push({ addr: enc(grpRij, 1), f: weekTotaalCellen.join("+"), v: groepTotaal });
-  setStijl(grpRij, 0, { font: { bold: true, sz: 11, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: INK } }, border: alleRanden });
-  setStijl(grpRij, 1, { font: { bold: true, sz: 11, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: INK } }, alignment: { horizontal: "center" }, border: alleRanden });
+  setStijl(grpRij, 0, { font: { bold: true, sz: 11, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: BRAND } }, border: alleRanden });
+  setStijl(grpRij, 1, { font: { bold: true, sz: 11, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: BRAND } }, alignment: { horizontal: "center" }, border: alleRanden });
   R += 2; aoa.push([]);
 
   // ── Goedkeuringsblok ──

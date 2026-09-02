@@ -268,6 +268,15 @@ function LoonstrookGenerator({ startWeek, onKlaar }: { startWeek?: string; onKla
 
   const toggle = (id: string) => { setKlaar(0); setGekozen((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; }); };
   const teMaken = rijen.filter((r) => gekozen.has(r.u.id) && !r.bestaat).length;
+  // Alles aan/uit voor wie nog geen strook heeft — scheelt los aanvinken bij grote teams.
+  const kandidaten = rijen.filter((r) => !r.bestaat);
+  const allesAan = kandidaten.length > 0 && kandidaten.every((r) => gekozen.has(r.u.id));
+  const toggleAlles = () => { setKlaar(0); setGekozen(allesAan ? new Set() : new Set(kandidaten.map((r) => r.u.id))); };
+  // Live samenvatting van wat je op het punt staat aan te maken.
+  const gekozenRijen = rijen.filter((r) => gekozen.has(r.u.id) && !r.bestaat);
+  const somUren = gekozenRijen.reduce((s, r) => s + r.uren, 0);
+  const somBruto = gekozenRijen.reduce((s, r) => s + (r.u.contract?.bruto ?? 0), 0);
+  const somNetto = gekozenRijen.reduce((s, r) => s + (r.u.contract?.netto ?? 0), 0);
 
   const genereer = () => {
     let n = 0;
@@ -324,12 +333,16 @@ function LoonstrookGenerator({ startWeek, onKlaar }: { startWeek?: string; onKla
                 <th className="px-3 py-2 text-right font-semibold">Uren</th>
                 <th className="px-3 py-2 text-right font-semibold">Bruto (contract)</th>
                 <th className="px-3 py-2 text-right font-semibold">Netto</th>
-                <th className="px-3 py-2 text-center font-semibold">Aanmaken</th>
+                <th className="px-3 py-2 text-center font-semibold">
+                  <button type="button" onClick={toggleAlles} disabled={kandidaten.length === 0} className="inline-flex items-center gap-1 font-semibold text-ink-500 hover:text-brand-600 disabled:opacity-40">
+                    {allesAan ? <CheckSquare className="h-4 w-4 text-brand-600" /> : <Square className="h-4 w-4" />} Allen
+                  </button>
+                </th>
               </tr>
             </thead>
             <tbody>
               {rijen.map((r) => (
-                <tr key={r.u.id} className={`border-t border-ink-100 ${r.uren === 0 && !r.bestaat ? "text-ink-300" : ""}`}>
+                <tr key={r.u.id} className={`border-t border-ink-100 ${r.uren === 0 && !r.bestaat ? "text-ink-300" : ""} ${gekozen.has(r.u.id) && !r.bestaat ? "bg-brand-50/40" : ""}`}>
                   <td className="px-3 py-2">{r.u.naam}</td>
                   <td className="px-3 py-2 text-right font-medium text-ink-800">{r.uren ? `${uurTekst(r.uren)} u` : "0 u"}</td>
                   <td className="px-3 py-2 text-right">{euro(r.u.contract?.bruto ?? 0)}</td>
@@ -346,6 +359,17 @@ function LoonstrookGenerator({ startWeek, onKlaar }: { startWeek?: string; onKla
                 </tr>
               ))}
             </tbody>
+            {gekozenRijen.length > 0 && (
+              <tfoot>
+                <tr className="border-t-2 border-ink-200 bg-ink-50/80 text-sm font-bold text-ink-900">
+                  <td className="px-3 py-2.5">Totaal ({gekozenRijen.length} geselecteerd)</td>
+                  <td className="px-3 py-2.5 text-right">{uurTekst(somUren)} u</td>
+                  <td className="px-3 py-2.5 text-right">{euro(somBruto)}</td>
+                  <td className="px-3 py-2.5 text-right">{euro(somNetto)}</td>
+                  <td />
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
 

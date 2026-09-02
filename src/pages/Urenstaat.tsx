@@ -488,19 +488,9 @@ export function Urenstaat() {
       .sort((a, b) => a.datum.localeCompare(b.datum) || (a.begin ?? "").localeCompare(b.begin ?? "") || naam(a.medewerkerId).localeCompare(naam(b.medewerkerId), "nl"));
   }, [weekRegels, filterPersoon, filterProject, users]);
 
-  if (!currentUser) return null;
-  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr";
-  if (!isLeiding) return <Card className="p-8 text-center text-sm text-ink-500">De urenstaat is alleen voor de boekhouding/leiding.</Card>;
-  if (modus === "uursoorten") return <UursoortBeheer bedrijf={bedrijf} updateBedrijf={updateBedrijf} onKlaar={() => setModus("lijst")} />;
-
-  const verschuif = (dagen: number) => { const d = new Date(weekDate); d.setDate(d.getDate() + dagen); setWeekISO(toISO(maandagVan(d))); };
-  const dezeWeek = toISO(maandagVan(new Date())) === weekISO;
-  const weekLabel = `${weekDate.toLocaleDateString("nl-NL", { day: "numeric", month: "short" })} – ${weekEinde.toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" })}`;
-
   // Alle weken om uit te kiezen: elke week waar uren in staan, plus deze week, plus een halfjaar terug
-  // en een maand vooruit — zo kun je ook naar een week springen waar nog niets in staat. Nieuwste
-  // bovenaan, met het totaal erbij zodat je in één oogopslag ziet waar nog werk ligt. Niet te ver
-  // vooruit: dan staat de lopende week (waar je meestal moet zijn) meteen bovenaan in beeld.
+  // en een maand vooruit. Deze hook staat bewust vóór de early returns (Uursoorten/geen-toegang),
+  // anders wordt hij bij die returns overgeslagen → "Rendered fewer hooks than expected" (wit scherm).
   const weekOpties = useMemo(() => {
     const nu = toISO(maandagVan(new Date()));
     const perWeek = new Map<string, number>();
@@ -522,6 +512,19 @@ export function Urenstaat() {
     });
   }, [urenstaat, weekISO]);
 
+  if (!currentUser) return null;
+  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr";
+  if (!isLeiding) return <Card className="p-8 text-center text-sm text-ink-500">De urenstaat is alleen voor de boekhouding/leiding.</Card>;
+  if (modus === "uursoorten") return <UursoortBeheer bedrijf={bedrijf} updateBedrijf={updateBedrijf} onKlaar={() => setModus("lijst")} />;
+
+  const verschuif = (dagen: number) => { const d = new Date(weekDate); d.setDate(d.getDate() + dagen); setWeekISO(toISO(maandagVan(d))); };
+  const dezeWeek = toISO(maandagVan(new Date())) === weekISO;
+  const weekLabel = `${weekDate.toLocaleDateString("nl-NL", { day: "numeric", month: "short" })} – ${weekEinde.toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" })}`;
+
+  // Alle weken om uit te kiezen: elke week waar uren in staan, plus deze week, plus een halfjaar terug
+  // en een maand vooruit — zo kun je ook naar een week springen waar nog niets in staat. Nieuwste
+  // bovenaan, met het totaal erbij zodat je in één oogopslag ziet waar nog werk ligt. Niet te ver
+  // vooruit: dan staat de lopende week (waar je meestal moet zijn) meteen bovenaan in beeld.
   const medewerkers = [...users].sort((a, b) => a.naam.localeCompare(b.naam, "nl"));
   const gekozenMedewerker = medewerkers.find((u) => u.id === filterPersoon) ?? null;
   const roosterActief = weergave === "rooster" && !!gekozenMedewerker; // rooster kan alleen per medewerker
