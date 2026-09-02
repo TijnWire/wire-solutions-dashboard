@@ -209,7 +209,7 @@ function TauwIntake({ type, onKlaar }: { type: TauwType; onKlaar: (id?: string) 
       <button type="button" onClick={() => onKlaar()} className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-500 hover:text-ink-800">
         <ArrowLeft className="h-4 w-4" /> Terug
       </button>
-      <h2 className="text-xl font-bold text-ink-900">Nieuwe opdracht</h2>
+      <h2 className="text-lg font-bold text-ink-900 sm:text-xl">Nieuwe opdracht</h2>
 
       <Card className="space-y-4 p-5">
         {/* Voor wie werk je? */}
@@ -679,13 +679,13 @@ function TauwDetail({ opdracht, onTerug }: { opdracht: TauwOpdracht; onTerug: ()
         <div className="min-w-0 flex-1">
           {naamBewerken ? (
             <div className="flex flex-wrap items-center gap-2">
-              <input value={naamConcept} autoFocus onChange={(e) => setNaamConcept(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") slaNaamOp(); if (e.key === "Escape") setNaamBewerken(false); }} placeholder="Naam van de map" aria-label="Mapnaam" className="w-72 max-w-full rounded-lg border border-ink-200 px-2.5 py-1.5 text-xl font-bold text-ink-900 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100" />
+              <input value={naamConcept} autoFocus onChange={(e) => setNaamConcept(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") slaNaamOp(); if (e.key === "Escape") setNaamBewerken(false); }} placeholder="Naam van de map" aria-label="Mapnaam" className="w-72 max-w-full rounded-lg border border-ink-200 px-2.5 py-1.5 text-lg font-bold text-ink-900 sm:text-xl outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100" />
               <button type="button" onClick={slaNaamOp} className={knopKlein}><Check className="h-3.5 w-3.5" /> Opslaan</button>
               <button type="button" onClick={() => setNaamBewerken(false)} className="text-sm font-medium text-ink-500 hover:text-ink-800">Annuleer</button>
             </div>
           ) : (
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-xl font-bold text-ink-900">{titel}</h2>
+              <h2 className="text-lg font-bold text-ink-900 sm:text-xl">{titel}</h2>
               {isLeiding && <button type="button" onClick={startNaamBewerken} title="Naam aanpassen" aria-label="Naam aanpassen" className="rounded-lg p-1.5 text-ink-400 hover:bg-ink-100 hover:text-brand-600"><Pencil className="h-4 w-4" /></button>}
               <Badge tone="slate">{TAUW_TYPE_LABEL[opdracht.type]}</Badge>
               <Badge tone={STATUS_TONE[status]}>{TAUW_STATUS_LABEL[status]}</Badge>
@@ -931,12 +931,12 @@ export function Tauw({ initieelTauw }: { initieelTauw?: string }) {
   const totOpenAdr = zichtbaar.filter(isOpenMap).reduce((s, o) => s + openAdressen(o), 0);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3 sm:space-y-6">
       <WerkTabs tab={tab} setTab={setTab} klaar={klaarLijst.length} archief={archiefLijst.length} />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold text-ink-900">TAUW of Van der Helm</h2>
+          <h2 className="text-lg font-bold text-ink-900 sm:text-xl">TAUW of Van der Helm</h2>
           <p className="text-sm text-ink-500">Bodemonderzoek en bezoekrondes: adressen erin, langs de deuren, en terug naar de opdrachtgever.</p>
         </div>
         {isLeiding && (
@@ -981,7 +981,7 @@ export function Tauw({ initieelTauw }: { initieelTauw?: string }) {
           </p>
         </Card>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-3 sm:space-y-6">
           {/* Eén-oogopslag-samenvatting van wat er openstaat */}
           <div className="flex flex-wrap gap-3">
             <div className="rounded-xl border border-ink-200 bg-white px-4 py-2.5 shadow-card">

@@ -91,7 +91,7 @@ function NieuwDossier({ onKlaar, onAnnuleer }: { onKlaar: (pd: string) => void; 
   };
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
+    <div className="mx-auto max-w-4xl space-y-3 sm:space-y-6">
       <button type="button" onClick={onAnnuleer} className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-500 hover:text-ink-800">
         <ArrowLeft className="h-4 w-4" /> Terug
       </button>

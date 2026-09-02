@@ -343,7 +343,7 @@ function RondeDetail({ ronde, onTerug }: { ronde: Brievenronde; onTerug: () => v
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="truncate text-xl font-bold text-ink-900">{ronde.straat}</h2>
+            <h2 className="truncate text-lg font-bold text-ink-900 sm:text-xl">{ronde.straat}</h2>
             <Badge tone={STATUS_TONE[status]}>{STATUS_LABEL[status]}</Badge>
           </div>
           <p className="text-sm text-ink-500">
@@ -836,7 +836,7 @@ function NieuweRonde({ onKlaar }: { onKlaar: () => void }) {
         <ArrowLeft className="h-4 w-4" />
         Terug
       </button>
-      <h2 className="text-xl font-bold text-ink-900">Nieuwe brievenronde</h2>
+      <h2 className="text-lg font-bold text-ink-900 sm:text-xl">Nieuwe brievenronde</h2>
 
       <Card className="space-y-4 p-5">
         <label className="block">
@@ -1407,7 +1407,7 @@ export function Brieven({ initieelRonde, initieelMap }: { initieelRonde?: string
       <div className="space-y-5">
         <WerkTabs tab={tab} setTab={setTab} klaar={klaarRondes.length} archief={archiefRondes.length} />
         <div>
-          <h2 className="text-xl font-bold text-ink-900">Klaar voor Stedin</h2>
+          <h2 className="text-lg font-bold text-ink-900 sm:text-xl">Klaar voor Stedin</h2>
           <p className="text-sm text-ink-500">Mappen die volledig zijn afgegooid en naar de boekhouding zijn gestuurd. Hier pakt de administratie ze op: factureren en klaar.</p>
         </div>
         {groepen.length === 0 ? (
@@ -1461,7 +1461,7 @@ export function Brieven({ initieelRonde, initieelMap }: { initieelRonde?: string
       <div className="space-y-5">
         <WerkTabs tab={tab} setTab={setTab} klaar={klaarRondes.length} archief={archiefRondes.length} />
         <div>
-          <h2 className="text-xl font-bold text-ink-900">Archief</h2>
+          <h2 className="text-lg font-bold text-ink-900 sm:text-xl">Archief</h2>
           <p className="text-sm text-ink-500">Afgehandeld werk. Alles blijft bewaard in de database — terugzetten kan altijd.</p>
         </div>
         {groepen.length === 0 ? (
@@ -1535,12 +1535,12 @@ export function Brieven({ initieelRonde, initieelMap }: { initieelRonde?: string
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3 sm:space-y-6">
       <WerkTabs tab={tab} setTab={setTab} klaar={klaarRondes.length} archief={archiefRondes.length} />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold text-ink-900">Brieven & Routes</h2>
+          <h2 className="text-lg font-bold text-ink-900 sm:text-xl">Brieven & Routes</h2>
           <p className="text-sm text-ink-500">Looproutes, ontbrekende huisnummers en bedrijfspanden.</p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -1573,7 +1573,7 @@ export function Brieven({ initieelRonde, initieelMap }: { initieelRonde?: string
           </p>
         </Card>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-3 sm:space-y-6">
           {filter.balk}
 
           {/* Eén-oogopslag-samenvatting van wat er openstaat */}

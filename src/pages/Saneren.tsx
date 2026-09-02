@@ -263,13 +263,13 @@ function SaneringDetail({ sanering, onTerug }: { sanering: Sanering; onTerug: ()
         <div className="min-w-0 flex-1">
           {naamBewerken ? (
             <div className="flex flex-wrap items-center gap-2">
-              <input autoFocus value={naamConcept} onChange={(e) => setNaamConcept(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") slaNaamOp(); if (e.key === "Escape") setNaamBewerken(false); }} aria-label="Projectnaam" className="w-72 max-w-full rounded-lg border border-brand-300 px-2.5 py-1.5 text-xl font-bold text-ink-900 outline-none focus:ring-2 focus:ring-brand-100" />
+              <input autoFocus value={naamConcept} onChange={(e) => setNaamConcept(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") slaNaamOp(); if (e.key === "Escape") setNaamBewerken(false); }} aria-label="Projectnaam" className="w-72 max-w-full rounded-lg border border-brand-300 px-2.5 py-1.5 text-lg font-bold text-ink-900 sm:text-xl outline-none focus:ring-2 focus:ring-brand-100" />
               <button type="button" onClick={slaNaamOp} className={knopKlein}><Check className="h-3.5 w-3.5" /> Opslaan</button>
               <button type="button" onClick={() => setNaamBewerken(false)} className="text-sm font-medium text-ink-500 hover:text-ink-800">Annuleer</button>
             </div>
           ) : (
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="truncate text-xl font-bold text-ink-900">{sanering.naam}</h2>
+              <h2 className="truncate text-lg font-bold text-ink-900 sm:text-xl">{sanering.naam}</h2>
               {isLeiding && <button type="button" onClick={() => { setNaamConcept(sanering.naam); setNaamBewerken(true); }} className="rounded-lg p-1.5 text-ink-400 hover:bg-ink-100 hover:text-brand-600" title="Naam wijzigen" aria-label="Naam wijzigen"><Pencil className="h-4 w-4" /></button>}
               <Badge tone={STATUS_TONE[status]}>{TAUW_STATUS_LABEL[status]}</Badge>
             </div>
@@ -542,10 +542,10 @@ function OudeSaneringen({ initieelSanering }: { initieelSanering?: string }) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3 sm:space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold text-ink-900">Saneren</h2>
+          <h2 className="text-lg font-bold text-ink-900 sm:text-xl">Saneren</h2>
           <p className="text-sm text-ink-500">Importeer Excel → project per wijk → werknemer maakt de afspraken → beheerder controleert en rondt af.</p>
         </div>
         {isLeiding && (
@@ -569,7 +569,7 @@ function OudeSaneringen({ initieelSanering }: { initieelSanering?: string }) {
           </p>
         </Card>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-3 sm:space-y-6">
           <div className="flex flex-wrap gap-3">
             <div className="rounded-xl border border-ink-200 bg-white px-4 py-2.5 shadow-card">
               <div className="text-lg font-bold text-ink-900">{openProjecten}</div>

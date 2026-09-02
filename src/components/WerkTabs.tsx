@@ -16,22 +16,25 @@ export function WerkTabs({ tab, setTab, klaar, archief }: {
   klaar: number;
   archief: number;
 }) {
-  const knop = (k: WerkTab, label: string, n?: number) => (
+  // Op mobiel kort ("Stedin"), vanaf sm de volledige tekst ("Klaar voor Stedin") — scheelt hoogte en
+  // voorkomt dat het label over twee regels breekt.
+  const knop = (k: WerkTab, kort: string, lang: string, n?: number) => (
     <button
       type="button"
       onClick={() => setTab(k)}
       aria-pressed={tab === k}
-      className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
+      className={`flex-1 whitespace-nowrap rounded-md px-2 py-1.5 text-xs font-semibold transition-colors sm:px-3 sm:py-2 sm:text-sm ${
         tab === k ? "bg-brand-600 text-white" : "text-ink-600 hover:bg-ink-50"}`}
     >
-      {label}{n ? ` (${n})` : ""}
+      <span className="sm:hidden">{kort}{n ? ` (${n})` : ""}</span>
+      <span className="hidden sm:inline">{lang}{n ? ` (${n})` : ""}</span>
     </button>
   );
   return (
-    <div className="flex gap-1 rounded-xl border border-ink-200 bg-white p-1 shadow-card">
-      {knop("overzicht", "Overzicht")}
-      {knop("stedin", "Klaar voor Stedin", klaar)}
-      {knop("archief", "Archief", archief)}
+    <div className="flex gap-0.5 rounded-lg border border-ink-200 bg-white p-0.5 shadow-card sm:gap-1 sm:rounded-xl sm:p-1">
+      {knop("overzicht", "Overzicht", "Overzicht")}
+      {knop("stedin", "Stedin", "Klaar voor Stedin", klaar)}
+      {knop("archief", "Archief", "Archief", archief)}
     </div>
   );
 }

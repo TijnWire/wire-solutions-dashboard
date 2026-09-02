@@ -36,10 +36,10 @@ export function StatCard({
       : "text-ink-400";
 
   return (
-    <Card className="p-5">
+    <Card className="p-3 sm:p-5">
       <div className="flex items-start justify-between">
-        <div className={`rounded-xl p-2.5 ${toneBg[tone]}`}>
-          <Icon className="h-5 w-5" />
+        <div className={`rounded-lg p-2 sm:rounded-xl sm:p-2.5 ${toneBg[tone]}`}>
+          <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
         </div>
         {deltaPct !== undefined && (
           <span className={`inline-flex items-center gap-0.5 text-xs font-semibold ${trendColor}`}>
@@ -48,10 +48,10 @@ export function StatCard({
           </span>
         )}
       </div>
-      <div className="mt-4">
-        <div className="text-2xl font-bold tracking-tight text-ink-900">{value}</div>
-        <div className="mt-0.5 text-sm text-ink-500">{label}</div>
-        {sub && <div className="mt-1 text-xs text-ink-400">{sub}</div>}
+      <div className="mt-2 sm:mt-4">
+        <div className="text-xl font-bold tracking-tight text-ink-900 sm:text-2xl">{value}</div>
+        <div className="mt-0.5 text-xs text-ink-500 sm:text-sm">{label}</div>
+        {sub && <div className="mt-0.5 text-xs text-ink-400 sm:mt-1">{sub}</div>}
       </div>
     </Card>
   );

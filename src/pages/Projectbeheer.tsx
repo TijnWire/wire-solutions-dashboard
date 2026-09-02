@@ -58,7 +58,7 @@ export function Projectbeheer() {
       : <Badge tone="green">Lopend</Badge>;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3 sm:space-y-6">
       <div>
         <h2 className="text-xl font-bold text-ink-900">Projectbeheer</h2>
         <p className="text-sm text-ink-500">Overzicht van alle lopende projecten — bezetting, uurtarief, PD-nummer en de gekoppelde facturen. Zoek op klant of project en maak er direct een factuur van.</p>

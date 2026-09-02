@@ -602,10 +602,10 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
   // ── Archiefpagina: afgeronde mappen blijven hier bewaard en zijn altijd terug te zetten ──
   if (tab === "archief" && isLeiding) {
     return (
-      <div key="archief" className="space-y-6 animate-slide-in-right">
+      <div key="archief" className="space-y-3 sm:space-y-6 animate-slide-in-right">
         <WerkTabs tab={tab} setTab={setTab} klaar={gereedeMappen.length} archief={gearchiveerdeMappen.length} />
         <div>
-          <h2 className="text-xl font-bold text-ink-900">Archief</h2>
+          <h2 className="text-lg font-bold text-ink-900 sm:text-xl">Archief</h2>
           <p className="text-sm text-ink-500">Mappen die je hebt afgerond of gearchiveerd. Ze staan niet meer in het overzicht, maar blijven bewaard — zet ze met één klik terug.</p>
         </div>
 
@@ -652,10 +652,10 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
   // ── Controle-/verstuurpagina "Klaar voor Stedin" ──
   if (tab === "stedin" && isLeiding) {
     return (
-      <div key="stedin" className="space-y-6 animate-slide-in-right">
+      <div key="stedin" className="space-y-3 sm:space-y-6 animate-slide-in-right">
         <WerkTabs tab={tab} setTab={setTab} klaar={gereedeMappen.length} archief={gearchiveerdeMappen.length} />
         <div>
-          <h2 className="text-xl font-bold text-ink-900">Klaar voor Stedin</h2>
+          <h2 className="text-lg font-bold text-ink-900 sm:text-xl">Klaar voor Stedin</h2>
           <p className="text-sm text-ink-500">Controleer elke map en verstuur 'm dan. Op de telefoon voegt de deel-knop de PDF's meteen als bijlage toe in je mail-app; op de laptop download ik de map (ZIP) en open ik een kant-en-klaar mailconcept.</p>
         </div>
 
@@ -738,7 +738,7 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
     const nieuweInMap = () => { setBewerk(undefined); setVoorinvul({ mapId: detailMap.id }); setModus("formulier"); };
     const bewaarNaam = () => { const n = mapNaamConcept.trim(); if (n && n !== detailMap.naam) updateVoorschouwMap(detailMap.id, { naam: n }); setNaamBewerk(false); };
     return (
-      <div className="space-y-6">
+      <div className="space-y-3 sm:space-y-6">
         <button type="button" onClick={sluit} className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-500 hover:text-ink-800"><ArrowLeft className="h-4 w-4" /> Terug naar overzicht</button>
 
         {/* Kop: de naam is alleen met het potlood te wijzigen (niet zomaar aanklikken) */}
@@ -746,7 +746,7 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600"><Folder className="h-6 w-6" /></span>
           {naamBewerk ? (
             <>
-              <input autoFocus value={mapNaamConcept} onChange={(e) => setMapNaamConcept(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") bewaarNaam(); if (e.key === "Escape") setNaamBewerk(false); }} onBlur={bewaarNaam} aria-label="Mapnaam" className="min-w-0 flex-1 rounded-lg border border-brand-300 px-3 py-2 text-xl font-bold text-ink-900 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100" />
+              <input autoFocus value={mapNaamConcept} onChange={(e) => setMapNaamConcept(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") bewaarNaam(); if (e.key === "Escape") setNaamBewerk(false); }} onBlur={bewaarNaam} aria-label="Mapnaam" className="min-w-0 flex-1 rounded-lg border border-brand-300 px-3 py-2 text-lg font-bold text-ink-900 sm:text-xl outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100" />
               <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={bewaarNaam} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700"><Check className="h-4 w-4" /> Opslaan</button>
             </>
           ) : (
@@ -821,14 +821,14 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
   }
 
   return (
-    <div key="overzicht" className="space-y-6 animate-slide-in-left">
+    <div key="overzicht" className="space-y-3 sm:space-y-6 animate-slide-in-left">
       {/* Boven de titel, net als bij TAUW en de rest. Hij stond hier eronder, en dan lees je eerst
           een kop en pas daarna dat je op een ander beeld kunt staan. */}
       {isLeiding && <WerkTabs tab={tab} setTab={setTab} klaar={gereedeMappen.length} archief={gearchiveerdeMappen.length} />}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold text-ink-900">Voorschouwen</h2>
+          <h2 className="text-lg font-bold text-ink-900 sm:text-xl">Voorschouwen</h2>
           <p className="text-sm text-ink-500">
             {isLeiding
               ? "Alle ingevulde voorschouwen van het team."
@@ -854,7 +854,7 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
             <ClipboardCheck className="h-5 w-5" />
           </div>
           <div>
-            <div className="text-xl font-bold text-ink-900">{zichtbaar.length}</div>
+            <div className="text-lg font-bold text-ink-900 sm:text-xl">{zichtbaar.length}</div>
             <div className="text-xs text-ink-500">Totaal</div>
           </div>
         </Card>
@@ -863,7 +863,7 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
             <FileText className="h-5 w-5" />
           </div>
           <div>
-            <div className="text-xl font-bold text-ink-900">{ingediend}</div>
+            <div className="text-lg font-bold text-ink-900 sm:text-xl">{ingediend}</div>
             <div className="text-xs text-ink-500">Ingediend</div>
           </div>
         </Card>
@@ -872,7 +872,7 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
             <Pencil className="h-5 w-5" />
           </div>
           <div>
-            <div className="text-xl font-bold text-ink-900">{concept}</div>
+            <div className="text-lg font-bold text-ink-900 sm:text-xl">{concept}</div>
             <div className="text-xs text-ink-500">Concept</div>
           </div>
         </Card>
