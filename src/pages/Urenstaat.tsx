@@ -382,10 +382,14 @@ function WeekRooster({ weekDate, medewerker, regels, vorigeWeekRegels, uursoorte
         </div>
       </div>
 
-      {/* Kolomkoppen */}
-      <div className={`${kolommen} border-b border-ink-100 px-5 py-2 text-[11px] font-bold uppercase tracking-wide text-ink-400`}>
-        <span>Dag</span><span>Begin</span><span>Eind</span><span>Pauze</span><span>Totaal</span><span>Uursoort · project · opmerking</span><span />
-      </div>
+      {/* Op mobiel te breed voor het scherm → horizontaal scrollbaar, zodat geen enkel veld
+          wegvalt. Op desktop is er ruimte zat en zie je alles in één keer. */}
+      <div className="overflow-x-auto">
+        <div className="min-w-[600px]">
+          {/* Kolomkoppen */}
+          <div className={`${kolommen} border-b border-ink-100 px-5 py-2 text-[11px] font-bold uppercase tracking-wide text-ink-400`}>
+            <span>Dag</span><span>Begin</span><span>Eind</span><span>Pauze</span><span>Totaal</span><span>Uursoort · project · opmerking</span><span />
+          </div>
 
       {/* De zeven dagen */}
       <div className="divide-y divide-ink-50">
@@ -452,6 +456,8 @@ function WeekRooster({ weekDate, medewerker, regels, vorigeWeekRegels, uursoorte
             </div>
           );
         })}
+      </div>
+        </div>
       </div>
 
       <div className="flex items-center justify-between border-t border-ink-200 bg-ink-50/60 px-5 py-3 text-sm">
@@ -719,7 +725,7 @@ export function Urenstaat() {
           <h2 className="text-xl font-bold text-ink-900">Urenstaat</h2>
           <p className="text-sm text-ink-500">Eén regel per gewerkte periode: wie, welke uursoort, welke dag en van hoe laat tot hoe laat. Het totaal rekent zichzelf uit (eind − begin − pauze).</p>
         </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:shrink-0">
           <button type="button" onClick={() => setModus("uursoorten")} className="inline-flex items-center gap-2 rounded-xl border border-ink-200 bg-white px-4 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50">
             <SlidersHorizontal className="h-4 w-4 text-ink-500" /> Uursoorten
           </button>
