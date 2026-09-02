@@ -673,9 +673,12 @@ export function Urenstaat() {
     });
   };
 
-  const exporteerNaarExcel = () => {
+  // Excel-export. heleTeam=true → álle medewerkers met uren deze week (negeert de persoon/project-
+  // filter); anders wat je nu op het scherm ziet (rijen). Zo maak je in één klik een teambrede urenstaat.
+  const exporteerNaarExcel = (heleTeam = false) => {
+    const bron = heleTeam ? weekRegels : rijen;
     const personen = medewerkers
-      .map((u) => ({ u, regels: rijen.filter((r) => r.medewerkerId === u.id) }))
+      .map((u) => ({ u, regels: bron.filter((r) => r.medewerkerId === u.id).slice().sort((a, b) => a.datum.localeCompare(b.datum) || (a.begin ?? "").localeCompare(b.begin ?? "")) }))
       .filter((x) => x.regels.length > 0)
       .map(({ u, regels }) => ({
         naam: u.naam,
@@ -716,8 +719,11 @@ export function Urenstaat() {
           <button type="button" onClick={() => setModus("uursoorten")} className="inline-flex items-center gap-2 rounded-xl border border-ink-200 bg-white px-4 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50">
             <SlidersHorizontal className="h-4 w-4 text-ink-500" /> Uursoorten
           </button>
-          <button type="button" onClick={exporteerNaarExcel} disabled={rijen.length === 0} className="inline-flex items-center gap-2 rounded-xl border border-ink-200 bg-white px-4 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50 disabled:opacity-40">
-            <FileSpreadsheet className="h-4 w-4 text-green-600" /> Excel-urenstaat
+          <button type="button" onClick={() => exporteerNaarExcel(false)} disabled={rijen.length === 0} className="inline-flex items-center gap-2 rounded-xl border border-ink-200 bg-white px-4 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50 disabled:opacity-40">
+            <FileSpreadsheet className="h-4 w-4 text-green-600" /> Excel (weergave)
+          </button>
+          <button type="button" onClick={() => exporteerNaarExcel(true)} disabled={weekRegels.length === 0} title="Urenstaat van alle medewerkers met uren deze week" className="inline-flex items-center gap-2 rounded-xl border border-ink-200 bg-white px-4 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50 disabled:opacity-40">
+            <Users2 className="h-4 w-4 text-brand-600" /> Excel hele team
           </button>
           <button type="button" onClick={() => navigeer("loonstroken", { loonWeek: weekISO })} className="inline-flex items-center gap-2 rounded-xl border border-ink-200 bg-white px-4 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50">
             <Wallet className="h-4 w-4 text-ink-500" /> Loonstroken maken

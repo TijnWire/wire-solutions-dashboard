@@ -77,9 +77,17 @@ export function exporteerUrenstaat(data: UrenExportData): void {
   aoa.push([""]);
   for (let c = 0; c < NKOL; c++) setStijl(2, c, { fill: { fgColor: { rgb: BRAND } } });
   merges.push({ s: { r: 2, c: 0 }, e: { r: 2, c: NKOL - 1 } });
-  aoa.push([`Week ${data.weekNr} · ${data.jaar}`, data.periodeLabel]);
+  // Week-nr + periode: elk over meerdere kolommen zodat de tekst niet tegen de buurcel loopt.
+  aoa.push([`Week ${data.weekNr} · ${data.jaar}`, "", data.periodeLabel]);
   setStijl(3, 0, { font: { bold: true, sz: 11 } });
+  setStijl(3, 2, { font: { sz: 11 } });
+  merges.push({ s: { r: 3, c: 0 }, e: { r: 3, c: 1 } }, { s: { r: 3, c: 2 }, e: { r: 3, c: 4 } });
+  // Opdrachtgever links (breed) en opsteller rechts (breed), elk over meerdere kolommen.
+  const opdrRij = aoa.length;
   aoa.push([`Opdrachtgever / project: ${data.opdrachtgever ?? ""}`, "", "", "", `Opsteller: ${data.opsteller ?? ""}`]);
+  setStijl(opdrRij, 0, { font: { sz: 10 } });
+  setStijl(opdrRij, 4, { font: { sz: 10 } });
+  merges.push({ s: { r: opdrRij, c: 0 }, e: { r: opdrRij, c: 3 } }, { s: { r: opdrRij, c: 4 }, e: { r: opdrRij, c: 9 } });
   aoa.push([]);
   let R = aoa.length;
 
@@ -87,8 +95,15 @@ export function exporteerUrenstaat(data: UrenExportData): void {
   let groepTotaal = 0;
 
   for (const p of data.personen) {
-    aoa.push([`Medewerker: ${p.naam}`, "", `Functie: ${p.functie || "—"}`, "", `Pers.nr: ${p.persnr}`]);
+    aoa.push([`Medewerker: ${p.naam}`, "", "", `Functie: ${p.functie || "—"}`, "", "", `Pers.nr: ${p.persnr}`]);
     setStijl(R, 0, { font: { bold: true, sz: 11, color: { rgb: BRAND_DONKER } } });
+    setStijl(R, 3, { font: { sz: 10, color: { rgb: INK } } });
+    setStijl(R, 6, { font: { sz: 10, color: { rgb: INK } } });
+    merges.push(
+      { s: { r: R, c: 0 }, e: { r: R, c: 2 } },
+      { s: { r: R, c: 3 }, e: { r: R, c: 5 } },
+      { s: { r: R, c: 6 }, e: { r: R, c: 9 } },
+    );
     R++;
 
     const kop = ["Datum", "Dag", "Uursoort", "Project", "Begin", "Eind", "Pauze (min)", "Totaal (u)", "Bijzonder", "Omschrijving werkzaamheden"];
@@ -154,12 +169,19 @@ export function exporteerUrenstaat(data: UrenExportData): void {
     aoa.push([]); R++;
   }
 
-  // ── Groepstotaal ──
+  // ── Groepstotaal ── label breed (kol 0-6), het getal onder de "Totaal (u)"-kolom (kol 7).
   const grpRij = R;
-  aoa.push(["TOTAAL alle medewerkers (uren)", weekTotaalCellen.length ? 0 : ""]);
-  if (weekTotaalCellen.length) formules.push({ addr: enc(grpRij, 1), f: weekTotaalCellen.join("+"), v: groepTotaal });
-  setStijl(grpRij, 0, { font: { bold: true, sz: 11, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: BRAND } }, border: alleRanden });
-  setStijl(grpRij, 1, { font: { bold: true, sz: 11, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: BRAND } }, alignment: { horizontal: "center" }, border: alleRanden });
+  aoa.push(["TOTAAL alle medewerkers (uren)", "", "", "", "", "", "", weekTotaalCellen.length ? 0 : ""]);
+  if (weekTotaalCellen.length) formules.push({ addr: enc(grpRij, 7), f: weekTotaalCellen.join("+"), v: groepTotaal });
+  for (let c = 0; c < NKOL; c++) {
+    setStijl(grpRij, c, {
+      font: { bold: true, sz: 11, color: { rgb: "FFFFFF" } },
+      fill: { fgColor: { rgb: BRAND } },
+      alignment: { horizontal: c === 7 ? "center" : "left" },
+      border: alleRanden,
+    });
+  }
+  merges.push({ s: { r: grpRij, c: 0 }, e: { r: grpRij, c: 6 } });
   R += 2; aoa.push([]);
 
   // ── Goedkeuringsblok ──
