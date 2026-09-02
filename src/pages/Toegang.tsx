@@ -24,7 +24,7 @@ export function Toegang() {
 
   if (!currentUser) return null;
   if (!magAlles(currentUser)) {
-    return <Card className="p-8 text-center text-sm text-ink-500">Alleen de eigenaar en HR kunnen de toegang beheren.</Card>;
+    return <Card className="p-8 text-center text-sm text-ink-500">Alleen de leiding (eigenaar, beheer of HR) kan de toegang beheren.</Card>;
   }
 
   const werknemers = users.filter((u) => u.rol === "monteur");

@@ -308,11 +308,13 @@ async function rolVan(env: Env, email: string): Promise<{ rol: string; boekhoudi
   return r ? { rol: r.rol, boekhouding: !!r.boekhouding } : null;
 }
 
-// HR (personeelszaken) heeft dezelfde rechten als de eigenaar — zelfde regel als magAlles in
-// src/lib/rechten.ts. Zonder dit kan HR in het dashboard wél een rol of wachtwoord wijzigen,
-// maar weigert de Worker de bijbehorende schrijfactie.
+// Wie mag "alles" op de server (rollen wijzigen, PII wissen, spiegel herstellen, admin-acties)?
+// Eigenaar en HR (personeelszaken) altijd. Op verzoek van de leiding telt BEHEER hier óók mee, zodat de
+// beheerders exact dezelfde volledige bevoegdheid als de eigenaar hebben. MOET gelijk lopen met magAlles
+// in src/lib/rechten.ts — anders laat de app iets toe dat de Worker weigert (of omgekeerd).
+// LET OP — beveiliging: elke 'beheer'-gebruiker heeft hierdoor volledige rechten, ook een toekomstige.
 function magAlles(rol: string | null | undefined): boolean {
-  return rol === "eigenaar" || rol === "hr";
+  return rol === "eigenaar" || rol === "hr" || rol === "beheer";
 }
 
 // Staat dit e-mailadres in de teamlijst (wire_state key 'users')? Alleen mensen die de beheerder in het

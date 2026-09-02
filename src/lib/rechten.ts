@@ -1,10 +1,13 @@
 import type { Role } from "./types";
 
-// HR is personeelszaken en heeft in het dashboard dezelfde rechten als de eigenaar: rollen en rechten
-// toewijzen, toegang beheren, wachtwoorden wijzigen. Eén plek, zodat de twee rollen niet uit elkaar lopen.
-// (De Worker kent dezelfde regel — zie magAlles in cloudflare/worker.ts.)
+// Wie mag "alles" (rollen/rechten toewijzen, toegang beheren, wachtwoorden wijzigen, PII wissen)?
+// Eigenaar en HR (personeelszaken) altijd. Op verzoek van de leiding telt BEHEER hier óók mee: de
+// beheerders (Tijn, Willem, Remon) hebben in de praktijk dezelfde volledige bevoegdheid als de eigenaar.
+// LET OP — beveiligingsgevolg: hierdoor krijgt ELKE 'beheer'-gebruiker volledige rechten, ook een
+// toekomstige. Wil je ooit weer een beperkte beheerder, geef die dan een aparte rol of draai dit terug.
+// (De Worker kent exact dezelfde regel — zie magAlles in cloudflare/worker.ts; die twee MOETEN gelijk zijn.)
 export function magAlles(user: { rol: Role } | null | undefined): boolean {
-  return user?.rol === "eigenaar" || user?.rol === "hr";
+  return user?.rol === "eigenaar" || user?.rol === "hr" || user?.rol === "beheer";
 }
 
 // Onderdelen die onder "Boekhouding" vallen. Wie hier toegang toe heeft (eigenaar, of een beheerder

@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { UserCog, Lock, type LucideIcon } from "lucide-react";
 import { useApp } from "../store/AppContext";
+import { magAlles } from "../lib/rechten";
 import { Gebruikersbeheer } from "./Gebruikersbeheer";
 import { Toegang } from "./Toegang";
 
-// Gecombineerde beheerpagina: gebruikers beheren + (voor eigenaar/HR) de toegang per rol/persoon.
+// Gecombineerde beheerpagina: gebruikers beheren + (voor de volledige beheerders) de toegang per rol/persoon.
 export function GebruikersToegang() {
   const { currentUser } = useApp();
-  const magToegang = currentUser?.rol === "eigenaar" || currentUser?.rol === "hr";
+  const magToegang = magAlles(currentUser);
   const [tab, setTab] = useState<"gebruikers" | "toegang">("gebruikers");
 
   const tabs: { key: "gebruikers" | "toegang"; label: string; icon: LucideIcon }[] = [

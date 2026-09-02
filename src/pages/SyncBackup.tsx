@@ -2,6 +2,7 @@ import { useState } from "react";
 import { CheckCircle2, AlertTriangle, RotateCcw, Database, Lock, Loader2, RefreshCw } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { Card, Bevestig } from "../components/ui";
+import { magAlles } from "../lib/rechten";
 import { sbSyncTest, sbAantallen, sbDbStatus, sbHerstelSpiegel, sbKoppelAccounts, type SyncTest, type DbStatus, type SyncStap } from "../lib/supabase";
 
 // De drie stappen van de test, in de volgorde waarin ze gebeuren.
@@ -77,7 +78,7 @@ export function SyncBackup() {
       setDbs(await sbDbStatus());
     } finally { setDbsBezig(false); }
   };
-  const isEigenaarOfHr = currentUser.rol === "eigenaar" || currentUser.rol === "hr";
+  const isEigenaarOfHr = magAlles(currentUser);
 
   const vergelijk = [
     { label: "Buurtaanpak", key: "buurtaanpak", lokaal: buurtaanpak.length },
