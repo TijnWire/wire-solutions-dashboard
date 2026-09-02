@@ -122,3 +122,48 @@ bij de eerste run aan.
 - **Live meekijken met de database:** `npx wrangler tail`
 - **Snel iets in de database checken:** `npx wrangler d1 execute wire-solutions --remote --command "select key, updated_at from wire_state"`
 - **Terugrollen naar Supabase:** `git revert` van de migratie-commit (de oude Supabase-code staat er nog).
+
+---
+
+## Beveiligingsupdate (branch `security-fixes`) — wat je moet draaien om het te activeren
+
+Deze update sluit vijf gaten. De code werkt meteen na deploy; drie punten vragen éénmalig een handeling.
+
+### A. Nieuwe database-tabel voor het intrekken van sessies (verplicht)
+Zonder deze tabel houdt een verwijderde medewerker tot 30 dagen toegang. De Worker maakt hem niet zelf aan:
+```powershell
+npx wrangler d1 execute wire-solutions --remote --file cloudflare/schema-token-revocaties.sql
+```
+> De code is fail-safe: ontbreekt de tabel, dan blijft alles gewoon werken (er wordt alleen nog niets
+> ingetrokken). Terugrollen kan met `cloudflare/rollback/schema-token-revocaties.rollback.sql`.
+
+### B. Claude-sleutel server-side zetten (dicht het grootste lek: sleutel op elk toestel)
+Zet de bedrijfs-Claude-sleutel als **secret** op de Worker. Vanaf dat moment loopt alle AI/PDF-scan via de
+Worker en verlaat de sleutel nooit meer een telefoon:
+```powershell
+npx wrangler secret put CLAUDE_KEY
+```
+Deploy daarna (`npx wrangler deploy`). **Haal vervolgens de Claude-sleutel weg uit Instellingen → Integraties
+in de app** (bij de leiding). De app valt zonder client-sleutel automatisch terug op de server-proxy.
+> Zolang je dit niet doet, blijft de oude situatie (sleutel op de toestellen) bestaan — de app blijft wél
+> werken, maar het lek is pas dicht als de secret staat én de client-sleutel leeg is.
+
+### C. CORS beperken tot je eigen domein (optioneel, aanbevolen)
+```powershell
+npx wrangler secret put ALLOWED_ORIGINS
+# waarde bijv.:  https://wire-solutions-dashboard.vercel.app
+```
+Zonder deze secret blijft het gedrag ongewijzigd (`*`).
+
+### Wat er verder automatisch in zit (geen actie nodig)
+- **Geen wachtwoord meer op het toestel.** De app bewaarde het echte wachtwoord in de browser (alleen
+  base64). Dat is eruit: gekoppeld blijven gaat nu via automatische sessie-verlenging (`/auth/verleng`).
+  Wie de app 30 dagen niet opent, logt één keer opnieuw in — z'n e-mailadres staat alvast ingevuld.
+- **Kwetsbare pakketten bijgewerkt** (o.a. een PDF.js-lek waarmee een besmette PDF code kon uitvoeren —
+  relevant voor de mail-bot). `xlsx` naar de officiële gepatchte SheetJS-release.
+- **Sessies worden ingetrokken** bij account verwijderen, wachtwoord-reset door een beheerder, en
+  e-mailwijziging.
+
+> Eén bekende, bewust NIET geforceerde: `vite`/`esbuild` (dev-server) hebben een moderate/high advisory
+> waarvan de fix een major-upgrade naar Vite 8 vereist. Dat raakt alleen de lokale ontwikkelserver, niet
+> de productie-build — daarom laten staan tot een apart, getest upgrade-moment.

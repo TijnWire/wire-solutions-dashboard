@@ -47,3 +47,11 @@ create table if not exists verlof_beslissingen (
   beslist_door_naam  text,
   beslist_op         text not null
 );
+
+-- 6) Token-intrekking: per e-mailadres het moment waarna een reeds uitgegeven JWT niet meer geldig is.
+--    Zie schema-token-revocaties.sql voor de uitleg. Gezet bij account verwijderen / wachtwoord-reset /
+--    e-mailwijziging, zodat een verwijderde medewerker niet nog 30 dagen (tokengeldigheid) toegang houdt.
+create table if not exists token_revocaties (
+  email        text primary key,
+  geldig_vanaf integer not null   -- unix-seconden; tokens met iat < geldig_vanaf worden geweigerd
+);

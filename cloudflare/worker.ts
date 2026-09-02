@@ -45,6 +45,12 @@ export interface Env extends SpiegelEnv {
   DB: D1Database;
   JWT_SECRET: string;
   SYNC_HUB: DurableObjectNamespace;
+  // Server-side Claude-sleutel (secret). Staat die ingesteld, dan loopt alle AI/PDF-scan via de proxy
+  // hieronder en verlaat de sleutel NOOIT de server. Zet 'm met:  wrangler secret put CLAUDE_KEY
+  CLAUDE_KEY?: string;
+  // Komma-lijst van toegestane origins voor CORS (bv. "https://wire-solutions-dashboard.vercel.app").
+  // Leeg → de app-origin wordt geëchood (nog steeds veiliger dan een harde '*').
+  ALLOWED_ORIGINS?: string;
 }
 
 // ── Realtime-hub (Durable Object) ──
@@ -90,13 +96,30 @@ function broadcast(env: Env, ctx: ExecutionContext, msg: unknown): void {
   } catch { /* realtime is een extra bovenop de poll — nooit de schrijf laten falen */ }
 }
 
-// ── CORS ── auth loopt via de Authorization-header (geen cookies), dus '*' mag.
+// ── CORS ── auth loopt via de Authorization-header (geen cookies). We echoën een origin uit de
+// ALLOWED_ORIGINS-allowlist wanneer die is ingesteld; anders vallen we terug op '*'. Omdat er geen
+// cookies in het spel zijn en de token in localStorage staat (niet cross-origin leesbaar), is dit
+// afdoende — de allowlist voorkomt bovendien dat een vreemde site namens de app requests presenteert.
 const CORS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, content-type",
   "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
   "Access-Control-Max-Age": "86400",
+  "Vary": "Origin",
 };
+
+// Kiest de Access-Control-Allow-Origin voor deze request. Staat ALLOWED_ORIGINS ingesteld en matcht de
+// binnenkomende Origin, dan echoën we die exact; matcht hij niet, dan de eerste toegestane origin
+// (zodat de app zelf altijd werkt). Zonder allowlist: '*' (ongewijzigd gedrag).
+function kiesOrigin(req: Request, env: Env): string {
+  const toegestaan = (env.ALLOWED_ORIGINS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (!toegestaan.length) return "*";
+  const origin = req.headers.get("Origin") ?? "";
+  return toegestaan.includes(origin) ? origin : toegestaan[0];
+}
+function corsVoor(req: Request, env: Env): Record<string, string> {
+  return { ...CORS, "Access-Control-Allow-Origin": kiesOrigin(req, env) };
+}
 
 function json(obj: unknown, status = 200): Response {
   return new Response(JSON.stringify(obj), { status, headers: { ...CORS, "Content-Type": "application/json" } });
@@ -158,18 +181,47 @@ async function maakToken(email: string, secret: string, nu: number): Promise<str
   const data = `${header}.${payload}`;
   return `${data}.${bufToB64url(await hmac(secret, data))}`;
 }
-async function leesToken(token: string, secret: string, nu: number): Promise<{ email: string } | null> {
+async function leesToken(token: string, secret: string, nu: number): Promise<{ email: string; iat: number } | null> {
   const p = token.split(".");
   if (p.length !== 3) return null;
   const verwacht = bufToB64url(await hmac(secret, `${p[0]}.${p[1]}`));
   if (!tijdveiligGelijk(p[2], verwacht)) return null;
   try {
-    const body = JSON.parse(new TextDecoder().decode(b64urlToBuf(p[1]))) as { email?: string; exp?: number };
+    const body = JSON.parse(new TextDecoder().decode(b64urlToBuf(p[1]))) as { email?: string; exp?: number; iat?: number };
     if (!body.email || !body.exp || body.exp < nu) return null;
-    return { email: String(body.email).toLowerCase() };
+    return { email: String(body.email).toLowerCase(), iat: Number(body.iat) || 0 };
   } catch {
     return null;
   }
+}
+
+// ── Token-intrekking ── na verwijderen van een account of een wachtwoord-reset is een reeds uitgegeven
+// JWT (30 dagen geldig) niets meer waard. We houden per e-mail een 'geldig_vanaf' (unix-seconden) bij;
+// een token met iat vóór dat moment wordt geweigerd. Om niet elke request D1 te belasten (2s-poll +
+// gratis daglimiet), cachen we de lijst ~60s per isolate.
+let _revocatieCache: { op: number; kaart: Map<string, number> } | null = null;
+async function geldigVanafKaart(env: Env): Promise<Map<string, number>> {
+  const nu = Date.now();
+  if (_revocatieCache && nu - _revocatieCache.op < 60000) return _revocatieCache.kaart;
+  const kaart = new Map<string, number>();
+  try {
+    const { results } = await env.DB.prepare("select email, geldig_vanaf from token_revocaties").all<{ email: string; geldig_vanaf: number }>();
+    for (const r of results ?? []) kaart.set(r.email, Number(r.geldig_vanaf) || 0);
+  } catch { /* tabel bestaat nog niet → niets ingetrokken (fail-open, want anders sluit een ontbrekende migratie iedereen buiten) */ }
+  _revocatieCache = { op: nu, kaart };
+  return kaart;
+}
+async function tokenIngetrokken(env: Env, email: string, iat: number): Promise<boolean> {
+  const vanaf = (await geldigVanafKaart(env)).get(email);
+  return !!vanaf && iat < vanaf;
+}
+async function trekTokensIn(env: Env, email: string, nuSec: number): Promise<void> {
+  try {
+    await env.DB.prepare(
+      "insert into token_revocaties (email, geldig_vanaf) values (?1, ?2) on conflict(email) do update set geldig_vanaf = ?2"
+    ).bind(email, nuSec).run();
+  } catch { /* tabel ontbreekt → migratie nog niet gedraaid; account is al uit users_auth verwijderd */ }
+  _revocatieCache = null; // meteen effect in deze isolate
 }
 
 // ── Rol-helpers (lezen app_roles, net als de RLS-functies is_owner/is_boekhouding) ──
@@ -406,7 +458,7 @@ export default {
   },
 
   async fetch(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
+    if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: corsVoor(req, env) });
     const nu = Math.floor(Date.now() / 1000);
     const nuISO = new Date().toISOString();
     const url = new URL(req.url);
@@ -482,6 +534,11 @@ export default {
       const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
       const sessie = token ? await leesToken(token, env.JWT_SECRET, nu) : null;
       if (!sessie) return json({ error: "Geen geldige sessie." }, 401);
+      // Is deze token ingetrokken (account verwijderd / wachtwoord gereset ná uitgifte)? Dan weigeren,
+      // ook al is de handtekening nog geldig en de vervaldatum niet verstreken.
+      if (await tokenIngetrokken(env, sessie.email, sessie.iat)) {
+        return json({ error: "Je sessie is ingetrokken. Log opnieuw in." }, 401);
+      }
       const ikEmail = sessie.email;
 
       // Eigen wachtwoord wijzigen
@@ -494,6 +551,42 @@ export default {
         ).bind(ikEmail, hash, nuISO).run();
         spiegelUpsert(env, ctx, "users_auth", [{ email: ikEmail, pw_hash: hash, created_at: nuISO, updated_at: nuISO }], "email");
         return json({ ok: true });
+      }
+
+      // ── SESSIE VERLENGEN ── geeft een verse token (30 dagen) terug op basis van de huidige geldige,
+      // niet-ingetrokken token. Zo hoeft de app het wachtwoord NIET lokaal te bewaren om "gekoppeld te
+      // blijven": zolang het toestel binnen de geldigheid opent, schuift de sessie vanzelf mee.
+      if (path === "/auth/verleng" && req.method === "POST") {
+        return json({ token: await maakToken(ikEmail, env.JWT_SECRET, nu), email: ikEmail });
+      }
+
+      // ── AI-PROXY ── Claude-calls lopen server-side, zodat de API-sleutel NOOIT op een toestel belandt.
+      // De frontend stuurt hierheen precies de body die anders naar api.anthropic.com zou gaan; wij
+      // plakken de secret-sleutel erop. Zonder ingestelde CLAUDE_KEY valt de app terug op de oude
+      // (client-side) sleutel uit Instellingen, zodat er niets breekt vóór de secret is gezet.
+      if (path === "/ai/claude" && req.method === "POST") {
+        if (!env.CLAUDE_KEY) return json({ error: "AI staat niet aan op de server (CLAUDE_KEY ontbreekt)." }, 503);
+        // Alleen doorlaten wat een Anthropic Messages-request hoort te zijn; nooit willekeurige velden.
+        const toegestaan = ["model", "max_tokens", "system", "tools", "tool_choice", "messages", "temperature"];
+        const payload: Record<string, unknown> = {};
+        for (const k of toegestaan) if (k in body) payload[k] = (body as Record<string, unknown>)[k];
+        if (!payload.model || !Array.isArray(payload.messages)) return json({ error: "Ongeldige AI-aanvraag." }, 400);
+        let upstream: Response;
+        try {
+          upstream = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              "x-api-key": env.CLAUDE_KEY,
+              "anthropic-version": "2023-06-01",
+            },
+            body: JSON.stringify(payload),
+          });
+        } catch {
+          return json({ error: "Kon de AI-dienst niet bereiken." }, 502);
+        }
+        const tekst = await upstream.text();
+        return new Response(tekst, { status: upstream.status, headers: { ...corsVoor(req, env), "Content-Type": "application/json" } });
       }
 
       // ── STATE (gedeelde JSON-store) ── met rechten per onderdeel, zie afgeschermdVoor().
@@ -721,6 +814,7 @@ export default {
           "insert into users_auth (email, pw_hash, created_at) values (?1, ?2, ?3) on conflict(email) do update set pw_hash = ?2"
         ).bind(doel, nieuweHash, nuISO).run();
         spiegelUpsert(env, ctx, "users_auth", [{ email: doel, pw_hash: nieuweHash, created_at: nuISO, updated_at: nuISO }], "email");
+        await trekTokensIn(env, doel, nu); // oude sessies van het doelaccount vervallen bij een reset
         await env.DB.prepare(
           "insert into admin_audit (gemaakt_op, actie, door_email, doel_email, details) values (?1, 'wachtwoord_reset', ?2, ?3, ?4)"
         ).bind(nuISO, ikEmail, doel, JSON.stringify({ via: "worker" })).run();
@@ -758,6 +852,7 @@ export default {
         await env.DB.prepare(
           "insert into admin_audit (gemaakt_op, actie, door_email, doel_email, details) values (?1, 'email_gewijzigd', ?2, ?3, ?4)"
         ).bind(nuISO, ikEmail, oud, JSON.stringify({ nieuw })).run();
+        await trekTokensIn(env, oud, nu); // token op het oude adres is nergens meer geldig
         return json({ ok: true });
       }
       // Haalt het inlog-account weg. Zonder dit blijft een verwijderde medewerker gewoon inloggen op de
@@ -774,6 +869,7 @@ export default {
         ]);
         spiegelVerwijder(env, ctx, "users_auth", "email", doel);
         spiegelVerwijder(env, ctx, "app_roles", "email", doel);
+        await trekTokensIn(env, doel, nu); // reeds uitgegeven token van dit account meteen ongeldig maken
         await env.DB.prepare(
           "insert into admin_audit (gemaakt_op, actie, door_email, doel_email, details) values (?1, 'account_verwijderd', ?2, ?3, ?4)"
         ).bind(nuISO, ikEmail, doel, JSON.stringify({ via: "worker" })).run();

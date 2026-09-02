@@ -1,5 +1,7 @@
 // PDF-extractie via de Anthropic Messages API (native PDF-input + geforceerde tool-use).
-// Draait direct vanuit de browser met de in Instellingen opgeslagen claudeKey.
+// Loopt via de server-proxy (aiTransport) zodat de API-sleutel server-side blijft; valt terug op de
+// client-sleutel uit Instellingen zolang de server nog geen CLAUDE_KEY heeft.
+import { postClaude } from "../aiTransport";
 
 type ClaudeRij = {
   straat: string;
@@ -75,21 +77,6 @@ function fileNaarBase64(file: File): Promise<string> {
   });
 }
 
-async function foutTekst(res: Response): Promise<string> {
-  let detail = "";
-  try {
-    const j = await res.json();
-    detail = j?.error?.message || "";
-  } catch {
-    // negeren
-  }
-  if (res.status === 401 || res.status === 403) return "Claude API-sleutel ongeldig of geen toegang. Controleer de sleutel bij Instellingen.";
-  if (res.status === 413) return "Het PDF-bestand is te groot voor de Claude-API.";
-  if (res.status === 429) return "Te veel aanvragen bij de Claude-API. Wacht even en probeer opnieuw.";
-  if (res.status >= 500) return "De Claude-API is tijdelijk niet beschikbaar. Probeer het later opnieuw.";
-  return detail || `Claude-API gaf een fout (status ${res.status}).`;
-}
-
 export async function leesPdfViaClaude(file: File, apiKey: string, signal?: AbortSignal): Promise<PdfResultaat> {
   let base64: string;
   try {
@@ -98,47 +85,36 @@ export async function leesPdfViaClaude(file: File, apiKey: string, signal?: Abor
     return { ok: false, fout: "Kon het PDF-bestand niet lezen." };
   }
 
-  let res: Response;
-  try {
-    res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      signal,
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": apiKey.trim(),
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true",
-      },
-      body: JSON.stringify({
-        model: "claude-opus-4-8",
-        max_tokens: 16000,
-        system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
-        tools: [ADRES_TOOL],
-        tool_choice: { type: "tool", name: "lever_adressen" },
-        messages: [
-          {
-            role: "user",
-            content: [
-              { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } },
-              { type: "text", text: "Extraheer alle adresregels uit dit document en lever ze via de tool." },
-            ],
-          },
-        ],
-      }),
-    });
-  } catch (e) {
-    if (e instanceof DOMException && e.name === "AbortError") return { ok: false, fout: "Scan geannuleerd." };
-    return { ok: false, fout: "Kon de Claude-API niet bereiken. Controleer je internetverbinding." };
+  const antwoord = await postClaude(
+    apiKey,
+    {
+      model: "claude-opus-4-8",
+      max_tokens: 16000,
+      system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
+      tools: [ADRES_TOOL],
+      tool_choice: { type: "tool", name: "lever_adressen" },
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } },
+            { type: "text", text: "Extraheer alle adresregels uit dit document en lever ze via de tool." },
+          ],
+        },
+      ],
+    },
+    signal,
+  );
+
+  if (!antwoord.ok) {
+    if (antwoord.status === 401 || antwoord.status === 403) return { ok: false, fout: "Claude API-sleutel ongeldig of geen toegang. Controleer de sleutel bij Instellingen." };
+    if (antwoord.status === 413) return { ok: false, fout: "Het PDF-bestand is te groot voor de Claude-API." };
+    if (antwoord.status === 429) return { ok: false, fout: "Te veel aanvragen bij de Claude-API. Wacht even en probeer opnieuw." };
+    if (antwoord.status >= 500) return { ok: false, fout: "De Claude-API is tijdelijk niet beschikbaar. Probeer het later opnieuw." };
+    return { ok: false, fout: antwoord.fout };
   }
 
-  if (!res.ok) return { ok: false, fout: await foutTekst(res) };
-
-  let data: unknown;
-  try {
-    data = await res.json();
-  } catch {
-    return { ok: false, fout: "Onverwacht antwoord van de Claude-API." };
-  }
+  const data = antwoord.data;
 
   const content = (data as { content?: unknown[] })?.content;
   const block = Array.isArray(content)

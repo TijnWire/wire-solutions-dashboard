@@ -23,7 +23,7 @@ function b64urlDecode(s: string): string {
   while (s.length % 4) s += "=";
   return decodeURIComponent(escape(atob(s)));
 }
-function tokenPayload(): { email?: string; exp?: number } | null {
+function tokenPayload(): { email?: string; exp?: number; iat?: number } | null {
   const t = leesToken();
   if (!t) return null;
   const p = t.split(".");
@@ -33,6 +33,15 @@ function tokenPayload(): { email?: string; exp?: number } | null {
 function tokenGeldig(): boolean {
   const p = tokenPayload();
   return !!(p?.email && p.exp && p.exp > Math.floor(Date.now() / 1000));
+}
+// Nadert de token zijn vervaldatum? Dan willen we hem proactief verlengen zolang hij nog geldig is,
+// zodat een actief gebruikt toestel gekoppeld blijft ZONDER dat we het wachtwoord hoeven te bewaren.
+// Drempel: minder dan 7 dagen resterend van de 30 (ruim genoeg voor wie de app af en toe opent).
+function tokenBijnaVerlopen(): boolean {
+  const p = tokenPayload();
+  if (!p?.exp) return false;
+  const resterend = p.exp - Math.floor(Date.now() / 1000);
+  return resterend > 0 && resterend < 7 * 24 * 60 * 60;
 }
 
 // Fout waarbij de server onze sessie weigert (401). Apart herkenbaar, zodat de app het verschil weet
@@ -165,21 +174,29 @@ export async function sbWijzigWachtwoord(nieuwWachtwoord: string): Promise<boole
   catch { return false; }
 }
 
-// ── Automatisch verbonden blijven ──
-// De inloggegevens worden ALLEEN lokaal op dit apparaat bewaard, zodat de app na heropenen vanzelf
-// opnieuw kan aankoppelen (self-healing) als de token verlopen is.
+// ── Automatisch verbonden blijven ── (VEILIG: geen wachtwoord meer op het toestel)
+// Vroeger werd hier het échte wachtwoord in localStorage bewaard (alleen base64, geen encryptie), zodat
+// de app na token-expiry stil opnieuw kon inloggen. Dat was een lek: bij diefstal of XSS lagen de
+// wachtwoorden voor het oprapen. Nu bewaren we ALLEEN het e-mailadres (niet gevoelig, puur om het
+// inlogscherm voor te vullen). Gekoppeld blijven gebeurt via /auth/verleng: zolang het toestel binnen
+// de geldigheid opent, vernieuwt de token vanzelf. Wie 30 dagen niets opent, logt gewoon opnieuw in.
 const SC_KEY = "wire.sc";
 const codeer = (s: string) => { try { return btoa(unescape(encodeURIComponent(s))); } catch { return ""; } };
 const decodeer = (s: string) => { try { return decodeURIComponent(escape(atob(s))); } catch { return ""; } };
 
-export function bewaarSyncCred(email: string, wachtwoord: string): void {
-  try { localStorage.setItem(SC_KEY, codeer(JSON.stringify({ e: email.trim().toLowerCase(), w: wachtwoord }))); } catch { /* opslag niet beschikbaar */ }
+// Let op: de tweede parameter (wachtwoord) wordt BEWUST genegeerd en niet meer opgeslagen. Hij staat er
+// alleen nog zodat bestaande aanroepers niet hoeven te veranderen.
+export function bewaarSyncCred(email: string, _wachtwoord?: string): void {
+  try { localStorage.setItem(SC_KEY, codeer(JSON.stringify({ e: email.trim().toLowerCase() }))); } catch { /* opslag niet beschikbaar */ }
+  // Ruim een eventueel oud record met een bewaard wachtwoord uit een vorige versie op.
+  try { localStorage.removeItem("wire.sc.pw"); } catch { /* niets */ }
 }
 export function wisSyncCred(): void {
   try { localStorage.removeItem(SC_KEY); } catch { /* niets */ }
 }
-function leesSyncCred(): { e: string; w: string } | null {
-  try { const v = localStorage.getItem(SC_KEY); if (!v) return null; const o = JSON.parse(decodeer(v)); return o?.e && o?.w ? o : null; } catch { return null; }
+// Alleen het bewaarde e-mailadres (om het inlogscherm voor te vullen). Nooit meer een wachtwoord.
+export function leesSyncEmail(): string | null {
+  try { const v = localStorage.getItem(SC_KEY); if (!v) return null; const o = JSON.parse(decodeer(v)); return o?.e ? String(o.e) : null; } catch { return null; }
 }
 
 // Zorgt dat er een geldige sessie is: is de token nog geldig, dan klaar; anders meldt de app zich stil
@@ -194,16 +211,25 @@ export async function sbHerstelSessie(): Promise<boolean> {
   return metTimeout(
     (async () => {
       try {
-        if (tokenGeldig()) return true;
-        const cred = leesSyncCred();
-        if (!cred) return false;
-        const uitkomst = await sbLoginUitkomst(cred.e, cred.w);
-        if (uitkomst === "ok") { sessieGeweigerd = false; return true; }
-        // BELANGRIJK: hier stond vroeger `sbRegistreer(...)` als noodgreep. Dat maakte een verwijderd
-        // account gewoon opnieuw aan en gaf een apparaat met een INGETROKKEN wachtwoord weer toegang.
-        // Weigert de server onze gegevens, dan gooien we ze weg en laten we de gebruiker opnieuw inloggen.
-        if (uitkomst === "fout") { wisSyncCred(); wisToken(); sessieGeweigerd = true; }
-        return false; // "onbereikbaar" → gegevens bewaren, straks vanzelf opnieuw proberen
+        if (tokenGeldig()) {
+          // Token nog geldig. Nadert hij zijn eind, verleng dan proactief zodat het toestel gekoppeld
+          // blijft — ZONDER een wachtwoord te bewaren. Mislukt de verlenging (offline/storing), geen ramp:
+          // de huidige token werkt nog en we proberen het later gewoon opnieuw.
+          if (tokenBijnaVerlopen()) {
+            try {
+              const r = await api<{ token?: string }>("/auth/verleng", { method: "POST" });
+              if (r.token) bewaarToken(r.token);
+            } catch { /* stil; token is nog geldig */ }
+          }
+          return true;
+        }
+        // Token verlopen of ingetrokken. We bewaren GEEN wachtwoord meer, dus stil herinloggen kan niet:
+        // de gebruiker moet opnieuw inloggen. Dit is bewust — het alternatief (wachtwoord op het toestel)
+        // was een beveiligingslek. Het inlogscherm vult zijn e-mailadres alvast in (leesSyncEmail).
+        // Was er eerder een sessie op dit toestel (bewaard e-mailadres), dan markeren we 'geweigerd' zodat
+        // de app een duidelijke "log opnieuw in"-melding kan tonen in plaats van stil te blijven.
+        if (leesSyncEmail()) { wisToken(); sessieGeweigerd = true; }
+        return false;
       } catch { return false; }
     })(),
     10000,

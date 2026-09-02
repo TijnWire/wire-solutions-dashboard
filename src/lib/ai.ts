@@ -1,7 +1,9 @@
 // AI-assistent voor het dashboard — kostenbewust.
 // • Model: het goedkope Claude Haiku (niet Opus).
 // • Harde dag-cap per gebruiker (lokaal bijgehouden) zodat het tokengebruik/kosten beperkt blijven.
-// • Draait client-side met de Claude-sleutel uit Instellingen (zelfde patroon als de PDF-scan).
+// • Loopt via de server-proxy (aiTransport): de API-sleutel blijft server-side. Terugval op de
+//   client-sleutel uit Instellingen zolang de server nog geen CLAUDE_KEY heeft.
+import { postClaude } from "./aiTransport";
 
 // Kostenefficiënt model (Haiku), bewust niet Opus.
 const AI_MODEL = "claude-haiku-4-5-20251001";
@@ -24,27 +26,13 @@ function verhoogTeller(userId: string): void {
 }
 
 async function claudeHaiku(apiKey: string, body: Record<string, unknown>): Promise<{ ok: true; data: any } | { ok: false; fout: string }> {
-  let res: Response;
-  try {
-    res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": apiKey.trim(),
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true",
-      },
-      body: JSON.stringify({ model: AI_MODEL, ...body }),
-    });
-  } catch {
-    return { ok: false, fout: "Kon de AI niet bereiken. Controleer je internetverbinding." };
+  const r = await postClaude(apiKey, { model: AI_MODEL, ...body });
+  if (!r.ok) {
+    if (r.status === 401 || r.status === 403) return { ok: false, fout: "Claude-sleutel ongeldig. Controleer de sleutel bij Instellingen." };
+    if (r.status === 429) return { ok: false, fout: "Even te druk bij de AI. Probeer het zo weer." };
+    return { ok: false, fout: r.fout };
   }
-  if (!res.ok) {
-    if (res.status === 401 || res.status === 403) return { ok: false, fout: "Claude-sleutel ongeldig. Controleer de sleutel bij Instellingen." };
-    if (res.status === 429) return { ok: false, fout: "Even te druk bij de AI. Probeer het zo weer." };
-    return { ok: false, fout: `AI gaf een fout (status ${res.status}).` };
-  }
-  try { return { ok: true, data: await res.json() }; } catch { return { ok: false, fout: "Onverwacht antwoord van de AI." }; }
+  return { ok: true, data: r.data };
 }
 
 export type Pagina = { key: string; label: string; groep: string };

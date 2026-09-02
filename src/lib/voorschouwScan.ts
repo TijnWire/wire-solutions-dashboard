@@ -1,7 +1,9 @@
 // Leest een MET DE HAND ingevuld voorschouw-formulier (foto's) met Claude vision en levert de velden
 // terug, zodat het formulier zich vooraf invult en als nette PDF eruit komt.
-// Draait direct vanuit de browser met de in Instellingen opgeslagen claudeKey.
+// Loopt via de server-proxy (aiTransport) zodat de API-sleutel server-side blijft; terugval op de
+// client-sleutel uit Instellingen zolang de server nog geen CLAUDE_KEY heeft.
 import { fileNaarDataUrl } from "./image";
+import { postClaude } from "./aiTransport";
 import type { Voorschouw } from "./types";
 
 type VoorschouwVelden = Pick<
@@ -75,39 +77,22 @@ export async function leesVoorschouwViaFotos(files: File[], apiKey: string, sign
   }
   const beelden = fotos.map((d) => { const { media, data } = base64Van(d); return { type: "image", source: { type: "base64", media_type: media, data } }; });
 
-  let res: Response;
-  try {
-    res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      signal,
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": apiKey.trim(),
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true",
-      },
-      body: JSON.stringify({
-        model: "claude-opus-4-8",
-        max_tokens: 4000,
-        system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
-        tools: [TOOL],
-        tool_choice: { type: "tool", name: "lever_voorschouw" },
-        messages: [{ role: "user", content: [...beelden, { type: "text", text: "Lees dit ingevulde voorschouw-formulier en lever de velden via de tool." }] }],
-      }),
-    });
-  } catch (e) {
-    if (e instanceof DOMException && e.name === "AbortError") return { ok: false, fout: "Scan geannuleerd." };
-    return { ok: false, fout: "Kon de Claude-API niet bereiken. Controleer je internetverbinding." };
-  }
+  const antwoord = await postClaude(
+    apiKey,
+    {
+      model: "claude-opus-4-8",
+      max_tokens: 4000,
+      system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
+      tools: [TOOL],
+      tool_choice: { type: "tool", name: "lever_voorschouw" },
+      messages: [{ role: "user", content: [...beelden, { type: "text", text: "Lees dit ingevulde voorschouw-formulier en lever de velden via de tool." }] }],
+    },
+    signal,
+  );
 
-  if (!res.ok) {
-    let detail = "";
-    try { detail = (await res.json())?.error?.message || ""; } catch { /* negeren */ }
-    return { ok: false, fout: foutTekst(res.status, detail) };
-  }
+  if (!antwoord.ok) return { ok: false, fout: foutTekst(antwoord.status, antwoord.fout) };
 
-  let data: unknown;
-  try { data = await res.json(); } catch { return { ok: false, fout: "Onverwacht antwoord van de Claude-API." }; }
+  const data = antwoord.data;
   const content = (data as { content?: unknown[] })?.content;
   const block = Array.isArray(content)
     ? (content.find((b) => (b as { type?: string; name?: string }).type === "tool_use" && (b as { name?: string }).name === "lever_voorschouw") as { input?: Partial<VoorschouwVelden> } | undefined)
