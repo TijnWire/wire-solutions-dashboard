@@ -16,9 +16,16 @@ const MERK = "r2:";
 export const isR2Foto = (v: string) => typeof v === "string" && v.startsWith(MERK);
 
 // Waar haalt de browser deze foto vandaan? Een data-URL is zichzelf al; een R2-naam wordt een adres.
+// De foto-route op de Worker vereist een geldige sessie (de foto's zijn persoonsgegevens), en een
+// <img>-tag kan geen Authorization-header meesturen — daarom hangen we de token als query mee, net als
+// bij de realtime-WebSocket. Zonder token (nog niet ingelogd) geven we het kale adres terug; de server
+// antwoordt dan met 401 en de browser toont simpelweg geen foto.
 export function fotoUrl(v: string): string {
   if (!isR2Foto(v)) return v;
-  return `${CLOUD_API_URL}/foto/${v.slice(MERK.length).split("/").map(encodeURIComponent).join("/")}`;
+  const pad = v.slice(MERK.length).split("/").map(encodeURIComponent).join("/");
+  const token = leesToken();
+  const basis = `${CLOUD_API_URL}/foto/${pad}`;
+  return token ? `${basis}?token=${encodeURIComponent(token)}` : basis;
 }
 
 // Een data-URL omzetten naar bytes, zodat we hem als bestand kunnen versturen in plaats van als

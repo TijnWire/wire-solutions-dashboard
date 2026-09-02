@@ -137,16 +137,32 @@ npx wrangler d1 execute wire-solutions --remote --file cloudflare/schema-token-r
 > De code is fail-safe: ontbreekt de tabel, dan blijft alles gewoon werken (er wordt alleen nog niets
 > ingetrokken). Terugrollen kan met `cloudflare/rollback/schema-token-revocaties.rollback.sql`.
 
-### B. Claude-sleutel server-side zetten (dicht het grootste lek: sleutel op elk toestel)
-Zet de bedrijfs-Claude-sleutel als **secret** op de Worker. Vanaf dat moment loopt alle AI/PDF-scan via de
-Worker en verlaat de sleutel nooit meer een telefoon:
+### B. AI aanzetten via OpenRouter (goedkoop) — server-side, sleutel nooit op een toestel
+De AI (PDF-scan, formulier-scan, assistent) draait via **OpenRouter** met een goedkoop, multimodaal
+model in plaats van het dure Claude Opus. Zet je OpenRouter-sleutel als **secret** op de Worker:
 ```powershell
-npx wrangler secret put CLAUDE_KEY
+npx wrangler secret put OPENROUTER_KEY
 ```
-Deploy daarna (`npx wrangler deploy`). **Haal vervolgens de Claude-sleutel weg uit Instellingen → Integraties
-in de app** (bij de leiding). De app valt zonder client-sleutel automatisch terug op de server-proxy.
-> Zolang je dit niet doet, blijft de oude situatie (sleutel op de toestellen) bestaan — de app blijft wél
-> werken, maar het lek is pas dicht als de secret staat én de client-sleutel leeg is.
+Optioneel het model kiezen (standaard `google/gemini-2.5-flash` — kan vision, PDF én tool-calling):
+```powershell
+npx wrangler secret put OPENROUTER_MODEL
+# waarde bijv.:  google/gemini-2.5-flash        (goede kwaliteit, zeer goedkoop)
+#          of:  google/gemini-2.5-flash-lite    (nog goedkoper)
+#          of:  openai/gpt-4o-mini              (alternatief)
+```
+Deploy daarna (`npx wrangler deploy`). Er hoeft **niets** meer in de app zelf te worden ingevuld — de
+scan-knoppen en de assistent werken zodra de secret staat en de gebruiker is ingelogd.
+
+**Zo zet je credit op OpenRouter:**
+1. Maak een account op https://openrouter.ai
+2. Ga naar **Credits** en zet een bedrag op (bv. €10 is voor dit dashboard heel lang genoeg).
+3. Ga naar **Keys → Create key**, kopieer de sleutel en gebruik die bij `wrangler secret put OPENROUTER_KEY`.
+4. Tip: stel bij de key een **maandelijkse limiet** in, dan kan het nooit uit de hand lopen.
+
+> Kosten ter vergelijking: Gemini Flash is grofweg **50–150× goedkoper** dan Claude Opus voor dit soort
+> extractiewerk. Een PDF met adressen scannen kost hiermee doorgaans een fractie van een cent.
+> Zolang `OPENROUTER_KEY` niet staat, geeft de app een nette melding "AI staat nog niet aan" — er breekt
+> niets, alleen de AI-functies wachten tot de sleutel er is.
 
 ### C. CORS beperken tot je eigen domein (optioneel, aanbevolen)
 ```powershell

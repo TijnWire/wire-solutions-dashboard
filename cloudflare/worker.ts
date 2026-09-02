@@ -45,9 +45,13 @@ export interface Env extends SpiegelEnv {
   DB: D1Database;
   JWT_SECRET: string;
   SYNC_HUB: DurableObjectNamespace;
-  // Server-side Claude-sleutel (secret). Staat die ingesteld, dan loopt alle AI/PDF-scan via de proxy
-  // hieronder en verlaat de sleutel NOOIT de server. Zet 'm met:  wrangler secret put CLAUDE_KEY
-  CLAUDE_KEY?: string;
+  // Server-side AI via OpenRouter (secret). Staat deze ingesteld, dan loopt alle AI/PDF-scan via de
+  // proxy hieronder en verlaat de sleutel NOOIT een toestel. Zet 'm met:  wrangler secret put OPENROUTER_KEY
+  OPENROUTER_KEY?: string;
+  // Welk model OpenRouter gebruikt. Goedkoop + multimodaal (vision, PDF, tool-calling).
+  // Standaard: google/gemini-2.5-flash. Wijzig zonder code aan te passen met:
+  //   wrangler secret put OPENROUTER_MODEL   (bv. google/gemini-2.5-flash-lite of openai/gpt-4o-mini)
+  OPENROUTER_MODEL?: string;
   // Komma-lijst van toegestane origins voor CORS (bv. "https://wire-solutions-dashboard.vercel.app").
   // Leeg → de app-origin wordt geëchood (nog steeds veiliger dan een harde '*').
   ALLOWED_ORIGINS?: string;
@@ -123,6 +127,80 @@ function corsVoor(req: Request, env: Env): Record<string, string> {
 
 function json(obj: unknown, status = 200): Response {
   return new Response(JSON.stringify(obj), { status, headers: { ...CORS, "Content-Type": "application/json" } });
+}
+
+// ── AI-VERTALING (Anthropic-formaat ⇄ OpenAI/OpenRouter-formaat) ──────────────────────────────────
+// De frontend bouwt zijn AI-verzoeken in het Anthropic-formaat (system-array, tools met input_schema,
+// content-blokken met type document/image, tool_choice {type:"tool"}). OpenRouter spreekt het
+// OpenAI-formaat. We vertalen hier het verzoek héén en het antwoord terug, zodat ALLE client-code
+// (het opbouwen én het uitlezen van de tool_use-blokken) exact hetzelfde blijft — alleen de motor
+// eronder is nu een goedkoop model in plaats van Claude.
+
+function anthropicTekstUit(system: unknown): string {
+  if (typeof system === "string") return system;
+  if (Array.isArray(system)) return system.map((b) => (b as { text?: string })?.text ?? "").join("\n");
+  return "";
+}
+
+// Eén Anthropic-content-blok → OpenAI-content-deel.
+function blokNaarOpenAI(blok: unknown): unknown {
+  const b = blok as { type?: string; text?: string; source?: { media_type?: string; data?: string } };
+  if (b?.type === "text") return { type: "text", text: b.text ?? "" };
+  if (b?.type === "image") {
+    const url = `data:${b.source?.media_type ?? "image/jpeg"};base64,${b.source?.data ?? ""}`;
+    return { type: "image_url", image_url: { url } };
+  }
+  if (b?.type === "document") {
+    // PDF: OpenRouter neemt een "file"-deel met een data-URL. Modellen met native PDF-ondersteuning
+    // (zoals Gemini) lezen 'm direct; anders draait OpenRouter er een parser overheen.
+    const url = `data:${b.source?.media_type ?? "application/pdf"};base64,${b.source?.data ?? ""}`;
+    return { type: "file", file: { filename: "document.pdf", file_data: url } };
+  }
+  return { type: "text", text: "" };
+}
+
+// Volledig Anthropic-verzoek → OpenAI/OpenRouter-verzoek.
+function naarOpenAIVerzoek(body: Record<string, unknown>, model: string): Record<string, unknown> {
+  const berichten: unknown[] = [];
+  const sys = anthropicTekstUit(body.system);
+  if (sys) berichten.push({ role: "system", content: sys });
+  for (const m of (Array.isArray(body.messages) ? body.messages : []) as Array<{ role?: string; content?: unknown }>) {
+    const inhoud = Array.isArray(m.content) ? (m.content as unknown[]).map(blokNaarOpenAI) : m.content;
+    berichten.push({ role: m.role ?? "user", content: inhoud });
+  }
+  const uit: Record<string, unknown> = {
+    model,
+    messages: berichten,
+    max_tokens: body.max_tokens ?? 4000,
+  };
+  if (typeof body.temperature === "number") uit.temperature = body.temperature;
+  // Tools: Anthropic {name,description,input_schema} → OpenAI {type:"function",function:{...parameters}}
+  if (Array.isArray(body.tools)) {
+    uit.tools = (body.tools as Array<{ name: string; description?: string; input_schema?: unknown }>).map((t) => ({
+      type: "function",
+      function: { name: t.name, description: t.description ?? "", parameters: t.input_schema ?? { type: "object", properties: {} } },
+    }));
+  }
+  // tool_choice: {type:"tool",name} → {type:"function",function:{name}} ; {type:"any"} → "required"
+  const tc = body.tool_choice as { type?: string; name?: string } | undefined;
+  if (tc?.type === "tool" && tc.name) uit.tool_choice = { type: "function", function: { name: tc.name } };
+  else if (tc?.type === "any") uit.tool_choice = "required";
+  else if (tc?.type === "auto") uit.tool_choice = "auto";
+  return uit;
+}
+
+// OpenAI/OpenRouter-antwoord → Anthropic-antwoordvorm { content: [ {type:"text"}|{type:"tool_use"} ] },
+// precies wat de client-code verwacht (block.type==="tool_use", block.name, block.input).
+function naarAnthropicAntwoord(data: unknown): { content: unknown[] } {
+  const msg = (data as { choices?: Array<{ message?: { content?: string | null; tool_calls?: Array<{ function?: { name?: string; arguments?: string } }> } }> })?.choices?.[0]?.message;
+  const content: unknown[] = [];
+  if (msg?.content) content.push({ type: "text", text: msg.content });
+  for (const tc of msg?.tool_calls ?? []) {
+    let input: unknown = {};
+    try { input = JSON.parse(tc.function?.arguments ?? "{}"); } catch { input = {}; }
+    content.push({ type: "tool_use", name: tc.function?.name ?? "", input });
+  }
+  return { content };
 }
 
 // ── base64url helpers ──
@@ -467,12 +545,19 @@ export default {
     // ── FOTO'S EN ARCHIEFDOSSIERS ── vóór alles, want dit is geen JSON.
     // Zodra de body hieronder als JSON wordt gelezen, is de stroom op en kan hij niet meer worden
     // doorgegeven aan de opslag. Dat kostte een testronde: "The ReadableStream has been locked".
+    //
+    // AUTH OP ALLE METHODES (ook GET): de foto's zijn meterkast-/adresfoto's = persoonsgegevens. Zonder
+    // deze check kon iedereen die een fotopad kende de foto ophalen zonder in te loggen. Een <img>-tag
+    // kan geen Authorization-header meesturen, dus voor GET/HEAD lezen we de token uit de query (?token=),
+    // net als bij /ws. POST/DELETE gebruiken de gewone Bearer-header. In beide gevallen wordt ook de
+    // token-intrekking gecontroleerd, zodat een verwijderd account ook geen foto's meer kan zien.
     if (path.startsWith("/foto")) {
-      const schrijft = req.method === "POST" || req.method === "DELETE";
-      if (schrijft) {
-        const auth = req.headers.get("Authorization") ?? "";
-        const t = auth.startsWith("Bearer ") ? auth.slice(7) : "";
-        if (!t || !(await leesToken(t, env.JWT_SECRET, nu))) return json({ error: "Geen geldige sessie." }, 401);
+      const uitHeader = (req.headers.get("Authorization") ?? "").startsWith("Bearer ")
+        ? (req.headers.get("Authorization") ?? "").slice(7) : "";
+      const t = uitHeader || (url.searchParams.get("token") ?? "");
+      const s = t ? await leesToken(t, env.JWT_SECRET, nu) : null;
+      if (!s || (await tokenIngetrokken(env, s.email, s.iat))) {
+        return json({ error: "Geen geldige sessie." }, 401);
       }
       const uit = await fotoRoutes(path, req.method, req, env, json);
       if (uit) return uit;
@@ -525,7 +610,9 @@ export default {
       if (path === "/ws") {
         const t = url.searchParams.get("token") ?? "";
         const s = t ? await leesToken(t, env.JWT_SECRET, nu) : null;
-        if (!s) return new Response("unauthorized", { status: 401, headers: CORS });
+        // Ook een ingetrokken account (verwijderd / wachtwoord gereset) mag geen socket meer openen —
+        // anders blijft de realtime-verbinding van een vertrokken medewerker hangen.
+        if (!s || (await tokenIngetrokken(env, s.email, s.iat))) return new Response("unauthorized", { status: 401, headers: CORS });
         return env.SYNC_HUB.get(env.SYNC_HUB.idFromName("global")).fetch(req);
       }
 
@@ -560,33 +647,39 @@ export default {
         return json({ token: await maakToken(ikEmail, env.JWT_SECRET, nu), email: ikEmail });
       }
 
-      // ── AI-PROXY ── Claude-calls lopen server-side, zodat de API-sleutel NOOIT op een toestel belandt.
-      // De frontend stuurt hierheen precies de body die anders naar api.anthropic.com zou gaan; wij
-      // plakken de secret-sleutel erop. Zonder ingestelde CLAUDE_KEY valt de app terug op de oude
-      // (client-side) sleutel uit Instellingen, zodat er niets breekt vóór de secret is gezet.
+      // ── AI-PROXY ── AI-calls lopen server-side via OpenRouter, zodat de API-sleutel NOOIT op een
+      // toestel belandt. De frontend stuurt zijn verzoek nog in het Anthropic-formaat; wij vertalen het
+      // naar OpenRouter (OpenAI-formaat) en het antwoord terug, en plakken de secret-sleutel erop.
+      // Zonder ingestelde OPENROUTER_KEY valt de app terug op de oude (client-side) sleutel, zodat er
+      // niets breekt vóór de secret is gezet.
       if (path === "/ai/claude" && req.method === "POST") {
-        if (!env.CLAUDE_KEY) return json({ error: "AI staat niet aan op de server (CLAUDE_KEY ontbreekt)." }, 503);
-        // Alleen doorlaten wat een Anthropic Messages-request hoort te zijn; nooit willekeurige velden.
-        const toegestaan = ["model", "max_tokens", "system", "tools", "tool_choice", "messages", "temperature"];
-        const payload: Record<string, unknown> = {};
-        for (const k of toegestaan) if (k in body) payload[k] = (body as Record<string, unknown>)[k];
-        if (!payload.model || !Array.isArray(payload.messages)) return json({ error: "Ongeldige AI-aanvraag." }, 400);
+        if (!env.OPENROUTER_KEY) return json({ error: "AI staat niet aan op de server (OPENROUTER_KEY ontbreekt)." }, 503);
+        if (!Array.isArray(body.messages)) return json({ error: "Ongeldige AI-aanvraag." }, 400);
+        const model = env.OPENROUTER_MODEL || "google/gemini-2.5-flash";
+        const openaiVerzoek = naarOpenAIVerzoek(body, model);
         let upstream: Response;
         try {
-          upstream = await fetch("https://api.anthropic.com/v1/messages", {
+          upstream = await fetch("https://openrouter.ai/api/v1/chat/completions", {
             method: "POST",
             headers: {
               "content-type": "application/json",
-              "x-api-key": env.CLAUDE_KEY,
-              "anthropic-version": "2023-06-01",
+              "authorization": `Bearer ${env.OPENROUTER_KEY}`,
+              // OpenRouter-attributie (optioneel maar netjes) — helpt bij het herkennen van het verkeer.
+              "http-referer": "https://wire-solutions-dashboard.vercel.app",
+              "x-title": "Wire Solutions Dashboard",
             },
-            body: JSON.stringify(payload),
+            body: JSON.stringify(openaiVerzoek),
           });
         } catch {
           return json({ error: "Kon de AI-dienst niet bereiken." }, 502);
         }
-        const tekst = await upstream.text();
-        return new Response(tekst, { status: upstream.status, headers: { ...corsVoor(req, env), "Content-Type": "application/json" } });
+        if (!upstream.ok) {
+          const foutTekst = await upstream.text();
+          return new Response(foutTekst, { status: upstream.status, headers: { ...corsVoor(req, env), "Content-Type": "application/json" } });
+        }
+        const openaiData = await upstream.json().catch(() => ({}));
+        // Terugvertalen naar het Anthropic-antwoordformaat dat de client-code verwacht.
+        return json(naarAnthropicAntwoord(openaiData));
       }
 
       // ── STATE (gedeelde JSON-store) ── met rechten per onderdeel, zie afgeschermdVoor().
