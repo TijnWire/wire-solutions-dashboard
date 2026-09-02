@@ -512,6 +512,41 @@ export function Urenstaat() {
     });
   }, [urenstaat, weekISO]);
 
+  // ── De lopende week staat vanzelf volgens contract ingevuld ──────────────────────────────────
+  // Deze hook MOET vóór de early returns staan (Uursoorten/geen-toegang), anders wordt hij bij die
+  // returns overgeslagen → "Rendered fewer hooks than expected" (wit scherm). Daarom self-contained:
+  // alle afgeleide waarden (medewerkers, contractregels) worden hier binnenin opgebouwd.
+  // Voorwaarden: alleen de HUIDIGE week, alleen als die nog hélemaal leeg is, en alleen als de
+  // gedeelde data binnen is (syncKlaar) — anders dubbele uren. Onthoud wélke week gevuld is.
+  const gevuldeWeek = useRef<string | null>(null);
+  useEffect(() => {
+    const dezeWeekNu = toISO(maandagVan(new Date())) === weekISO;
+    if (!dezeWeekNu || !syncKlaar || gevuldeWeek.current === weekISO) return;
+    if (weekRegels.length > 0 || users.length === 0) return;
+    gevuldeWeek.current = weekISO;
+    const us = uursoortenVan(bedrijf);
+    const wkStart = new Date(weekISO + "T00:00:00");
+    for (const u of users) {
+      let rest = u.contract?.uren != null ? u.contract.uren : STANDAARD_CONTRACT;
+      for (let i = 0; i < 5 && rest > 0.01; i++) {
+        const uren = Math.min(STANDAARD_DAG, rest);
+        rest -= uren;
+        const d = new Date(wkStart); d.setDate(d.getDate() + i);
+        addUren({
+          medewerkerId: u.id,
+          datum: toISO(d),
+          uursoortId: us[0]?.id,
+          begin: STANDAARD_BEGIN,
+          eind: eindNa(STANDAARD_BEGIN, uren, STANDAARD_PAUZE),
+          pauze: STANDAARD_PAUZE,
+          uren,
+          notitie: "",
+        });
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [syncKlaar, weekISO, weekRegels.length, users.length]);
+
   if (!currentUser) return null;
   const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr";
   if (!isLeiding) return <Card className="p-8 text-center text-sm text-ink-500">De urenstaat is alleen voor de boekhouding/leiding.</Card>;
@@ -595,24 +630,6 @@ export function Urenstaat() {
     setVraagVullen(false);
   };
 
-  // ── De lopende week staat vanzelf volgens contract ingevuld ──────────────────────────────────
-  // Voorwaarden, want dit maakt uit zichzelf uren aan die doorlopen naar de loonstroken:
-  //  • alleen de HUIDIGE week — anders maak je met alleen even vooruitbladeren al uren aan;
-  //  • alleen als de week nog hélemaal leeg is (van niemand uren). Dus zodra er iets staat, blijft
-  //    het zoals het is: haal je bij één iemand de uren weg, dan komen ze niet terug;
-  //  • alleen als de gedeelde data binnen is (syncKlaar). Zonder dat zou een apparaat dat nog niets
-  //    heeft opgehaald de week nóg een keer vullen → dubbele uren, want samenvoegen gooit niets weg.
-  // Onthoud wélke week gevuld is, niet of er "al eens" gevuld is: een losse ja/nee-vlag die je bij
-  // een weekwissel terugzet, staat na het vullen meteen weer open — en dan vult een tweede ronde de
-  // week nog een keer (dubbele uren). Met de week erin kan dat per definitie niet.
-  const gevuldeWeek = useRef<string | null>(null);
-  useEffect(() => {
-    if (!dezeWeek || !syncKlaar || gevuldeWeek.current === weekISO) return;
-    if (weekRegels.length > 0 || medewerkers.length === 0) return;
-    gevuldeWeek.current = weekISO;
-    for (const u of medewerkers) for (const r of contractRegels(u)) addUren(r);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dezeWeek, syncKlaar, weekISO, weekRegels.length, medewerkers.length]);
   const contractTotaal = teDoenLijst.reduce((s, u) => s + contractUren(u), 0);
 
   // Tijden/pauze wijzigen → totaal automatisch herberekenen (handmatig overschrijven blijft mogelijk).
