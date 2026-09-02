@@ -291,6 +291,9 @@ type AppState = {
   deleteFactuur: (id: string) => void;
   addOpdrachtgever: (o: Omit<Opdrachtgever, "id">) => string;
   updateOpdrachtgever: (id: string, patch: Partial<Opdrachtgever>) => void;
+  // Voegt een lijst kant-en-klare opdrachtgevers (mét id) toe, maar alleen die waarvan het id nog niet
+  // bestaat. Idempotent: nogmaals aanroepen doet niets. Geeft het aantal daadwerkelijk toegevoegde terug.
+  voegOpdrachtgeversToe: (lijst: Opdrachtgever[]) => number;
   deleteOpdrachtgever: (id: string) => void;
   updateBedrijf: (patch: Partial<Bedrijf>) => void;
 
@@ -1521,6 +1524,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
   const updateOpdrachtgever: AppState["updateOpdrachtgever"] = (id, patch) =>
     setOpdrachtgevers((prev) => prev.map((o) => (o.id === id ? { ...o, ...patch } : o)));
+  // Idempotente bulk-toevoeging: voegt alleen opdrachtgevers toe waarvan het id nog niet bestaat.
+  // Zo kan de standaardlijst veilig (her)geïmporteerd worden zonder dubbelingen of overschrijvingen.
+  const voegOpdrachtgeversToe: AppState["voegOpdrachtgeversToe"] = (lijst) => {
+    let toegevoegd = 0;
+    setOpdrachtgevers((prev) => {
+      const bestaat = new Set(prev.map((o) => o.id));
+      const nieuw = lijst.filter((o) => !bestaat.has(o.id));
+      toegevoegd = nieuw.length;
+      return nieuw.length ? [...prev, ...nieuw] : prev;
+    });
+    return toegevoegd;
+  };
   const deleteOpdrachtgever: AppState["deleteOpdrachtgever"] = (id) => {
     setOpdrachtgevers((prev) => prev.filter((o) => o.id !== id));
     tomb("opdrachtgevers", id);
@@ -1747,6 +1762,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         deleteFactuur,
         addOpdrachtgever,
         updateOpdrachtgever,
+        voegOpdrachtgeversToe,
         deleteOpdrachtgever,
         updateBedrijf,
         addLoonstrook,

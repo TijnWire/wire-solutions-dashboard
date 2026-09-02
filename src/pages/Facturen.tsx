@@ -9,6 +9,7 @@ import { downloadFactuurPdf, mailFactuur, factuurTotalen, euro } from "../lib/fa
 import { exporteerExcel } from "../lib/excel";
 import { weekStartISO, weekLabel, isISODatum } from "../lib/week";
 import { PeriodeNavigator, periodeRange, type Periode } from "../components/PeriodeNavigator";
+import { STANDAARD_OPDRACHTGEVERS } from "../lib/opdrachtgeversData";
 import type { Factuur, FactuurRegel, FactuurStatus, Project, Opdrachtgever, Buurtaanpak, Brievenronde, Bedrijf, FactuurPreset } from "../lib/types";
 
 // Concept = blauw, Verstuurd = oranje/geel, Betaald = groen — zo zie je de status in één oogopslag.
@@ -23,6 +24,16 @@ const statusKleur: Record<FactuurStatus, string> = {
   Betaald: "bg-emerald-500",
 };
 const datumKort = (iso: string) => { const d = iso.slice(0, 10).split("-"); return d.length === 3 ? `${d[2]}-${d[1]}-${d[0]}` : iso; };
+
+// Leesbaar label voor een opdrachtgever in de keuzelijsten. Veel opdrachtgevers delen dezelfde
+// bedrijfsnaam (bijv. 20 keer "Stedin Netbeheer B.V."); zonder de contactpersoon + plaats zijn ze in de
+// dropdown niet uit elkaar te houden. Volgorde: contactpersoon — bedrijf (afdeling) · plaats.
+function opdrachtgeverLabel(o: Opdrachtgever): string {
+  const bedrijf = o.afdeling ? `${o.naam} — ${o.afdeling}` : o.naam;
+  const plaats = o.postcodePlaats.replace(/^\s*\d{4}\s*[A-Za-z]{2}\s*/, "").trim(); // postcode eraf → alleen plaats
+  const kop = o.tav ? `${o.tav} — ${bedrijf}` : bedrijf;
+  return plaats ? `${kop} · ${plaats}` : kop;
+}
 
 const FACTUUR_STATUSSEN: FactuurStatus[] = ["Concept", "Verstuurd", "Betaald"];
 
@@ -122,7 +133,7 @@ function FactuurForm({ bestaande, initieel, onKlaar, onOpgeslagen }: { bestaande
         <div className="flex flex-wrap items-center gap-2 border-t border-ink-100 pt-3">
           <span className="text-xs font-semibold text-ink-500">Opdrachtgever</span>
           <div className="w-full sm:w-64">
-            <Keuze value="" onChange={kiesOpdrachtgever} altijdZoeken opties={[{ waarde: "", label: opdrachtgevers.length ? "Kies opdrachtgever…" : "Nog geen opdrachtgevers" }, ...opdrachtgevers.map((o) => ({ waarde: o.id, label: o.afdeling ? `${o.naam} — ${o.afdeling}` : o.naam }))]} title="Opdrachtgever kiezen" />
+            <Keuze value="" onChange={kiesOpdrachtgever} altijdZoeken opties={[{ waarde: "", label: opdrachtgevers.length ? "Kies opdrachtgever…" : "Nog geen opdrachtgevers" }, ...opdrachtgevers.map((o) => ({ waarde: o.id, label: opdrachtgeverLabel(o) }))]} title="Opdrachtgever kiezen" />
           </div>
           <span className="text-xs text-ink-400">vult de klantgegevens automatisch in</span>
         </div>
@@ -230,10 +241,11 @@ function FactuurForm({ bestaande, initieel, onKlaar, onOpgeslagen }: { bestaande
 
 // ── Opdrachtgevers beheren (vaste klantgegevens) ──
 function OpdrachtgeverBeheer({ onKlaar }: { onKlaar: () => void }) {
-  const { opdrachtgevers, addOpdrachtgever, updateOpdrachtgever, deleteOpdrachtgever } = useApp();
+  const { opdrachtgevers, addOpdrachtgever, updateOpdrachtgever, deleteOpdrachtgever, voegOpdrachtgeversToe } = useApp();
   const leeg = { naam: "", afdeling: "", relatienummer: "", adres: "", postcodePlaats: "", email: "", tav: "", personen: [] as { userId: string; uurtarief: number }[] };
   const [bewerkId, setBewerkId] = useState<string | null>(null); // null = dicht, "nieuw" = nieuw, id = bewerken
   const [d, setD] = useState(leeg);
+  const [importMelding, setImportMelding] = useState("");
   const set = (patch: Partial<typeof d>) => setD((x) => ({ ...x, ...patch }));
   const start = (o?: Opdrachtgever) => {
     if (o) { setBewerkId(o.id); setD({ naam: o.naam, afdeling: o.afdeling ?? "", relatienummer: o.relatienummer, adres: o.adres, postcodePlaats: o.postcodePlaats, email: o.email, tav: o.tav ?? "", personen: o.personen ?? [] }); }
@@ -247,6 +259,14 @@ function OpdrachtgeverBeheer({ onKlaar }: { onKlaar: () => void }) {
     sluit();
   };
 
+  // Hoeveel uit de standaardlijst ontbreken er nog? (op id — idempotent)
+  const bestaandeIds = new Set(opdrachtgevers.map((o) => o.id));
+  const nogTeImporteren = STANDAARD_OPDRACHTGEVERS.filter((o) => !bestaandeIds.has(o.id)).length;
+  const importeerStandaard = () => {
+    const n = voegOpdrachtgeversToe(STANDAARD_OPDRACHTGEVERS);
+    setImportMelding(n > 0 ? `${n} opdrachtgever${n === 1 ? "" : "s"} toegevoegd.` : "Alle opdrachtgevers uit de lijst stonden er al — niets toegevoegd.");
+  };
+
   return (
     <div className="mx-auto max-w-2xl space-y-5">
       <button type="button" onClick={onKlaar} className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-500 hover:text-ink-800"><ArrowLeft className="h-4 w-4" /> Terug naar facturen</button>
@@ -255,8 +275,21 @@ function OpdrachtgeverBeheer({ onKlaar }: { onKlaar: () => void }) {
           <h2 className="text-xl font-bold text-ink-900">Opdrachtgevers</h2>
           <p className="text-sm text-ink-500">Vaste klantgegevens om snel op een factuur te kiezen.</p>
         </div>
-        {bewerkId === null && <button type="button" onClick={() => start()} className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-brand-700"><Plus className="h-4 w-4" /> Nieuwe opdrachtgever</button>}
+        {bewerkId === null && (
+          <div className="flex flex-wrap items-center gap-2">
+            {nogTeImporteren > 0 && (
+              <button type="button" onClick={importeerStandaard} className="inline-flex items-center gap-2 rounded-xl border border-ink-200 bg-white px-4 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50" title="Voeg de vaste lijst met opdrachtgevers toe (dubbele worden overgeslagen)">
+                <ArrowDownToLine className="h-4 w-4" /> Standaardlijst importeren ({nogTeImporteren})
+              </button>
+            )}
+            <button type="button" onClick={() => start()} className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-brand-700"><Plus className="h-4 w-4" /> Nieuwe opdrachtgever</button>
+          </div>
+        )}
       </div>
+
+      {importMelding && (
+        <div className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{importMelding}</div>
+      )}
 
       {bewerkId !== null && (
         <Card className="space-y-3 p-4">
@@ -358,7 +391,7 @@ function UrenFactuur({ facturenCount, opdrachtgevers, users, urenstaat, onGenere
       <Card className="space-y-4 p-4">
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="sm:col-span-2"><label className={labelCls}>Opdrachtgever</label>
-            <Keuze value={ogId} onChange={setOgId} altijdZoeken opties={opdrachtgevers.length ? opdrachtgevers.map((o) => ({ waarde: o.id, label: o.afdeling ? `${o.naam} — ${o.afdeling}` : o.naam })) : [{ waarde: "", label: "Nog geen opdrachtgevers" }]} title="Opdrachtgever" />
+            <Keuze value={ogId} onChange={setOgId} altijdZoeken opties={opdrachtgevers.length ? opdrachtgevers.map((o) => ({ waarde: o.id, label: opdrachtgeverLabel(o) })) : [{ waarde: "", label: "Nog geen opdrachtgevers" }]} title="Opdrachtgever" />
           </div>
           <div><label className={labelCls}>Van</label><DatumKiezer value={van} onChange={setVan} /></div>
           <div><label className={labelCls}>Tot en met</label><DatumKiezer value={tot} onChange={setTot} /></div>

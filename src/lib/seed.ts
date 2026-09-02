@@ -1,4 +1,5 @@
 import type { User, Project, Taak, ProjectPost, Sanering, TauwOpdracht, Brievenronde, Afspraak, Factuur, Bedrijf, Loonstrook, Boete, Communicatie, Verlof, KennisArtikel, Instellingen, Klant, Opdrachtgever, Buurtaanpak, Schouwafspraak, AgendaItem, Todo, BlancoBrief, Urenregel } from "./types";
+import { STANDAARD_OPDRACHTGEVERS } from "./opdrachtgeversData";
 
 // Saneren-dossiers en TAUW-opdrachten starten leeg; aanmaken via de bijbehorende pagina.
 export const SEED_SANERINGEN: Sanering[] = [];
@@ -84,9 +85,12 @@ export const SEED_BEDRIJF: Bedrijf = {
   bic: "RABONL2U",
 };
 
-// Vaste opdrachtgevers (klantgegevens voor op facturen). Stedin staat er alvast in.
+// Vaste opdrachtgevers (klantgegevens voor op facturen). De bestaande Stedin-standaard (og-stedin) plus
+// de éénmalig aangeleverde contactpersonen-lijst. Op een leeg/nieuw toestel staan ze meteen klaar; op
+// een al ingewerkt toestel importeer je ze met de knop bij Facturen → Opdrachtgevers.
 export const SEED_OPDRACHTGEVERS: Opdrachtgever[] = [
   { id: "og-stedin", naam: "Stedin Netbeheer B.V.", relatienummer: "20200015", adres: "Nijverheidsweg 15", postcodePlaats: "3534 AM Utrecht", email: "", tav: "Rune Zwijnenburg" },
+  ...STANDAARD_OPDRACHTGEVERS,
 ];
 
 export const SEED_BUURTAANPAK: Buurtaanpak[] = [];
