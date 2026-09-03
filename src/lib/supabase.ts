@@ -149,6 +149,28 @@ export async function sbLogin(email: string, wachtwoord: string): Promise<boolea
   return (await sbLoginUitkomst(email, wachtwoord)) === "ok";
 }
 
+// "Wachtwoord vergeten": vraagt de Worker een nieuw wachtwoord naar het account-adres te mailen (Resend).
+// Retourneert altijd een melding om te tonen; ok=false alleen bij een échte fout (bv. mail niet ingesteld).
+export async function sbWachtwoordVergeten(email: string): Promise<{ ok: boolean; melding: string }> {
+  return metTimeout<{ ok: boolean; melding: string }>(
+    (async () => {
+      try {
+        const r = await api<{ ok?: boolean; melding?: string; error?: string }>(
+          "/auth/wachtwoord-vergeten",
+          { method: "POST", auth: false, body: { email: email.trim().toLowerCase() } }
+        );
+        return { ok: r.ok !== false, melding: r.melding || r.error || "Als dit e-mailadres bekend is, ontvang je zo een mail." };
+      } catch (e) {
+        // De Worker geeft bij 503 (mail niet ingesteld) een SessieFout-achtige respons; toon die tekst.
+        const melding = e instanceof Error && e.message ? e.message : "Het lukte even niet. Probeer het zo nog eens.";
+        return { ok: false, melding };
+      }
+    })(),
+    12000,
+    { ok: false, melding: "Geen verbinding — probeer het zo nog eens." }
+  );
+}
+
 // Zorgt dat dit account bestaat (signup is idempotent) — en levert meteen een sessie op.
 export async function sbRegistreer(email: string, wachtwoord: string): Promise<boolean> {
   return metTimeout(

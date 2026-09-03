@@ -55,6 +55,14 @@ export interface Env extends SpiegelEnv {
   // Komma-lijst van toegestane origins voor CORS (bv. "https://wire-solutions-dashboard.vercel.app").
   // Leeg → de app-origin wordt geëchood (nog steeds veiliger dan een harde '*').
   ALLOWED_ORIGINS?: string;
+  // E-mail via Resend (secret). Staat deze ingesteld, dan kan de Worker een "wachtwoord vergeten"-mail
+  // sturen. Zet 'm met:  wrangler secret put RESEND_API_KEY
+  RESEND_API_KEY?: string;
+  // Afzender voor die mails, bv. "Wire Solutions <noreply@wiresolutions.nl>". Zonder geverifieerd
+  // domein alleen "onboarding@resend.dev" toegestaan. Zet met:  wrangler secret put RESEND_FROM
+  RESEND_FROM?: string;
+  // Publieke URL van het dashboard (voor de inloglink in de mail). Bv. https://wire-solutions-dashboard.vercel.app
+  APP_URL?: string;
 }
 
 // ── Realtime-hub (Durable Object) ──
@@ -300,6 +308,78 @@ async function trekTokensIn(env: Env, email: string, nuSec: number): Promise<voi
     ).bind(email, nuSec).run();
   } catch { /* tabel ontbreekt → migratie nog niet gedraaid; account is al uit users_auth verwijderd */ }
   _revocatieCache = null; // meteen effect in deze isolate
+}
+
+// ── E-mail via Resend: nieuw wachtwoord na "wachtwoord vergeten" ──
+// Stuurt een nette HTML-mail (Wire Solutions-huisstijl) naar het account-adres. Retourneert true als
+// Resend de mail heeft geaccepteerd. Zonder RESEND_API_KEY wordt deze functie niet aangeroepen.
+function htmlEscape(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+async function stuurWachtwoordMail(env: Env, email: string, wachtwoord: string, appUrl: string): Promise<boolean> {
+  if (!env.RESEND_API_KEY) return false;
+  const from = env.RESEND_FROM || "Wire Solutions <onboarding@resend.dev>";
+  const url = appUrl || "https://wire-solutions-dashboard.vercel.app";
+  const ww = htmlEscape(wachtwoord);
+  const veiligeUrl = htmlEscape(url);
+  const html = `<!DOCTYPE html><html lang="nl"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/></head>
+<body style="margin:0;padding:0;background-color:#f1f5f9;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f1f5f9;padding:24px 12px;"><tr><td align="center">
+<table role="presentation" width="560" cellpadding="0" cellspacing="0" style="width:560px;max-width:560px;background-color:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 1px 3px rgba(16,24,40,.1);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <tr><td style="background-color:#ea580c;padding:28px 32px;">
+    <span style="font-size:22px;font-weight:800;color:#ffffff;letter-spacing:.3px;">Wire Solutions</span>
+    <div style="font-size:12px;font-weight:600;color:#ffffff;opacity:.85;letter-spacing:1px;text-transform:uppercase;margin-top:4px;">Wachtwoord opnieuw ingesteld</div>
+  </td></tr>
+  <tr><td style="padding:32px 32px 8px 32px;">
+    <p style="margin:0;font-size:16px;color:#1e293b;font-weight:700;">Nieuw wachtwoord aangevraagd</p>
+    <p style="margin:12px 0 0 0;font-size:14px;line-height:1.6;color:#1e293b;">Je hebt een nieuw wachtwoord aangevraagd voor het Wire Solutions dashboard. Hiermee log je direct weer in.</p>
+  </td></tr>
+  <tr><td style="padding:20px 32px 8px 32px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#fff7ed;border:1px solid #e2e8f0;border-radius:12px;"><tr><td style="padding:18px 20px;">
+      <p style="margin:0 0 14px 0;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#c2410c;">Jouw nieuwe inloggegevens</p>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:14px;color:#1e293b;">
+        <tr><td style="padding:6px 0;color:#64748b;width:120px;">Website</td><td style="padding:6px 0;"><a href="${veiligeUrl}" style="color:#c2410c;text-decoration:none;font-weight:600;">${veiligeUrl}</a></td></tr>
+        <tr><td style="padding:6px 0;color:#64748b;">E-mailadres</td><td style="padding:6px 0;font-weight:600;">${htmlEscape(email)}</td></tr>
+        <tr><td style="padding:6px 0;color:#64748b;">Wachtwoord</td><td style="padding:6px 0;"><span style="display:inline-block;background-color:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:6px 12px;font-family:'Courier New',Courier,monospace;font-size:15px;font-weight:700;color:#1e293b;letter-spacing:.5px;">${ww}</span></td></tr>
+      </table>
+    </td></tr></table>
+  </td></tr>
+  <tr><td style="padding:12px 32px 8px 32px;">
+    <table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="border-radius:10px;background-color:#ea580c;">
+      <a href="${veiligeUrl}" style="display:inline-block;padding:13px 28px;font-size:14px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:10px;">Inloggen op het dashboard &rarr;</a>
+    </td></tr></table>
+  </td></tr>
+  <tr><td style="padding:16px 32px 8px 32px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;line-height:1.6;color:#1e293b;">
+      <tr><td style="padding:3px 0;"><span style="color:#ea580c;font-weight:800;">&#9656;</span>&nbsp; Wijzig dit wachtwoord na je login naar iets persoonlijks.</td></tr>
+      <tr><td style="padding:3px 0;"><span style="color:#ea580c;font-weight:800;">&#9656;</span>&nbsp; Heb jij dit niet aangevraagd? Neem dan contact op met je leidinggevende.</td></tr>
+    </table>
+  </td></tr>
+  <tr><td style="background-color:#f8fafc;border-top:1px solid #e2e8f0;padding:18px 32px;">
+    <p style="margin:0;font-size:11px;line-height:1.5;color:#94a3b8;">Deze mail is automatisch verstuurd vanuit het Wire Solutions dashboard.</p>
+  </td></tr>
+</table></td></tr></table></body></html>`;
+  const tekst = [
+    "Wire Solutions — nieuw wachtwoord",
+    "",
+    "Je hebt een nieuw wachtwoord aangevraagd voor het Wire Solutions dashboard.",
+    "",
+    `Website:    ${url}`,
+    `E-mail:     ${email}`,
+    `Wachtwoord: ${wachtwoord}`,
+    "",
+    "Wijzig dit wachtwoord na je login. Heb jij dit niet aangevraagd? Neem contact op met je leidinggevende.",
+  ].join("\n");
+  try {
+    const r = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ from, to: [email], subject: "Je nieuwe wachtwoord voor het Wire Solutions dashboard", html, text: tekst }),
+    });
+    return r.ok;
+  } catch {
+    return false;
+  }
 }
 
 // ── Rol-helpers (lezen app_roles, net als de RLS-functies is_owner/is_boekhouding) ──
@@ -606,6 +686,46 @@ export default {
         }
         if (!hash || !(await verifieerWachtwoord(ww, hash))) return json({ error: "Onjuiste inloggegevens." }, 401);
         return json({ token: await maakToken(email, env.JWT_SECRET, nu), email });
+      }
+
+      // ── Wachtwoord vergeten ── stuurt een nieuw tijdelijk wachtwoord naar het EIGEN account-adres.
+      // Antwoordt altijd "ok" (ook als het account niet bestaat), zodat niemand via dit endpoint kan
+      // aftasten welke e-mailadressen wél/niet in het systeem staan.
+      if (path === "/auth/wachtwoord-vergeten" && req.method === "POST") {
+        const email = String(body.email ?? "").trim().toLowerCase();
+        const neutraal = { ok: true, melding: "Als dit e-mailadres bij ons bekend is, ontvang je binnen enkele minuten een mail met een nieuw wachtwoord." };
+        if (!email || !email.includes("@")) return json(neutraal);
+        if (!env.RESEND_API_KEY) {
+          // Geen mailkanaal ingesteld → we resetten NIET (anders zou het account op slot gaan zonder dat
+          // iemand het nieuwe wachtwoord ontvangt). Nette melding, geen harde fout.
+          return json({ ok: false, melding: "Wachtwoord-herstel per mail is nog niet ingesteld. Vraag je leidinggevende om een nieuw wachtwoord." }, 503);
+        }
+        // Bestaat het account? Zo niet: stilzwijgend hetzelfde neutrale antwoord.
+        let bestaat = false;
+        try {
+          const rij = await env.DB.prepare("select email from users_auth where email = ?").bind(email).first<{ email: string }>();
+          bestaat = !!rij;
+        } catch { bestaat = false; }
+        if (!bestaat) return json(neutraal);
+
+        // Nieuw tijdelijk wachtwoord zetten + oude sessies intrekken.
+        const nieuw = genereerWachtwoord();
+        const hash = await hashWachtwoord(nieuw);
+        try {
+          await env.DB.prepare(
+            "insert into users_auth (email, pw_hash, created_at) values (?1, ?2, ?3) on conflict(email) do update set pw_hash = ?2"
+          ).bind(email, hash, new Date(nu * 1000).toISOString()).run();
+          await trekTokensIn(env, email, nu);
+          spiegelUpsert(env, ctx, "users_auth", [{ email, pw_hash: hash, updated_at: new Date(nu * 1000).toISOString() }], "email");
+        } catch {
+          return json({ ok: false, melding: "Het lukte even niet. Probeer het zo nog eens." }, 500);
+        }
+
+        // Mail versturen via Resend.
+        const appUrl = env.APP_URL || (req.headers.get("Origin") ?? "");
+        const verstuurd = await stuurWachtwoordMail(env, email, nieuw, appUrl);
+        if (!verstuurd) return json({ ok: false, melding: "Het nieuwe wachtwoord is klaargezet, maar de mail kon niet worden verstuurd. Neem contact op met je leidinggevende." }, 502);
+        return json(neutraal);
       }
 
       // ── WebSocket-verbinding voor realtime (token via query, want browsers kunnen geen header meesturen) ──
