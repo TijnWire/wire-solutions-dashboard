@@ -55,3 +55,4 @@ Thumbs.db
 # Wrangler werkmap (lokale testdatabase, bouwrommel) — hoort niet in de repo
 .wrangler/
 .mockup/
+tmp/
