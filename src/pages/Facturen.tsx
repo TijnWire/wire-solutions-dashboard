@@ -994,7 +994,7 @@ export function Facturen({ initieelFactuur, nieuwFactuurProject }: { initieelFac
                           </div>
                           <div className="flex w-full items-center justify-end gap-1 sm:w-auto">
                             {f.status === "Concept" ? (
-                              <button type="button" onClick={() => updateFactuur(f.id, { status: "Goedgekeurd" })} className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 sm:py-1.5" title="Deze factuur goedkeuren">
+                              <button type="button" onClick={() => updateFactuur(f.id, { status: "Goedgekeurd" })} className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 sm:py-1.5" title="Deze factuur goedkeuren">
                                 <CheckCircle2 className="h-3.5 w-3.5" /> Goedkeuren
                               </button>
                             ) : f.status === "Goedgekeurd" ? (
