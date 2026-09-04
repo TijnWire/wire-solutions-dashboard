@@ -12,16 +12,16 @@ import { PeriodeNavigator, periodeRange, type Periode } from "../components/Peri
 import { STANDAARD_OPDRACHTGEVERS } from "../lib/opdrachtgeversData";
 import type { Factuur, FactuurRegel, FactuurStatus, Project, Opdrachtgever, Buurtaanpak, Brievenronde, Bedrijf, FactuurPreset } from "../lib/types";
 
-// Concept = blauw, Goedgekeurd = indigo, Verstuurd = oranje/geel, Betaald = groen — status in één oogopslag.
+// Concept = blauw, Goedgekeurd = groen, Verstuurd = oranje/geel, Betaald = groen — status in één oogopslag.
 const statusTone: Record<FactuurStatus, string> = {
   Concept: "blue",
-  Goedgekeurd: "indigo",
+  Goedgekeurd: "emerald",
   Verstuurd: "amber",
   Betaald: "emerald",
 };
 const statusKleur: Record<FactuurStatus, string> = {
   Concept: "bg-blue-500",
-  Goedgekeurd: "bg-indigo-500",
+  Goedgekeurd: "bg-emerald-500",
   Verstuurd: "bg-amber-500",
   Betaald: "bg-emerald-500",
 };
