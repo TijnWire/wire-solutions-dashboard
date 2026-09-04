@@ -200,12 +200,11 @@ export const Topbar = memo(function Topbar({
           onClick={onSync}
           title={synced ? "Alles wordt gesynchroniseerd — tik voor details" : "Niet gesynchroniseerd — tik om te controleren"}
           aria-label={synced ? "Gesynchroniseerd" : "Niet gesynchroniseerd"}
-          className={`inline-flex h-9 items-center gap-1.5 rounded-full border px-2 text-[13px] font-semibold transition-colors sm:pr-3 ${synced ? "border-green-200 bg-green-50 text-green-700 hover:bg-green-100" : "border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100"}`}
+          className={`inline-flex h-9 items-center justify-center rounded-full border px-2 transition-colors ${synced ? "border-green-200 bg-green-50 text-green-700 hover:bg-green-100" : "border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100"}`}
         >
           <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${synced ? "bg-green-500/15 text-green-600" : "bg-amber-500/20 text-amber-600"}`}>
             {synced ? <Cloud className="h-3.5 w-3.5" /> : <CloudOff className="h-3.5 w-3.5 animate-pulse" />}
           </span>
-          <span className="hidden sm:inline">{synced ? "Gesynchroniseerd" : "Niet gesynct"}</span>
         </button>
 
         {/* Mobiele zoekknop — opent een schermvullend venster */}

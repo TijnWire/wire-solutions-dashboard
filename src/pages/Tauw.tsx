@@ -7,6 +7,7 @@ import { WerknemerKiezer } from "../components/WerknemerKiezer";
 import { DatumKiezer } from "../components/DatumKiezer";
 import { TijdKiezer } from "../components/TijdKiezer";
 import { Card, Badge, Bevestig } from "../components/ui";
+import { PdVeld, pdWaarde } from "../components/PdVeld";
 import { afleidRegio } from "../lib/regio";
 import { magAlles } from "../lib/rechten";
 import { waUrl } from "../lib/communicatie";
@@ -188,6 +189,7 @@ function TypeKiezer({ waarde, onKies }: { waarde: TauwType; onKies: (t: TauwType
 function TauwIntake({ type, onKlaar }: { type: TauwType; onKlaar: (id?: string) => void }) {
   const { addTauw } = useApp();
   const [referentie, setReferentie] = useState("");
+  const [pdCijfers, setPdCijfers] = useState("");
   const [gekozen, setGekozen] = useState<TauwType>(type);
   const [opdrachtgever, setOpdrachtgever] = useState<TauwOpdrachtgever>("TAUW");
   const [importOpen, setImportOpen] = useState(false);
@@ -198,6 +200,7 @@ function TauwIntake({ type, onKlaar }: { type: TauwType; onKlaar: (id?: string) 
     status: "nieuw" as const,
     regio: "",
     opdrachtgever,
+    pdNummer: pdWaarde(pdCijfers),
     stappen: [],
   });
 
@@ -212,6 +215,7 @@ function TauwIntake({ type, onKlaar }: { type: TauwType; onKlaar: (id?: string) 
       <h2 className="text-lg font-bold text-ink-900 sm:text-xl">Nieuwe opdracht</h2>
 
       <Card className="space-y-4 p-5">
+        <PdVeld cijfers={pdCijfers} onChange={setPdCijfers} />
         {/* Voor wie werk je? */}
         <div>
           <span className="mb-1.5 block text-sm font-medium text-ink-700">Voor wie is deze opdracht?</span>

@@ -30,6 +30,7 @@ import { useApp } from "../store/AppContext";
 import { useNav } from "../store/NavContext";
 import { Keuze } from "../components/Keuze";
 import { Card, Badge, Bevestig } from "../components/ui";
+import { PdVeld, pdWaarde } from "../components/PdVeld";
 import { WerknemerKiezer } from "../components/WerknemerKiezer";
 import { BestandScanModal } from "../components/BestandScanModal";
 import { DatumKiezer } from "../components/DatumKiezer";
@@ -800,6 +801,7 @@ function NieuweRonde({ onKlaar }: { onKlaar: () => void }) {
   const [straat, setStraat] = useState("");
   const [postcode, setPostcode] = useState("");
   const [plaats, setPlaats] = useState("");
+  const [pdCijfers, setPdCijfers] = useState("");
   const [toegewezenAan, setToegewezenAan] = useState(
     currentUser?.rol === "monteur" ? currentUser.id : ""
   );
@@ -823,6 +825,7 @@ function NieuweRonde({ onKlaar }: { onKlaar: () => void }) {
       toegewezenOp: toegewezenAan ? new Date().toISOString() : undefined,
       adressen,
       regio: afleidRegio(postcode.trim(), plaats.trim()),
+      pdNummer: pdWaarde(pdCijfers),
     });
     onKlaar();
   };
@@ -839,6 +842,7 @@ function NieuweRonde({ onKlaar }: { onKlaar: () => void }) {
       <h2 className="text-lg font-bold text-ink-900 sm:text-xl">Nieuwe brievenronde</h2>
 
       <Card className="space-y-4 p-5">
+        <PdVeld cijfers={pdCijfers} onChange={setPdCijfers} />
         <label className="block">
           <span className="mb-1.5 block text-sm font-medium text-ink-700">Straatnaam</span>
           <input value={straat} onChange={(e) => setStraat(e.target.value)} placeholder="bijv. Dorpsstraat" className={inputCls} />

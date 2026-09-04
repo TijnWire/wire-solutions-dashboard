@@ -486,6 +486,7 @@ export type Schouwafspraak = {
   status: SchouwStatus;
   notitie: string;
   aangemaakt: string; // ISO
+  pdNummer?: string; // optioneel Stedin PD-nummer — koppelt de schouw aan de boekhouding
   gearchiveerd?: boolean;   // uit de actieve lijst, bewaard onder "Archief" — nooit weggegooid
   gearchiveerdOp?: string;  // ISO
 };
@@ -814,6 +815,7 @@ export type TauwOpdracht = {
   status: TauwStatus;
   referentie: string;
   regio: string;
+  pdNummer?: string; // optioneel Stedin PD-nummer — koppelt de opdracht aan de boekhouding
   toegewezenAan?: string; // user id (werknemer)
   toegewezenOp?: string; // ISO — wanneer de map aan de werknemer is afgegeven
   deadline?: string; // ISO yyyy-mm-dd — door de beheerder gezet

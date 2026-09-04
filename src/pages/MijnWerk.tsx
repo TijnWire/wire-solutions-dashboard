@@ -97,12 +97,6 @@ export function MijnWerk({ initieelProject }: { initieelProject?: string }) {
     setNieuwBijProject(null);
   };
 
-  const stats = [
-    { label: "Te doen", value: teDoen, icon: ListTodo, tone: "bg-red-50 text-red-600" },
-    { label: "Mee bezig", value: bezig, icon: Loader2, tone: "bg-orange-50 text-orange-600" },
-    { label: "Klaar", value: klaar, icon: CheckCircle2, tone: "bg-green-50 text-green-600" },
-  ];
-
   // Werkbonnen: door de manager toegewezen rondes en afspraken
   type WerkArea = "brieven" | "afspraken" | "tauw" | "buurtaanpak" | "voorschouwen";
   type Werkbon = {
@@ -220,6 +214,19 @@ export function MijnWerk({ initieelProject }: { initieelProject?: string }) {
   const mappen = mapMeta
     .map((m) => ({ ...m, items: werkbonnen.filter((w) => w.area === m.area) }))
     .filter((m) => m.items.length > 0);
+
+  // Tellers "Te doen / Mee bezig / Klaar": naast losse taken tellen we ook het toegewezen werk
+  // (werkbonnen), gemapt op voortgang — 0% = te doen, 1–99% = mee bezig, 100% = klaar. Zo laten de
+  // tellers bovenaan zien wat de medewerker daadwerkelijk binnenkrijgt, i.p.v. altijd 0.
+  const werkTeDoen = werkbonnen.filter((w) => w.pct <= 0).length;
+  const werkBezig = werkbonnen.filter((w) => w.pct > 0 && w.pct < 100).length;
+  const werkKlaar = werkbonnen.filter((w) => w.pct >= 100).length;
+
+  const stats = [
+    { label: "Te doen", value: teDoen + werkTeDoen, icon: ListTodo, tone: "bg-red-50 text-red-600" },
+    { label: "Mee bezig", value: bezig + werkBezig, icon: Loader2, tone: "bg-orange-50 text-orange-600" },
+    { label: "Klaar", value: klaar + werkKlaar, icon: CheckCircle2, tone: "bg-green-50 text-green-600" },
+  ];
 
   // Overige meldingen = de mailbox minus de items die nu al als werkmapje getoond worden.
   const isWerkMelding = (id: string) =>
