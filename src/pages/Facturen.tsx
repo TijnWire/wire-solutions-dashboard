@@ -368,13 +368,18 @@ function UrenFactuur({ facturenCount, opdrachtgevers, users, urenstaat, onGenere
   const subtotaal = metUren.reduce((s, r) => s + r.uren * r.tarief, 0);
 
   const genereer = () => {
-    if (!og || metUren.length === 0) return;
+    if (!og) return;
+    // Zijn er gekoppelde medewerkers mét uren in deze periode? Dan die als regels. Zo niet: één lege
+    // regel die HR zelf invult — de koppeling is dus NIET verplicht, je kunt alles met de hand doen.
+    const factuurRegels = metUren.length > 0
+      ? metUren.map((r) => ({ omschrijving: `Gewerkte uren ${r.naam} (${fmt(van)} – ${fmt(tot)})`, aantal: Math.round(r.uren * 100) / 100, prijs: r.tarief }))
+      : [{ omschrijving: `Gewerkte uren (${fmt(van)} – ${fmt(tot)})`, aantal: 0, prijs: 0 }];
     const concept: Omit<Factuur, "id"> = {
       nummer: `${new Date().getFullYear()}-${String(facturenCount + 1).padStart(4, "0")}`,
       datum: new Date().toISOString().slice(0, 10),
       klantNaam: og.naam, afdeling: og.afdeling ?? "", tav: og.tav ?? "", klantAdres: og.adres, klantPostcodePlaats: og.postcodePlaats,
       relatienummer: og.relatienummer, email: og.email, betaaltermijn: 14,
-      regels: metUren.map((r) => ({ omschrijving: `Gewerkte uren ${r.naam} (${fmt(van)} – ${fmt(tot)})`, aantal: Math.round(r.uren * 100) / 100, prijs: r.tarief })),
+      regels: factuurRegels,
       btwPercentage: 21, status: "Concept", notitie: "",
     };
     onGenereer(concept);
@@ -385,7 +390,7 @@ function UrenFactuur({ facturenCount, opdrachtgevers, users, urenstaat, onGenere
       <button type="button" onClick={onKlaar} className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-500 hover:text-ink-800"><ArrowLeft className="h-4 w-4" /> Terug naar facturen</button>
       <div>
         <h2 className="text-xl font-bold text-ink-900">Factuur op uren</h2>
-        <p className="text-sm text-ink-500">Kies een opdrachtgever en een periode. De app telt de gewerkte uren per gekoppelde medewerker (uit de Urenstaat) en zet ze automatisch op een concept-factuur die je nog kunt nakijken en mailen.</p>
+        <p className="text-sm text-ink-500">Kies een opdrachtgever en een periode. Zijn er medewerkers gekoppeld met uren in de Urenstaat, dan vult de app die automatisch in — anders krijg je een lege concept-factuur die je zelf invult. Alles is achteraf nog aan te passen.</p>
       </div>
 
       <Card className="space-y-4 p-4">
@@ -400,8 +405,9 @@ function UrenFactuur({ facturenCount, opdrachtgevers, users, urenstaat, onGenere
         {!og ? (
           <p className="rounded-lg bg-ink-50 px-3 py-2 text-sm text-ink-500">Kies een opdrachtgever om te beginnen.</p>
         ) : (og.personen ?? []).length === 0 ? (
-          <div className="rounded-lg bg-amber-50 px-3 py-3 text-sm text-amber-700">
-            Er zijn nog geen medewerkers aan {og.naam} gekoppeld. <button type="button" onClick={onNaarOpdrachtgevers} className="font-semibold underline">Koppel medewerkers &amp; uurtarief</button> bij Opdrachtgevers.
+          <div className="rounded-lg bg-ink-50 px-3 py-3 text-sm text-ink-600">
+            Geen medewerkers gekoppeld aan {og.naam} — je krijgt een lege concept-factuur die je zelf invult.
+            Wil je uren voortaan automatisch laten invullen? <button type="button" onClick={onNaarOpdrachtgevers} className="font-semibold text-brand-700 underline">Koppel medewerkers &amp; uurtarief</button> (optioneel).
           </div>
         ) : (
           <div className="overflow-x-auto rounded-xl border border-ink-200">
@@ -435,8 +441,8 @@ function UrenFactuur({ facturenCount, opdrachtgevers, users, urenstaat, onGenere
         )}
 
         <div className="flex flex-wrap items-center gap-2">
-          <button type="button" onClick={genereer} disabled={!og || metUren.length === 0} className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-40"><Receipt className="h-4 w-4" /> Factuur genereren</button>
-          {og && metUren.length === 0 && (og.personen ?? []).length > 0 && <span className="text-xs text-ink-400">Geen uren in deze periode voor de gekoppelde medewerkers.</span>}
+          <button type="button" onClick={genereer} disabled={!og} className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-40"><Receipt className="h-4 w-4" /> {metUren.length > 0 ? "Factuur genereren" : "Lege factuur aanmaken"}</button>
+          {og && metUren.length === 0 && (og.personen ?? []).length > 0 && <span className="text-xs text-ink-400">Geen uren in deze periode — je krijgt een lege factuur om zelf in te vullen.</span>}
         </div>
       </Card>
     </div>
