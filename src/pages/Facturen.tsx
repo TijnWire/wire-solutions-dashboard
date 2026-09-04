@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Plus, ArrowLeft, Download, Pencil, Trash2, Receipt, X, FileSpreadsheet, Users, Search, Mail, Clock, ArrowDownToLine, SlidersHorizontal, Save, Eye, Undo2 } from "lucide-react";
+import { Plus, ArrowLeft, Download, Pencil, Trash2, Receipt, X, FileSpreadsheet, Users, Search, Mail, Clock, ArrowDownToLine, SlidersHorizontal, Save, Eye, Undo2, CheckCircle2 } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { useNav } from "../store/NavContext";
 import { DatumKiezer } from "../components/DatumKiezer";
@@ -12,14 +12,16 @@ import { PeriodeNavigator, periodeRange, type Periode } from "../components/Peri
 import { STANDAARD_OPDRACHTGEVERS } from "../lib/opdrachtgeversData";
 import type { Factuur, FactuurRegel, FactuurStatus, Project, Opdrachtgever, Buurtaanpak, Brievenronde, Bedrijf, FactuurPreset } from "../lib/types";
 
-// Concept = blauw, Verstuurd = oranje/geel, Betaald = groen — zo zie je de status in één oogopslag.
+// Concept = blauw, Goedgekeurd = indigo, Verstuurd = oranje/geel, Betaald = groen — status in één oogopslag.
 const statusTone: Record<FactuurStatus, string> = {
   Concept: "blue",
+  Goedgekeurd: "indigo",
   Verstuurd: "amber",
   Betaald: "emerald",
 };
 const statusKleur: Record<FactuurStatus, string> = {
   Concept: "bg-blue-500",
+  Goedgekeurd: "bg-indigo-500",
   Verstuurd: "bg-amber-500",
   Betaald: "bg-emerald-500",
 };
@@ -35,7 +37,7 @@ function opdrachtgeverLabel(o: Opdrachtgever): string {
   return plaats ? `${kop} · ${plaats}` : kop;
 }
 
-const FACTUUR_STATUSSEN: FactuurStatus[] = ["Concept", "Verstuurd", "Betaald"];
+const FACTUUR_STATUSSEN: FactuurStatus[] = ["Concept", "Goedgekeurd", "Verstuurd", "Betaald"];
 
 const veld =
   "w-full rounded-lg border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100";
@@ -558,7 +560,7 @@ function TarievenBeheer({ bedrijf, updateBedrijf, onKlaar }: { bedrijf: Bedrijf;
 }
 
 export function Facturen({ initieelFactuur, nieuwFactuurProject }: { initieelFactuur?: string; nieuwFactuurProject?: string }) {
-  const { facturen, bedrijf, updateBedrijf, deleteFactuur, projects, updateProject, opdrachtgevers, buurtaanpak, updateBuurtaanpak, rondes, updateRonde, users, urenstaat, currentUser, addMededeling } = useApp();
+  const { facturen, bedrijf, updateBedrijf, updateFactuur, deleteFactuur, projects, updateProject, opdrachtgevers, buurtaanpak, updateBuurtaanpak, rondes, updateRonde, users, urenstaat, currentUser, addMededeling } = useApp();
   const { navigeer } = useNav();
   const teFactureren = projects.filter((p) => p.boekhouding === "te_factureren");
   const teFacturerenBuurt = buurtaanpak.filter((b) => b.boekhouding === "te_factureren");
@@ -911,6 +913,15 @@ export function Facturen({ initieelFactuur, nieuwFactuurProject }: { initieelFac
                             <div className="text-xs text-ink-400">incl. btw</div>
                           </div>
                           <div className="flex w-full items-center justify-end gap-1 sm:w-auto">
+                            {f.status === "Concept" ? (
+                              <button type="button" onClick={() => updateFactuur(f.id, { status: "Goedgekeurd" })} className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 sm:py-1.5" title="Deze factuur goedkeuren">
+                                <CheckCircle2 className="h-3.5 w-3.5" /> Goedkeuren
+                              </button>
+                            ) : f.status === "Goedgekeurd" ? (
+                              <button type="button" onClick={() => updateFactuur(f.id, { status: "Concept" })} className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-3 py-2 text-xs font-medium text-ink-600 hover:bg-ink-50 sm:py-1.5" title="Terugzetten naar concept">
+                                <Undo2 className="h-3.5 w-3.5" /> Naar concept
+                              </button>
+                            ) : null}
                             <button type="button" onClick={() => void downloadFactuurPdf(f, bedrijf)} className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-3 py-2 text-xs font-medium text-ink-700 hover:bg-ink-50 sm:py-1.5">
                               <Download className="h-3.5 w-3.5" /> PDF
                             </button>

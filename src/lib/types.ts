@@ -320,7 +320,7 @@ export type FactuurRegel = {
   prijs: number; // per stuk, excl. btw
 };
 
-export type FactuurStatus = "Concept" | "Verstuurd" | "Betaald";
+export type FactuurStatus = "Concept" | "Goedgekeurd" | "Verstuurd" | "Betaald";
 
 export type Factuur = {
   id: string;
