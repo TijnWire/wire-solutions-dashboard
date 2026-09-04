@@ -241,12 +241,23 @@ function FactuurForm({ bestaande, initieel, onKlaar, onOpgeslagen }: { bestaande
 
 // ── Opdrachtgevers beheren (vaste klantgegevens) ──
 function OpdrachtgeverBeheer({ onKlaar }: { onKlaar: () => void }) {
-  const { opdrachtgevers, addOpdrachtgever, updateOpdrachtgever, deleteOpdrachtgever, voegOpdrachtgeversToe } = useApp();
+  const { opdrachtgevers, addOpdrachtgever, updateOpdrachtgever, deleteOpdrachtgever, voegOpdrachtgeversToe, users } = useApp();
   const leeg = { naam: "", afdeling: "", relatienummer: "", adres: "", postcodePlaats: "", email: "", tav: "", personen: [] as { userId: string; uurtarief: number }[] };
   const [bewerkId, setBewerkId] = useState<string | null>(null); // null = dicht, "nieuw" = nieuw, id = bewerken
   const [d, setD] = useState(leeg);
   const [importMelding, setImportMelding] = useState("");
   const set = (patch: Partial<typeof d>) => setD((x) => ({ ...x, ...patch }));
+  // ── Gekoppelde medewerkers + uurtarief beheren binnen het bewerk-formulier ──
+  const koppelMedewerker = (userId: string) => {
+    if (!userId || d.personen.some((p) => p.userId === userId)) return;
+    set({ personen: [...d.personen, { userId, uurtarief: 0 }] });
+  };
+  const zetTarief = (userId: string, uurtarief: number) =>
+    set({ personen: d.personen.map((p) => (p.userId === userId ? { ...p, uurtarief } : p)) });
+  const ontkoppel = (userId: string) =>
+    set({ personen: d.personen.filter((p) => p.userId !== userId) });
+  const naamVanUser = (id: string) => users.find((u) => u.id === id)?.naam ?? "Onbekend";
+  const nogTeKoppelen = users.filter((u) => !d.personen.some((p) => p.userId === u.id));
   const start = (o?: Opdrachtgever) => {
     if (o) { setBewerkId(o.id); setD({ naam: o.naam, afdeling: o.afdeling ?? "", relatienummer: o.relatienummer, adres: o.adres, postcodePlaats: o.postcodePlaats, email: o.email, tav: o.tav ?? "", personen: o.personen ?? [] }); }
     else { setBewerkId("nieuw"); setD(leeg); }
@@ -304,6 +315,56 @@ function OpdrachtgeverBeheer({ onKlaar }: { onKlaar: () => void }) {
             <div><label className={labelCls}>Postcode + plaats</label><input value={d.postcodePlaats} onChange={(e) => set({ postcodePlaats: e.target.value })} placeholder="3534 AM Utrecht" className={veld} /></div>
           </div>
 
+          {/* Gekoppelde medewerkers + uurtarief — optioneel. Staan deze ingevuld, dan vult "Factuur op
+              uren" de gewerkte uren automatisch met het juiste tarief. Leeg laten mag: HR vult dan zelf in. */}
+          <div className="rounded-xl border border-ink-200 bg-ink-50/40 p-3.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h4 className="text-sm font-bold text-ink-900">Medewerkers &amp; uurtarief</h4>
+                <p className="text-xs text-ink-500">Koppel wie voor deze opdrachtgever werkt en tegen welk uurtarief. Optioneel — voor automatische uren-facturen.</p>
+              </div>
+              {nogTeKoppelen.length > 0 && (
+                <div className="w-full sm:w-56">
+                  <Keuze
+                    value=""
+                    onChange={koppelMedewerker}
+                    altijdZoeken
+                    placeholder="+ Medewerker koppelen"
+                    opties={nogTeKoppelen.map((u) => ({ waarde: u.id, label: u.naam }))}
+                    title="Medewerker koppelen"
+                  />
+                </div>
+              )}
+            </div>
+
+            {d.personen.length === 0 ? (
+              <p className="mt-3 rounded-lg bg-white px-3 py-3 text-center text-sm text-ink-400">Nog geen medewerkers gekoppeld.</p>
+            ) : (
+              <div className="mt-3 space-y-2">
+                {d.personen.map((p) => (
+                  <div key={p.userId} className="flex items-center gap-3 rounded-lg border border-ink-200 bg-white px-3 py-2">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-50 text-xs font-bold text-brand-700">
+                      {naamVanUser(p.userId).split(" ").filter(Boolean).slice(0, 2).map((x) => x[0]).join("").toUpperCase()}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-800">{naamVanUser(p.userId)}</span>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      <span className="text-sm text-ink-400">€</span>
+                      <input
+                        value={p.uurtarief ? String(p.uurtarief).replace(".", ",") : ""}
+                        onChange={(e) => { const n = parseFloat(e.target.value.replace(",", ".")); zetTarief(p.userId, Number.isFinite(n) && n >= 0 ? n : 0); }}
+                        inputMode="decimal"
+                        placeholder="0,00"
+                        className="w-20 rounded-lg border border-ink-200 px-2 py-1.5 text-right text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+                      />
+                      <span className="text-sm text-ink-400">/u</span>
+                    </div>
+                    <button type="button" onClick={() => ontkoppel(p.userId)} className="shrink-0 rounded-lg p-1.5 text-red-400 hover:bg-red-50 hover:text-red-600" title="Ontkoppelen"><Trash2 className="h-4 w-4" /></button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           <div className="flex gap-2">
             <button type="button" onClick={opslaan} disabled={!d.naam.trim()} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-40">Opslaan</button>
             <button type="button" onClick={sluit} className="rounded-lg px-3 py-2 text-sm text-ink-500 hover:bg-ink-50">Annuleer</button>
@@ -322,6 +383,7 @@ function OpdrachtgeverBeheer({ onKlaar }: { onKlaar: () => void }) {
                   <span className="font-semibold text-ink-900">{o.naam}</span>
                   {o.afdeling && <Badge tone="indigo">{o.afdeling}</Badge>}
                   {o.relatienummer && <Badge tone="slate">{o.relatienummer}</Badge>}
+                  {(o.personen ?? []).length > 0 && <Badge tone="green">{(o.personen ?? []).length} medew.</Badge>}
                 </div>
                 <div className="truncate text-xs text-ink-500">{[o.afdeling, o.tav ? `t.a.v. ${o.tav}` : "", o.adres, o.postcodePlaats, o.email].filter(Boolean).join(" · ")}</div>
               </div>
