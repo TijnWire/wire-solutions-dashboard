@@ -529,8 +529,15 @@ export function Urenstaat() {
     return [...weken].sort().reverse().map((w) => {
       const u = perWeek.get(w) ?? 0;
       const d = new Date(w + "T00:00:00");
-      const extra = [u > 0 ? `${uurTekst(u)} u` : "leeg", w === nu ? "deze week" : ""].filter(Boolean).join(" · ");
-      return { waarde: w, label: `Week ${weekNr(d)} · ${weekBereik(w)} · ${extra}` };
+      const dezeWeek = w === nu;
+      return {
+        waarde: w,
+        label: `Week ${weekNr(d)}${dezeWeek ? " · deze week" : ""}`,
+        sublabel: weekBereik(w),
+        badge: u > 0
+          ? { tekst: `${uurTekst(u)} u`, tone: "green" as const }
+          : { tekst: "leeg", tone: "slate" as const },
+      };
     });
   }, [urenstaat, weekISO]);
 

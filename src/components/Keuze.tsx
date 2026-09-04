@@ -10,6 +10,15 @@ export type KeuzeOptie = {
   // sneller dan een rij grijze regels met een bolletje ervoor: je ziet de kleur al vóór je het woord
   // hebt gelezen. Alleen zetten waar kleur ook echt betekenis heeft.
   tekstKleur?: string;
+  sublabel?: string;    // tweede regel onder het label (grijs, kleiner) — bv. de datumreeks van een week
+  badge?: { tekst: string; tone?: "brand" | "green" | "slate" | "amber" }; // klein label rechts, bv. "640 u" of "leeg"
+};
+
+const BADGE_TONE: Record<string, string> = {
+  brand: "bg-brand-100 text-brand-700",
+  green: "bg-green-100 text-green-700",
+  slate: "bg-ink-100 text-ink-500",
+  amber: "bg-amber-100 text-amber-700",
 };
 
 // Afgeronde keuzelijst die de native <select> vervangt. Het menu wordt via een portal getoond
@@ -105,12 +114,13 @@ export function Keuze({ value, onChange, opties, placeholder = "Kies…", disabl
               />
             </div>
           )}
-          <div className="max-h-72 overflow-auto p-1">
+          <div className="max-h-80 overflow-auto p-1.5">
             {gefilterd.length === 0 ? (
               <div className="px-3 py-6 text-center text-sm text-ink-400">Niets gevonden</div>
             ) : (
               gefilterd.map((o) => {
                 const actief = o.waarde === value;
+                const heeftSub = !!o.sublabel;
                 return (
                   <button
                     key={o.waarde || "__leeg"}
@@ -118,11 +128,17 @@ export function Keuze({ value, onChange, opties, placeholder = "Kies…", disabl
                     // Bij een lange lijst begin je bij wat nu gekozen is, in plaats van bovenaan.
                     ref={actief ? (el) => el?.scrollIntoView({ block: "nearest" }) : undefined}
                     onClick={() => kies(o.waarde)}
-                    className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold outline-none focus-visible:bg-ink-50 ${
-                      actief ? "bg-brand-50" : "hover:bg-ink-50"} ${o.tekstKleur ?? (actief ? "text-brand-700" : "text-ink-700")}`}
+                    className={`flex w-full items-center gap-2.5 rounded-lg px-3 ${heeftSub ? "py-2" : "py-2"} text-left outline-none transition-colors focus-visible:bg-ink-50 ${
+                      actief ? "bg-brand-50 ring-1 ring-inset ring-brand-200" : "hover:bg-ink-50"}`}
                   >
                     {o.kleur && <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${o.kleur}`} />}
-                    <span className="flex-1 truncate">{o.label}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className={`block truncate text-sm font-semibold ${o.tekstKleur ?? (actief ? "text-brand-700" : "text-ink-800")}`}>{o.label}</span>
+                      {heeftSub && <span className={`block truncate text-xs ${actief ? "text-brand-600/80" : "text-ink-400"}`}>{o.sublabel}</span>}
+                    </span>
+                    {o.badge && (
+                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold tabular-nums ${BADGE_TONE[o.badge.tone ?? "slate"]}`}>{o.badge.tekst}</span>
+                    )}
                     {actief && <Check className="h-4 w-4 shrink-0 text-brand-600" />}
                   </button>
                 );
