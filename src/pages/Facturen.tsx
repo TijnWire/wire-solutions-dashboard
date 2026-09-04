@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Plus, ArrowLeft, Download, Pencil, Trash2, Receipt, X, FileSpreadsheet, Users, Search, Mail, Clock, ArrowDownToLine, SlidersHorizontal, Save, Eye, Undo2, CheckCircle2 } from "lucide-react";
+import { Plus, ArrowLeft, Download, Pencil, Trash2, Receipt, X, FileSpreadsheet, Users, Search, Mail, Clock, ArrowDownToLine, SlidersHorizontal, Save, Eye, Undo2, CheckCircle2, Hash } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { useNav } from "../store/NavContext";
 import { DatumKiezer } from "../components/DatumKiezer";
@@ -39,6 +39,19 @@ function opdrachtgeverLabel(o: Opdrachtgever): string {
 
 const FACTUUR_STATUSSEN: FactuurStatus[] = ["Concept", "Goedgekeurd", "Verstuurd", "Betaald"];
 
+// Volgend factuurnummer. Is er een startnummer ingesteld (bv. 1685 uit het oude systeem), dan lopen de
+// nummers dóór als kaal getal vanaf dat punt: max(startNummer, hoogste bestaande + 1). Zonder startnummer
+// blijft het oude formaat "JAAR-0001" gelden. De laatste cijferreeks in een bestaand nummer telt als waarde.
+function volgendFactuurNummer(facturen: { nummer: string }[], bedrijf: Bedrijf): string {
+  const hoogste = facturen.reduce((m, f) => {
+    const match = String(f.nummer).match(/(\d+)\s*$/);
+    return Math.max(m, match ? parseInt(match[1], 10) : 0);
+  }, 0);
+  const start = bedrijf.factuurStartNummer;
+  if (start && start > 0) return String(Math.max(start, hoogste + 1)).padStart(4, "0");
+  return `${new Date().getFullYear()}-${String(facturen.length + 1).padStart(4, "0")}`;
+}
+
 const veld =
   "w-full rounded-lg border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100";
 const labelCls = "mb-1 block text-xs font-semibold text-ink-600";
@@ -53,10 +66,9 @@ const presetsVan = (b: Bedrijf): FactuurPreset[] => (b.factuurPresets?.length ? 
 // ── Factuur aanmaken / bewerken ──
 function FactuurForm({ bestaande, initieel, onKlaar, onOpgeslagen }: { bestaande?: Factuur; initieel?: Omit<Factuur, "id">; onKlaar: () => void; onOpgeslagen?: () => void }) {
   const { bedrijf, facturen, addFactuur, updateFactuur, opdrachtgevers } = useApp();
-  const volgnr = String(facturen.length + 1).padStart(4, "0");
   const [f, setF] = useState<Omit<Factuur, "id">>(
     bestaande ?? initieel ?? {
-      nummer: `${new Date().getFullYear()}-${volgnr}`,
+      nummer: volgendFactuurNummer(facturen, bedrijf),
       datum: new Date().toISOString().slice(0, 10),
       klantNaam: "",
       afdeling: "",
@@ -402,8 +414,8 @@ function OpdrachtgeverBeheer({ onKlaar }: { onKlaar: () => void }) {
 }
 
 // ── Automatisch een factuur op basis van de gewerkte uren (Urenstaat) per opdrachtgever ──
-function UrenFactuur({ facturenCount, opdrachtgevers, users, urenstaat, onGenereer, onNaarOpdrachtgevers, onKlaar }: {
-  facturenCount: number;
+function UrenFactuur({ volgendNummer, opdrachtgevers, users, urenstaat, onGenereer, onNaarOpdrachtgevers, onKlaar }: {
+  volgendNummer: string;
   opdrachtgevers: Opdrachtgever[];
   users: { id: string; naam: string }[];
   urenstaat: { medewerkerId: string; datum: string; uren: number }[];
@@ -439,7 +451,7 @@ function UrenFactuur({ facturenCount, opdrachtgevers, users, urenstaat, onGenere
       ? metUren.map((r) => ({ omschrijving: `Gewerkte uren ${r.naam} (${fmt(van)} – ${fmt(tot)})`, aantal: Math.round(r.uren * 100) / 100, prijs: r.tarief }))
       : [{ omschrijving: `Gewerkte uren (${fmt(van)} – ${fmt(tot)})`, aantal: 0, prijs: 0 }];
     const concept: Omit<Factuur, "id"> = {
-      nummer: `${new Date().getFullYear()}-${String(facturenCount + 1).padStart(4, "0")}`,
+      nummer: volgendNummer,
       datum: new Date().toISOString().slice(0, 10),
       klantNaam: og.naam, afdeling: og.afdeling ?? "", tav: og.tav ?? "", klantAdres: og.adres, klantPostcodePlaats: og.postcodePlaats,
       relatienummer: og.relatienummer, email: og.email, betaaltermijn: 14,
@@ -559,6 +571,68 @@ function TarievenBeheer({ bedrijf, updateBedrijf, onKlaar }: { bedrijf: Bedrijf;
   );
 }
 
+// ── Factuurnummering: doorlopende nummering vanaf een startnummer (bv. 1685 uit het oude systeem) ──
+function NummeringBeheer({ bedrijf, facturen, updateBedrijf, onKlaar }: { bedrijf: Bedrijf; facturen: Factuur[]; updateBedrijf: (patch: Partial<Bedrijf>) => void; onKlaar: () => void }) {
+  const [aan, setAan] = useState<boolean>(!!bedrijf.factuurStartNummer && bedrijf.factuurStartNummer > 0);
+  const [start, setStart] = useState<string>(bedrijf.factuurStartNummer ? String(bedrijf.factuurStartNummer) : "");
+  const hoogste = facturen.reduce((m, f) => { const x = String(f.nummer).match(/(\d+)\s*$/); return Math.max(m, x ? parseInt(x[1], 10) : 0); }, 0);
+  const startNum = parseInt(start, 10);
+  const geldig = !aan || (Number.isFinite(startNum) && startNum > 0);
+  const voorbeeld = aan && geldig ? String(Math.max(startNum, hoogste + 1)).padStart(4, "0") : `${new Date().getFullYear()}-${String(facturen.length + 1).padStart(4, "0")}`;
+  const opslaan = () => {
+    if (!geldig) return;
+    updateBedrijf({ factuurStartNummer: aan ? startNum : undefined });
+    onKlaar();
+  };
+
+  return (
+    <div className="mx-auto max-w-2xl space-y-5">
+      <button type="button" onClick={onKlaar} className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-500 hover:text-ink-800"><ArrowLeft className="h-4 w-4" /> Terug naar facturen</button>
+      <div>
+        <h2 className="text-xl font-bold text-ink-900">Factuurnummering</h2>
+        <p className="text-sm text-ink-500">Werk je met een oud systeem? Laat de nummering hier dóórlopen vanaf een startnummer, zodat je niet dubbel nummert. Nieuwe facturen krijgen dan automatisch het volgende nummer.</p>
+      </div>
+
+      <Card className="space-y-4 p-4">
+        <label className="flex items-start gap-3">
+          <input type="checkbox" checked={aan} onChange={(e) => setAan(e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-ink-300 text-brand-600 focus:ring-brand-500" />
+          <span>
+            <span className="block text-sm font-semibold text-ink-900">Doorlopende nummering aanzetten</span>
+            <span className="block text-xs text-ink-500">Zonder dit gebruikt de app het oude formaat "jaar-volgnummer" (bijv. {new Date().getFullYear()}-0001).</span>
+          </span>
+        </label>
+
+        {aan && (
+          <div>
+            <label className={labelCls}>Doorrekenen vanaf nummer</label>
+            <input
+              inputMode="numeric"
+              value={start}
+              onChange={(e) => setStart(e.target.value.replace(/[^\d]/g, ""))}
+              placeholder="1685"
+              className={veld + " max-w-[12rem]"}
+            />
+            {!geldig && <p className="mt-1 text-xs text-red-600">Vul een geldig startnummer in (groter dan 0).</p>}
+            {geldig && hoogste >= startNum && startNum > 0 && (
+              <p className="mt-1 text-xs text-amber-600">Er bestaat al een factuur met nummer {hoogste}. De volgende wordt daarom {String(hoogste + 1).padStart(4, "0")}.</p>
+            )}
+          </div>
+        )}
+
+        <div className="rounded-lg bg-ink-50 px-3 py-2.5 text-sm text-ink-600">
+          Volgende factuur krijgt nummer: <span className="font-bold text-ink-900">{voorbeeld}</span>
+        </div>
+      </Card>
+
+      <div className="flex gap-2">
+        <button type="button" onClick={opslaan} disabled={!geldig} className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-5 py-3 text-sm font-bold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-40"><Save className="h-4 w-4" /> Opslaan</button>
+        <button type="button" onClick={onKlaar} className="rounded-xl border border-ink-200 bg-white px-5 py-3 text-sm font-semibold text-ink-700 hover:bg-ink-50">Annuleren</button>
+      </div>
+      <p className="text-xs text-ink-400">Het nummer van een bestaande factuur pas je aan in de factuur zelf. Dit bepaalt alleen waar nieuwe facturen beginnen.</p>
+    </div>
+  );
+}
+
 export function Facturen({ initieelFactuur, nieuwFactuurProject }: { initieelFactuur?: string; nieuwFactuurProject?: string }) {
   const { facturen, bedrijf, updateBedrijf, updateFactuur, deleteFactuur, projects, updateProject, opdrachtgevers, buurtaanpak, updateBuurtaanpak, rondes, updateRonde, users, urenstaat, currentUser, addMededeling } = useApp();
   const { navigeer } = useNav();
@@ -589,7 +663,7 @@ export function Facturen({ initieelFactuur, nieuwFactuurProject }: { initieelFac
   const inkomendAantal = teFactureren.length + teFacturerenBuurt.length + teFacturerenMappen.length;
   const [tab, setTab] = useState<"facturen" | "inkomend">("facturen");
   const [bron, setBron] = useState<null | (() => void)>(null); // markeert de bron als gefactureerd zodra de factuur is opgeslagen
-  const [modus, setModus] = useState<"lijst" | "formulier" | "opdrachtgevers" | "uren" | "tarieven">("lijst");
+  const [modus, setModus] = useState<"lijst" | "formulier" | "opdrachtgevers" | "uren" | "tarieven" | "nummering">("lijst");
   const [bewerk, setBewerk] = useState<Factuur | undefined>(undefined);
   const [nieuwVan, setNieuwVan] = useState<Omit<Factuur, "id"> | undefined>(undefined);
   const [verwijder, setVerwijder] = useState<Factuur | null>(null);
@@ -715,10 +789,13 @@ export function Facturen({ initieelFactuur, nieuwFactuurProject }: { initieelFac
     return <OpdrachtgeverBeheer onKlaar={() => setModus("lijst")} />;
   }
   if (modus === "uren") {
-    return <UrenFactuur facturenCount={facturen.length} opdrachtgevers={opdrachtgevers} users={users} urenstaat={urenstaat} onGenereer={nieuweVanUren} onNaarOpdrachtgevers={() => setModus("opdrachtgevers")} onKlaar={() => setModus("lijst")} />;
+    return <UrenFactuur volgendNummer={volgendFactuurNummer(facturen, bedrijf)} opdrachtgevers={opdrachtgevers} users={users} urenstaat={urenstaat} onGenereer={nieuweVanUren} onNaarOpdrachtgevers={() => setModus("opdrachtgevers")} onKlaar={() => setModus("lijst")} />;
   }
   if (modus === "tarieven") {
     return <TarievenBeheer bedrijf={bedrijf} updateBedrijf={updateBedrijf} onKlaar={() => setModus("lijst")} />;
+  }
+  if (modus === "nummering") {
+    return <NummeringBeheer bedrijf={bedrijf} facturen={facturen} updateBedrijf={updateBedrijf} onKlaar={() => setModus("lijst")} />;
   }
 
   // ── Filteren (zoektekst + periode + status) en groeperen per week ──
@@ -761,6 +838,9 @@ export function Facturen({ initieelFactuur, nieuwFactuurProject }: { initieelFac
           </button>
           <button type="button" onClick={() => setModus("tarieven")} className="inline-flex items-center gap-2 rounded-xl border border-ink-200 bg-white px-4 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50">
             <SlidersHorizontal className="h-4 w-4 text-ink-500" /> Tarieven
+          </button>
+          <button type="button" onClick={() => setModus("nummering")} className="inline-flex items-center gap-2 rounded-xl border border-ink-200 bg-white px-4 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50">
+            <Hash className="h-4 w-4 text-ink-500" /> Nummering
           </button>
           {facturen.length > 0 && (
             <button type="button" onClick={exporteerNaarExcel} className="inline-flex items-center gap-2 rounded-xl border border-ink-200 bg-white px-4 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50">
