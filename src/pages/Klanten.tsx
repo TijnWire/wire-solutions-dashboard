@@ -79,7 +79,7 @@ export function Klanten({ initieelKey }: { initieelKey?: string }) {
   const [detailCat, setDetailCat] = useState<string | null>(null); // geopende projectsoort-filterpagina
   const [detailZoek, setDetailZoek] = useState("");
   const [tab, setTab] = useState<"adressen" | "projecten">("projecten");
-  const [periode, setPeriode] = useState<Periode>("maand");
+  const [periode, setPeriode] = useState<Periode>("alles");
   const [anker, setAnker] = useState(() => new Date().toISOString().slice(0, 10));
 
   if (!currentUser) return null;
