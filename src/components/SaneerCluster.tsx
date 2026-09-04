@@ -153,51 +153,61 @@ export function SaneerVerdelen({ dossier, adressen, clusters, veldwerkers, naamV
               is het onzin om twintig groepen los aan te wijzen: dat is twintig keer dezelfde handeling
               en twintig kansen om er eentje te vergeten. Dus: één klik op een naam, alles verdeeld.
               Wie het toch wil splitsen, klapt hieronder de groepen open. */}
-          <div className="rounded-2xl border border-ink-200 bg-white p-4 shadow-sm">
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <h3 className="text-base font-bold text-ink-900">Wie voert dit werk uit?</h3>
-              <span className="text-xs text-ink-500">{clusters.length} groepen · {adressen.length} adressen</span>
+          <div className="rounded-2xl border border-ink-200 bg-white p-4 shadow-sm sm:p-5">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <h3 className="text-base font-bold text-ink-900">Wie voert dit werk uit?</h3>
+                <p className="mt-0.5 text-sm text-ink-500">Tik op een naam om het hele project op die persoon te zetten.</p>
+              </div>
+              <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-ink-50 px-3 py-1 text-xs font-semibold text-ink-600">
+                <Users className="h-3.5 w-3.5" /> {clusters.length} groepen · {adressen.length} adressen
+              </span>
             </div>
-            <p className="mt-0.5 text-sm text-ink-500">
-              Eén klik zet het hele project op één naam. Alle groepen gaan mee.
-            </p>
 
-            <div className="mt-3 flex flex-wrap gap-2">
+            {/* Gelijkmatig raster: elke medewerker een even grote kaart met initialen. Mobiel 2 koloms,
+                desktop tot 4 — geen chaotisch wrappende pillen meer. */}
+            <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
               {veldwerkers.map((u) => {
                 const alles = clusters.length > 0 && clusters.every((k) => k.toegewezen_aan === u.id);
                 const deels = !alles && clusters.some((k) => k.toegewezen_aan === u.id);
+                const initialen = u.naam.split(" ").filter(Boolean).slice(0, 2).map((d) => d[0]).join("").toUpperCase();
                 return (
                   <button key={u.id} type="button" onClick={() => void wijsAlles(u.id)} disabled={bezig}
-                    className={`rounded-xl border-2 px-4 py-2.5 text-sm font-semibold transition-colors disabled:opacity-60 ${
-                      alles ? "border-brand-500 bg-brand-50 text-brand-800"
-                        : deels ? "border-brand-300 bg-white text-ink-800"
-                        : "border-ink-200 bg-white text-ink-700 hover:border-brand-300 hover:bg-brand-50/50"}`}>
-                    {alles && <Check className="mr-1.5 inline h-4 w-4" />}
-                    {u.naam}
-                    {deels && <span className="ml-1.5 text-xs font-normal text-ink-500">(deels)</span>}
+                    className={`group flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-colors disabled:opacity-60 ${
+                      alles ? "border-brand-500 bg-brand-50 ring-1 ring-brand-500"
+                        : deels ? "border-brand-300 bg-white"
+                        : "border-ink-200 bg-white hover:border-brand-300 hover:bg-brand-50/50"}`}>
+                    <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                      alles ? "bg-brand-600 text-white" : "bg-ink-100 text-ink-600"}`}>
+                      {alles ? <Check className="h-4 w-4" /> : initialen}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className={`block truncate text-sm font-semibold ${alles ? "text-brand-800" : "text-ink-800"}`}>{u.naam}</span>
+                      {deels && <span className="block text-xs font-medium text-ink-400">deels toegewezen</span>}
+                    </span>
                   </button>
                 );
               })}
-              {onverdeeld === 0 && (
-                <button type="button" onClick={() => void wijsAlles("")} disabled={bezig}
-                  className="rounded-xl px-3 py-2.5 text-sm font-medium text-ink-500 hover:bg-ink-50">
-                  Toewijzing wissen
-                </button>
-              )}
             </div>
 
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-ink-100 pt-3">
-              <p className="text-sm text-ink-600">
+            <div className="mt-4 flex flex-col gap-3 border-t border-ink-100 pt-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="flex items-center gap-2 text-sm">
                 {onverdeeld === 0
-                  ? <span className="font-semibold text-green-700">Alles verdeeld — klaar om langs de deuren te gaan.</span>
-                  : <><b className="text-amber-700">{onverdeeld} van de {clusters.length} groepen</b> nog niet verdeeld</>}
+                  ? <><CheckCircle2 className="h-4 w-4 shrink-0 text-green-600" /><span className="font-semibold text-green-700">Alles verdeeld — klaar om langs de deuren te gaan.</span></>
+                  : <><AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" /><span className="text-ink-600"><b className="text-amber-700">{onverdeeld} van de {clusters.length} groepen</b> nog niet verdeeld</span></>}
               </p>
               <div className="flex flex-wrap gap-2">
+                {onverdeeld === 0 && (
+                  <button type="button" onClick={() => void wijsAlles("")} disabled={bezig}
+                    className={`${knop} bg-white text-ink-600 ring-1 ring-ink-200 hover:bg-ink-50`}>
+                    <XCircle className="h-4 w-4" /> Wissen
+                  </button>
+                )}
                 <button type="button" onClick={() => setPerGroep((v) => !v)} className={`${knop} bg-white text-ink-700 ring-1 ring-ink-200 hover:bg-ink-50`}>
-                  <Scissors className="h-4 w-4" /> {perGroep ? "Groepen verbergen" : "Per groep aanpassen"}
+                  <Scissors className="h-4 w-4" /> {perGroep ? "Groepen verbergen" : "Per groep"}
                 </button>
                 <button type="button" onClick={() => void cluster()} disabled={bezig} className={`${knop} bg-white text-ink-700 ring-1 ring-ink-200 hover:bg-ink-50`}>
-                  {bezig ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Opnieuw groeperen
+                  {bezig ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Opnieuw
                 </button>
               </div>
             </div>
