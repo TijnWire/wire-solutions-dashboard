@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import type { Role } from "./types";
 
-export type NavGroup = "Werk" | "Projecten" | "Vragen" | "Operatie" | "Boekhouding" | "Systeem";
+export type NavGroup = "Werk" | "Projecten" | "Vragen" | "Operatie" | "Boekhouding" | "Bedrijfsdata" | "Systeem";
 
 export type NavItem = {
   key: string;
@@ -87,8 +87,8 @@ export const NAV: NavItem[] = [
   { key: "medewerkers", label: "Medewerkers", icon: Users, group: "Boekhouding", roles: LEIDING },
   { key: "communicatie", label: "Communicatie", icon: MessagesSquare, badge: "AI", group: "Operatie", roles: ALLE },
 
-  { key: "overzicht", label: "Dashboard", icon: LayoutDashboard, group: "Systeem", roles: LEIDING },
-  { key: "team", label: "Team", icon: Users, group: "Systeem", roles: LEIDING },
+  { key: "overzicht", label: "Dashboard", icon: LayoutDashboard, group: "Bedrijfsdata", roles: LEIDING },
+  { key: "team", label: "Team", icon: Users, group: "Bedrijfsdata", roles: LEIDING },
   { key: "klanten", label: "Klanten & Database", icon: Database, group: "Systeem", roles: LEIDING },
   { key: "beheer", label: "Gebruikers & toegang", icon: UserCog, group: "Systeem", roles: LEIDING },
   // Bij de werknemer staat hier alleen het tabblad Sync & back-up: kan mijn telefoon bij de gegevens
@@ -96,7 +96,7 @@ export const NAV: NavItem[] = [
   { key: "instellingen", label: "Instellingen", icon: Settings, group: "Systeem", roles: ALLE },
 ];
 
-export const GROUPS: NavGroup[] = ["Werk", "Projecten", "Vragen", "Operatie", "Boekhouding", "Systeem"];
+export const GROUPS: NavGroup[] = ["Werk", "Projecten", "Vragen", "Operatie", "Boekhouding", "Bedrijfsdata", "Systeem"];
 
 // Bepaalt of een gebruiker een menu-item mag zien.
 // Beheerders zien beheer-onderdelen alleen als de eigenaar dat gebied heeft toegewezen.
