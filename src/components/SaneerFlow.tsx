@@ -237,7 +237,7 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
           : <SaneerWerklijst adressen={adressen} clusters={clusters} naamVan={naamVan} onWijzig={() => void laad()} beeld={beeld} setBeeld={setBeeld} zoek={zoek} uitvoering={dossier.uitvoering_van} starttijd={dossier.starttijd} />
       )}
 
-      {actief === "inlezen" && <SaneerImport dossier={dossier} aantalNu={adressen.length} onKlaar={() => void laad()} />}
+      {actief === "inlezen" && <SaneerImport dossier={dossier} aantalNu={adressen.length} bestaandeAdressen={adressen} onKlaar={() => void laad()} />}
 
       {actief === "verdelen" && (
         adressen.length === 0

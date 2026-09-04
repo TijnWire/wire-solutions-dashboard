@@ -1,12 +1,14 @@
 import { useRef, useState } from "react";
 import {
-  FileUp, AlertTriangle, CheckCircle2, Phone, PhoneOff, Pencil, X, Loader2, RotateCcw, Save, Search,
+  FileUp, AlertTriangle, CheckCircle2, Phone, PhoneOff, Pencil, X, Loader2, RotateCcw, Save, Search, Sparkles, Plus,
 } from "lucide-react";
 import { ImportScan, type ScanStap } from "./ImportScan";
 import {
   leesRaster, raadKop, bouwRijen, herkenningCompleet, netPostcode, postcodeGeldig,
   type ImportRij, type Mapping, type Raster,
 } from "../lib/bodemImport";
+import { leesAdressenViaAi } from "../lib/saneerAiImport";
+import { aiBeschikbaar } from "../lib/aiTransport";
 import { haalMapping, stuurAdressen, type FlowAdres } from "../lib/saneerflowWerk";
 import { zoekPostcodes } from "../lib/postcodeZoeker";
 import type { Dossier } from "../lib/saneerflow";
@@ -49,17 +51,21 @@ const naarFlowAdres = (r: ImportRij, pd: string): Partial<FlowAdres> => ({
   opmerking: [r.opmerking, r.wijk && `wijk: ${r.wijk}`].filter(Boolean).join(" · "),
 });
 
-export function SaneerImport({ dossier, aantalNu, onKlaar }: {
+export function SaneerImport({ dossier, aantalNu, bestaandeAdressen, onKlaar }: {
   dossier: Dossier;
   aantalNu: number;
+  bestaandeAdressen?: { straat: string; huisnummer: string; toevoeging?: string; postcode: string }[];
   onKlaar: () => void;
 }) {
   const invoer = useRef<HTMLInputElement>(null);
+  const aiInvoer = useRef<HTMLInputElement>(null);
   const [scan, setScan] = useState<ScanStap | null>(null);
   const [bestand, setBestand] = useState("");
   const [klaar, setKlaar] = useState<Klaar | null>(null);
   const [fout, setFout] = useState("");
   const [bezig, setBezig] = useState(false);
+  const [aiBezig, setAiBezig] = useState(false);
+  const [handmatig, setHandmatig] = useState(false);
   const [uitslag, setUitslag] = useState<{ toegevoegd: number; overgeslagen: number; afgekeurd: number } | null>(null);
   const [bewerk, setBewerk] = useState<number | null>(null);
   const [gevonden, setGevonden] = useState(0);
@@ -158,6 +164,64 @@ export function SaneerImport({ dossier, aantalNu, onKlaar }: {
     setScan(null);
   }
 
+  // ── AI-import: PDF of rommelig bestand uitlezen naar nette adres-kolommen ──
+  // Loopt via de OpenRouter-proxy op de server. De uitkomst gaat door hetzelfde voorbeeld-/controle-
+  // scherm als de gewone import, inclusief dubbel-detectie tegen de al bestaande adressen.
+  async function kiesAi(file: File) {
+    setFout(""); setUitslag(null); setKlaar(null);
+    setBestand(file.name);
+    setAiBezig(true);
+    setScan("herkennen");
+    const r = await leesAdressenViaAi(file, bestaandeAdressen ?? []);
+    setAiBezig(false);
+    setScan(null);
+    if (!r.ok) { setFout(r.fout); return; }
+
+    // Adressen die al in dit dossier staan: niet opnieuw toevoegen — markeer ze met een duidelijke reden
+    // zodat ze in de "komt er niet doorheen"-lijst staan i.p.v. stil te verdwijnen of dubbel te komen.
+    const rijen = r.rijen.map((x) =>
+      x.bestaatAl && x.fouten.length === 0
+        ? { ...x, fouten: ["Staat al in dit dossier"] }
+        : x);
+
+    const goed = rijen
+      .filter((x) => x.fouten.length === 0 && !x.dubbelInBestand)
+      .sort((a, b) => {
+        const pa = netPostcode(a.postcode), pb = netPostcode(b.postcode);
+        if (pa !== pb) return pa < pb ? -1 : 1;
+        const na = parseInt(a.huisnummer.replace(/\D/g, ""), 10) || 0;
+        const nb = parseInt(b.huisnummer.replace(/\D/g, ""), 10) || 0;
+        return na - nb || a.toevoeging.localeCompare(b.toevoeging);
+      });
+    setGevonden(goed.length);
+    setKlaar({
+      goed,
+      afgekeurd: rijen.filter((x) => x.fouten.length > 0 || x.dubbelInBestand),
+      bestandsnaam: file.name, mapping: {}, kopIndex: 0, leegAantal: 0, opgezocht: 0,
+    });
+  }
+
+  // ── Handmatig één adres toevoegen ──
+  function voegHandmatigToe(velden: { straat: string; huisnummer: string; toevoeging: string; postcode: string; plaats: string; bewoner: string; telefoon: string }) {
+    const straat = velden.straat.trim(), huisnummer = velden.huisnummer.trim();
+    const postcode = netPostcode(velden.postcode.trim());
+    const fouten: string[] = [];
+    if (!straat) fouten.push("Straat ontbreekt");
+    if (!huisnummer) fouten.push("Huisnummer ontbreekt");
+    if (!postcodeGeldig(postcode)) fouten.push(postcode ? "Postcode klopt niet" : "Postcode ontbreekt");
+    if (fouten.length > 0) { setFout(fouten.join(" · ")); return; }
+    const rij: ImportRij = {
+      bron: (klaar?.goed.length ?? 0) + 1, straat, huisnummer, toevoeging: velden.toevoeging.trim(),
+      postcode, plaats: velden.plaats.trim(), wijk: "", perceel: "", bewoner: velden.bewoner.trim(),
+      telefoon: velden.telefoon.trim(), opmerking: "", fouten: [], waarschuwingen: ["handmatig toegevoegd"], dubbelInBestand: false, bestaatAl: false,
+    };
+    setFout("");
+    setKlaar((k) => k
+      ? { ...k, goed: [...k.goed, rij] }
+      : { goed: [rij], afgekeurd: [], bestandsnaam: "Handmatig toegevoegd", mapping: {}, kopIndex: 0, leegAantal: 0, opgezocht: 0 });
+    setHandmatig(false);
+  }
+
   async function verstuur() {
     if (!klaar) return;
     setBezig(true); setFout("");
@@ -208,6 +272,8 @@ export function SaneerImport({ dossier, aantalNu, onKlaar }: {
     <div className="space-y-4">
       <input ref={invoer} type="file" accept=".xlsx,.xls,.csv" className="hidden"
         onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void kies(f); }} />
+      <input ref={aiInvoer} type="file" accept=".pdf,.csv,.txt,image/*" className="hidden"
+        onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void kiesAi(f); }} />
 
       {aantalNu > 0 && !klaar && !scan && (
         <div className="rounded-xl bg-brand-50 px-4 py-3 text-sm text-brand-900">
@@ -274,9 +340,33 @@ export function SaneerImport({ dossier, aantalNu, onKlaar }: {
             {aantalNu > 0 ? "Sleep nog een bestand hierheen of klik om te kiezen" : "Sleep het bestand hierheen of klik om te kiezen"}
           </div>
           <div className="mt-1 text-sm text-ink-500">
-            Excel (.xlsx, .xls) of CSV — de kolommen worden zelf herkend
+            Excel (.xlsx, .xls) of CSV — de kolommen worden zelf herkend. PDF of ander bestand? Gebruik de AI-knop hieronder.
           </div>
         </div>
+      )}
+
+      {/* Extra manieren om adressen toe te voegen: AI voor PDF/rommelige bestanden, en handmatig. */}
+      {!klaar && !scan && !handmatig && (
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <button type="button" onClick={() => { if (aiBeschikbaar()) aiInvoer.current?.click(); else setFout("De AI staat nog niet aan op de server. Vraag de beheerder de OpenRouter-sleutel in te stellen."); }}
+            disabled={aiBezig}
+            className={`${knop} flex-1 border-2 border-dashed border-brand-300 bg-brand-50/50 text-brand-800 hover:bg-brand-50 disabled:opacity-60`}>
+            {aiBezig ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+            {aiBezig ? "AI leest het bestand…" : "PDF of rommelig bestand? Laat de AI het uitlezen"}
+          </button>
+          <button type="button" onClick={() => { setFout(""); setHandmatig(true); }}
+            className={`${knop} border border-ink-200 bg-white text-ink-700 hover:bg-ink-50 sm:flex-none`}>
+            <Plus className="h-4 w-4" /> Adres handmatig
+          </button>
+        </div>
+      )}
+
+      {/* Handmatig één adres invoeren */}
+      {handmatig && (
+        <HandmatigAdres
+          onToevoegen={voegHandmatigToe}
+          onAnnuleer={() => { setHandmatig(false); setFout(""); }}
+        />
       )}
 
       {klaar && (
@@ -400,6 +490,43 @@ export function SaneerImport({ dossier, aantalNu, onKlaar }: {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+// ── Klein formulier om één adres met de hand in te voeren ──
+function HandmatigAdres({ onToevoegen, onAnnuleer }: {
+  onToevoegen: (velden: { straat: string; huisnummer: string; toevoeging: string; postcode: string; plaats: string; bewoner: string; telefoon: string }) => void;
+  onAnnuleer: () => void;
+}) {
+  const [v, setV] = useState({ straat: "", huisnummer: "", toevoeging: "", postcode: "", plaats: "", bewoner: "", telefoon: "" });
+  const set = (p: Partial<typeof v>) => setV((s) => ({ ...s, ...p }));
+  const veld = "w-full rounded-lg border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100";
+  const lab = "mb-1 block text-xs font-semibold text-ink-600";
+  const kanToe = v.straat.trim() && v.huisnummer.trim() && v.postcode.trim();
+  return (
+    <div className="rounded-2xl border-2 border-brand-200 bg-white p-4 shadow-sm">
+      <div className="mb-3 flex items-center justify-between">
+        <h4 className="text-sm font-bold text-ink-900">Adres handmatig toevoegen</h4>
+        <button type="button" onClick={onAnnuleer} className="text-ink-400 hover:text-ink-600"><X className="h-5 w-5" /></button>
+      </div>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-6">
+        <div className="col-span-2 sm:col-span-3"><label className={lab}>Straat *</label><input autoFocus value={v.straat} onChange={(e) => set({ straat: e.target.value })} placeholder="Dorpsstraat" className={veld} /></div>
+        <div><label className={lab}>Huisnr *</label><input value={v.huisnummer} onChange={(e) => set({ huisnummer: e.target.value })} placeholder="12" className={veld} /></div>
+        <div><label className={lab}>Toev.</label><input value={v.toevoeging} onChange={(e) => set({ toevoeging: e.target.value })} placeholder="A" className={veld} /></div>
+        <div><label className={lab}>Postcode *</label><input value={v.postcode} onChange={(e) => set({ postcode: e.target.value })} placeholder="1234 AB" className={veld} /></div>
+        <div className="col-span-2 sm:col-span-3"><label className={lab}>Plaats</label><input value={v.plaats} onChange={(e) => set({ plaats: e.target.value })} placeholder="Rotterdam" className={veld} /></div>
+        <div className="col-span-2 sm:col-span-2"><label className={lab}>Bewoner</label><input value={v.bewoner} onChange={(e) => set({ bewoner: e.target.value })} placeholder="Naam (optioneel)" className={veld} /></div>
+        <div className="col-span-2 sm:col-span-1"><label className={lab}>Telefoon</label><input value={v.telefoon} onChange={(e) => set({ telefoon: e.target.value })} placeholder="06 …" className={veld} /></div>
+      </div>
+      <div className="mt-3 flex items-center gap-2">
+        <button type="button" onClick={() => onToevoegen(v)} disabled={!kanToe}
+          className={`${knop} bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-40`}>
+          <Plus className="h-4 w-4" /> Toevoegen aan de lijst
+        </button>
+        <button type="button" onClick={onAnnuleer} className={`${knop} bg-ink-100 text-ink-700 hover:bg-ink-200`}>Annuleren</button>
+      </div>
+      <p className="mt-2 text-xs text-ink-500">* Straat, huisnummer en postcode zijn nodig. Het adres komt in het voorbeeld hieronder — controleer en klik daarna op “toevoegen”.</p>
     </div>
   );
 }
