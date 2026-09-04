@@ -49,7 +49,14 @@ function volgendFactuurNummer(facturen: { nummer: string }[], bedrijf: Bedrijf):
   }, 0);
   const start = bedrijf.factuurStartNummer;
   if (start && start > 0) return String(Math.max(start, hoogste + 1)).padStart(4, "0");
-  return `${new Date().getFullYear()}-${String(facturen.length + 1).padStart(4, "0")}`;
+  // Jaar-volgnummer: elk jaar opnieuw vanaf 0001. Tel alleen de facturen met dit jaar als prefix, en pak
+  // het hoogste volgnummer binnen dat jaar + 1 (robuust ook als er tussendoor eentje verwijderd is).
+  const jaar = new Date().getFullYear();
+  const hoogsteDitJaar = facturen.reduce((m, f) => {
+    const match = String(f.nummer).match(new RegExp(`^${jaar}-(\\d+)$`));
+    return match ? Math.max(m, parseInt(match[1], 10)) : m;
+  }, 0);
+  return `${jaar}-${String(hoogsteDitJaar + 1).padStart(4, "0")}`;
 }
 
 const veld =
@@ -576,9 +583,11 @@ function NummeringBeheer({ bedrijf, facturen, updateBedrijf, onKlaar }: { bedrij
   const [aan, setAan] = useState<boolean>(!!bedrijf.factuurStartNummer && bedrijf.factuurStartNummer > 0);
   const [start, setStart] = useState<string>(bedrijf.factuurStartNummer ? String(bedrijf.factuurStartNummer) : "");
   const hoogste = facturen.reduce((m, f) => { const x = String(f.nummer).match(/(\d+)\s*$/); return Math.max(m, x ? parseInt(x[1], 10) : 0); }, 0);
+  const jaar = new Date().getFullYear();
+  const hoogsteDitJaar = facturen.reduce((m, f) => { const x = String(f.nummer).match(new RegExp(`^${jaar}-(\\d+)$`)); return x ? Math.max(m, parseInt(x[1], 10)) : m; }, 0);
   const startNum = parseInt(start, 10);
   const geldig = !aan || (Number.isFinite(startNum) && startNum > 0);
-  const voorbeeld = aan && geldig ? String(Math.max(startNum, hoogste + 1)).padStart(4, "0") : `${new Date().getFullYear()}-${String(facturen.length + 1).padStart(4, "0")}`;
+  const voorbeeld = aan && geldig ? String(Math.max(startNum, hoogste + 1)).padStart(4, "0") : `${jaar}-${String(hoogsteDitJaar + 1).padStart(4, "0")}`;
   const opslaan = () => {
     if (!geldig) return;
     updateBedrijf({ factuurStartNummer: aan ? startNum : undefined });
