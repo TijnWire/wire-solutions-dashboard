@@ -147,36 +147,9 @@
   0%, 100% { transform: translateY(0); }
   50%      { transform: translateY(-9px); }
 }
-@keyframes lh-deeltje {
-  0%   { transform: translateY(0) scale(0.6); opacity: 0; }
-  20%  { opacity: 0.9; }
-  100% { transform: translateY(-120px) scale(1.1); opacity: 0; }
-}
-@keyframes lh-glans {
-  0%, 100% { opacity: 0.35; transform: scale(0.96); }
-  50%      { opacity: 0.6; transform: scale(1.04); }
-}
-@keyframes st-groei {
-  from { transform: scaleX(0); }
-  to   { transform: scaleX(1); }
-}
-@keyframes st-op {
-  from { transform: scaleY(0); }
-  to   { transform: scaleY(1); }
-}
-@keyframes st-in {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
 .lh-sway { animation: lh-sway 9s ease-in-out infinite; transform-style: preserve-3d; }
 .lh-zweef { animation: lh-zweef 5s ease-in-out infinite; transform-style: preserve-3d; }
-.lh-deeltje { animation: lh-deeltje 6s ease-in infinite; }
-.lh-glans { animation: lh-glans 5s ease-in-out infinite; }
-.st-groei { transform-origin: left center; animation: st-groei 0.9s cubic-bezier(0.22, 1, 0.36, 1) both; }
-.st-op { transform-origin: bottom center; animation: st-op 0.8s cubic-bezier(0.22, 1, 0.36, 1) both; }
-.st-in { animation: st-in 0.5s ease-out both; }
 @media (prefers-reduced-motion: reduce) {
-  .lh-sway, .lh-zweef, .lh-deeltje, .lh-glans, .st-groei, .st-op, .st-in { animation: none !important; }
+  .lh-sway, .lh-zweef { animation: none !important; }
   .lh-sway { transform: rotateY(-18deg) rotateX(4deg); }
-  .lh-deeltje { opacity: 0; }
 }
