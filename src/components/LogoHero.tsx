@@ -95,11 +95,8 @@ export function LogoHero() {
           </div>
         </div>
       </div>
-      {/* Woordmerk, in de kleuren van het logo */}
-      <div className="-mt-1 text-center leading-none">
-        <div className="text-lg font-extrabold uppercase tracking-[0.28em] text-[#6b4a2b] sm:text-xl">Wire Solutions</div>
-        <div className="mt-1.5 text-[11px] font-medium tracking-[0.3em] text-[#e08a33]">Detachering &amp; Payrolling</div>
-      </div>
+      {/* Woordmerk: exact het lettertype uit het logo (als vector uit het originele logo overgenomen) */}
+      <img src="/wire-woordmerk.svg" alt="Wire Solutions — Detachering &amp; Payrolling" className="-mt-2 w-full max-w-[19rem] select-none" draggable={false} />
     </section>
   );
 }
