@@ -4,7 +4,6 @@ import { useApp } from "../store/AppContext";
 import { useProjectFilter } from "../components/ProjectFilter";
 import { WerkTabs, type WerkTab } from "../components/WerkTabs";
 import { Card, Badge } from "../components/ui";
-import { PdVeld, pdWaarde } from "../components/PdVeld";
 import { WerknemerKiezer } from "../components/WerknemerKiezer";
 import { DatumKiezer } from "../components/DatumKiezer";
 import { TijdKiezer } from "../components/TijdKiezer";
@@ -23,7 +22,7 @@ const statusTone: Record<SchouwStatus, "slate" | "amber" | "green" | "red"> = {
 
 const leegForm = {
   straat: "", huisnummer: "", postcode: "", plaats: "",
-  contactNaam: "", telefoon: "", datum: "", tijd: "", toegewezenAan: "", notitie: "", pdCijfers: "",
+  contactNaam: "", telefoon: "", datum: "", tijd: "", toegewezenAan: "", notitie: "",
 };
 
 const datumLabel = (iso: string) => (iso ? new Date(iso + "T00:00:00").toLocaleDateString("nl-NL", { weekday: "short", day: "numeric", month: "short" }) : "");
@@ -77,7 +76,7 @@ export function Schouwafspraken() {
   const openNieuw = () => { setBewerkId(null); setForm({ ...leegForm }); };
   const openBewerk = (s: Schouwafspraak) => {
     setBewerkId(s.id);
-    setForm({ straat: s.straat, huisnummer: s.huisnummer, postcode: s.postcode, plaats: s.plaats, contactNaam: s.contactNaam, telefoon: s.telefoon, datum: s.datum, tijd: s.tijd, toegewezenAan: s.toegewezenAan ?? "", notitie: s.notitie, pdCijfers: (s.pdNummer ?? "").replace(/\D/g, "") });
+    setForm({ straat: s.straat, huisnummer: s.huisnummer, postcode: s.postcode, plaats: s.plaats, contactNaam: s.contactNaam, telefoon: s.telefoon, datum: s.datum, tijd: s.tijd, toegewezenAan: s.toegewezenAan ?? "", notitie: s.notitie });
   };
   const sluit = () => { setForm(null); setBewerkId(null); };
 
@@ -93,7 +92,6 @@ export function Schouwafspraken() {
       straat: form.straat.trim(), huisnummer: form.huisnummer.trim(), postcode: form.postcode.trim(), plaats: form.plaats.trim(),
       contactNaam: form.contactNaam.trim(), telefoon: form.telefoon.trim(),
       datum: form.datum, tijd: form.tijd, toegewezenAan: form.toegewezenAan || undefined, notitie: form.notitie.trim(), status,
-      pdNummer: pdWaarde(form.pdCijfers),
     };
     if (bewerkId) updateSchouw(bewerkId, data);
     else addSchouw(data);
@@ -138,11 +136,18 @@ export function Schouwafspraken() {
             <button type="button" onClick={sluit} className="text-ink-400 hover:text-ink-600"><X className="h-5 w-5" /></button>
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="sm:col-span-2"><PdVeld cijfers={form.pdCijfers} onChange={(c) => set({ pdCijfers: c })} /></div>
+            {/* Er wordt per stad ingepland, dus de stad staat bovenaan. Eerder ingevoerde plaatsen
+                komen als suggestie terug, zodat "Rotterdam" niet op drie manieren wordt getypt. */}
+            <div>
+              <label className={labelCls}>Stad / plaats</label>
+              <input value={form.plaats} onChange={(e) => set({ plaats: e.target.value })} list="schouw-plaatsen" placeholder="Rotterdam" className={veld} />
+              <datalist id="schouw-plaatsen">
+                {[...new Set(schouwafspraken.map((s) => s.plaats.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, "nl")).map((p) => <option key={p} value={p} />)}
+              </datalist>
+            </div>
+            <div><label className={labelCls}>Postcode</label><input value={form.postcode} onChange={(e) => set({ postcode: e.target.value })} placeholder="1234 AB" className={veld} /></div>
             <div><label className={labelCls}>Straat</label><input value={form.straat} onChange={(e) => set({ straat: e.target.value })} placeholder="Straatnaam" className={veld} /></div>
             <div><label className={labelCls}>Huisnummer</label><input value={form.huisnummer} onChange={(e) => set({ huisnummer: e.target.value })} placeholder="12" className={veld} /></div>
-            <div><label className={labelCls}>Postcode</label><input value={form.postcode} onChange={(e) => set({ postcode: e.target.value })} placeholder="1234 AB" className={veld} /></div>
-            <div><label className={labelCls}>Plaats</label><input value={form.plaats} onChange={(e) => set({ plaats: e.target.value })} placeholder="Rotterdam" className={veld} /></div>
             <div><label className={labelCls}>Contactpersoon</label><input value={form.contactNaam} onChange={(e) => set({ contactNaam: e.target.value })} placeholder="Naam bewoner" className={veld} /></div>
             <div><label className={labelCls}>Telefoon</label><input value={form.telefoon} onChange={(e) => set({ telefoon: e.target.value })} placeholder="06 …" className={veld} /></div>
             <div><label className={labelCls}>Datum</label><DatumKiezer value={form.datum} onChange={(iso) => set({ datum: iso })} placeholder="Nog in te plannen" /></div>
