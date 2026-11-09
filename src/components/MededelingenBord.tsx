@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { Megaphone, Pin, PinOff, Trash2, Check, AlertTriangle, Send, CalendarClock, Users2, User } from "lucide-react";
+import { Megaphone, Pin, PinOff, Trash2, Check, AlertTriangle, Send, CalendarClock, Users2 } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { Card } from "./ui";
 import { DatumKiezer } from "./DatumKiezer";
 import { Keuze } from "./Keuze";
 import { WERK_CATEGORIEEN, werkCategorieNaam, werkNaam } from "../lib/lopendWerk";
+import { isMededelingVoor, ontvangersLabel, ontvangersVan } from "../lib/mededelingen";
 
 const datumKort = (iso: string) => { const d = iso.slice(0, 10).split("-"); return d.length === 3 ? `${d[2]}-${d[1]}-${d[0]}` : iso; };
 function vandaagISO(): string { const t = new Date(); return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`; }
@@ -26,7 +27,7 @@ export function MededelingComposer({ className = "" }: { className?: string }) {
   const { users, currentUser, addMededeling } = useApp();
   const [tekst, setTekst] = useState("");
   const [projectId, setProjectId] = useState("");
-  const [gerichtAan, setGerichtAan] = useState("");
+  const [ontvangers, setOntvangers] = useState<string[]>([]); // leeg = hele team
   const [belangrijk, setBelangrijk] = useState(false);
   const [deadline, setDeadline] = useState("");
 
@@ -35,10 +36,12 @@ export function MededelingComposer({ className = "" }: { className?: string }) {
   if (!isLeiding) return null;
 
   const naamVan = (id?: string) => users.find((u) => u.id === id)?.naam ?? "Onbekend";
+  const kandidaten = users.filter((u) => u.id !== currentUser.id).sort((a, b) => a.naam.localeCompare(b.naam, "nl"));
+  const wissel = (id: string) => setOntvangers((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
   const plaats = () => {
     if (!tekst.trim()) return;
-    addMededeling({ auteurId: currentUser.id, tekst: tekst.trim(), projectId: projectId || undefined, gerichtAan: gerichtAan || undefined, belangrijk, deadline: deadline || undefined });
-    setTekst(""); setProjectId(""); setGerichtAan(""); setBelangrijk(false); setDeadline("");
+    addMededeling({ auteurId: currentUser.id, tekst: tekst.trim(), projectId: projectId || undefined, gerichtAanIds: ontvangers.length ? ontvangers : undefined, belangrijk, deadline: deadline || undefined });
+    setTekst(""); setProjectId(""); setOntvangers([]); setBelangrijk(false); setDeadline("");
   };
 
   return (
@@ -50,11 +53,35 @@ export function MededelingComposer({ className = "" }: { className?: string }) {
         placeholder="Wat moet er gebeuren? Wees zo duidelijk mogelijk — wat, waar en waar moet het team op letten…"
         className="w-full resize-none rounded-lg border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
       />
-      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
-        <label className="block">
-          <span className="mb-1 flex items-center gap-1 text-[11px] font-semibold text-ink-500">{gerichtAan ? <User className="h-3 w-3" /> : <Users2 className="h-3 w-3" />} Voor wie?</span>
-          <Keuze value={gerichtAan} onChange={setGerichtAan} altijdZoeken opties={[{ waarde: "", label: "Hele team" }, ...users.filter((u) => u.id !== currentUser.id).map((u) => ({ waarde: u.id, label: u.naam }))]} />
-        </label>
+      {/* Voor wie? Eén, meerdere of het hele team: vink de personen aan. */}
+      <fieldset className="rounded-lg border border-ink-200 p-3">
+        <legend className="flex items-center gap-1 px-1 text-[11px] font-semibold text-ink-500"><Users2 className="h-3 w-3" /> Voor wie?</legend>
+        <div className="flex flex-wrap items-center gap-2">
+          <label className={`inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-semibold transition-colors ${ontvangers.length === 0 ? "border-brand-500 bg-brand-50 text-brand-700" : "border-ink-200 text-ink-600 hover:bg-ink-50"}`}>
+            <input type="checkbox" checked={ontvangers.length === 0} onChange={() => setOntvangers([])} className="h-4 w-4 accent-brand-600" />
+            Hele team
+          </label>
+          {kandidaten.length > 1 && (
+            <>
+              <button type="button" onClick={() => setOntvangers(kandidaten.map((u) => u.id))} className="text-xs font-semibold text-brand-600 hover:underline">Alle personen aanvinken</button>
+              {ontvangers.length > 0 && <button type="button" onClick={() => setOntvangers([])} className="text-xs font-semibold text-ink-500 hover:underline">Wissen</button>}
+            </>
+          )}
+        </div>
+        <div className="mt-2 grid max-h-44 grid-cols-1 gap-1.5 overflow-y-auto sm:grid-cols-2">
+          {kandidaten.map((u) => {
+            const aan = ontvangers.includes(u.id);
+            return (
+              <label key={u.id} className={`flex cursor-pointer items-center gap-2 rounded-lg border px-2.5 py-1.5 text-sm transition-colors ${aan ? "border-brand-400 bg-brand-50 text-ink-900" : "border-ink-100 text-ink-700 hover:bg-ink-50"}`}>
+                <input type="checkbox" checked={aan} onChange={() => wissel(u.id)} className="h-4 w-4 shrink-0 accent-brand-600" />
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-ink-800 text-[10px] font-semibold text-white">{u.initialen}</span>
+                <span className="min-w-0 truncate">{u.naam}</span>
+              </label>
+            );
+          })}
+        </div>
+      </fieldset>
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
         <label className="block">
           <span className="mb-1 block text-[11px] font-semibold text-ink-500">Project (optioneel)</span>
           <Keuze
@@ -76,7 +103,7 @@ export function MededelingComposer({ className = "" }: { className?: string }) {
         <button type="button" onClick={() => setBelangrijk((b) => !b)} className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-sm font-semibold transition-colors ${belangrijk ? "border-red-300 bg-red-50 text-red-600" : "border-ink-200 text-ink-600 hover:bg-ink-50"}`}>
           <AlertTriangle className="h-3.5 w-3.5" /> Belangrijk
         </button>
-        <span className="text-xs text-ink-400">{gerichtAan ? `Gaat naar ${naamVan(gerichtAan)}` : "Gaat naar het hele team"}</span>
+        <span className="text-xs text-ink-400">{ontvangers.length ? `Gaat naar ${ontvangersLabel(ontvangers, naamVan)}` : "Gaat naar het hele team"}</span>
         <button type="button" onClick={plaats} disabled={!tekst.trim()} className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-40">
           <Send className="h-3.5 w-3.5" /> Plaatsen
         </button>
@@ -98,7 +125,7 @@ export function MededelingenFeed({ scrollClass = "max-h-96" }: { scrollClass?: s
 
   // Werknemers zien team-brede + aan hen gerichte mededelingen; leiding ziet alles. Vastgezet bovenaan, daarna nieuwste eerst.
   const zichtbaar = mededelingen
-    .filter((m) => isLeiding || !m.gerichtAan || m.gerichtAan === currentUser.id)
+    .filter((m) => isMededelingVoor(m, currentUser.id, isLeiding))
     .sort((a, b) => Number(!!b.vastgepind) - Number(!!a.vastgepind) || (a.aangemaakt < b.aangemaakt ? 1 : -1));
 
   return (
@@ -121,7 +148,7 @@ export function MededelingenFeed({ scrollClass = "max-h-96" }: { scrollClass?: s
                     {m.vastgepind && <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 font-semibold text-amber-700"><Pin className="h-3 w-3" /> Vastgezet</span>}
                     {m.belangrijk && <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 font-semibold text-red-700"><AlertTriangle className="h-3 w-3" /> Let op</span>}
                     {proj && <span className="rounded-full bg-brand-50 px-2 py-0.5 font-semibold text-brand-700">{proj}</span>}
-                    {m.gerichtAan && <span className="rounded-full bg-ink-100 px-2 py-0.5 font-medium text-ink-600">Voor {naamVan(m.gerichtAan)}</span>}
+                    {ontvangersVan(m).length > 0 && <span className="rounded-full bg-ink-100 px-2 py-0.5 font-medium text-ink-600" title={ontvangersVan(m).map(naamVan).join(", ")}>Voor {ontvangersLabel(ontvangersVan(m), naamVan)}</span>}
                     {m.deadline && <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-semibold ${teLaat ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}><CalendarClock className="h-3 w-3" /> Deadline {datumKort(m.deadline)}{teLaat ? " · te laat" : ""}</span>}
                   </div>
                   <p className="mt-1.5 whitespace-pre-wrap text-sm text-ink-800">{m.tekst}</p>
@@ -154,7 +181,7 @@ export function MededelingenBord({ compose = false }: { compose?: boolean }) {
   const { mededelingen, currentUser } = useApp();
   if (!currentUser) return null;
   const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr";
-  const aantal = mededelingen.filter((m) => isLeiding || !m.gerichtAan || m.gerichtAan === currentUser.id).length;
+  const aantal = mededelingen.filter((m) => isMededelingVoor(m, currentUser.id, isLeiding)).length;
 
   return (
     <Card className="overflow-hidden">

@@ -28,6 +28,11 @@ export type User = {
   // of een net aangepaste rol worden teruggedraaid door een apparaat dat nog een oudere lijst had.
   // Zie mergeCollection in lib/merge.ts.
   bijgewerktOp?: string; // ISO
+  // Geboortedatum (yyyy-mm-dd) — alleen voor de verjaardag in de agenda van collega's. Optioneel.
+  geboortedatum?: string;
+  // Geheime sleutel voor de persoonlijke agenda-link (telefoonagenda). Wie de link heeft, kan de agenda
+  // lezen; "nieuwe link maken" vervangt de sleutel en maakt de oude link meteen ongeldig.
+  agendaToken?: string;
 };
 
 // Onderdelen die een beheerder van de eigenaar mag beheren
@@ -115,7 +120,8 @@ export type Mededeling = {
   auteurId: string; // beheerder/eigenaar die de mededeling plaatste
   tekst: string;
   projectId?: string; // optioneel gekoppeld project
-  gerichtAan?: string; // user id; leeg = hele team
+  gerichtAan?: string; // user id; leeg = hele team  (oud: één persoon — nieuwe mededelingen gebruiken gerichtAanIds)
+  gerichtAanIds?: string[]; // meerdere personen aangevinkt; leeg/afwezig (en geen gerichtAan) = hele team
   belangrijk: boolean; // "let op" — extra opvallend
   deadline?: string; // ISO yyyy-mm-dd — optionele deadline voor de taak
   vastgepind?: boolean; // bovenaan vastgezet

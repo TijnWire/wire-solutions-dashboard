@@ -39,6 +39,8 @@ import {
 } from "./spiegel";
 import { schrijfGesplitst, herstelAllemaal, isDeelSleutel, basisSleutel } from "./delen";
 import { fotoRoutes, verhuisFotos } from "./fotos";
+import { bouwPersoonlijkeFeed } from "../src/lib/agendaFeed";
+import type { AgendaBronnen } from "../src/lib/agendaFeed";
 import { saneerRoutes } from "./saneerflow";
 
 export interface Env extends SpiegelEnv {
@@ -545,6 +547,45 @@ async function seedRollenUitUsers(env: Env, users: unknown, nuISO: string, ctx?:
   if (ctx && spiegelRijen.length) spiegelUpsert(env, ctx, "app_roles", spiegelRijen, "email");
 }
 
+// ── AGENDA-ABONNEMENT ──
+// Een medewerker kan in de app een persoonlijke agenda-link maken (zie Agenda → Telefoonagenda). Die link
+// werkt in Apple Agenda én Google Agenda als abonnement en wordt door de telefoon zelf ververst. De sleutel
+// in de link (agendaToken op de gebruiker) is het enige "wachtwoord": er is bewust geen login, want een
+// agenda-app kan geen Authorization-header meesturen. Een nieuwe link maken in de app vervangt de sleutel.
+// De inhoud komt uit exact dezelfde code als de Agenda-pagina (src/lib/agendaFeed.ts).
+async function agendaFeedResponse(token: string, env: Env): Promise<Response> {
+  const nietGevonden = () => new Response("Agenda niet gevonden.", { status: 404, headers: { "Content-Type": "text/plain; charset=utf-8" } });
+  const { results } = await env.DB.prepare(
+    "select key, data from wire_state where key in ('users', 'verlof', 'agendaItems', 'mededelingen') or key like 'users deel %' or key like 'verlof deel %' or key like 'agendaItems deel %' or key like 'mededelingen deel %'"
+  ).all<{ key: string; data: string }>();
+  const ruw: Record<string, unknown> = {};
+  for (const r of results ?? []) { try { ruw[r.key] = JSON.parse(r.data); } catch { /* rij overslaan */ } }
+  const gegevens = await herstelAllemaal(env, ruw);
+  const lijst = (k: string) => (Array.isArray(gegevens[k]) ? (gegevens[k] as unknown[]) : []);
+  const users = lijst("users") as AgendaBronnen["users"];
+  const gebruiker = users.find((u) => typeof u.agendaToken === "string" && u.agendaToken.length === token.length && tijdveiligGelijk(u.agendaToken, token));
+  if (!gebruiker) return nietGevonden();
+
+  const besl = await env.DB.prepare("select verlof_id, status from verlof_beslissingen").all<{ verlof_id: string; status: string }>();
+  const verlofStatus: Record<string, string> = {};
+  for (const b of besl.results ?? []) verlofStatus[b.verlof_id] = b.status;
+
+  const { ics } = bouwPersoonlijkeFeed({
+    users,
+    verlof: lijst("verlof") as AgendaBronnen["verlof"],
+    agendaItems: lijst("agendaItems") as AgendaBronnen["agendaItems"],
+    mededelingen: lijst("mededelingen") as AgendaBronnen["mededelingen"],
+    verlofStatus,
+  }, gebruiker);
+  return new Response(ics, {
+    headers: {
+      "Content-Type": "text/calendar; charset=utf-8",
+      "Content-Disposition": 'inline; filename="wire-solutions-agenda.ics"',
+      "Cache-Control": "private, max-age=300",
+    },
+  });
+}
+
 export default {
   // Dagelijkse opruiming: projecten die langer dan de bewaartermijn geleden zijn afgerond, verliezen
   // hun persoonsgegevens. Draait via een cron-trigger (zie wrangler.toml), zodat het ook gebeurt als
@@ -623,6 +664,17 @@ export default {
     const nuISO = new Date().toISOString();
     const url = new URL(req.url);
     const path = url.pathname.replace(/\/+$/, "") || "/";
+
+    // ── AGENDA-ABONNEMENT (telefoon) ── publiek bereikbaar, beveiligd door de geheime sleutel in de link.
+    if (path === "/agenda/status" && req.method === "GET") return json({ ok: true });
+    if (req.method === "GET" && /^\/agenda\/[0-9a-f]{32}\.ics$/.test(path)) {
+      try {
+        return await agendaFeedResponse(path.slice("/agenda/".length, -".ics".length), env);
+      } catch (e) {
+        console.log("[agenda] feed mislukt:", String(e).slice(0, 200));
+        return new Response("Agenda tijdelijk niet beschikbaar.", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } });
+      }
+    }
 
     // ── FOTO'S EN ARCHIEFDOSSIERS ── vóór alles, want dit is geen JSON.
     // Zodra de body hieronder als JSON wordt gelezen, is de stroom op en kan hij niet meer worden

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ListTodo, Loader2, CheckCircle2, Plus, FolderKanban, Mailbox, CalendarCheck, ChevronRight, ChevronDown, FileScan, Shovel, ClipboardCheck, CalendarDays, CalendarClock, Mail, AlertTriangle, Cable, Phone, Check } from "lucide-react";
+import { Plus, FolderKanban, Mailbox, CalendarCheck, ChevronRight, ChevronDown, FileScan, Shovel, ClipboardCheck, CalendarDays, CalendarClock, Mail, AlertTriangle, Cable, Phone, Check } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { useNav } from "../store/NavContext";
 import { TAUW_TYPE_LABEL } from "../lib/types";
@@ -33,10 +33,13 @@ import { TaakKaart } from "../components/TaakKaart";
 import { ProjectBord } from "../components/ProjectBord";
 import { BestandScanModal } from "../components/BestandScanModal";
 import { MededelingenBord } from "../components/MededelingenBord";
+import { LogoHero } from "../components/LogoHero";
+import { MijnStatistieken } from "../components/MijnStatistieken";
+import { berekenStatistieken } from "../lib/statistieken";
 import type { LucideIcon } from "lucide-react";
 
 export function MijnWerk({ initieelProject }: { initieelProject?: string }) {
-  const { currentUser, projects, taken, rondes, afspraken, tauwOpdrachten, addTaak, voorschouwen, voorschouwMappen, projectPosts, saneringen, buurtaanpak, updateBuurtaanpak, users, bedrijf, instellingen, verlof } = useApp();
+  const { currentUser, projects, taken, rondes, afspraken, tauwOpdrachten, addTaak, voorschouwen, voorschouwMappen, schouwafspraken, projectPosts, saneringen, buurtaanpak, updateBuurtaanpak, users, bedrijf, instellingen, verlof } = useApp();
   const { navigeer } = useNav();
   const [nieuwBijProject, setNieuwBijProject] = useState<string | null>(null);
   const [nieuweTitel, setNieuweTitel] = useState("");
@@ -78,10 +81,6 @@ export function MijnWerk({ initieelProject }: { initieelProject?: string }) {
       p.toegewezenAan.includes(currentUser.id) ||
       mijnTaken.some((t) => t.projectId === p.id)
   );
-
-  const teDoen = mijnTaken.filter((t) => t.status === "Te doen").length;
-  const bezig = mijnTaken.filter((t) => t.status === "Mee bezig").length;
-  const klaar = mijnTaken.filter((t) => t.status === "Klaar").length;
 
   const voegToe = (projectId: string) => {
     if (!nieuweTitel.trim()) return;
@@ -215,18 +214,11 @@ export function MijnWerk({ initieelProject }: { initieelProject?: string }) {
     .map((m) => ({ ...m, items: werkbonnen.filter((w) => w.area === m.area) }))
     .filter((m) => m.items.length > 0);
 
-  // Tellers "Te doen / Mee bezig / Klaar": naast losse taken tellen we ook het toegewezen werk
-  // (werkbonnen), gemapt op voortgang — 0% = te doen, 1–99% = mee bezig, 100% = klaar. Zo laten de
-  // tellers bovenaan zien wat de medewerker daadwerkelijk binnenkrijgt, i.p.v. altijd 0.
-  const werkTeDoen = werkbonnen.filter((w) => w.pct <= 0).length;
-  const werkBezig = werkbonnen.filter((w) => w.pct > 0 && w.pct < 100).length;
-  const werkKlaar = werkbonnen.filter((w) => w.pct >= 100).length;
-
-  const stats = [
-    { label: "Te doen", value: teDoen + werkTeDoen, icon: ListTodo, tone: "bg-red-50 text-red-600" },
-    { label: "Mee bezig", value: bezig + werkBezig, icon: Loader2, tone: "bg-orange-50 text-orange-600" },
-    { label: "Klaar", value: klaar + werkKlaar, icon: CheckCircle2, tone: "bg-green-50 text-green-600" },
-  ];
+  // Korte samenvatting onder de begroeting in de header (dezelfde telling als de statistieken).
+  const hero = berekenStatistieken({ taken, projects, rondes, afspraken, schouwafspraken, tauwOpdrachten, buurtaanpak, voorschouwen, voorschouwMappen }, currentUser.id, vandaagISO());
+  const heroTekst = hero.totaalWerk === 0
+    ? "Je hebt nog geen werk toegewezen. Zodra je manager iets voor je klaarzet, zie je het hier."
+    : `${hero.werk.open.length} nog open · ${hero.werk.bezig.length} mee bezig · ${hero.werk.klaar.length} klaar. Werk je voortgang bij zodra je verder bent.`;
 
   // Overige meldingen = de mailbox minus de items die nu al als werkmapje getoond worden.
   const isWerkMelding = (id: string) =>
@@ -239,33 +231,8 @@ export function MijnWerk({ initieelProject }: { initieelProject?: string }) {
 
   return (
     <div className="space-y-6">
-      {/* Begroeting */}
-      <div>
-        <h2 className="text-xl font-bold text-ink-900">
-          Hoi {currentUser.naam.split(" ")[0]} 👋
-        </h2>
-        <p className="text-sm text-ink-500">
-          Dit staat er voor jou klaar vandaag. Werk je taken bij zodra je verder bent.
-        </p>
-      </div>
-
-      {/* Mini-stats */}
-      <div className="grid grid-cols-3 gap-4">
-        {stats.map((s) => {
-          const Icon = s.icon;
-          return (
-            <Card key={s.label} className="flex flex-col items-start gap-1.5 p-3 sm:flex-row sm:items-center sm:gap-3 sm:p-4">
-              <div className={`rounded-xl p-2.5 ${s.tone}`}>
-                <Icon className="h-5 w-5" />
-              </div>
-              <div>
-                <div className="text-xl font-bold text-ink-900">{s.value}</div>
-                <div className="text-xs text-ink-500">{s.label}</div>
-              </div>
-            </Card>
-          );
-        })}
-      </div>
+      {/* Bewegend 3D-logo + begroeting */}
+      <LogoHero voornaam={currentUser.naam.split(" ")[0]} samenvatting={heroTekst} />
 
       {/* SMS-herinneringen — binnen 24u versturen (1 druk: SMS klaar → verstuurd → sluit) */}
       {smsTeVersturen.length > 0 && (
@@ -310,6 +277,9 @@ export function MijnWerk({ initieelProject }: { initieelProject?: string }) {
           </Card>
         </div>
       )}
+
+      {/* Statistieken: open / bezig / klaar, afspraken, brieven en mijlpalen */}
+      <MijnStatistieken />
 
       {/* Mededelingen van de beheerder */}
       <MededelingenBord />

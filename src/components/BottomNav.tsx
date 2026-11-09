@@ -14,7 +14,7 @@ const KORT: Record<string, string> = {
 
 // App-achtige onderbalk op mobiel: de belangrijkste bestemmingen + "Meer" (opent het volledige menu).
 export const BottomNav = memo(function BottomNav({ active, onSelect, onMeer, currentUser, badges }: { active: string; onSelect: (key: string) => void; onMeer: () => void; currentUser: User | null; badges?: Record<string, number> }) {
-  const zichtbaar = useMemo(() => (currentUser ? NAV.filter((n) => magZien(currentUser, n)) : []), [currentUser]);
+  const zichtbaar = useMemo(() => (currentUser ? NAV.filter((n) => !n.verborgen && magZien(currentUser, n)) : []), [currentUser]);
   const primair = useMemo(() => PRIMAIR.map((k) => zichtbaar.find((n) => n.key === k)).filter(Boolean).slice(0, 4) as typeof NAV, [zichtbaar]);
   if (!currentUser) return null;
 

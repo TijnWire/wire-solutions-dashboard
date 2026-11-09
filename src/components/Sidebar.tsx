@@ -18,7 +18,7 @@ export const Sidebar = memo(function Sidebar({
   onLogout: () => void;
   badges?: Record<string, number>;
 }) {
-  const items = useMemo(() => (currentUser ? NAV.filter((n) => magZien(currentUser, n)) : []), [currentUser]);
+  const items = useMemo(() => (currentUser ? NAV.filter((n) => !n.verborgen && magZien(currentUser, n)) : []), [currentUser]);
   const groups = useMemo(() => GROUPS.filter((g) => items.some((i) => i.group === g)), [items]);
   const { bedrijf } = useApp();
   if (!currentUser) return null;
