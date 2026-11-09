@@ -148,14 +148,15 @@ export const Topbar = memo(function Topbar({
 
   return (
     <>
-    <header className="sticky top-0 z-30 flex items-center gap-4 border-b border-ink-200 bg-white/80 px-4 pb-3.5 pt-[calc(0.875rem+env(safe-area-inset-top))] backdrop-blur md:px-6 md:py-3.5">
-      <button type="button" onClick={onMenu} className="-ml-1 rounded-lg p-2 text-ink-600 hover:bg-ink-100 md:hidden" title="Menu">
-        <Menu className="h-5 w-5" />
+    <header className="sticky top-0 z-30 flex items-center gap-2 border-b border-ink-200 bg-white/80 px-4 pb-3.5 pt-[calc(0.875rem+env(safe-area-inset-top))] backdrop-blur md:gap-4 md:px-6 md:py-3.5">
+      <button type="button" onClick={onMenu} className="-ml-2 rounded-lg p-2 text-ink-700 hover:bg-ink-100 md:hidden" title="Menu" aria-label="Menu openen">
+        <Menu className="h-6 w-6" />
       </button>
       <div className="min-w-0">
-        <h1 className="truncate text-lg font-bold text-ink-900">{title}</h1>
-        <p className="text-xs text-ink-500">
-          {new Date().toLocaleDateString("nl-NL", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+        <h1 className="truncate text-xl font-bold text-ink-900 md:text-lg">{title}</h1>
+        <p className="truncate text-xs text-ink-500">
+          <span className="sm:hidden">{new Date().toLocaleDateString("nl-NL", { weekday: "long", day: "numeric", month: "long" })}</span>
+          <span className="hidden sm:inline">{new Date().toLocaleDateString("nl-NL", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</span>
         </p>
       </div>
 
@@ -200,10 +201,10 @@ export const Topbar = memo(function Topbar({
           onClick={onSync}
           title={synced ? "Alles wordt gesynchroniseerd — tik voor details" : "Niet gesynchroniseerd — tik om te controleren"}
           aria-label={synced ? "Gesynchroniseerd" : "Niet gesynchroniseerd"}
-          className={`inline-flex h-9 items-center justify-center rounded-full border px-2 transition-colors ${synced ? "border-green-200 bg-green-50 text-green-700 hover:bg-green-100" : "border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100"}`}
+          className={`inline-flex h-11 min-w-[2.75rem] items-center justify-center rounded-full border px-2 transition-colors ${synced ? "border-green-200 bg-green-50 text-green-700 hover:bg-green-100" : "border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100"}`}
         >
-          <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${synced ? "bg-green-500/15 text-green-600" : "bg-amber-500/20 text-amber-600"}`}>
-            {synced ? <Cloud className="h-3.5 w-3.5" /> : <CloudOff className="h-3.5 w-3.5 animate-pulse" />}
+          <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${synced ? "bg-green-500/15 text-green-700" : "bg-amber-500/20 text-amber-700"}`}>
+            {synced ? <Cloud className="h-4 w-4" /> : <CloudOff className="h-4 w-4 animate-pulse" />}
           </span>
         </button>
 
@@ -213,8 +214,9 @@ export const Topbar = memo(function Topbar({
           onClick={() => setMobielZoek(true)}
           className="rounded-lg border border-ink-200 bg-white p-2 text-ink-500 hover:bg-ink-50 hover:text-ink-700 md:hidden"
           title="Zoeken"
+          aria-label="Zoeken"
         >
-          <Search className="h-[18px] w-[18px]" />
+          <Search className="h-5 w-5" />
         </button>
 
         {/* Meldingen */}
@@ -223,11 +225,12 @@ export const Topbar = memo(function Topbar({
             type="button"
             onClick={() => setOpen((o) => !o)}
             title={aantal > 0 ? `${aantal} melding${aantal === 1 ? "" : "en"}` : "Geen meldingen"}
-            className="relative z-50 rounded-lg border border-ink-200 bg-white p-2 text-ink-500 hover:bg-ink-50 hover:text-ink-700"
+            aria-label={aantal > 0 ? `${aantal} melding${aantal === 1 ? "" : "en"}` : "Geen meldingen"}
+            className="relative z-50 rounded-lg border border-ink-200 bg-white p-2 text-ink-600 hover:bg-ink-50 hover:text-ink-800"
           >
-            <Bell className="h-[18px] w-[18px]" />
+            <Bell className="h-5 w-5" />
             {aantal > 0 && (
-              <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white ring-2 ring-white">
+              <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-xs font-bold text-white ring-2 ring-white">
                 {aantal}
               </span>
             )}
@@ -302,7 +305,7 @@ export const Topbar = memo(function Topbar({
                 </button>
               )}
             </div>
-            <button type="button" onClick={sluitMobielZoek} className="shrink-0 rounded-lg px-3 py-2 text-sm font-semibold text-ink-600 hover:bg-ink-100">
+            <button type="button" onClick={sluitMobielZoek} className="shrink-0 rounded-lg px-4 py-2.5 text-base font-semibold text-ink-700 hover:bg-ink-100">
               Sluit
             </button>
           </div>

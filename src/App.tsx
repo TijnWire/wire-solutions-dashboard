@@ -208,10 +208,11 @@ export default function App() {
             <button
               type="button"
               onClick={() => setMenuOpen(false)}
-              className="absolute right-3 top-4 z-10 rounded-lg p-2 text-ink-400 hover:bg-ink-100"
+              className="absolute right-3 top-4 z-10 rounded-lg p-2 text-ink-500 hover:bg-ink-100"
               title="Sluiten"
+              aria-label="Menu sluiten"
             >
-              <X className="h-5 w-5" />
+              <X className="h-6 w-6" />
             </button>
             <Sidebar active={active} onSelect={ga} currentUser={currentUser} onLogout={onLogout} badges={sidebarBadges} />
           </div>

@@ -5,8 +5,10 @@ import { Keuze } from "./Keuze";
 import { TAAK_STATUSSEN, type Taak, type TaakStatus } from "../lib/types";
 
 const statusStyle: Record<TaakStatus, { actief: string; rand: string }> = {
-  "Te doen": { actief: "bg-red-500 text-white", rand: "text-red-600" },
-  "Mee bezig": { actief: "bg-orange-500 text-white", rand: "text-orange-600" },
+  // Donkerder tinten dan voorheen (rood-600 / oranje-brand-600 / groen-600): witte tekst op de lichtere
+  // varianten haalde het contrast niet, wat juist bij deze belangrijkste knoppen telt.
+  "Te doen": { actief: "bg-red-600 text-white", rand: "text-red-600" },
+  "Mee bezig": { actief: "bg-brand-600 text-white", rand: "text-brand-700" },
   Klaar: { actief: "bg-green-600 text-white", rand: "text-green-600" },
 };
 
@@ -23,12 +25,14 @@ export function TaakKaart({
   const toegewezen = users.find((u) => u.id === taak.toegewezenAan);
 
   return (
-    <div className="rounded-xl border border-ink-200 bg-white p-3.5">
-      <div className="flex items-start gap-3">
+    <div className="rounded-xl border border-ink-200 bg-white p-4 sm:p-3.5">
+      {/* Op de telefoon staat de status-schakelaar op een eigen regel, over de volle breedte, met grote
+          knoppen — naast de titel was er te weinig ruimte en waren de drie knoppen piepklein. */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
         <div className="min-w-0 flex-1">
           <div
-            className={`text-sm font-medium ${
-              taak.status === "Klaar" ? "text-ink-400 line-through" : "text-ink-900"
+            className={`text-base font-semibold sm:text-sm sm:font-medium ${
+              taak.status === "Klaar" ? "text-ink-500 line-through" : "text-ink-900"
             }`}
           >
             {taak.titel}
@@ -52,8 +56,8 @@ export function TaakKaart({
             ) : null)}
             <button
               onClick={() => setOpen((o) => !o)}
-              className={`inline-flex items-center gap-1 hover:text-ink-700 ${
-                taak.notitie ? "text-brand-600" : ""
+              className={`-my-2 inline-flex items-center gap-1 py-2.5 hover:text-ink-700 ${
+                taak.notitie ? "font-semibold text-brand-700" : ""
               }`}
             >
               <MessageSquare className="h-3.5 w-3.5" />
@@ -64,15 +68,16 @@ export function TaakKaart({
         </div>
 
         {/* Status-schakelaar */}
-        <div className="flex shrink-0 overflow-hidden rounded-lg border border-ink-200">
+        <div className="flex w-full shrink-0 overflow-hidden rounded-lg border border-ink-200 sm:w-auto">
           {TAAK_STATUSSEN.map((s) => {
             const actief = taak.status === s;
             return (
               <button
                 key={s}
                 onClick={() => updateTaak(taak.id, { status: s })}
-                className={`px-2.5 py-1 text-xs font-medium transition-colors ${
-                  actief ? statusStyle[s].actief : "bg-white text-ink-400 hover:bg-ink-50"
+                aria-pressed={actief}
+                className={`flex-1 px-2.5 py-3 text-sm font-semibold transition-colors sm:flex-none sm:py-1 sm:text-xs sm:font-medium ${
+                  actief ? statusStyle[s].actief : "bg-white text-ink-600 hover:bg-ink-50"
                 }`}
               >
                 {s}
@@ -88,8 +93,8 @@ export function TaakKaart({
             value={taak.notitie}
             onChange={(e) => updateTaak(taak.id, { notitie: e.target.value })}
             placeholder="Voeg een notitie of update toe…"
-            rows={2}
-            className="w-full resize-none rounded-lg border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+            rows={3}
+            className="w-full resize-none rounded-lg border border-ink-200 px-3 py-2.5 text-base sm:text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
           />
           {isAdmin && (
             <div className="flex items-center justify-between gap-2">

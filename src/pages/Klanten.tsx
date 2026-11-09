@@ -57,7 +57,7 @@ function KlantForm({ onKlaar }: { onKlaar: () => void }) {
             {fotos.map((f, i) => (
               <div key={i} className="group relative aspect-square overflow-hidden rounded-lg border border-ink-200">
                 <img src={f} alt="" className="h-full w-full object-cover" />
-                <button type="button" onClick={() => setFotos((p) => p.filter((_, idx) => idx !== i))} className="absolute right-1 top-1 rounded-full bg-black/60 p-1 text-white opacity-0 group-hover:opacity-100"><X className="h-3.5 w-3.5" /></button>
+                <button type="button" onClick={() => setFotos((p) => p.filter((_, idx) => idx !== i))} className="absolute right-1 top-1 rounded-full bg-black/70 p-2.5 text-white opacity-0 group-hover:opacity-100"><X className="h-3.5 w-3.5" /></button>
               </div>
             ))}
             <FotoKnoppen onFiles={upload} bezig={bezig} />
@@ -200,7 +200,7 @@ export function Klanten({ initieelKey }: { initieelKey?: string }) {
                 <img src={x.f} alt="" className="h-full w-full object-cover" />
                 <span className="absolute bottom-1 left-1 rounded bg-black/60 px-1 text-[8px] text-white">{x.bron === "klant" ? "database" : "voorschouw"}</span>
                 {x.bron === "klant" && h.klant && (
-                  <button type="button" onClick={() => updateKlant(h.klant!.id, { fotos: h.klant!.fotos.filter((ff) => ff !== x.f) })} className="absolute right-1 top-1 rounded-full bg-black/60 p-1 text-white opacity-0 group-hover:opacity-100"><X className="h-3.5 w-3.5" /></button>
+                  <button type="button" onClick={() => updateKlant(h.klant!.id, { fotos: h.klant!.fotos.filter((ff) => ff !== x.f) })} className="absolute right-1 top-1 rounded-full bg-black/70 p-2.5 text-white opacity-0 group-hover:opacity-100"><X className="h-3.5 w-3.5" /></button>
                 )}
               </div>
             ))}

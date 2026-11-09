@@ -1,5 +1,6 @@
 import { memo, useMemo } from "react";
 import { LogOut } from "lucide-react";
+import { TekstGrootteKeuze } from "./TekstGrootteKeuze";
 import { NAV, GROUPS, magZien } from "../lib/nav";
 import { ROL_LABEL, type User } from "../lib/types";
 import { useApp } from "../store/AppContext";
@@ -46,13 +47,13 @@ export const Sidebar = memo(function Sidebar({
                     <button
                       key={item.key}
                       onClick={() => onSelect(item.key)}
-                      className={`group flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                      className={`group flex w-full items-center gap-3 rounded-lg px-3 py-3 text-base font-medium transition-colors md:py-2 md:text-sm ${
                         isActive
                           ? "bg-brand-600 text-white shadow-sm"
                           : "text-ink-600 hover:bg-ink-100 hover:text-ink-900"
                       }`}
                     >
-                      <Icon className="h-[18px] w-[18px] shrink-0" />
+                      <Icon className="h-6 w-6 shrink-0 md:h-[18px] md:w-[18px]" />
                       <span className="flex-1 text-left">{item.label}</span>
                       {!!badges?.[item.key] && (
                         <span
@@ -83,23 +84,29 @@ export const Sidebar = memo(function Sidebar({
         ))}
       </nav>
 
-      <div className="border-t border-ink-200 px-4 py-3">
+      <div className="space-y-3 border-t border-ink-200 px-4 py-3">
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-600 text-sm font-semibold text-white">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-600 text-sm font-semibold text-white">
             {currentUser.initialen}
           </div>
           <div className="min-w-0 flex-1 leading-tight">
             <div className="truncate text-sm font-medium text-ink-900">{currentUser.naam}</div>
-            <div className="truncate text-[11px] text-ink-400">{ROL_LABEL[currentUser.rol]}</div>
+            <div className="truncate text-xs text-ink-500">{ROL_LABEL[currentUser.rol]}</div>
           </div>
-          <button
-            onClick={onLogout}
-            title="Uitloggen"
-            className="rounded-lg p-2 text-ink-400 hover:bg-ink-100 hover:text-ink-700"
-          >
-            <LogOut className="h-[18px] w-[18px]" />
-          </button>
         </div>
+        {/* Tekstgrootte direct bij de hand, zonder eerst naar Instellingen te hoeven zoeken. */}
+        <div>
+          <div className="mb-1.5 text-xs font-semibold text-ink-500">Tekstgrootte</div>
+          <TekstGrootteKeuze compact />
+        </div>
+        {/* Uitloggen als gewone knop met tekst — alleen een icoontje is voor veel mensen niet duidelijk. */}
+        <button
+          type="button"
+          onClick={onLogout}
+          className="flex w-full items-center justify-center gap-2 rounded-xl border border-ink-200 bg-white px-3 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50"
+        >
+          <LogOut className="h-[18px] w-[18px]" /> Uitloggen
+        </button>
       </div>
     </aside>
   );

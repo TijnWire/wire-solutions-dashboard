@@ -404,20 +404,20 @@ export function MijnWerk({ initieelProject }: { initieelProject?: string }) {
                   <FolderKanban className="h-5 w-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-semibold text-ink-900">{project.naam}</h3>
-                  <p className="text-xs text-ink-500">{project.wijk}</p>
+                  <h3 className="text-base font-semibold text-ink-900 sm:text-sm">{project.naam}</h3>
+                  <p className="text-sm text-ink-500 sm:text-xs">{project.wijk}</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => setScan({ id: project.id, naam: project.naam })}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-2.5 py-1.5 text-xs font-semibold text-ink-600 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-3 py-2 text-sm font-semibold text-ink-700 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 sm:px-2.5 sm:py-1.5 sm:text-xs"
                   title="Bestand (PDF/Excel) scannen en adressen importeren"
                 >
                   <FileScan className="h-4 w-4" /> Scan
                 </button>
-                <span className="hidden text-xs text-ink-400 sm:inline">
+                <span className="hidden text-xs text-ink-500 sm:inline">
                   {projectTaken.filter((t) => t.status === "Klaar").length}/{projectTaken.length} klaar
                 </span>
               </div>
@@ -429,34 +429,37 @@ export function MijnWerk({ initieelProject }: { initieelProject?: string }) {
               ))}
 
               {nieuwBijProject === project.id ? (
-                <div className="flex gap-2">
+                // Op de telefoon onder elkaar: veld over de volle breedte, daaronder twee grote knoppen.
+                <div className="flex flex-col gap-2 sm:flex-row">
                   <input
                     autoFocus
                     value={nieuweTitel}
                     onChange={(e) => setNieuweTitel(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && voegToe(project.id)}
                     placeholder="Wat moet er gebeuren?"
-                    className="flex-1 rounded-lg border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+                    className="flex-1 rounded-lg border-2 border-ink-300 px-3 py-3 text-base outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100 sm:border sm:border-ink-200 sm:py-2 sm:text-sm"
                   />
-                  <button
-                    onClick={() => voegToe(project.id)}
-                    className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700"
-                  >
-                    Toevoegen
-                  </button>
-                  <button
-                    onClick={() => setNieuwBijProject(null)}
-                    className="rounded-lg px-2 py-2 text-sm text-ink-500 hover:bg-ink-50"
-                  >
-                    Annuleer
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => voegToe(project.id)}
+                      className="flex-1 rounded-lg bg-brand-600 px-4 py-3 text-base font-semibold text-white hover:bg-brand-700 sm:flex-none sm:px-3 sm:py-2 sm:text-sm sm:font-medium"
+                    >
+                      Toevoegen
+                    </button>
+                    <button
+                      onClick={() => setNieuwBijProject(null)}
+                      className="rounded-lg border border-ink-200 bg-white px-4 py-3 text-base font-semibold text-ink-700 hover:bg-ink-50 sm:border-0 sm:px-2 sm:py-2 sm:text-sm sm:font-normal sm:text-ink-500"
+                    >
+                      Annuleer
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <button
                   onClick={() => setNieuwBijProject(project.id)}
-                  className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-medium text-ink-500 hover:bg-ink-50 hover:text-ink-700"
+                  className="flex w-full items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-ink-300 px-3 py-3 text-base font-semibold text-ink-700 hover:bg-ink-50 hover:text-ink-900 sm:inline-flex sm:w-auto sm:rounded-lg sm:border-0 sm:px-2 sm:py-1.5 sm:text-sm sm:font-medium sm:text-ink-500"
                 >
-                  <Plus className="h-4 w-4" />
+                  <Plus className="h-5 w-5 sm:h-4 sm:w-4" />
                   Taak toevoegen
                 </button>
               )}

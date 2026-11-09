@@ -15,6 +15,9 @@ export default {
         ],
       },
       colors: {
+        // TOEGANKELIJKHEID: brand-600/700 zijn iets donkerder dan het standaard Tailwind-oranje, zodat
+        // witte tekst op een oranje knop (en oranje tekst op wit) de 4,5:1-contrastnorm haalt. Dat is
+        // het verschil tussen "goed leesbaar" en "moet ik turen" — vooral buiten in fel zonlicht.
         brand: {
           50: "#fff7ed",
           100: "#ffedd5",
@@ -22,18 +25,28 @@ export default {
           300: "#fdba74",
           400: "#fb923c",
           500: "#f97316",
-          600: "#ea580c",
-          700: "#c2410c",
+          600: "#cf4509",
+          700: "#b13b0a",
           800: "#9a3412",
           900: "#7c2d12",
         },
+        // Zelfde reden voor de gewone Tailwind-kleuren waar de app witte tekst op zet of gekleurde
+        // tekst op wit: de standaardtinten halen daar het minimale contrast niet.
+        orange: { 600: "#cf4509", 700: "#b13b0a" },
+        green: { 600: "#15803d", 700: "#166534" },
+        red: { 500: "#dc2626" },
+        emerald: { 600: "#047857", 700: "#065f46" },
+        amber: { 600: "#b45309" },
+        sky: { 600: "#0369a1" },
+        // ink-400/500 (grijze hulptekst) lagen op 2,6:1 en 4,3:1 — te flets voor wie niet scherp ziet.
+        // Nu 5:1 of hoger. ink-300 blijft licht: dat is bedoeld voor randjes en decoratieve iconen.
         ink: {
           50: "#f8fafc",
           100: "#f1f5f9",
           200: "#e2e8f0",
           300: "#cbd5e1",
-          400: "#94a3b8",
-          500: "#64748b",
+          400: "#5b6b80",
+          500: "#526176",
           600: "#475569",
           700: "#334155",
           800: "#1e293b",

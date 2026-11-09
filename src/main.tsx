@@ -3,7 +3,11 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import { AppProvider } from "./store/AppContext";
 import { installSelectOnFocus } from "./lib/selectOnFocus";
+import { pasTekstgrootteToe } from "./lib/tekstgrootte";
 import "./index.css";
+
+// De door de gebruiker gekozen tekstgrootte meteen toepassen, nog vóór de eerste render (geen flits).
+pasTekstgrootteToe();
 
 // Cijfervelden bij focus/klik meteen volledig selecteren (hele dashboard).
 installSelectOnFocus();

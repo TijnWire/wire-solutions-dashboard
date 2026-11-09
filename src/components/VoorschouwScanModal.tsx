@@ -94,7 +94,7 @@ export function VoorschouwScanModal({ open, onSluit, onResultaat }: {
                 {fotos.map((f, i) => (
                   <div key={i} className="group relative aspect-square overflow-hidden rounded-lg border border-ink-200">
                     <img src={URL.createObjectURL(f)} alt={`Foto ${i + 1}`} className="h-full w-full object-cover" />
-                    <button type="button" onClick={() => verwijder(i)} className="absolute right-1 top-1 rounded-full bg-black/60 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100" title="Verwijderen"><Trash2 className="h-3.5 w-3.5" /></button>
+                    <button type="button" onClick={() => verwijder(i)} className="absolute right-1 top-1 rounded-full bg-black/70 p-2.5 text-white opacity-0 transition-opacity group-hover:opacity-100" title="Verwijderen"><Trash2 className="h-3.5 w-3.5" /></button>
                   </div>
                 ))}
                 <FotoKnoppen onFiles={voegToe} bezig={false} />

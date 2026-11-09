@@ -23,8 +23,8 @@ export function WerkTabs({ tab, setTab, klaar, archief }: {
       type="button"
       onClick={() => setTab(k)}
       aria-pressed={tab === k}
-      className={`flex-1 whitespace-nowrap rounded-md px-2 py-1.5 text-xs font-semibold transition-colors sm:px-3 sm:py-2 sm:text-sm ${
-        tab === k ? "bg-brand-600 text-white" : "text-ink-600 hover:bg-ink-50"}`}
+      className={`flex-1 whitespace-nowrap rounded-md px-2 py-2.5 text-sm font-semibold transition-colors sm:px-3 sm:py-2 ${
+        tab === k ? "bg-brand-600 text-white" : "text-ink-700 hover:bg-ink-50"}`}
     >
       <span className="sm:hidden">{kort}{n ? ` (${n})` : ""}</span>
       <span className="hidden sm:inline">{lang}{n ? ` (${n})` : ""}</span>

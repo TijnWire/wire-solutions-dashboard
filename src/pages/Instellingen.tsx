@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Building2, Activity, CheckCircle2, Info, AlertTriangle, Database, Pencil, Save, Lock, Plug, RefreshCw, Upload, Eye, ChevronRight, RotateCcw } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { Card } from "../components/ui";
+import { TekstGrootteKeuze } from "../components/TekstGrootteKeuze";
 import { berekenMeldingen } from "../lib/meldingen";
 import { APP_VERSIE } from "../lib/versie";
 import { logoSrc, logoNaarDataUrl } from "../lib/logo";
@@ -242,6 +243,13 @@ export function Instellingen() {
           {isLeiding ? "Bedrijfsgegevens, API-sleutels, sync & back-up en de systeemstatus van de app." : "Of dit apparaat meeloopt met de rest van het team."}
         </p>
       </div>
+
+      {/* Weergave — voor iedereen, ook voor wie verder niets in Instellingen mag. */}
+      <Card className="p-5">
+        <h3 className="text-base font-bold text-ink-900">Tekstgrootte</h3>
+        <p className="mb-3 mt-0.5 text-sm text-ink-500">Lastig te lezen? Kies hier een grotere tekst. Dit geldt voor dit apparaat.</p>
+        <TekstGrootteKeuze />
+      </Card>
 
       <div className="flex flex-wrap gap-2 border-b border-ink-200">
         {tabs.map((t) => {

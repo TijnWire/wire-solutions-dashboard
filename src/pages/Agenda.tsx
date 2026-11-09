@@ -282,7 +282,7 @@ export function Agenda() {
       {weergave === "maand" ? (
         /* ── Maandkalender ── */
         <Card className="p-5">
-          <div className="mb-4 flex items-center justify-between">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
             <h3 className="text-xl font-bold text-ink-900">{MAANDEN[maand]} {jaar}</h3>
             <div className="flex items-center gap-1.5">
               <button type="button" onClick={naarVandaag} className="rounded-xl border border-ink-200 px-4 py-2 text-sm font-medium text-ink-700 hover:bg-ink-50">Vandaag</button>

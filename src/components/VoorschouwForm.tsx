@@ -340,7 +340,7 @@ export function VoorschouwForm({
                 <button
                   type="button"
                   onClick={() => verwijderFoto(i)}
-                  className="absolute right-1 top-1 rounded-full bg-black/60 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                  className="absolute right-1 top-1 rounded-full bg-black/70 p-2.5 text-white opacity-0 transition-opacity group-hover:opacity-100"
                 >
                   <X className="h-3.5 w-3.5" />
                 </button>

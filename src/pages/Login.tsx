@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { LogIn, AlertCircle, Loader2, Mail, ArrowLeft, CheckCircle2 } from "lucide-react";
+import { LogIn, AlertCircle, Loader2, Mail, ArrowLeft, CheckCircle2, Eye, EyeOff } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { logoSrc } from "../lib/logo";
 import { sbWachtwoordVergeten } from "../lib/supabase";
@@ -10,6 +10,8 @@ export function Login() {
   const [wachtwoord, setWachtwoord] = useState("");
   const [fout, setFout] = useState("");
   const [bezig, setBezig] = useState(false);
+  // Oogje bij het wachtwoordveld: zien wat je typt scheelt veel mislukte pogingen op een telefoon.
+  const [toonWachtwoord, setToonWachtwoord] = useState(false);
   // Wachtwoord-vergeten: eigen mini-scherm binnen dezelfde kaart.
   const [modus, setModus] = useState<"inloggen" | "vergeten">("inloggen");
   const [resetBezig, setResetBezig] = useState(false);
@@ -77,42 +79,64 @@ export function Login() {
           {modus === "inloggen" ? (
             <>
               <h1 className="text-3xl font-bold text-ink-900">Inloggen</h1>
-              <p className="mt-2 text-ink-500">Log in met je werkaccount.</p>
+              <p className="mt-2 text-base text-ink-600">Log in met je werkaccount.</p>
 
               <form onSubmit={submit} className="mt-8 space-y-5">
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-ink-700">E-mailadres</label>
+                  <label htmlFor="login-email" className="mb-1.5 block text-base font-semibold text-ink-800 sm:text-sm sm:font-medium sm:text-ink-700">E-mailadres</label>
                   <input
+                    id="login-email"
+                    name="email"
                     type="email"
+                    inputMode="email"
+                    autoComplete="username"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
                     value={email}
                     onChange={(e) => { setEmail(e.target.value); setFout(""); }}
                     placeholder="naam@wiresolutions.nl"
-                    className="w-full rounded-lg border border-ink-200 px-4 py-3 text-sm outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
+                    className="w-full rounded-lg border-2 border-ink-300 px-4 py-3.5 text-base outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 sm:border sm:border-ink-200 sm:py-3 sm:text-sm"
                   />
                 </div>
                 <div>
-                  <div className="mb-1.5 flex items-center justify-between">
-                    <label className="block text-sm font-medium text-ink-700">Wachtwoord</label>
+                  <label htmlFor="login-wachtwoord" className="mb-1.5 block text-base font-semibold text-ink-800 sm:text-sm sm:font-medium sm:text-ink-700">Wachtwoord</label>
+                  <div className="relative">
+                    <input
+                      id="login-wachtwoord"
+                      name="password"
+                      type={toonWachtwoord ? "text" : "password"}
+                      autoComplete="current-password"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      value={wachtwoord}
+                      onChange={(e) => { setWachtwoord(e.target.value); setFout(""); }}
+                      placeholder="••••••••"
+                      className="w-full rounded-lg border-2 border-ink-300 py-3.5 pl-4 pr-14 text-base outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 sm:border sm:border-ink-200 sm:py-3 sm:text-sm"
+                    />
                     <button
                       type="button"
-                      onClick={() => { setModus("vergeten"); setResetMelding(""); setResetOk(false); }}
-                      className="text-xs font-semibold text-orange-600 hover:text-orange-700 hover:underline"
+                      onClick={() => setToonWachtwoord((t) => !t)}
+                      aria-label={toonWachtwoord ? "Wachtwoord verbergen" : "Wachtwoord tonen"}
+                      aria-pressed={toonWachtwoord}
+                      className="absolute right-1 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-lg text-ink-600 hover:bg-ink-100"
                     >
-                      Wachtwoord vergeten?
+                      {toonWachtwoord ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                     </button>
                   </div>
-                  <input
-                    type="password"
-                    value={wachtwoord}
-                    onChange={(e) => { setWachtwoord(e.target.value); setFout(""); }}
-                    placeholder="••••••••"
-                    className="w-full rounded-lg border border-ink-200 px-4 py-3 text-sm outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
-                  />
+                  <button
+                    type="button"
+                    onClick={() => { setModus("vergeten"); setResetMelding(""); setResetOk(false); }}
+                    className="mt-1 -ml-1 rounded-lg px-1 py-3 text-base font-semibold text-orange-700 hover:text-orange-800 hover:underline sm:py-2 sm:text-sm"
+                  >
+                    Wachtwoord vergeten?
+                  </button>
                 </div>
 
                 {fout && (
-                  <div className="flex items-start gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <div role="alert" className="flex items-start gap-2 rounded-lg bg-red-50 px-3 py-3 text-base text-red-800 sm:py-2 sm:text-sm">
+                    <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 sm:h-4 sm:w-4" />
                     <span>{fout}</span>
                   </div>
                 )}
@@ -120,14 +144,14 @@ export function Login() {
                 <button
                   type="submit"
                   disabled={bezig}
-                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-orange-600 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-orange-700 disabled:opacity-60"
+                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-orange-600 py-4 text-lg font-semibold text-white shadow-sm transition-colors hover:bg-orange-700 disabled:opacity-60 sm:py-3 sm:text-sm"
                 >
                   {bezig ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
                   {bezig ? "Bezig met inloggen…" : "Inloggen"}
                 </button>
               </form>
 
-              <p className="mt-8 border-t border-ink-100 pt-5 text-xs text-ink-400">
+              <p className="mt-8 border-t border-ink-100 pt-5 text-sm text-ink-600">
                 Geen toegang? Vraag je leidinggevende om een account of een nieuw wachtwoord.
               </p>
             </>
@@ -136,7 +160,7 @@ export function Login() {
               <button
                 type="button"
                 onClick={() => { setModus("inloggen"); setResetMelding(""); }}
-                className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-ink-500 hover:text-ink-800"
+                className="mb-4 -ml-2 inline-flex items-center gap-1.5 rounded-lg px-2 py-3 text-base font-semibold text-ink-600 hover:text-ink-900"
               >
                 <ArrowLeft className="h-4 w-4" /> Terug naar inloggen
               </button>
@@ -145,19 +169,26 @@ export function Login() {
 
               <form onSubmit={vraagReset} className="mt-8 space-y-5">
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-ink-700">Werk-e-mailadres</label>
+                  <label htmlFor="reset-email" className="mb-1.5 block text-base font-semibold text-ink-800 sm:text-sm sm:font-medium sm:text-ink-700">Werk-e-mailadres</label>
                   <input
+                    id="reset-email"
+                    name="email"
                     type="email"
+                    inputMode="email"
+                    autoComplete="username"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
                     value={email}
                     onChange={(e) => { setEmail(e.target.value); setResetMelding(""); }}
                     placeholder="naam@wiresolutions.nl"
                     autoFocus
-                    className="w-full rounded-lg border border-ink-200 px-4 py-3 text-sm outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
+                    className="w-full rounded-lg border-2 border-ink-300 px-4 py-3.5 text-base outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 sm:border sm:border-ink-200 sm:py-3 sm:text-sm"
                   />
                 </div>
 
                 {resetMelding && (
-                  <div className={`flex items-start gap-2 rounded-lg px-3 py-2 text-sm ${resetOk ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
+                  <div role="status" className={`flex items-start gap-2 rounded-lg px-3 py-3 text-base sm:py-2 sm:text-sm ${resetOk ? "bg-green-50 text-green-800" : "bg-red-50 text-red-800"}`}>
                     {resetOk ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" /> : <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />}
                     <span>{resetMelding}</span>
                   </div>
@@ -167,7 +198,7 @@ export function Login() {
                   <button
                     type="submit"
                     disabled={resetBezig}
-                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-orange-600 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-orange-700 disabled:opacity-60"
+                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-orange-600 py-4 text-lg font-semibold text-white shadow-sm transition-colors hover:bg-orange-700 disabled:opacity-60 sm:py-3 sm:text-sm"
                   >
                     {resetBezig ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
                     {resetBezig ? "Bezig met versturen…" : "Stuur mij een nieuw wachtwoord"}
@@ -176,14 +207,14 @@ export function Login() {
                   <button
                     type="button"
                     onClick={() => { setModus("inloggen"); setResetMelding(""); }}
-                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-orange-600 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-orange-700"
+                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-orange-600 py-4 text-lg font-semibold text-white shadow-sm transition-colors hover:bg-orange-700 sm:py-3 sm:text-sm"
                   >
                     <ArrowLeft className="h-4 w-4" /> Terug naar inloggen
                   </button>
                 )}
               </form>
 
-              <p className="mt-8 border-t border-ink-100 pt-5 text-xs text-ink-400">
+              <p className="mt-8 border-t border-ink-100 pt-5 text-sm text-ink-600">
                 Controleer ook je spam-map. Blijft de mail uit? Vraag je leidinggevende om een nieuw wachtwoord.
               </p>
             </>

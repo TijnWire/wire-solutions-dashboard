@@ -25,12 +25,21 @@
     height: 100%;
     overflow: hidden;
   }
-  /* Mobiel: de hele app iets compacter. Tailwind-afstanden en -tekst gebruiken rem, dus een
-     kleinere basismaat verkleint alles proportioneel — zo past er meer op het scherm. */
-  @media (max-width: 640px) {
-    html {
-      font-size: 14px;
-    }
+  /* TOEGANKELIJKHEID — vroeger stond hier voor mobiel een basismaat van 14px "zodat er meer op het scherm
+     past". Dat maakte alle tekst (en alle knoppen, want die gebruiken rem) 12% kleiner dan normaal en
+     tekst in "text-sm" kwam daardoor op ~12px uit. Nu is de basis gewoon 16px, en kan iedere gebruiker
+     in Instellingen kiezen voor Groot of Extra groot (zie lib/tekstgrootte.ts, die zet html font-size). */
+  /* Placeholder-tekst (voorbeeldtekst in een leeg veld) was te licht: standaard ~2,5:1 op wit. */
+  input::placeholder,
+  textarea::placeholder {
+    color: #6b7a90;
+    opacity: 1;
+  }
+  /* Duidelijke focusrand voor wie met toetsenbord/schakelaar navigeert. Alleen bij :focus-visible,
+     dus niet zichtbaar bij gewoon tikken of klikken. */
+  :where(button, a, [role="button"], summary):focus-visible {
+    outline: 3px solid #cf4509;
+    outline-offset: 2px;
   }
   /* Invoervelden op ALLE touch-apparaten minstens 16px, anders zoomt iOS automatisch in bij het
      focussen (bv. de zoekbalk). !important omdat Tailwind's tekst-utilities (text-sm/…) anders winnen. */
@@ -152,4 +161,57 @@
 @media (prefers-reduced-motion: reduce) {
   .lh-sway, .lh-zweef { animation: none !important; }
   .lh-sway { transform: rotateY(-18deg) rotateX(4deg); }
+}
+
+
+/* ══ TOEGANKELIJKHEID: mobiel ═══════════════════════════════════════════════════════════════════
+   Bewust ná de Tailwind-utilities, zodat deze regels de kleine standaardmaten overrulen zonder dat
+   in tientallen bestanden elke text-xs / text-[10px] met de hand aangepast hoeft te worden. */
+
+/* Kleine teksten: op telefoons nooit onder ~12px, en gewone hulptekst op 13px. Alles in rem, dus
+   het schaalt mee met de gekozen tekstgrootte (Normaal / Groot / Extra groot). Onder 640px, daarboven
+   regelen de sm:-varianten het zelf. */
+@media (max-width: 639px) {
+  .text-xs { font-size: 0.8125rem; line-height: 1.2rem; }
+  .text-sm { font-size: 0.9375rem; line-height: 1.4rem; }
+  .text-\[8px\],
+  .text-\[9px\],
+  .text-\[10px\] { font-size: 0.75rem; line-height: 1rem; }
+  .text-\[11px\] { font-size: 0.8125rem; line-height: 1.1rem; }
+  .text-\[13px\] { font-size: 0.875rem; line-height: 1.25rem; }
+}
+
+/* Vingers zijn dikker dan een muisaanwijzer. Op touchscreens krijgt alles wat je aantikt een
+   minimale hoogte van 44px (de richtlijn van Apple/Google/WCAG), zonder dat de knop er anders uit
+   hoeft te zien: kleine iconknoppen (menu, sluiten, wissen) worden 44x44. Tekstlinks zonder
+   achtergrond of rand en knoppen die over een foto zweven (.absolute) blijven buiten schot — die
+   worden waar nodig apart aangepakt. */
+@media (pointer: coarse) {
+  button:not(.absolute):is([class*="bg-"], [class*="border"]),
+  select,
+  summary {
+    min-height: 44px;
+  }
+  button:not(.absolute):has(> svg:only-child) {
+    min-width: 44px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="hidden"]) {
+    min-height: 44px;
+  }
+  input[type="checkbox"],
+  input[type="radio"] {
+    width: 1.375rem;
+    height: 1.375rem;
+    flex-shrink: 0;
+  }
+}
+
+/* Acties die op een computer pas bij "hover" verschijnen bestaan niet op een touchscreen: die
+   moeten daar gewoon altijd zichtbaar zijn (bv. de verwijderknop op een foto). */
+@media (hover: none) {
+  .opacity-0.group-hover\:opacity-100 { opacity: 1; }
 }
