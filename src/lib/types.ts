@@ -41,10 +41,10 @@ export const BEHEER_GEBIEDEN: { key: string; label: string }[] = [
   { key: "team", label: "Team" },
   { key: "projecten", label: "Projecten" },
   { key: "afspraken", label: "Afspraken" },
-  { key: "brieven", label: "Brieven & Routes" },
+  { key: "brieven", label: "Brieven" },
   { key: "documenten", label: "Documenten" },
   { key: "communicatie", label: "Communicatie" },
-  { key: "klanten", label: "Klanten & Database" },
+  { key: "klanten", label: "Klanten & Documenten" },
   { key: "facturen", label: "Facturen" },
   { key: "loonstroken", label: "Loonstroken" },
   { key: "boetes", label: "Boetes" },
@@ -855,7 +855,7 @@ export type TauwOpdracht = {
 // ── Projectarchief (Klanten & Database): de 4 mappen waarin afgeronde projecten worden bewaard ──
 export type ProjectCategorie = "brieven" | "saneren" | "voorschouwen" | "tauw";
 export const PROJECT_CATEGORIE_LABEL: Record<ProjectCategorie, string> = {
-  brieven: "Brieven & Routes",
+  brieven: "Brieven",
   saneren: "Saneren",
   voorschouwen: "Voorschouwen",
   tauw: "TAUW",

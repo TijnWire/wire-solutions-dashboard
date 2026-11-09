@@ -41,14 +41,15 @@ export function VrijeDagen() {
 
   if (!currentUser) return null;
   const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr";
-  if (!isLeiding) return <Card className="p-8 text-center text-sm text-ink-500">Dit overzicht is alleen voor de boekhouding/leiding.</Card>;
+  // Werknemers zien uitsluitend hun eigen vrije dagen (alleen-lezen), nooit die van collega's.
+  const eigen = !isLeiding;
 
   const jaar = new Date().getFullYear();
   const jaarStart = `${jaar}-01-01`, jaarEind = `${jaar}-12-31`;
   const medewerkers = [...users].sort((a, b) => a.naam.localeCompare(b.naam, "nl"));
 
   // ── Detailpagina van één medewerker ──
-  const detail = detailId ? medewerkers.find((u) => u.id === detailId) : undefined;
+  const detail = eigen ? currentUser : detailId ? medewerkers.find((u) => u.id === detailId) : undefined;
   if (detail) {
     const u = detail;
     const totaal = vrijeDagen(u);
@@ -63,19 +64,27 @@ export function VrijeDagen() {
 
     return (
       <div className="space-y-5">
-        <button type="button" onClick={() => setDetailId(null)} className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-500 hover:text-ink-800">
-          <ArrowLeft className="h-4 w-4" /> Terug naar overzicht
-        </button>
+        {!eigen && (
+          <button type="button" onClick={() => setDetailId(null)} className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-500 hover:text-ink-800">
+            <ArrowLeft className="h-4 w-4" /> Terug naar overzicht
+          </button>
+        )}
 
         <div className="flex items-center gap-3">
           <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-ink-800 text-base font-semibold text-white">{u.initialen}</span>
           <div className="min-w-0">
             <h2 className="truncate text-xl font-bold text-ink-900">{u.naam}</h2>
-            <p className="truncate text-sm text-ink-500">{u.functie || "Medewerker"} · vrije dagen & uren {jaar}</p>
+            <p className="truncate text-sm text-ink-500">{eigen ? `Jouw vrije dagen & uren ${jaar}` : `${u.functie || "Medewerker"} · vrije dagen & uren ${jaar}`}</p>
           </div>
         </div>
 
-        {/* Bewerkbaar: contract + vrije dagen/jaar */}
+        {/* Bewerkbaar (alleen leiding): contract + vrije dagen/jaar */}
+        {eigen ? (
+          <Card className="flex flex-wrap gap-x-6 gap-y-1 p-4 text-sm text-ink-600">
+            <span>Contract: <strong className="text-ink-900">{contractUren(u)} uur/week</strong></span>
+            <span>Vrije dagen per jaar: <strong className="text-ink-900">{totaal}</strong></span>
+          </Card>
+        ) : (
         <Card className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2">
           <label className="space-y-1">
             <span className="block text-xs font-semibold text-ink-500">Contract (uur/week)</span>
@@ -86,6 +95,7 @@ export function VrijeDagen() {
             <input inputMode="numeric" value={String(totaal)} onChange={(e) => { const n = parseInt(e.target.value.replace(/\D/g, ""), 10); updateUser(u.id, { verlofDagenPerJaar: Number.isFinite(n) ? n : 0 }); }} className={inputCls} />
           </label>
         </Card>
+        )}
 
         {/* Kerncijfers: dagen + uren */}
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

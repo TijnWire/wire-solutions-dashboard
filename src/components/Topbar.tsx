@@ -6,7 +6,7 @@ import type { ZoekGroep, ZoekItem } from "../lib/zoeken";
 // Meldingen worden per categorie gegroepeerd (afgeleid van waar de melding heen linkt), zodat je
 // niet één lange platte lijst krijgt maar overzichtelijke blokjes per onderwerp.
 const MELDING_CAT: Record<string, { label: string; Icon: LucideIcon; prio: number }> = {
-  brieven: { label: "Brieven & Routes", Icon: Mailbox, prio: 5 },
+  brieven: { label: "Brieven", Icon: Mailbox, prio: 5 },
   afspraken: { label: "Afspraken", Icon: CalendarCheck, prio: 4 },
   saneren: { label: "Saneren", Icon: Building2, prio: 4 },
   buurtaanpak: { label: "Buurtaanpak", Icon: Cable, prio: 4 },

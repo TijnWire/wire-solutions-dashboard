@@ -55,9 +55,13 @@ function kort(tekst: string, max = 60): string {
   return t.length > max ? t.slice(0, max - 1).trimEnd() + "…" : t;
 }
 
+// Mededelingen zijn alleen voor eigenaren en beheerders.
+export const magMededelingen = (rol?: string) => rol === "eigenaar" || rol === "beheer";
+
 // ── Voor de Agenda-pagina: alles wat tussen twee data (inclusief) valt ──
 // `leiding` bepaalt wat je van meetings en mededelingen ziet (leiding alles, een werknemer wat voor hem is).
-export function gebeurtenissenTussen(bron: AgendaBronnen, vanISO: string, totISO: string, ik: { id: string; leiding: boolean }): AgendaGebeurtenis[] {
+// `mededelingen: false` laat ze helemaal weg: alleen eigenaren en beheerders zien mededelingen.
+export function gebeurtenissenTussen(bron: AgendaBronnen, vanISO: string, totISO: string, ik: { id: string; leiding: boolean; mededelingen?: boolean }): AgendaGebeurtenis[] {
   const uit: AgendaGebeurtenis[] = [];
   const naam = (id?: string) => bron.users.find((u) => u.id === id)?.naam ?? "Onbekend";
 
@@ -95,7 +99,7 @@ export function gebeurtenissenTussen(bron: AgendaBronnen, vanISO: string, totISO
   }
 
   // Mededelingen: op de dag van plaatsen én op de deadline.
-  for (const m of bron.mededelingen) {
+  for (const m of ik.mededelingen === false ? [] : bron.mededelingen) {
     if (!isMededelingVoor(m, ik.id, ik.leiding)) continue;
     const geplaatst = m.aangemaakt.slice(0, 10);
     if (geplaatst >= vanISO && geplaatst <= totISO) {
@@ -195,7 +199,7 @@ export function bouwPersoonlijkeFeed(bron: AgendaBronnen, gebruiker: User, nu: D
   const van = `${jaar - 1}-01-01`;
   const tot = `${jaar + 2}-12-31`;
   const leiding = false; // persoonlijk: alleen wat voor jou is, ook voor de leiding
-  const alles = gebeurtenissenTussen(bron, van, tot, { id: gebruiker.id, leiding });
+  const alles = gebeurtenissenTussen(bron, van, tot, { id: gebruiker.id, leiding, mededelingen: magMededelingen(gebruiker.rol) });
 
   const verjaardagen = new Map<string, AgendaGebeurtenis>();
   const rest: AgendaGebeurtenis[] = [];

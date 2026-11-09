@@ -152,7 +152,7 @@ export function AiAssistent() {
           zou een krimpende knop minder gaan bedekken, weer verschijnen, weer bedekken, en zichzelf
           aan en uit knipperen. */}
       {!open && (
-        <div ref={vakRef} className="pointer-events-none fixed bottom-20 right-4 z-40 h-14 w-14 sm:bottom-6 sm:right-6">
+        <div ref={vakRef} className="pointer-events-none fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom))] right-4 z-40 h-14 w-14 sm:bottom-6 sm:right-6">
           <button
             type="button"
             onClick={() => setOpen(true)}

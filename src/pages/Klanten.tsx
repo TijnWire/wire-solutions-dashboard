@@ -1,9 +1,10 @@
 import { useState } from "react";
 import {
   Search, Plus, ArrowLeft, MapPin, Phone, Mail, Trash2, X,
-  CalendarCheck, Mailbox, ClipboardCheck, Database, Image as ImageIcon, Download,
+  CalendarCheck, Mailbox, ClipboardCheck, FileText, Database, Image as ImageIcon, Download,
   ChevronRight, Shovel, Building2, FolderArchive,
 } from "lucide-react";
+import { Documenten } from "./Documenten";
 import { useApp } from "../store/AppContext";
 import { Card, Badge, Bevestig } from "../components/ui";
 import { FotoKnoppen } from "../components/FotoKnoppen";
@@ -70,7 +71,7 @@ function KlantForm({ onKlaar }: { onKlaar: () => void }) {
 }
 
 export function Klanten({ initieelKey }: { initieelKey?: string }) {
-  const { klanten, afspraken, rondes, voorschouwen, voorschouwMappen, saneringen, tauwOpdrachten, buurtaanpak, currentUser, addKlant, updateKlant, deleteKlant, updateRonde, updateSanering, updateTauw, updateVoorschouwMap } = useApp();
+  const { klanten, afspraken, voorschouwen, voorschouwMappen, saneringen, tauwOpdrachten, buurtaanpak, currentUser, addKlant, updateKlant, deleteKlant, updateSanering, updateTauw, updateVoorschouwMap } = useApp();
   const [zoek, setZoek] = useState("");
   const [openKey, setOpenKey] = useState<string | null>(initieelKey ?? null);
   const [nieuw, setNieuw] = useState(false);
@@ -78,7 +79,7 @@ export function Klanten({ initieelKey }: { initieelKey?: string }) {
   const [bezig, setBezig] = useState(false);
   const [detailCat, setDetailCat] = useState<string | null>(null); // geopende projectsoort-filterpagina
   const [detailZoek, setDetailZoek] = useState("");
-  const [tab, setTab] = useState<"adressen" | "projecten">("projecten");
+  const [tab, setTab] = useState<"adressen" | "projecten" | "documenten">("projecten");
   const [periode, setPeriode] = useState<Periode>("alles");
   const [anker, setAnker] = useState(() => new Date().toISOString().slice(0, 10));
 
@@ -98,7 +99,6 @@ export function Klanten({ initieelKey }: { initieelKey?: string }) {
   };
   for (const k of klanten) merge({ key: normKey(k.straat, k.huisnummer), naam: k.naam, straat: k.straat, huisnummer: k.huisnummer, postcode: k.postcode, plaats: k.plaats, telefoon: k.telefoon, email: k.email, klantId: k.id });
   for (const a of afspraken) if (a.straat && a.huisnummer) merge({ key: normKey(a.straat, a.huisnummer), naam: a.klantNaam, straat: a.straat, huisnummer: a.huisnummer, postcode: a.postcode, plaats: a.plaats, telefoon: a.telefoon, email: a.email });
-  for (const r of rondes) for (const ad of r.adressen) merge({ key: normKey(r.straat, String(ad.huisnummer)), naam: "", straat: r.straat, huisnummer: String(ad.huisnummer), postcode: r.postcode, plaats: r.plaats, telefoon: "" });
   for (const s of saneringen) for (const a of (s.adressen ?? [])) if (a.straat && a.huisnummer) merge({ key: normKey(a.straat, a.huisnummer), naam: a.naam || "", straat: a.straat, huisnummer: a.huisnummer, postcode: a.postcode, plaats: a.plaats, telefoon: a.telefoon || "" });
   for (const o of tauwOpdrachten) for (const a of o.adressen) if (a.straat && a.huisnummer) merge({ key: normKey(a.straat, a.huisnummer), naam: a.bewoner || "", straat: a.straat, huisnummer: a.huisnummer, postcode: a.postcode, plaats: a.plaats, telefoon: a.telefoon || "" });
   for (const b of buurtaanpak) for (const a of b.adressen) if (a.straat && a.huisnummer) merge({ key: normKey(a.straat, a.huisnummer), naam: "", straat: a.straat, huisnummer: a.huisnummer, postcode: a.postcode, plaats: "", telefoon: a.telefoon || "" });
@@ -108,7 +108,6 @@ export function Klanten({ initieelKey }: { initieelKey?: string }) {
   // Historie per adres
   const historie = (it: AdresItem) => ({
     afspraken: afspraken.filter((a) => normKey(a.straat, a.huisnummer) === it.key),
-    brieven: rondes.flatMap((r) => r.adressen.filter((ad) => normKey(r.straat, String(ad.huisnummer)) === it.key).map((ad) => ({ ronde: r, adres: ad }))),
     voorschouwen: voorschouwen.filter((v) => v.straatnaam.trim().toLowerCase() === it.straat.trim().toLowerCase()),
     klant: it.klantId ? klanten.find((k) => k.id === it.klantId) : undefined,
   });
@@ -224,18 +223,6 @@ export function Klanten({ initieelKey }: { initieelKey?: string }) {
           </div>
 
           <div>
-            <div className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-ink-500"><Mailbox className="h-3.5 w-3.5" /> Brieven</div>
-            {h.brieven.length === 0 ? <p className="text-sm text-ink-400">Geen.</p> : h.brieven.map(({ ronde, adres }) => (
-              <div key={adres.id} className="mb-1.5 flex items-center gap-2 rounded-lg border border-ink-200 p-2.5 text-sm">
-                <span className="font-medium text-ink-800">{ronde.straat} {adres.huisnummer}</span>
-                <span className="text-ink-500">· {ronde.plaats}</span>
-                <Badge tone={adres.status === "Gegooid" ? "green" : adres.status === "Blanco" ? "amber" : adres.status === "Niet thuis" ? "red" : "slate"}>{adres.status}</Badge>
-                {adres.type === "bedrijf" && <span className="text-xs text-brand-600">bedrijfspand</span>}
-              </div>
-            ))}
-          </div>
-
-          <div>
             <div className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-ink-500"><ClipboardCheck className="h-3.5 w-3.5" /> Voorschouwen (straat)</div>
             {h.voorschouwen.length === 0 ? <p className="text-sm text-ink-400">Geen.</p> : h.voorschouwen.map((v) => (
               <div key={v.id} className="mb-1.5 flex items-center gap-2 rounded-lg border border-ink-200 p-2.5 text-sm">
@@ -248,7 +235,7 @@ export function Klanten({ initieelKey }: { initieelKey?: string }) {
           </div>
         </Card>
 
-        <Bevestig open={!!verwijder} titel="Klantrecord verwijderen" tekst="Dit verwijdert de opgeslagen notitie en foto's voor dit adres. De afspraken/brieven/voorschouwen blijven bestaan." onBevestig={() => { if (verwijder) deleteKlant(verwijder); setVerwijder(null); }} onAnnuleer={() => setVerwijder(null)} />
+        <Bevestig open={!!verwijder} titel="Klantrecord verwijderen" tekst="Dit verwijdert de opgeslagen notitie en foto's voor dit adres. De afspraken/voorschouwen blijven bestaan." onBevestig={() => { if (verwijder) deleteKlant(verwijder); setVerwijder(null); }} onAnnuleer={() => setVerwijder(null)} />
       </div>
     );
   }
@@ -261,22 +248,6 @@ export function Klanten({ initieelKey }: { initieelKey?: string }) {
   type ArchiefRij = { id: string; titel: string; subtitel: string; datum?: string; peil: string; regels: string[]; gearchiveerd: boolean; herstel: () => void };
   const peilVan = (...kandidaten: (string | undefined)[]) => (kandidaten.find((d) => d) ?? "").slice(0, 10);
   const projectMappen: { key: string; label: string; Icon: typeof Mailbox; rijen: ArchiefRij[] }[] = [
-    {
-      key: "brieven", label: "Brieven & Routes", Icon: Mailbox,
-      rijen: rondes.map((r) => {
-        const te = r.adressen.filter((a) => !a.ontbreekt);
-        return {
-          id: r.id,
-          titel: r.straat || "Ronde",
-          subtitel: [[r.postcode, r.plaats].filter(Boolean).join(" "), `${te.length} adres${te.length === 1 ? "" : "sen"}`].filter(Boolean).join(" · "),
-          datum: r.gearchiveerdOp,
-          peil: peilVan(r.gearchiveerdOp, r.verstuurdOp, r.aangemaakt),
-          regels: te.map((a) => `${r.straat} ${a.huisnummer}${a.toevoeging || ""} — ${a.status}`),
-          gearchiveerd: !!r.gearchiveerd,
-          herstel: () => updateRonde(r.id, { gearchiveerd: false, gearchiveerdOp: undefined }),
-        };
-      }),
-    },
     {
       key: "saneren", label: "Saneren", Icon: Building2,
       rijen: saneringen.map((s) => {
@@ -339,7 +310,6 @@ export function Klanten({ initieelKey }: { initieelKey?: string }) {
   // Alle adressen binnen een projectsoort (voor de filterpagina): straat/huisnummer/postcode/plaats.
   type AdresCat = { straat: string; huisnummer: string; postcode: string; plaats: string; extra: string; telefoon?: string; email?: string };
   const adressenVanCat = (key: string): AdresCat[] => {
-    if (key === "brieven") return rondes.flatMap((r) => r.adressen.filter((a) => !a.ontbreekt).map((a) => ({ straat: r.straat, huisnummer: `${a.huisnummer}${a.toevoeging || ""}`, postcode: r.postcode, plaats: r.plaats, extra: a.status })));
     if (key === "saneren") return saneringen.flatMap((s) => (s.adressen ?? []).map((a) => ({ straat: a.straat, huisnummer: a.huisnummer, postcode: a.postcode, plaats: a.plaats, extra: a.naam || "", telefoon: a.telefoon })));
     if (key === "voorschouwen") return voorschouwen.map((v) => ({ straat: v.straatnaam, huisnummer: "", postcode: v.postcode, plaats: v.plaats, extra: v.status }));
     if (key === "tauw") return tauwOpdrachten.flatMap((o) => o.adressen.map((a) => ({ straat: a.straat, huisnummer: a.huisnummer, postcode: a.postcode, plaats: a.plaats, extra: a.bewoner || "", telefoon: a.telefoon })));
@@ -352,14 +322,14 @@ export function Klanten({ initieelKey }: { initieelKey?: string }) {
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold text-ink-900">Klanten & Database</h2>
+          <h2 className="text-xl font-bold text-ink-900">Klanten & Documenten</h2>
           <p className="text-sm text-ink-500">Eén centraal archief — zoek elk adres terug met alle historie en foto's.</p>
         </div>
         {isLeiding && <button type="button" onClick={() => setNieuw(true)} className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-brand-700"><Plus className="h-4 w-4" /> Nieuwe klant</button>}
       </div>
 
       {/* Twee even grote tabbladen: Projecten (afgeronde projecten) eerst, dan Adressen (centraal adresarchief) */}
-      <div className="grid w-full grid-cols-2 gap-1 rounded-xl border border-ink-200 bg-ink-100 p-1 shadow-card sm:w-80">
+      <div className="grid w-full grid-cols-3 gap-1 rounded-xl border border-ink-200 bg-ink-100 p-1 shadow-card sm:w-[30rem]">
         <button type="button" onClick={() => setTab("projecten")} className={`flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors outline-none focus-visible:ring-2 focus-visible:ring-brand-400 ${tab === "projecten" ? "bg-brand-600 text-white" : "text-ink-600 hover:bg-white"}`}>
           <FolderArchive className="h-4 w-4" /> Projecten
           <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${tab === "projecten" ? "bg-white/20 text-white" : "bg-ink-200 text-ink-600"}`}>{totaalGearchiveerd}</span>
@@ -368,7 +338,13 @@ export function Klanten({ initieelKey }: { initieelKey?: string }) {
           <MapPin className="h-4 w-4" /> Adressen
           <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${tab === "adressen" ? "bg-white/20 text-white" : "bg-ink-200 text-ink-600"}`}>{alle.length}</span>
         </button>
+        <button type="button" onClick={() => setTab("documenten")} className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors outline-none focus-visible:ring-2 focus-visible:ring-brand-400 ${tab === "documenten" ? "bg-brand-600 text-white" : "text-ink-600 hover:bg-white"}`}>
+          <FileText className="h-4 w-4" /> Documenten
+        </button>
       </div>
+
+      {/* Documenten: zoeken, sorteren en exporteren naar Excel (voorheen een apart menu-item) */}
+      {tab === "documenten" && <Documenten />}
 
       {/* Filterpagina per projectsoort — zoek direct op straat/huisnummer/postcode/plaats */}
       {tab === "projecten" && detailCat && detailProjectMap && (() => {
@@ -452,14 +428,13 @@ export function Klanten({ initieelKey }: { initieelKey?: string }) {
           items={zichtbaar.map((it) => {
             const h = historie(it);
             const fotoN = (h.klant?.fotos.length ?? 0) + h.voorschouwen.reduce((s, v) => s + v.fotos.length, 0);
-            const totaal = h.afspraken.length + h.brieven.length + h.voorschouwen.length + fotoN;
+            const totaal = h.afspraken.length + h.voorschouwen.length + fotoN;
             return {
               id: it.key, straat: it.straat, huisnummer: it.huisnummer, postcode: it.postcode, plaats: it.plaats,
               telefoon: it.telefoon || undefined, email: it.email || undefined, titelExtra: it.naam || undefined,
               onder: (
                 <>
                   {h.afspraken.length > 0 && <span className="rounded-full bg-ink-100 px-2 py-0.5">{h.afspraken.length} afspr.</span>}
-                  {h.brieven.length > 0 && <span className="rounded-full bg-ink-100 px-2 py-0.5">{h.brieven.length} brief</span>}
                   {h.voorschouwen.length > 0 && <span className="rounded-full bg-ink-100 px-2 py-0.5">{h.voorschouwen.length} voorsch.</span>}
                   {fotoN > 0 && <span className="rounded-full bg-brand-50 px-2 py-0.5 font-medium text-brand-700">{fotoN} foto{fotoN === 1 ? "" : "'s"}</span>}
                   {totaal === 0 && <span>geen historie</span>}

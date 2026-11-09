@@ -5,11 +5,10 @@ import { Card, Badge } from "../components/ui";
 import { DatumKiezer } from "../components/DatumKiezer";
 import { TijdKiezer } from "../components/TijdKiezer";
 import { Keuze } from "../components/Keuze";
-import { weekStartISO, verschuifWeek, weekBereik } from "../lib/week";
 import { VERLOF_TYPES, type VerlofType, type VerlofStatus, type Verlof as VerlofT } from "../lib/types";
 import { useVerlofBeslissingen } from "../lib/verlofBeslissingen";
 import { TelefoonAgenda } from "../components/TelefoonAgenda";
-import { AGENDA_SOORTEN, AGENDA_SOORT_LABEL, gebeurtenissenTussen, valtOp, type AgendaGebeurtenis, type AgendaSoort } from "../lib/agendaFeed";
+import { AGENDA_SOORTEN, AGENDA_SOORT_LABEL, gebeurtenissenTussen, magMededelingen, valtOp, type AgendaGebeurtenis, type AgendaSoort } from "../lib/agendaFeed";
 
 const MAANDEN = ["januari", "februari", "maart", "april", "mei", "juni", "juli", "augustus", "september", "oktober", "november", "december"];
 const DAGEN = ["ma", "di", "wo", "do", "vr", "za", "zo"];
@@ -133,10 +132,8 @@ export function Agenda() {
   const { verlof, agendaItems, mededelingen, users, currentUser, addVerlof, deleteVerlof } = useApp();
   const { map: beslissingen } = useVerlofBeslissingen();
   const vandaag = new Date();
-  const [weergave, setWeergave] = useState<"maand" | "week">("maand");
   const [jaar, setJaar] = useState(vandaag.getFullYear());
   const [maand, setMaand] = useState(vandaag.getMonth());
-  const [weekAnker, setWeekAnker] = useState(weekStartISO(toISO(vandaag)));
   const [popupDag, setPopupDag] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   // Filter op soort (geldt voor maand én week) en op medewerker (alleen leiding)
@@ -148,19 +145,13 @@ export function Agenda() {
   const start = (eerste.getDay() + 6) % 7;
   const cellen: Date[] = [];
   for (let i = 0; i < 42; i++) cellen.push(new Date(jaar, maand, 1 - start + i));
-  // Week-dagen (7) vanaf de maandag-anker
-  const weekDagen: string[] = [];
-  {
-    const ma = new Date(weekAnker + "T00:00:00");
-    for (let i = 0; i < 7; i++) { const d = new Date(ma); d.setDate(ma.getDate() + i); weekDagen.push(toISO(d)); }
-  }
-  const vanISO = weergave === "maand" ? toISO(cellen[0]) : weekDagen[0];
-  const totISO = weergave === "maand" ? toISO(cellen[41]) : weekDagen[6];
+  const vanISO = toISO(cellen[0]);
+  const totISO = toISO(cellen[41]);
   const isLeiding = !!currentUser && (currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr");
 
   const verlofStatus = useMemo(() => Object.fromEntries(Object.entries(beslissingen).map(([id, b]) => [id, b.status as string])), [beslissingen]);
   const alle = useMemo(
-    () => (currentUser ? gebeurtenissenTussen({ users, verlof, agendaItems, mededelingen, verlofStatus }, vanISO, totISO, { id: currentUser.id, leiding: isLeiding }) : []),
+    () => (currentUser ? gebeurtenissenTussen({ users, verlof, agendaItems, mededelingen, verlofStatus }, vanISO, totISO, { id: currentUser.id, leiding: isLeiding, mededelingen: magMededelingen(currentUser.rol) }) : []),
     [users, verlof, agendaItems, mededelingen, verlofStatus, vanISO, totISO, currentUser, isLeiding],
   );
   // Verlof en meetings kun je op medewerker filteren; feestdagen, verjaardagen en mededelingen blijven staan.
@@ -208,7 +199,7 @@ export function Agenda() {
 
   const vorige = () => { if (maand === 0) { setMaand(11); setJaar((j) => j - 1); } else setMaand((m) => m - 1); };
   const volgende = () => { if (maand === 11) { setMaand(0); setJaar((j) => j + 1); } else setMaand((m) => m + 1); };
-  const naarVandaag = () => { setJaar(vandaag.getFullYear()); setMaand(vandaag.getMonth()); setWeekAnker(weekStartISO(toISO(vandaag))); };
+  const naarVandaag = () => { setJaar(vandaag.getFullYear()); setMaand(vandaag.getMonth()); };
 
   const vandaagISO = toISO(vandaag);
   const mijnVerlof = isLeiding ? verlof : verlof.filter((v) => v.medewerkerId === currentUser.id);
@@ -220,7 +211,7 @@ export function Agenda() {
   const filterBalk = (
     <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-ink-200 bg-ink-50/50 p-2">
       <span className="inline-flex items-center gap-1 text-xs font-semibold text-ink-500"><Filter className="h-3.5 w-3.5" /> Toon</span>
-      {AGENDA_SOORTEN.map((s) => {
+      {AGENDA_SOORTEN.filter((s) => s !== "mededeling" || magMededelingen(currentUser.rol)).map((s) => {
         const aan = zichtbareSoorten.has(s);
         const Icoon = SOORT_STIJL[s].icoon;
         return (
@@ -240,17 +231,11 @@ export function Agenda() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold text-ink-900">Agenda</h2>
-          <p className="text-sm text-ink-500">Verlof, meetings, mededelingen, verjaardagen en feestdagen.</p>
+          <p className="text-sm text-ink-500">{magMededelingen(currentUser.rol) ? "Verlof, meetings, mededelingen, verjaardagen en feestdagen." : "Verlof, meetings, verjaardagen en feestdagen."}</p>
         </div>
         <div className="flex items-center gap-2">
-          {/* Maand / Week schakelaar */}
-          <div className="flex rounded-xl border border-ink-200 bg-white p-0.5">
-            {(["maand", "week"] as const).map((w) => (
-              <button key={w} type="button" onClick={() => setWeergave(w)} className={`rounded-lg px-3 py-1.5 text-sm font-semibold capitalize transition-colors ${weergave === w ? "bg-brand-600 text-white" : "text-ink-600 hover:bg-ink-50"}`}>{w}</button>
-            ))}
-          </div>
           <button type="button" onClick={() => { setFormOpen(true); setVMedewerker(currentUser.id); }} className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-brand-700">
-            <Plane className="h-4 w-4" /> Verlof
+            Verlof aanvragen
           </button>
         </div>
       </div>
@@ -279,8 +264,7 @@ export function Agenda() {
         </Card>
       )}
 
-      {weergave === "maand" ? (
-        /* ── Maandkalender ── */
+        {/* ── Maandkalender ── */}
         <Card className="p-5">
           <div className="mb-4 flex items-center justify-between">
             <h3 className="text-xl font-bold text-ink-900">{MAANDEN[maand]} {jaar}</h3>
@@ -326,43 +310,6 @@ export function Agenda() {
             {VERLOF_TYPES.map((t) => (<span key={t} className="inline-flex items-center gap-2"><span className={`h-3 w-3 rounded-full ${verlofKleur[t]}`} /> {t}</span>))}
           </div>
         </Card>
-      ) : (
-        /* ── Weekweergave ── */
-        <Card className="p-5">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <button type="button" onClick={() => setWeekAnker((w) => verschuifWeek(w, -1))} className="rounded-xl border border-ink-200 p-2 text-ink-600 hover:bg-ink-50" title="Vorige week"><ChevronLeft className="h-5 w-5" /></button>
-              <button type="button" onClick={() => setWeekAnker(weekStartISO(toISO(vandaag)))} className="rounded-xl px-3 py-2 text-lg font-bold text-ink-900 hover:bg-ink-50" title="Naar deze week">{weekBereik(weekAnker)}</button>
-              <button type="button" onClick={() => setWeekAnker((w) => verschuifWeek(w, 1))} className="rounded-xl border border-ink-200 p-2 text-ink-600 hover:bg-ink-50" title="Volgende week"><ChevronRight className="h-5 w-5" /></button>
-            </div>
-          </div>
-          {filterBalk}
-          <div className="space-y-2">
-            {weekDagen.map((iso) => {
-              const dag = opDag(iso);
-              const isVandaag = iso === vandaagISO;
-              return (
-                <div key={iso} className={`rounded-xl border p-3 ${isVandaag ? "border-brand-300 bg-brand-50/40" : "border-ink-200"}`}>
-                  <div className="mb-1.5 flex items-center justify-between">
-                    <span className="text-sm font-bold capitalize text-ink-800">{dagLang(iso)}</span>
-                    <button type="button" onClick={() => setPopupDag(iso)} className="inline-flex items-center gap-1 rounded-lg border border-ink-200 px-2 py-1 text-xs font-semibold text-ink-600 hover:bg-ink-50"><Plus className="h-3.5 w-3.5" /> Toevoegen</button>
-                  </div>
-                  {dag.length === 0 ? (
-                    <p className="text-xs text-ink-400">Niets in de agenda.</p>
-                  ) : (
-                    <div className="flex flex-wrap gap-1.5">
-                      {dag.map((g) => {
-                        const Icoon = SOORT_STIJL[g.soort].icoon;
-                        return <span key={g.id} className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium ${SOORT_STIJL[g.soort].chip}`}><Icoon className="h-3 w-3" /> {g.tijd ? `${g.tijd} ` : ""}{g.titel}</span>;
-                      })}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </Card>
-      )}
 
       <TelefoonAgenda />
 

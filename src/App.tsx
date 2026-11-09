@@ -1,7 +1,6 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { X } from "lucide-react";
 import { Sidebar } from "./components/Sidebar";
-import { BottomNav } from "./components/BottomNav";
 import { Topbar } from "./components/Topbar";
 import { DevSwitcher } from "./components/DevSwitcher";
 import { Login } from "./pages/Login";
@@ -232,13 +231,10 @@ export default function App() {
         <OfflineBanner />
         {/* De key zorgt dat elke nieuwe pagina opnieuw mount, waardoor de schuif-animatie afspeelt. */}
         {/* id: deze kolom is wat er scrollt — zie lib/scroll.ts (detailpagina's beginnen bovenaan). */}
-        <main id={HOOFDINHOUD_ID} className="scrollbar-thin flex-1 overflow-y-auto overflow-x-hidden overscroll-contain p-4 pb-[calc(5rem+env(safe-area-inset-bottom))] md:p-6 md:pb-6">
+        <main id={HOOFDINHOUD_ID} className="scrollbar-thin flex-1 overflow-y-auto overflow-x-hidden overscroll-contain p-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] md:p-6 md:pb-6">
           <div key={active} className="animate-slide-in-right">{render()}</div>
         </main>
       </div>
-
-      {/* App-achtige onderbalk op mobiel */}
-      <BottomNav active={active} onSelect={ga} onMeer={onMenu} currentUser={currentUser} badges={sidebarBadges} />
 
       <AiAssistent />
       <DevSwitcher />

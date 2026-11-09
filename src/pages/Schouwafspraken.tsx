@@ -60,7 +60,7 @@ export function Schouwafspraken() {
     <div className="space-y-5">
       <div>
         <h2 className="text-xl font-bold text-ink-900">Schouwafspraken</h2>
-        <p className="text-sm text-ink-500">Per stad of plaats een map. Open een map, kies de week en vul de afspraken in; de planning voor Stedin maakt het dashboard daarna zelf.</p>
+        <p className="text-sm text-ink-500">Per stad of plaats een map. Open een map, kies de week en vul de afspraken in; de planning voor Stedin wordt geautomatiseerd verwerkt in Excel.</p>
       </div>
 
       <Card className="p-4">

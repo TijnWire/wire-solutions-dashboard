@@ -3,7 +3,7 @@ import type { Project, Brievenronde, VoorschouwMap, TauwOpdracht } from "./types
 // De vaste projecten/onderdelen waar werk op geboekt wordt of een mededeling over gaat.
 // Bewust de onderdelen zelf — niet het losse werk erbinnen (dat wordt een onleesbare lijst).
 export const WERK_CATEGORIEEN: { id: string; naam: string }[] = [
-  { id: "brieven", naam: "Brieven & Routes" },
+  { id: "brieven", naam: "Brieven" },
   { id: "buurtaanpak", naam: "Buurtaanpak" },
   { id: "saneren", naam: "Saneren" },
   { id: "voorschouwen", naam: "Voorschouwen" },
@@ -30,7 +30,7 @@ export function lopendeProjectOpties(projects: Project[], rondes: Brievenronde[]
 
   // Brieven & Routes: mappen met nog lopend werk (minstens één ronde niet verstuurd), gegroepeerd op mapnaam
   const brvMappen = [...new Set(rondes.filter((r) => r.mapNaam && !r.gearchiveerd && r.status !== "verstuurd").map((r) => r.mapNaam as string))].sort((a, b) => a.localeCompare(b, "nl"));
-  for (const naam of brvMappen) opties.push({ id: `brv:${naam}`, naam: `Brieven: ${naam}`, groep: "Brieven & routes" });
+  for (const naam of brvMappen) opties.push({ id: `brv:${naam}`, naam: `Brieven: ${naam}`, groep: "Brieven" });
 
   // Voorschouwen: actieve mappen (niet gearchiveerd)
   for (const m of voorschouwMappen.filter((m) => !m.gearchiveerd).sort((a, b) => a.naam.localeCompare(b.naam, "nl"))) {

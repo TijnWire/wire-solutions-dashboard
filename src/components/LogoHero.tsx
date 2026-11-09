@@ -83,8 +83,11 @@ export function LogoHero() {
         role="img"
         aria-label="Wire Solutions logo — tik om het te laten draaien"
         className="relative w-full max-w-[19rem] cursor-pointer select-none sm:max-w-[22rem]"
-        style={{ aspectRatio: "575 / 370", perspective: "900px", touchAction: "pan-y" }}
+        style={{ perspective: "900px", touchAction: "pan-y" }}
       >
+        {/* Houdt de verhouding van het logo vast (575 × 370). Bewust met padding i.p.v. CSS aspect-ratio:
+            op oudere iPhones kende Safari dat niet, waardoor het vak 0 hoog werd en het logo verdween. */}
+        <div aria-hidden="true" style={{ paddingBottom: "64.35%" }} />
         {/* Buitenste laag: volgt je vinger/muis */}
         <div className="absolute inset-0 transition-transform duration-200 ease-out" style={{ transformStyle: "preserve-3d", transform: `rotateX(${kanteling.x}deg) rotateY(${kanteling.y}deg)` }}>
           {/* Draai bij een tik */}

@@ -832,7 +832,7 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
           <p className="text-sm text-ink-500">
             {isLeiding
               ? "Alle ingevulde voorschouwen van het team."
-              : "Jouw voorschouwen. Vul er een in bij de klant thuis."}
+              : "Gegevens en foto’s worden geautomatiseerd verwerkt conform Stedin format"}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">

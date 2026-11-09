@@ -45,12 +45,14 @@ export type NavItem = {
 // HR ziet alles (personeelszaken/boekhouding) — daarom in élke rol-groep opgenomen.
 const ALLE: Role[] = ["eigenaar", "beheer", "hr", "monteur"];
 const LEIDING: Role[] = ["eigenaar", "beheer", "hr"];
+// Alleen eigenaren en beheerders (bijv. Mededelingen).
+const BEHEER: Role[] = ["eigenaar", "beheer"];
 
 // Project-onderdelen waarvan de eigenaar de toegang per werknemer kan aan-/uitzetten (Toegang-pagina).
 // Werk (Mijn werk, Projecten, Agenda, Mededelingen), Kennisbank en Communicatie blijven ALTIJD zichtbaar;
 // Boekhouding, Klanten & Database en beheer zijn sowieso leiding-only (werknemers zien die niet).
 export const WERKNEMER_TOEGANG: { key: string; label: string }[] = [
-  { key: "brieven", label: "Brieven & Routes" },
+  { key: "brieven", label: "Brieven" },
   { key: "saneren", label: "Saneren" },
   { key: "voorschouwen", label: "Voorschouwen" },
   { key: "schouwafspraken", label: "Schouwafspraken" },
@@ -61,9 +63,9 @@ export const WERKNEMER_TOEGANG_KEYS = WERKNEMER_TOEGANG.map((x) => x.key);
 export const NAV: NavItem[] = [
   { key: "mijnwerk", label: "Mijn werk", icon: ClipboardList, group: "Werk", roles: ALLE },
   { key: "agenda", label: "Agenda", icon: CalendarDays, group: "Werk", roles: ALLE },
-  { key: "mededelingen", label: "Mededelingen", icon: Megaphone, group: "Werk", roles: ALLE },
+  { key: "mededelingen", label: "Mededelingen", icon: Megaphone, group: "Werk", roles: BEHEER },
 
-  { key: "brieven", label: "Brieven & Routes", icon: Mailbox, group: "Projecten", roles: ALLE },
+  { key: "brieven", label: "Brieven", icon: Mailbox, group: "Projecten", roles: ALLE },
   // Buurtaanpak staat tijdelijk niet in het menu (30-07-2026, op verzoek). De pagina, de gegevens en
   // de code blijven bestaan: zodra dit project weer begint, hoeft alleen deze regel terug.
   // { key: "buurtaanpak", label: "Buurtaanpak", icon: Waypoints, group: "Projecten", roles: ALLE },
@@ -75,10 +77,11 @@ export const NAV: NavItem[] = [
   // Afspraken staat niet meer in het menu (op verzoek). Pagina en gegevens blijven bestaan;
   // om het terug te zetten hoeft alleen `verborgen: true` weg.
   { key: "afspraken", label: "Afspraken", icon: CalendarCheck, group: "Operatie", roles: LEIDING, verborgen: true },
-  { key: "documenten", label: "Documenten", icon: FileText, group: "Operatie", roles: LEIDING },
+  // Documenten staat nu als tabblad in Klanten & Documenten; de losse pagina blijft bereikbaar.
+  { key: "documenten", label: "Documenten", icon: FileText, group: "Operatie", roles: LEIDING, verborgen: true },
   { key: "communicatie", label: "Communicatie", icon: MessagesSquare, badge: "AI", group: "Operatie", roles: ALLE },
   { key: "kennisbank", label: "Kennisbank", icon: BookOpen, group: "Operatie", roles: ALLE },
-  { key: "klanten", label: "Klanten & Database", icon: Database, group: "Operatie", roles: LEIDING },
+  { key: "klanten", label: "Klanten & Documenten", icon: Database, group: "Operatie", roles: LEIDING },
 
   { key: "projectbeheer", label: "Projectbeheer", icon: Briefcase, group: "Boekhouding", roles: LEIDING },
   { key: "facturen", label: "Facturen", icon: Receipt, group: "Boekhouding", roles: LEIDING },
@@ -87,8 +90,9 @@ export const NAV: NavItem[] = [
   // zijn eigen regels zien (filter op medewerkerId) en alle knoppen om iets aan te maken, te wijzigen
   // of te verwijderen zijn leiding-only. Je eigen loonstrook is van jou; die van een ander niet.
   { key: "loonstroken", label: "Loonstroken", icon: Wallet, group: "Boekhouding", roles: ALLE },
-  { key: "vrijedagen", label: "Vrije dagen", icon: Sun, group: "Boekhouding", roles: LEIDING },
-  { key: "verlof", label: "Verlof", icon: Plane, group: "Boekhouding", roles: LEIDING },
+  // Werknemers zien op Vrije dagen en Verlof uitsluitend hun eigen gegevens.
+  { key: "vrijedagen", label: "Vrije dagen", icon: Sun, group: "Boekhouding", roles: ALLE },
+  { key: "verlof", label: "Verlof", icon: Plane, group: "Boekhouding", roles: ALLE },
   { key: "boetes", label: "Boetes", icon: AlertTriangle, group: "Boekhouding", roles: ALLE },
   { key: "medewerkers", label: "Medewerkers", icon: Users, group: "Boekhouding", roles: LEIDING },
 

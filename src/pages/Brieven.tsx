@@ -1409,9 +1409,9 @@ export function Brieven({ initieelRonde, initieelMap }: { initieelRonde?: string
     const groepen = perMap(klaarRondes);
     return (
       <div className="space-y-5">
-        <WerkTabs tab={tab} setTab={setTab} klaar={klaarRondes.length} archief={archiefRondes.length} />
+        <WerkTabs tab={tab} setTab={setTab} klaar={klaarRondes.length} archief={archiefRondes.length} stedinLabel="Boekhouding" zonderArchief />
         <div>
-          <h2 className="text-lg font-bold text-ink-900 sm:text-xl">Klaar voor Stedin</h2>
+          <h2 className="text-lg font-bold text-ink-900 sm:text-xl">Boekhouding</h2>
           <p className="text-sm text-ink-500">Mappen die volledig zijn afgegooid en naar de boekhouding zijn gestuurd. Hier pakt de administratie ze op: factureren en klaar.</p>
         </div>
         {groepen.length === 0 ? (
@@ -1463,7 +1463,7 @@ export function Brieven({ initieelRonde, initieelMap }: { initieelRonde?: string
     const groepen = perMap(archiefRondes);
     return (
       <div className="space-y-5">
-        <WerkTabs tab={tab} setTab={setTab} klaar={klaarRondes.length} archief={archiefRondes.length} />
+        <WerkTabs tab={tab} setTab={setTab} klaar={klaarRondes.length} archief={archiefRondes.length} stedinLabel="Boekhouding" zonderArchief />
         <div>
           <h2 className="text-lg font-bold text-ink-900 sm:text-xl">Archief</h2>
           <p className="text-sm text-ink-500">Afgehandeld werk. Alles blijft bewaard in de database — terugzetten kan altijd.</p>
@@ -1540,11 +1540,11 @@ export function Brieven({ initieelRonde, initieelMap }: { initieelRonde?: string
 
   return (
     <div className="space-y-3 sm:space-y-6">
-      <WerkTabs tab={tab} setTab={setTab} klaar={klaarRondes.length} archief={archiefRondes.length} />
+      <WerkTabs tab={tab} setTab={setTab} klaar={klaarRondes.length} archief={archiefRondes.length} stedinLabel="Boekhouding" zonderArchief />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-bold text-ink-900 sm:text-xl">Brieven & Routes</h2>
+          <h2 className="text-lg font-bold text-ink-900 sm:text-xl">Brieven</h2>
           <p className="text-sm text-ink-500">Looproutes, ontbrekende huisnummers en bedrijfspanden.</p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -1566,7 +1566,7 @@ export function Brieven({ initieelRonde, initieelMap }: { initieelRonde?: string
           </button>
         </div>
       </div>
-      <BestandScanModal open={scanOpen} projectId="" projectNaam="Brieven & Routes" onSluit={() => setScanOpen(false)} />
+      <BestandScanModal open={scanOpen} projectId="" projectNaam="Brieven" onSluit={() => setScanOpen(false)} />
 
 
       {zichtbaar.length === 0 ? (

@@ -5,16 +5,15 @@ import { Keuze } from "../components/Keuze";
 import { exporteerDocumentenExcel } from "../lib/excel";
 
 type Item = { id: string; data: Record<string, string | number> };
-type CatKey = "afspraken" | "voorschouwen" | "brieven";
+type CatKey = "afspraken" | "voorschouwen";
 
 const CATS: { key: CatKey; label: string; primair: string; groep: string; bestand: string }[] = [
   { key: "afspraken", label: "Afspraken", primair: "Adres", groep: "Locatie", bestand: "Afspraken" },
   { key: "voorschouwen", label: "Voorschouwen", primair: "Straat", groep: "Plaats", bestand: "Voorschouwen" },
-  { key: "brieven", label: "Brieven (adressen)", primair: "Adres", groep: "Straat", bestand: "Brieven_adressen" },
 ];
 
 export function Documenten() {
-  const { afspraken, voorschouwen, rondes, users, bedrijf, currentUser } = useApp();
+  const { afspraken, voorschouwen, users, bedrijf, currentUser } = useApp();
   const naamVan = (id?: string) => users.find((u) => u.id === id)?.naam ?? "";
 
   const [cat, setCat] = useState<CatKey>("afspraken");
@@ -46,17 +45,8 @@ export function Documenten() {
           Datum: new Date(v.aangemaakt).toLocaleDateString("nl-NL"),
         },
       }));
-    return rondes.flatMap((r) =>
-      r.adressen.map((a) => ({
-        id: a.id,
-        data: {
-          Adres: `${r.straat} ${a.huisnummer}${a.toevoeging ? "-" + a.toevoeging : ""}`,
-          Straat: r.straat, Huisnummer: a.huisnummer, Type: a.type, Status: a.status,
-          Ontbreekt: a.ontbreekt ? "Ja" : "Nee", Wijk: r.plaats, Notitie: a.notitie,
-        },
-      }))
-    );
-  }, [cat, afspraken, voorschouwen, rondes, users]);
+    return [];
+  }, [cat, afspraken, voorschouwen, users]);
 
   const huidige = CATS.find((c) => c.key === cat)!;
   const kolommen = items.length ? Object.keys(items[0].data) : [];
@@ -111,10 +101,7 @@ export function Documenten() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h2 className="text-xl font-bold text-ink-900">Documenten</h2>
-        <p className="text-sm text-ink-500">Kies een soort, zoek of sorteer, vink aan en download als Excel (.xlsx).</p>
-      </div>
+      <p className="text-sm text-ink-500">Kies een soort, zoek of sorteer, vink aan en download als Excel (.xlsx).</p>
 
       {/* Soort */}
       <div className="flex flex-wrap gap-2">
