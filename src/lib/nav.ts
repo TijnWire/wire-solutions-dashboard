@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import type { Role } from "./types";
 
-export type NavGroup = "Werk" | "Projecten" | "Vragen" | "Operatie" | "Boekhouding" | "Bedrijfsdata" | "Systeem";
+export type NavGroup = "Werk" | "Projecten" | "Hulpmiddelen" | "Boekhouding" | "Bedrijfsdata" | "Systeem";
 
 export type NavItem = {
   key: string;
@@ -37,6 +37,9 @@ export type NavItem = {
   badge?: string;
   group: NavGroup;
   roles: Role[];
+  // Niet in het menu en de mobiele onderbalk, maar de pagina blijft gewoon bestaan en bereikbaar via
+  // links (dashboard-tegels, meldingen, Mijn werk). De rol-controle (roles/magZien) blijft ook gelden.
+  verborgen?: boolean;
 };
 
 // HR ziet alles (personeelszaken/boekhouding) — daarom in élke rol-groep opgenomen.
@@ -69,10 +72,12 @@ export const NAV: NavItem[] = [
   { key: "schouwafspraken", label: "Schouwafspraken", icon: CalendarClock, group: "Projecten", roles: ALLE },
   { key: "tauw", label: "Bodemonderzoeken", icon: Shovel, group: "Projecten", roles: ALLE },
 
-  { key: "kennisbank", label: "Kennisbank", icon: BookOpen, group: "Vragen", roles: ALLE },
+  { key: "kennisbank", label: "Kennisbank", icon: BookOpen, group: "Hulpmiddelen", roles: ALLE },
 
-  { key: "afspraken", label: "Afspraken", icon: CalendarCheck, group: "Operatie", roles: LEIDING },
-  { key: "documenten", label: "Documenten", icon: FileText, group: "Operatie", roles: LEIDING },
+  // Afspraken staat niet meer in het menu (09-11-2026, op verzoek). Pagina en gegevens blijven bestaan;
+  // om het terug te zetten hoeft alleen `verborgen: true` weg.
+  { key: "afspraken", label: "Afspraken", icon: CalendarCheck, group: "Hulpmiddelen", roles: LEIDING, verborgen: true },
+  { key: "documenten", label: "Documenten", icon: FileText, group: "Hulpmiddelen", roles: LEIDING },
 
   { key: "projectbeheer", label: "Projectbeheer", icon: Briefcase, group: "Boekhouding", roles: LEIDING },
   { key: "facturen", label: "Facturen", icon: Receipt, group: "Boekhouding", roles: LEIDING },
@@ -85,7 +90,7 @@ export const NAV: NavItem[] = [
   { key: "verlof", label: "Verlof", icon: Plane, group: "Boekhouding", roles: LEIDING },
   { key: "boetes", label: "Boetes", icon: AlertTriangle, group: "Boekhouding", roles: ALLE },
   { key: "medewerkers", label: "Medewerkers", icon: Users, group: "Boekhouding", roles: LEIDING },
-  { key: "communicatie", label: "Communicatie", icon: MessagesSquare, badge: "AI", group: "Operatie", roles: ALLE },
+  { key: "communicatie", label: "Communicatie", icon: MessagesSquare, badge: "AI", group: "Hulpmiddelen", roles: ALLE },
 
   { key: "overzicht", label: "Dashboard", icon: LayoutDashboard, group: "Bedrijfsdata", roles: LEIDING },
   { key: "team", label: "Team", icon: Users, group: "Bedrijfsdata", roles: LEIDING },
@@ -96,7 +101,7 @@ export const NAV: NavItem[] = [
   { key: "instellingen", label: "Instellingen", icon: Settings, group: "Systeem", roles: ALLE },
 ];
 
-export const GROUPS: NavGroup[] = ["Werk", "Projecten", "Vragen", "Operatie", "Boekhouding", "Bedrijfsdata", "Systeem"];
+export const GROUPS: NavGroup[] = ["Werk", "Projecten", "Hulpmiddelen", "Boekhouding", "Bedrijfsdata", "Systeem"];
 
 // Bepaalt of een gebruiker een menu-item mag zien.
 // Beheerders zien beheer-onderdelen alleen als de eigenaar dat gebied heeft toegewezen.
