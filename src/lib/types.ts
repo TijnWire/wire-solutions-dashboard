@@ -501,7 +501,8 @@ export type SchouwMap = {
   naam: string;        // stad / plaats
   aangemaakt: string;  // ISO
   bijgewerktOp: string; // ISO — bij elke wijziging bijgewerkt, nodig om versies samen te voegen
-  weken?: Record<string, SchouwWeekTijden>; // sleutel = maandag van de week (ISO)
+  weken?: Record<string, SchouwWeekTijden>; /* key = maandag ISO */
+  verwijderdeDagen?: Record<string, string[]>; /* key = maandag ISO → ISO-datums die in die week niet doorgaan */ // sleutel = maandag van de week (ISO)
 };
 
 // ── Klanten & Database ──

@@ -39,6 +39,9 @@ const PLAATS_TIJDEN: Record<string, { maandag: string[]; werkdag: string[] }> = 
 };
 
 // Standaardtijden van een dag; sommige plaatsen hebben hun eigen indeling, de rest de algemene.
+// Dagen (ISO) die in de week van `maandag` zijn verwijderd, bijvoorbeeld door een feestdag of een vrije dag.
+export const verwijderdeDagen = (map: SchouwMap | undefined, maandag: string): string[] => map?.verwijderdeDagen?.[maandag] ?? [];
+
 export const standaardTijden = (dagIndex: number, plaats?: string): string[] => {
   const eigen = plaats ? PLAATS_TIJDEN[normPlaats(plaats)] : undefined;
   if (eigen) return [...(dagIndex === 0 ? eigen.maandag : eigen.werkdag)];
@@ -74,9 +77,13 @@ export function bouwWeek(map: SchouwMap | undefined, maandag: string, afspraken:
     perDag.set(a.datum, lijst);
   }
   const uit: SchouwDag[] = [];
+  const weg = new Set(verwijderdeDagen(map, maandag));
   dagenVanWeek(maandag).forEach((iso, i) => {
     const opDag = perDag.get(iso) ?? [];
     if (i >= 5 && opDag.length === 0) return;
+    // Een verwijderde dag verdwijnt uit het raster en dus ook uit de Excel. Staat er toch een afspraak
+    // op (later alsnog ingevuld), dan blijft de dag staan, zodat er nooit iets uit de planning valt.
+    if (weg.has(iso) && opDag.length === 0) return;
     const vakken = i >= 5 ? [] : tijdenVan(map, maandag, iso, i, plaats);
     const tijden = new Set<string>(vakken);
     for (const a of opDag) tijden.add(a.tijd || "");

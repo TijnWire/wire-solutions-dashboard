@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { ArrowLeft, CalendarClock, ChevronLeft, ChevronRight, Clock, Download, FolderOpen, FolderPlus, Pencil, Phone, Plus, RotateCcw, Trash2, X } from "lucide-react";
+import { ArrowLeft, CalendarClock, CalendarX, ChevronLeft, ChevronRight, Clock, Download, FolderOpen, FolderPlus, Pencil, Phone, Plus, RotateCcw, Trash2, X } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { Card, Badge } from "../components/ui";
 import { WerknemerKiezer } from "../components/WerknemerKiezer";
@@ -9,7 +9,7 @@ import { Keuze } from "../components/Keuze";
 import { SCHOUW_STATUSSEN, type SchouwStatus, type Schouwafspraak } from "../lib/types";
 import { isISODatum, toISO, verschuifWeek, weekBereik, weekNummer, weekStartISO } from "../lib/week";
 import {
-  bouwWeek, exportDagen, mapOverzicht, normPlaats, sorteerOpTijd, tijdLabel, tijdenVan, type MapOverzicht,
+  bouwWeek, dagenVanWeek, exportDagen, mapOverzicht, normPlaats, sorteerOpTijd, tijdLabel, tijdenVan, verwijderdeDagen, WEEKDAG_NAMEN, type MapOverzicht,
 } from "../lib/schouw";
 import { exporteerSchouwPlanning } from "../lib/schouwExcel";
 
@@ -210,6 +210,28 @@ function MapDetail({ overzicht, terug }: { overzicht: MapOverzicht; terug: () =>
     updateSchouwMap(id, { weken });
   };
 
+  // Een dag laten vervallen (bv. een feestdag): hij verdwijnt uit het raster én uit de Excel voor Stedin.
+  // Staan er nog afspraken op, dan eerst die verplaatsen of verwijderen, zodat er niets zoekraakt.
+  const zetVerwijderd = (iso: string, weg: boolean) => {
+    const id = record?.id ?? addSchouwMap(overzicht.naam);
+    const huidig = verwijderdeDagen(record, maandag);
+    const nieuw = weg ? [...new Set([...huidig, iso])] : huidig.filter((d) => d !== iso);
+    const alle = { ...(record?.verwijderdeDagen ?? {}) };
+    if (nieuw.length) alle[maandag] = nieuw;
+    else delete alle[maandag];
+    updateSchouwMap(id, { verwijderdeDagen: alle });
+  };
+  const verwijderDag = (dag: { datum: string; naam: string; regels: { afspraken: Schouwafspraak[] }[] }) => {
+    const n = dag.regels.reduce((m, r) => m + r.afspraken.length, 0);
+    if (n > 0) {
+      alert(`Op ${dag.naam.toLowerCase()} ${dagKort(dag.datum)} staan nog ${n} ${n === 1 ? "afspraak" : "afspraken"}. Verplaats of verwijder die eerst, dan kun je de dag verwijderen.`);
+      return;
+    }
+    if (!confirm(`${dag.naam} ${dagKort(dag.datum)} verwijderen uit week ${nr}? De dag komt dan ook niet op de planning voor Stedin.`)) return;
+    if (tijdenDag === dag.datum) setTijdenDag(null);
+    zetVerwijderd(dag.datum, true);
+  };
+
   const download = async () => {
     setBezig(true);
     try {
@@ -219,6 +241,10 @@ function MapDetail({ overzicht, terug }: { overzicht: MapOverzicht; terug: () =>
     }
   };
 
+  // Werkdagen van deze week die zijn verwijderd (en dus niet in het raster staan), om terug te kunnen zetten.
+  const verwijderdeLijst = dagenVanWeek(maandag)
+    .map((iso, i) => ({ iso, naam: WEEKDAG_NAMEN[i], i }))
+    .filter((d) => d.i < 5 && verwijderdeDagen(record, maandag).includes(d.iso) && !week.some((w) => w.datum === d.iso));
   const inWeek = week.reduce((n, d) => n + d.regels.reduce((m, r) => m + r.afspraken.filter((a) => a.status !== "Geannuleerd").length, 0), 0);
   const formVakken = form ? vakkenVoor(form.datum) : [];
   const bezetOp = (iso: string, t: string) => afspraken.some((a) => a.id !== bewerkId && a.datum === iso && a.tijd === t && a.status !== "Geannuleerd");
@@ -251,7 +277,7 @@ function MapDetail({ overzicht, terug }: { overzicht: MapOverzicht; terug: () =>
           {!isHuidigeWeek && (
             <button type="button" onClick={() => setMaandag(weekStartISO(vandaagISO()))} className={knop}>Deze week</button>
           )}
-          <button type="button" onClick={download} disabled={bezig} className="ml-auto inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50">
+          <button type="button" onClick={download} disabled={bezig || week.length === 0} className="ml-auto inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50">
             <Download className="h-4 w-4" /> {bezig ? "Bezig…" : `Planning week ${nr} voor Stedin (Excel)`}
           </button>
         </div>
@@ -382,9 +408,14 @@ function MapDetail({ overzicht, terug }: { overzicht: MapOverzicht; terug: () =>
               <span className="text-sm text-ink-600">{dagKort(dag.datum)}</span>
               {aangepast && <Badge tone="amber">Aangepaste tijdvakken</Badge>}
               {kanTijdenAanpassen && (
-                <button type="button" onClick={() => setTijdenDag(open ? null : dag.datum)} className="ml-auto inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-ink-700 hover:bg-white/70">
-                  <Clock className="h-3.5 w-3.5" /> {open ? "Klaar" : "Tijdvakken aanpassen"}
-                </button>
+                <span className="ml-auto flex items-center gap-1">
+                  <button type="button" onClick={() => setTijdenDag(open ? null : dag.datum)} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-ink-700 hover:bg-white/70">
+                    <Clock className="h-3.5 w-3.5" /> {open ? "Klaar" : "Tijdvakken aanpassen"}
+                  </button>
+                  <button type="button" onClick={() => verwijderDag(dag)} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-red-600 hover:bg-white/70" title="Deze dag laten vervallen">
+                    <CalendarX className="h-3.5 w-3.5" /> Dag verwijderen
+                  </button>
+                </span>
               )}
             </div>
 
@@ -457,7 +488,22 @@ function MapDetail({ overzicht, terug }: { overzicht: MapOverzicht; terug: () =>
         );
       })}
 
-      {week.every((d) => d.regels.length === 0) && (
+      {verwijderdeLijst.length > 0 && (
+        <Card className="p-4">
+          <h3 className="mb-2 text-sm font-bold text-ink-900">Verwijderde dagen in week {nr}</h3>
+          <div className="flex flex-wrap gap-2">
+            {verwijderdeLijst.map((d) => (
+              <span key={d.iso} className="inline-flex items-center gap-2 rounded-lg border border-ink-200 bg-ink-50 py-1 pl-3 pr-1.5 text-sm text-ink-700">
+                {d.naam} {dagKort(d.iso)}
+                <button type="button" onClick={() => zetVerwijderd(d.iso, false)} className="inline-flex items-center gap-1 rounded-md bg-white px-2 py-1 text-xs font-semibold text-brand-600 hover:bg-brand-50"><RotateCcw className="h-3 w-3" /> Terugzetten</button>
+              </span>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-ink-400">Deze dagen staan niet op de planning voor Stedin.</p>
+        </Card>
+      )}
+
+      {week.length === 0 && verwijderdeLijst.length === 0 && (
         <Card className="p-10 text-center">
           <CalendarClock className="mx-auto h-10 w-10 text-ink-300" />
           <p className="mt-3 text-sm text-ink-500">Er staat niets in deze week.</p>
