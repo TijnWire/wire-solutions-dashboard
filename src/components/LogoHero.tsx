@@ -74,7 +74,7 @@ export function LogoHero() {
   };
 
   return (
-    <section className="flex flex-col items-center py-2" aria-label="Wire Solutions">
+    <section className="flex flex-col items-center pb-2 pt-4" aria-label="Wire Solutions">
       <div
         ref={vak}
         onPointerMove={beweeg}
@@ -82,8 +82,8 @@ export function LogoHero() {
         onClick={() => setDraai((d) => d + 1)}
         role="img"
         aria-label="Wire Solutions logo — tik om het te laten draaien"
-        className="relative h-44 w-full max-w-[19rem] cursor-pointer select-none sm:h-56"
-        style={{ perspective: "900px", touchAction: "pan-y" }}
+        className="relative w-full max-w-[19rem] cursor-pointer select-none sm:max-w-[22rem]"
+        style={{ aspectRatio: "575 / 370", perspective: "900px", touchAction: "pan-y" }}
       >
         {/* Buitenste laag: volgt je vinger/muis */}
         <div className="absolute inset-0 transition-transform duration-200 ease-out" style={{ transformStyle: "preserve-3d", transform: `rotateX(${kanteling.x}deg) rotateY(${kanteling.y}deg)` }}>
@@ -96,7 +96,7 @@ export function LogoHero() {
         </div>
       </div>
       {/* Woordmerk: exact het lettertype uit het logo (als vector uit het originele logo overgenomen) */}
-      <img src="/wire-woordmerk.svg" alt="Wire Solutions — Detachering &amp; Payrolling" className="-mt-2 w-full max-w-[19rem] select-none" draggable={false} />
+      <img src="/wire-woordmerk.svg" alt="Wire Solutions — Detachering &amp; Payrolling" className="relative z-10 mt-3 w-full max-w-[19rem] select-none sm:max-w-[22rem]" draggable={false} />
     </section>
   );
 }
