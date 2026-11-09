@@ -26,7 +26,8 @@ export const Sidebar = memo(function Sidebar({
   return (
     <aside className="flex h-full w-64 shrink-0 flex-col border-r border-ink-200 bg-white pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] text-ink-600">
       <div className="flex items-center justify-center px-5 py-5">
-        <img src={logoSrc(bedrijf)} alt={bedrijf.naam || "Logo"} className="h-16 w-auto" />
+        {/* Alleen het beeldmerk (zoals het app-icoon); een door de leiding ingesteld eigen logo gaat voor. */}
+        <img src={bedrijf.logo?.trim() ? logoSrc(bedrijf) : "/wire-merk.svg"} alt={bedrijf.naam || "Wire Solutions"} className="h-14 w-auto" />
       </div>
 
       <nav className="scrollbar-thin flex-1 space-y-6 overflow-y-auto px-3 pb-6">
