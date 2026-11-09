@@ -940,7 +940,7 @@ export function Tauw({ initieelTauw }: { initieelTauw?: string }) {
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-bold text-ink-900 sm:text-xl">TAUW of Van der Helm</h2>
+          <h2 className="text-lg font-bold text-ink-900 sm:text-xl">Bodemonderzoeken</h2>
           <p className="text-sm text-ink-500">Bodemonderzoek en bezoekrondes: adressen erin, langs de deuren, en terug naar de opdrachtgever.</p>
         </div>
         {isLeiding && (

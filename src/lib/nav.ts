@@ -51,7 +51,7 @@ export const WERKNEMER_TOEGANG: { key: string; label: string }[] = [
   { key: "saneren", label: "Saneren" },
   { key: "voorschouwen", label: "Voorschouwen" },
   { key: "schouwafspraken", label: "Schouwafspraken" },
-  { key: "tauw", label: "TAUW of Van der Helm" },
+  { key: "tauw", label: "Bodemonderzoeken" },
 ];
 export const WERKNEMER_TOEGANG_KEYS = WERKNEMER_TOEGANG.map((x) => x.key);
 
@@ -67,7 +67,7 @@ export const NAV: NavItem[] = [
   { key: "saneren", label: "Saneren", icon: Building2, group: "Projecten", roles: ALLE },
   { key: "voorschouwen", label: "Voorschouwen", icon: ClipboardCheck, group: "Projecten", roles: ALLE },
   { key: "schouwafspraken", label: "Schouwafspraken", icon: CalendarClock, group: "Projecten", roles: ALLE },
-  { key: "tauw", label: "TAUW of Van der Helm", icon: Shovel, group: "Projecten", roles: ALLE },
+  { key: "tauw", label: "Bodemonderzoeken", icon: Shovel, group: "Projecten", roles: ALLE },
 
   { key: "kennisbank", label: "Kennisbank", icon: BookOpen, group: "Vragen", roles: ALLE },
 
