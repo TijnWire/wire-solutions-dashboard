@@ -32,6 +32,7 @@ import type {
   Communicatie,
   Verlof,
   Schouwafspraak,
+  SchouwMap,
   BlancoBrief,
   Urenregel,
   AgendaItem,
@@ -157,6 +158,7 @@ const LS = {
   comm: "wire.comm",
   verlof: "wire.verlof",
   schouwafspraken: "wire.schouwafspraken",
+  schouwMappen: "wire.schouwMappen",
   blancoBrieven: "wire.blancoBrieven",
   urenstaat: "wire.urenstaat",
   agendaItems: "wire.agendaItems",
@@ -213,6 +215,7 @@ type AppState = {
   comm: Communicatie;
   verlof: Verlof[];
   schouwafspraken: Schouwafspraak[];
+  schouwMappen: SchouwMap[];
   blancoBrieven: BlancoBrief[];
   urenstaat: Urenregel[];
   agendaItems: AgendaItem[];
@@ -314,6 +317,9 @@ type AppState = {
   addSchouw: (s: Omit<Schouwafspraak, "id" | "aangemaakt">) => string;
   updateSchouw: (id: string, patch: Partial<Schouwafspraak>) => void;
   deleteSchouw: (id: string) => void;
+  addSchouwMap: (naam: string) => string;
+  updateSchouwMap: (id: string, patch: Partial<Omit<SchouwMap, "id">>) => void;
+  deleteSchouwMap: (id: string) => void;
 
   addBlanco: (b: Omit<BlancoBrief, "id" | "aangemaakt">) => string;
   updateBlanco: (id: string, patch: Partial<BlancoBrief>) => void;
@@ -370,6 +376,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [comm, setComm] = useState<Communicatie>(SEED_COMM);
   const [verlof, setVerlof] = useState<Verlof[]>(SEED_VERLOF);
   const [schouwafspraken, setSchouwafspraken] = useState<Schouwafspraak[]>(SEED_SCHOUW);
+  const [schouwMappen, setSchouwMappen] = useState<SchouwMap[]>([]);
   const [blancoBrieven, setBlancoBrieven] = useState<BlancoBrief[]>(SEED_BLANCO);
   const [urenstaat, setUrenstaat] = useState<Urenregel[]>(SEED_UREN);
   const [agendaItems, setAgendaItems] = useState<AgendaItem[]>(SEED_AGENDA_ITEMS);
@@ -401,7 +408,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let actief = true;
     (async () => {
-      let [u, p, t, pp, pl, san, tw, v, r, af, fac, bed, loon, boe, communicatie, verl, kn, inst, kl, s, vm, med, og, ba, del, sch, ai, td, bl, ur] = await Promise.all([
+      let [u, p, t, pp, pl, san, tw, v, r, af, fac, bed, loon, boe, communicatie, verl, kn, inst, kl, s, vm, med, og, ba, del, sch, ai, td, bl, ur, schm] = await Promise.all([
         laadSlice<User[]>("users", LS.users, SEED_USERS),
         laadSlice<Project[]>("projects", LS.projects, SEED_PROJECTS),
         laadSlice<Taak[]>("taken", LS.taken, SEED_TAKEN),
@@ -432,6 +439,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         laadSlice<Todo[]>("todos", LS.todos, SEED_TODOS),
         laadSlice<BlancoBrief[]>("blancoBrieven", LS.blancoBrieven, SEED_BLANCO),
         laadSlice<Urenregel[]>("urenstaat", LS.urenstaat, SEED_UREN),
+        laadSlice<SchouwMap[]>("schouwMappen", LS.schouwMappen, []),
       ]);
       if (!actief) return;
       // Eenmalige schoonmaak: verwijder de voorbeeld-/demoprojecten en bijbehorende data, zodat het
@@ -553,6 +561,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setComm({ ...SEED_COMM, ...communicatie });
       setVerlof(verl);
       setSchouwafspraken(sch ?? []);
+      setSchouwMappen(schm ?? []);
       setBlancoBrieven(bl ?? []);
       setUrenstaat(migreerUren(ur));
       setAgendaItems(ai ?? []);
@@ -634,6 +643,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (hydrated) void idbSet("schouwafspraken", schouwafspraken);
   }, [schouwafspraken, hydrated]);
   useEffect(() => {
+    if (hydrated) void idbSet("schouwMappen", schouwMappen);
+  }, [schouwMappen, hydrated]);
+  useEffect(() => {
     if (hydrated) void idbSet("blancoBrieven", blancoBrieven);
   }, [blancoBrieven, hydrated]);
   useEffect(() => {
@@ -692,6 +704,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     comm: (v) => setComm(v as Communicatie),
     verlof: (v) => setVerlof(v as Verlof[]),
     schouwafspraken: (v) => setSchouwafspraken(v as Schouwafspraak[]),
+    schouwMappen: (v) => setSchouwMappen(v as SchouwMap[]),
     blancoBrieven: (v) => setBlancoBrieven(v as BlancoBrief[]),
     urenstaat: (v) => setUrenstaat(migreerUren(v)),
     agendaItems: (v) => setAgendaItems(v as AgendaItem[]),
@@ -709,7 +722,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const waarden: Record<string, unknown> = {
     users, projects, taken, projectPosts, planningen, saneringen, tauw: tauwOpdrachten,
     voorschouwMappen, mededelingen, rondes, afspraken, facturen, bedrijf,
-    loonstroken, boetes, comm, verlof, schouwafspraken, blancoBrieven, urenstaat, agendaItems, todos, kennis, instellingen, klanten, opdrachtgevers, buurtaanpak,
+    loonstroken, boetes, comm, verlof, schouwafspraken, schouwMappen, blancoBrieven, urenstaat, agendaItems, todos, kennis, instellingen, klanten, opdrachtgevers, buurtaanpak,
     deletes,
   };
   // Voorschouwen per shard toevoegen aan de te-pushen waarden (los van de rest).
@@ -726,7 +739,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const COLLECTIONS = new Set([
     "users", "projects", "taken", "projectPosts", "planningen", "saneringen", "buurtaanpak", "tauw",
     "voorschouwMappen", "mededelingen", "rondes", "afspraken", "facturen",
-    "opdrachtgevers", "loonstroken", "boetes", "verlof", "schouwafspraken", "blancoBrieven", "urenstaat", "agendaItems", "todos", "kennis", "klanten",
+    "opdrachtgevers", "loonstroken", "boetes", "verlof", "schouwafspraken", "schouwMappen", "blancoBrieven", "urenstaat", "agendaItems", "todos", "kennis", "klanten",
   ]);
   for (let i = 0; i < VS_SHARDS; i++) COLLECTIONS.add(vsKey(i));
 
@@ -1142,7 +1155,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       schrijfKey(key, waarden[key]); // wachtrij: nooit twee schrijfacties tegelijk op hetzelfde onderdeel
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supabaseAan, sbSessie, hydrated, syncKlaar, users, projects, taken, projectPosts, planningen, saneringen, tauwOpdrachten, voorschouwen, voorschouwMappen, mededelingen, rondes, afspraken, facturen, bedrijf, loonstroken, boetes, comm, verlof, schouwafspraken, blancoBrieven, urenstaat, agendaItems, todos, kennis, instellingen, klanten, opdrachtgevers, buurtaanpak, deletes]);
+  }, [supabaseAan, sbSessie, hydrated, syncKlaar, users, projects, taken, projectPosts, planningen, saneringen, tauwOpdrachten, voorschouwen, voorschouwMappen, mededelingen, rondes, afspraken, facturen, bedrijf, loonstroken, boetes, comm, verlof, schouwafspraken, schouwMappen, blancoBrieven, urenstaat, agendaItems, todos, kennis, instellingen, klanten, opdrachtgevers, buurtaanpak, deletes]);
 
   // Bewaakt of de sync écht loopt. `sbSessie` betekende alleen "we hebben ooit een token gekregen" — dat
   // bolletje stond dus groen terwijl er in werkelijkheid uren niets meer heen en weer ging (verlopen token,
@@ -1590,6 +1603,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
   const updateSchouw: AppState["updateSchouw"] = (id, patch) =>
     setSchouwafspraken((prev) => prev.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+  const addSchouwMap: AppState["addSchouwMap"] = (naam) => {
+    const id = nextId("smap");
+    const nu = new Date().toISOString();
+    setSchouwMappen((prev) => [...prev, { id, naam: naam.trim() || "Nieuwe map", aangemaakt: nu, bijgewerktOp: nu }]);
+    return id;
+  };
+  // bijgewerktOp bij ELKE wijziging meestempelen, zodat deze wijziging wint bij het samenvoegen op de centrale database.
+  const updateSchouwMap: AppState["updateSchouwMap"] = (id, patch) =>
+    setSchouwMappen((prev) => prev.map((m) => (m.id === id ? { ...m, ...patch, bijgewerktOp: new Date().toISOString() } : m)));
+  const deleteSchouwMap: AppState["deleteSchouwMap"] = (id) => {
+    setSchouwMappen((prev) => prev.filter((m) => m.id !== id));
+    tomb("schouwMappen", id);
+  };
   const deleteSchouw: AppState["deleteSchouw"] = (id) => {
     setSchouwafspraken((prev) => prev.filter((x) => x.id !== id));
     tomb("schouwafspraken", id);
@@ -1699,6 +1725,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         comm,
         verlof,
         schouwafspraken,
+        schouwMappen,
         blancoBrieven,
         urenstaat,
         agendaItems,
@@ -1778,6 +1805,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addSchouw,
         updateSchouw,
         deleteSchouw,
+        addSchouwMap,
+        updateSchouwMap,
+        deleteSchouwMap,
         addBlanco,
         updateBlanco,
         deleteBlanco,

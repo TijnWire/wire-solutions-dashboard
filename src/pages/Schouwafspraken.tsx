@@ -1,17 +1,21 @@
-import { useMemo, useState } from "react";
-import { Plus, X, Trash2, MapPin, Phone, CalendarClock, Search, Pencil, Archive, RotateCcw } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
+import { ArrowLeft, CalendarClock, ChevronLeft, ChevronRight, Clock, Download, FolderOpen, FolderPlus, Pencil, Phone, Plus, RotateCcw, Trash2, X } from "lucide-react";
 import { useApp } from "../store/AppContext";
-import { useProjectFilter } from "../components/ProjectFilter";
-import { WerkTabs, type WerkTab } from "../components/WerkTabs";
 import { Card, Badge } from "../components/ui";
 import { WerknemerKiezer } from "../components/WerknemerKiezer";
 import { DatumKiezer } from "../components/DatumKiezer";
-import { TijdKiezer } from "../components/TijdKiezer";
+import { TijdKiezer, normaliseerTijd } from "../components/TijdKiezer";
 import { Keuze } from "../components/Keuze";
 import { SCHOUW_STATUSSEN, type SchouwStatus, type Schouwafspraak } from "../lib/types";
+import { isISODatum, toISO, verschuifWeek, weekBereik, weekNummer, weekStartISO } from "../lib/week";
+import {
+  bouwWeek, exportDagen, mapOverzicht, normPlaats, sorteerOpTijd, tijdLabel, tijdenVan, type MapOverzicht,
+} from "../lib/schouw";
+import { exporteerSchouwPlanning } from "../lib/schouwExcel";
 
 const veld = "w-full rounded-xl border border-ink-200 px-3.5 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100";
 const labelCls = "mb-1 block text-xs font-semibold text-ink-600";
+const knop = "inline-flex items-center gap-1.5 rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm font-medium text-ink-700 hover:bg-ink-50";
 
 const statusTone: Record<SchouwStatus, "slate" | "amber" | "green" | "red"> = {
   "In te plannen": "slate",
@@ -20,216 +24,444 @@ const statusTone: Record<SchouwStatus, "slate" | "amber" | "green" | "red"> = {
   Geannuleerd: "red",
 };
 
-const leegForm = {
-  straat: "", huisnummer: "", postcode: "", plaats: "",
-  contactNaam: "", telefoon: "", datum: "", tijd: "", toegewezenAan: "", notitie: "",
-};
+const dagKort = (iso: string) => new Date(iso + "T00:00:00").toLocaleDateString("nl-NL", { day: "numeric", month: "short" });
+const vandaagISO = () => toISO(new Date());
 
-const datumLabel = (iso: string) => (iso ? new Date(iso + "T00:00:00").toLocaleDateString("nl-NL", { weekday: "short", day: "numeric", month: "short" }) : "");
-
+// ───────────────────────── Overzicht: één map per stad / plaats ─────────────────────────
 export function Schouwafspraken() {
-  const { schouwafspraken, users, currentUser, addSchouw, updateSchouw, deleteSchouw } = useApp();
-  const [form, setForm] = useState<typeof leegForm | null>(null);
-  const [bewerkId, setBewerkId] = useState<string | null>(null);
-  const [zoek, setZoek] = useState("");
-  // Dezelfde drie beelden als op de andere projectpagina's. Uitgevoerd = klaar, dus klaar om door te
-  // geven; gearchiveerd = afgehandeld en uit beeld, maar nog steeds in de database.
-  const [tab, setTab] = useState<WerkTab>("overzicht");
+  const { schouwafspraken, schouwMappen, addSchouwMap, deleteSchouwMap, currentUser } = useApp();
+  const [gekozen, setGekozen] = useState<string | null>(null);
+  const [nieuw, setNieuw] = useState("");
 
-  // Tellen doen we over alles, niet over wat er na de periodefilter overblijft — anders zegt de balk
-  // "Archief (0)" terwijl er van vorig jaar tientallen in staan.
-  const mijne = schouwafspraken.filter((s) =>
-    currentUser?.rol === "eigenaar" || currentUser?.rol === "beheer" || currentUser?.rol === "hr" || s.toegewezenAan === currentUser?.id);
-  const klaarLijst = mijne.filter((s) => !s.gearchiveerd && s.status === "Uitgevoerd");
-  const archiefLijst = mijne.filter((s) => s.gearchiveerd);
-  const inTab = tab === "stedin" ? klaarLijst
-    : tab === "archief" ? archiefLijst
-    : mijne.filter((s) => !s.gearchiveerd && s.status !== "Uitgevoerd");
+  // Gearchiveerde afspraken (van vóór de mappen) horen niet meer in de weekplanning.
+  const actief = useMemo(() => schouwafspraken.filter((s) => !s.gearchiveerd), [schouwafspraken]);
+  const mappen = useMemo(() => mapOverzicht(schouwMappen, actief), [schouwMappen, actief]);
 
-  const filter = useProjectFilter(inTab, {
-    datum: (s) => s.datum || s.aangemaakt,
-    isOpen: (s) => !s.datum,          // nog geen afspraak gepland = nog te doen
-  });
-
-  const isLeiding = currentUser?.rol === "eigenaar" || currentUser?.rol === "beheer" || currentUser?.rol === "hr";
-  const naamVan = (id?: string) => users.find((u) => u.id === id)?.naam ?? "Niet toegewezen";
-  const set = (p: Partial<typeof leegForm>) => setForm((f) => ({ ...(f ?? leegForm), ...p }));
-
-  // Werknemers zien alleen hun eigen toegewezen schouwafspraken; leiding ziet alles.
-  const zichtbaar = useMemo(() => {
-    const q = zoek.trim().toLowerCase();
-    return filter.zichtbaar
-      .filter((s) => !q || `${s.straat} ${s.huisnummer} ${s.postcode} ${s.plaats} ${s.contactNaam}`.toLowerCase().includes(q))
-      .sort((a, b) => {
-        // Ingeplande met datum vooraan (op datum/tijd), daarna de rest op aanmaakmoment.
-        if (a.datum && b.datum) return (a.datum + a.tijd).localeCompare(b.datum + b.tijd);
-        if (a.datum) return -1;
-        if (b.datum) return 1;
-        return b.aangemaakt.localeCompare(a.aangemaakt);
-      });
-  }, [filter.zichtbaar, isLeiding, currentUser?.id, zoek]);
-
-  // Deze controle staat bewust onder alle hooks: React eist dat hooks bij iedere render in
-  // dezelfde volgorde draaien, en een return erboven slaat ze over.
   if (!currentUser) return null;
+  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr";
 
-  const openNieuw = () => { setBewerkId(null); setForm({ ...leegForm }); };
-  const openBewerk = (s: Schouwafspraak) => {
-    setBewerkId(s.id);
-    setForm({ straat: s.straat, huisnummer: s.huisnummer, postcode: s.postcode, plaats: s.plaats, contactNaam: s.contactNaam, telefoon: s.telefoon, datum: s.datum, tijd: s.tijd, toegewezenAan: s.toegewezenAan ?? "", notitie: s.notitie });
+  if (gekozen !== null) {
+    const m = mappen.find((x) => x.sleutel === gekozen);
+    if (m) return <MapDetail key={m.sleutel} overzicht={m} terug={() => setGekozen(null)} />;
+  }
+
+  const huidigeWeek = weekStartISO(vandaagISO());
+  const vandaag = vandaagISO();
+
+  const maakMap = () => {
+    const naam = nieuw.trim().replace(/\s+/g, " ");
+    if (!naam) return;
+    if (!mappen.some((m) => m.sleutel === normPlaats(naam))) addSchouwMap(naam);
+    setNieuw("");
+    setGekozen(normPlaats(naam));
   };
-  const sluit = () => { setForm(null); setBewerkId(null); };
-
-  const opslaan = () => {
-    if (!form || !form.straat.trim() || !form.huisnummer.trim()) return;
-    // Status leiden we af: een datum betekent "Ingepland" (tenzij al uitgevoerd/geannuleerd bij bewerken).
-    const bestaand = bewerkId ? schouwafspraken.find((s) => s.id === bewerkId) : undefined;
-    const status: SchouwStatus =
-      bestaand && (bestaand.status === "Uitgevoerd" || bestaand.status === "Geannuleerd")
-        ? bestaand.status
-        : form.datum ? "Ingepland" : "In te plannen";
-    const data = {
-      straat: form.straat.trim(), huisnummer: form.huisnummer.trim(), postcode: form.postcode.trim(), plaats: form.plaats.trim(),
-      contactNaam: form.contactNaam.trim(), telefoon: form.telefoon.trim(),
-      datum: form.datum, tijd: form.tijd, toegewezenAan: form.toegewezenAan || undefined, notitie: form.notitie.trim(), status,
-    };
-    if (bewerkId) updateSchouw(bewerkId, data);
-    else addSchouw(data);
-    sluit();
-  };
-
-  // De tellers gaan over het beeld dat openstaat — anders tel je het archief mee in "In te plannen".
-  const telPer = (st: SchouwStatus) => inTab.filter((s) => s.status === st).length;
-
-  const nu = () => new Date().toISOString();
 
   return (
     <div className="space-y-5">
-      <WerkTabs tab={tab} setTab={setTab} klaar={klaarLijst.length} archief={archiefLijst.length} />
+      <div>
+        <h2 className="text-xl font-bold text-ink-900">Schouwafspraken</h2>
+        <p className="text-sm text-ink-500">Per stad of plaats een map. Open een map, kies de week en vul de afspraken in; de planning voor Stedin maakt het dashboard daarna zelf.</p>
+      </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-bold text-ink-900">Schouwafspraken</h2>
-          <p className="text-sm text-ink-500">Plan de voorschouw-bezoeken: adres, moment en wie er langsgaat.</p>
-        </div>
-        {isLeiding && (
-          <button type="button" onClick={openNieuw} className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-brand-700">
-            <Plus className="h-4 w-4" /> Nieuwe schouwafspraak
+      <Card className="p-4">
+        <label className={labelCls} htmlFor="nieuwe-map">Nieuwe map (stad / plaats)</label>
+        <div className="flex flex-wrap gap-2">
+          <input
+            id="nieuwe-map"
+            value={nieuw}
+            onChange={(e) => setNieuw(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") maakMap(); }}
+            placeholder="Bijvoorbeeld Rotterdam"
+            className={veld + " min-w-0 flex-1"}
+          />
+          <button type="button" onClick={maakMap} disabled={!nieuw.trim()} className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-brand-700 disabled:opacity-40">
+            <FolderPlus className="h-4 w-4" /> Map aanmaken
           </button>
-        )}
-      </div>
-
-      {/* Telling per status */}
-      <div className="flex flex-wrap gap-2">
-        {SCHOUW_STATUSSEN.map((st) => (
-          <span key={st} className="inline-flex items-center gap-1.5 rounded-full border border-ink-200 bg-white px-3 py-1 text-xs font-semibold text-ink-600">
-            <Badge tone={statusTone[st]}>{telPer(st)}</Badge> {st}
-          </span>
-        ))}
-      </div>
-
-      {/* Formulier (leiding) */}
-      {form && isLeiding && (
-        <Card className="space-y-3 p-5 ring-2 ring-brand-200">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-ink-900">{bewerkId ? "Schouwafspraak bewerken" : "Nieuwe schouwafspraak"}</h3>
-            <button type="button" onClick={sluit} className="text-ink-400 hover:text-ink-600"><X className="h-5 w-5" /></button>
-          </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {/* Er wordt per stad ingepland, dus de stad staat bovenaan. Eerder ingevoerde plaatsen
-                komen als suggestie terug, zodat "Rotterdam" niet op drie manieren wordt getypt. */}
-            <div>
-              <label className={labelCls}>Stad / plaats</label>
-              <input value={form.plaats} onChange={(e) => set({ plaats: e.target.value })} list="schouw-plaatsen" placeholder="Rotterdam" className={veld} />
-              <datalist id="schouw-plaatsen">
-                {[...new Set(schouwafspraken.map((s) => s.plaats.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, "nl")).map((p) => <option key={p} value={p} />)}
-              </datalist>
-            </div>
-            <div><label className={labelCls}>Postcode</label><input value={form.postcode} onChange={(e) => set({ postcode: e.target.value })} placeholder="1234 AB" className={veld} /></div>
-            <div><label className={labelCls}>Straat</label><input value={form.straat} onChange={(e) => set({ straat: e.target.value })} placeholder="Straatnaam" className={veld} /></div>
-            <div><label className={labelCls}>Huisnummer</label><input value={form.huisnummer} onChange={(e) => set({ huisnummer: e.target.value })} placeholder="12" className={veld} /></div>
-            <div><label className={labelCls}>Contactpersoon</label><input value={form.contactNaam} onChange={(e) => set({ contactNaam: e.target.value })} placeholder="Naam bewoner" className={veld} /></div>
-            <div><label className={labelCls}>Telefoon</label><input value={form.telefoon} onChange={(e) => set({ telefoon: e.target.value })} placeholder="06 …" className={veld} /></div>
-            <div><label className={labelCls}>Datum</label><DatumKiezer value={form.datum} onChange={(iso) => set({ datum: iso })} placeholder="Nog in te plannen" /></div>
-            <div><label className={labelCls}>Tijd</label><TijdKiezer value={form.tijd} onChange={(tijd) => set({ tijd })} /></div>
-          </div>
-          <div>
-            <label className={labelCls}>Wie gaat schouwen?</label>
-            <WerknemerKiezer value={form.toegewezenAan} onChange={(id) => set({ toegewezenAan: id })} users={users} leegLabel="Niet toegewezen" />
-          </div>
-          <div><label className={labelCls}>Notitie</label><textarea value={form.notitie} onChange={(e) => set({ notitie: e.target.value })} rows={2} placeholder="Bijzonderheden, waar is de meterkast, toegang…" className={veld + " resize-none"} /></div>
-          <div className="flex items-center gap-2">
-            <button type="button" onClick={opslaan} disabled={!form.straat.trim() || !form.huisnummer.trim()} className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-40"><Plus className="h-4 w-4" /> {bewerkId ? "Opslaan" : "Toevoegen"}</button>
-            <button type="button" onClick={sluit} className="rounded-lg border border-ink-200 bg-white px-5 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50">Annuleren</button>
-          </div>
-        </Card>
-      )}
-
-      {/* Zoeken */}
-      {schouwafspraken.length > 0 && (
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-400" />
-          <input value={zoek} onChange={(e) => setZoek(e.target.value)} placeholder="Zoek op adres, plaats of contact…" className="w-full rounded-2xl border border-ink-200 bg-white py-3 pl-12 pr-4 text-base outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100" />
         </div>
-      )}
+      </Card>
 
-      {/* Lijst */}
-      {filter.balk}
-
-      {zichtbaar.length === 0 ? (
+      {mappen.length === 0 ? (
         <Card className="p-10 text-center">
-          <CalendarClock className="mx-auto h-10 w-10 text-ink-300" />
-          <p className="mt-3 text-sm text-ink-500">
-            {tab === "stedin" ? "Nog niets klaar voor Stedin. Zodra een afspraak op Uitgevoerd staat, komt hij hier."
-              : tab === "archief" ? "Het archief is nog leeg. Uitgevoerde en geannuleerde afspraken kun je hier opbergen."
-              : schouwafspraken.length === 0 ? "Nog geen schouwafspraken." : "Geen resultaten."}
-          </p>
+          <FolderOpen className="mx-auto h-10 w-10 text-ink-300" />
+          <p className="mt-3 text-sm text-ink-500">Nog geen mappen. Maak hierboven een map voor de eerste stad of plaats.</p>
         </Card>
       ) : (
-        <div className="space-y-3">
-          {zichtbaar.map((s) => (
-            <Card key={s.id} className="p-4">
-              <div className="flex flex-wrap items-start gap-3">
-                <div className="rounded-xl bg-brand-50 p-2.5 text-brand-600"><MapPin className="h-5 w-5" /></div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-bold text-ink-900">{s.straat} {s.huisnummer}</span>
-                    <Badge tone={statusTone[s.status]}>{s.status}</Badge>
-                  </div>
-                  <div className="mt-0.5 flex flex-wrap items-center gap-x-4 gap-y-0.5 text-xs text-ink-500">
-                    {(s.postcode || s.plaats) && <span>{[s.postcode, s.plaats].filter(Boolean).join(" ")}</span>}
-                    {s.datum && <span className="inline-flex items-center gap-1"><CalendarClock className="h-3.5 w-3.5" />{datumLabel(s.datum)}{s.tijd ? ` · ${s.tijd}` : ""}</span>}
-                    {s.contactNaam && <span>{s.contactNaam}</span>}
-                    {s.telefoon && <a href={`tel:${s.telefoon}`} className="inline-flex items-center gap-1 text-brand-600"><Phone className="h-3.5 w-3.5" />{s.telefoon}</a>}
-                    <span className="inline-flex items-center gap-1 text-ink-400">Schouwer: {naamVan(s.toegewezenAan)}</span>
-                  </div>
-                  {s.notitie && <p className="mt-1.5 text-sm text-ink-600">{s.notitie}</p>}
-
-                  {/* Statusknoppen: iedereen die 'm ziet mag de status bijwerken (uitgevoerd melden). */}
-                  <div className="mt-3 flex flex-wrap items-center gap-2">
-                    <div className="w-44">
-                      <Keuze value={s.status} onChange={(w) => updateSchouw(s.id, { status: w as SchouwStatus })} opties={SCHOUW_STATUSSEN.map((st) => ({ waarde: st, label: st }))} title="Status" />
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {mappen.map((m) => {
+            const dezeWeek = m.afspraken.filter((a) => a.datum && weekStartISO(a.datum) === huidigeWeek).length;
+            const komend = m.afspraken.filter((a) => a.datum >= vandaag && a.status !== "Geannuleerd").length;
+            const nogIn = m.afspraken.filter((a) => !a.datum).length;
+            return (
+              <Card key={m.sleutel} className="p-0">
+                <button type="button" onClick={() => setGekozen(m.sleutel)} className="flex w-full items-start gap-3 rounded-2xl p-4 text-left hover:bg-ink-50">
+                  <div className="rounded-xl bg-brand-50 p-2.5 text-brand-600"><FolderOpen className="h-5 w-5" /></div>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-bold text-ink-900">{m.naam}</div>
+                    <div className="mt-0.5 text-xs text-ink-500">
+                      {m.afspraken.length === 0 ? "Nog geen afspraken" : `${m.afspraken.length} ${m.afspraken.length === 1 ? "afspraak" : "afspraken"}`}
                     </div>
-                    {isLeiding && (
-                      <>
-                        <WerknemerKiezer value={s.toegewezenAan ?? ""} onChange={(id) => updateSchouw(s.id, { toegewezenAan: id || undefined })} users={users} leegLabel="Niet toegewezen" />
-                        <button type="button" onClick={() => openBewerk(s)} className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-3 py-2 text-sm font-medium text-ink-700 hover:bg-ink-50"><Pencil className="h-3.5 w-3.5" /> Bewerken</button>
-                        {/* Archiveren in plaats van weggooien: de afspraak verdwijnt uit het
-                            overzicht maar blijft in de database staan, en is met één klik terug. */}
-                        {s.gearchiveerd ? (
-                          <button type="button" onClick={() => updateSchouw(s.id, { gearchiveerd: false, gearchiveerdOp: undefined })} className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-3 py-2 text-sm font-medium text-ink-700 hover:bg-ink-50"><RotateCcw className="h-3.5 w-3.5" /> Terugzetten</button>
-                        ) : (s.status === "Uitgevoerd" || s.status === "Geannuleerd") && (
-                          <button type="button" onClick={() => updateSchouw(s.id, { gearchiveerd: true, gearchiveerdOp: nu() })} className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-3 py-2 text-sm font-medium text-ink-700 hover:bg-ink-50"><Archive className="h-3.5 w-3.5" /> Naar archief</button>
-                        )}
-                        <button type="button" onClick={() => { if (confirm(`Schouwafspraak ${s.straat} ${s.huisnummer} verwijderen?`)) deleteSchouw(s.id); }} className="ml-auto rounded-lg p-2 text-red-400 hover:bg-red-50 hover:text-red-600" title="Verwijderen"><Trash2 className="h-4 w-4" /></button>
-                      </>
-                    )}
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {dezeWeek > 0 && <Badge tone="amber">{dezeWeek} deze week</Badge>}
+                      {komend > 0 && <Badge tone="slate">{komend} gepland</Badge>}
+                      {nogIn > 0 && <Badge tone="red">{nogIn} zonder datum</Badge>}
+                    </div>
                   </div>
-                </div>
-              </div>
-            </Card>
-          ))}
+                </button>
+                {isLeiding && m.record && m.afspraken.length === 0 && (
+                  <div className="border-t border-ink-100 px-4 py-2 text-right">
+                    <button
+                      type="button"
+                      onClick={() => { if (confirm(`Map "${m.naam}" verwijderen?`)) deleteSchouwMap(m.record!.id); }}
+                      className="inline-flex items-center gap-1.5 text-xs font-medium text-red-500 hover:text-red-700"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" /> Lege map verwijderen
+                    </button>
+                  </div>
+                )}
+              </Card>
+            );
+          })}
         </div>
+      )}
+    </div>
+  );
+}
+
+// ───────────────────────── Eén map: weekplanning ─────────────────────────
+type FormState = { datum: string; tijd: string; straat: string; huisnummer: string; telefoon: string; notitie: string; toegewezenAan: string; status: SchouwStatus };
+
+function MapDetail({ overzicht, terug }: { overzicht: MapOverzicht; terug: () => void }) {
+  const { users, currentUser, addSchouw, updateSchouw, deleteSchouw, addSchouwMap, updateSchouwMap } = useApp();
+  const { record, afspraken } = overzicht;
+  const [maandag, setMaandag] = useState(() => weekStartISO(vandaagISO()));
+  const [form, setForm] = useState<FormState | null>(null);
+  const [bewerkId, setBewerkId] = useState<string | null>(null);
+  const [tijdenDag, setTijdenDag] = useState<string | null>(null);
+  const [bezig, setBezig] = useState(false);
+  const formRef = useRef<HTMLDivElement | null>(null);
+
+  const week = useMemo(() => bouwWeek(record, maandag, afspraken), [record, maandag, afspraken]);
+  const zonderDatum = useMemo(() => afspraken.filter((a) => !a.datum || !isISODatum(a.datum)), [afspraken]);
+  const wekenMetWerk = useMemo(() => {
+    const t = new Map<string, number>();
+    for (const a of afspraken) {
+      const w = a.datum && isISODatum(a.datum) ? weekStartISO(a.datum) : "";
+      if (w) t.set(w, (t.get(w) ?? 0) + 1);
+    }
+    return [...t.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  }, [afspraken]);
+
+  if (!currentUser) return null;
+  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr";
+  const naamVan = (id?: string) => users.find((u) => u.id === id)?.naam ?? "";
+  const magVerwijderen = (a: Schouwafspraak) => isLeiding || !a.toegewezenAan || a.toegewezenAan === currentUser.id;
+  const nr = weekNummer(maandag);
+  const isHuidigeWeek = maandag === weekStartISO(vandaagISO());
+  const kanTijdenAanpassen = overzicht.sleutel !== ""; // "Zonder plaats" is geen echte map
+
+  // Tijdvakken van een willekeurige datum (voor de tijdknoppen in het formulier).
+  const vakkenVoor = (iso: string): string[] => {
+    if (!isISODatum(iso)) return [];
+    const ma = weekStartISO(iso);
+    const dagIndex = (new Date(iso + "T00:00:00").getDay() + 6) % 7;
+    if (dagIndex >= 5 && !record?.weken?.[ma]?.[iso]) return [];
+    return tijdenVan(record, ma, iso, dagIndex);
+  };
+
+  const openNieuw = (datum = "", tijd = "") => {
+    setBewerkId(null);
+    setForm({ datum, tijd, straat: "", huisnummer: "", telefoon: "", notitie: "", toegewezenAan: currentUser.id, status: "In te plannen" });
+    setTimeout(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
+  };
+  const openBewerk = (a: Schouwafspraak) => {
+    setBewerkId(a.id);
+    setForm({ datum: a.datum, tijd: a.tijd, straat: a.straat, huisnummer: a.huisnummer, telefoon: a.telefoon, notitie: a.notitie, toegewezenAan: a.toegewezenAan ?? "", status: a.status });
+    setTimeout(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
+  };
+  const sluit = () => { setForm(null); setBewerkId(null); };
+  const set = (p: Partial<FormState>) => setForm((f) => (f ? { ...f, ...p } : f));
+
+  const opslaan = () => {
+    if (!form || !form.straat.trim() || !form.huisnummer.trim()) return;
+    // Status volgt de datum: met datum = "Ingepland", zonder = "In te plannen" — tenzij de afspraak al
+    // handmatig op Uitgevoerd of Geannuleerd is gezet.
+    const handmatig = form.status === "Uitgevoerd" || form.status === "Geannuleerd";
+    const status: SchouwStatus = handmatig ? form.status : form.datum ? "Ingepland" : "In te plannen";
+    const data = {
+      straat: form.straat.trim(), huisnummer: form.huisnummer.trim(), telefoon: form.telefoon.trim(), notitie: form.notitie.trim(),
+      datum: form.datum, tijd: form.tijd, toegewezenAan: form.toegewezenAan || undefined, status,
+    };
+    if (bewerkId) updateSchouw(bewerkId, data);
+    else addSchouw({ ...data, postcode: "", plaats: overzicht.sleutel ? overzicht.naam : "", contactNaam: "" });
+    // De week volgt de gekozen datum, zodat je de afspraak meteen op de planning ziet staan.
+    if (form.datum && isISODatum(form.datum)) setMaandag(weekStartISO(form.datum));
+    sluit();
+  };
+
+  // Tijdvakken van één dag aanpassen. De eerste keer maken we (indien nodig) de map aan.
+  const zetDagTijden = (iso: string, lijst: string[] | null) => {
+    const id = record?.id ?? addSchouwMap(overzicht.naam);
+    const weken = { ...(record?.weken ?? {}) };
+    const w = { ...(weken[maandag] ?? {}) };
+    if (lijst === null) delete w[iso];
+    else w[iso] = [...new Set(lijst)].sort(sorteerOpTijd);
+    if (Object.keys(w).length) weken[maandag] = w;
+    else delete weken[maandag];
+    updateSchouwMap(id, { weken });
+  };
+
+  const download = async () => {
+    setBezig(true);
+    try {
+      await exporteerSchouwPlanning({ plaats: overzicht.naam, maandag, dagen: exportDagen(week) });
+    } finally {
+      setBezig(false);
+    }
+  };
+
+  const inWeek = week.reduce((n, d) => n + d.regels.reduce((m, r) => m + r.afspraken.filter((a) => a.status !== "Geannuleerd").length, 0), 0);
+  const formVakken = form ? vakkenVoor(form.datum) : [];
+  const bezetOp = (iso: string, t: string) => afspraken.some((a) => a.id !== bewerkId && a.datum === iso && a.tijd === t && a.status !== "Geannuleerd");
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <button type="button" onClick={terug} className="mb-2 inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 hover:text-brand-700">
+          <ArrowLeft className="h-4 w-4" /> Alle mappen
+        </button>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-bold text-ink-900">{overzicht.naam}</h2>
+            <p className="text-sm text-ink-500">Schouwafspraken per week. Het weeknummer volgt de gekozen datum.</p>
+          </div>
+          <button type="button" onClick={() => openNieuw()} className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-brand-700">
+            <Plus className="h-4 w-4" /> Nieuwe schouwafspraak
+          </button>
+        </div>
+      </div>
+
+      {/* Weekkiezer + download */}
+      <Card className="p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" onClick={() => setMaandag(verschuifWeek(maandag, -1))} className={knop} aria-label="Vorige week"><ChevronLeft className="h-4 w-4" /></button>
+          <div className="w-64 max-w-full">
+            <DatumKiezer value={maandag} onChange={(iso) => iso && setMaandag(weekStartISO(iso))} weergave={`Week ${nr} · ${weekBereik(maandag)}`} />
+          </div>
+          <button type="button" onClick={() => setMaandag(verschuifWeek(maandag, 1))} className={knop} aria-label="Volgende week"><ChevronRight className="h-4 w-4" /></button>
+          {!isHuidigeWeek && (
+            <button type="button" onClick={() => setMaandag(weekStartISO(vandaagISO()))} className={knop}>Deze week</button>
+          )}
+          <button type="button" onClick={download} disabled={bezig} className="ml-auto inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50">
+            <Download className="h-4 w-4" /> {bezig ? "Bezig…" : `Planning week ${nr} voor Stedin (Excel)`}
+          </button>
+        </div>
+        {wekenMetWerk.length > 0 && (
+          <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs">
+            <span className="font-semibold text-ink-500">Weken met afspraken:</span>
+            {wekenMetWerk.map(([ma, n]) => (
+              <button
+                key={ma}
+                type="button"
+                onClick={() => setMaandag(ma)}
+                className={`rounded-full border px-2.5 py-1 font-semibold ${ma === maandag ? "border-brand-500 bg-brand-50 text-brand-700" : "border-ink-200 bg-white text-ink-600 hover:bg-ink-50"}`}
+              >
+                Week {weekNummer(ma)} ({n})
+              </button>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      {/* Formulier */}
+      {form && (
+        <div ref={formRef}>
+          <Card className="space-y-3 p-5 ring-2 ring-brand-200">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-ink-900">{bewerkId ? "Schouwafspraak bewerken" : "Nieuwe schouwafspraak"} · {overzicht.naam}</h3>
+              <button type="button" onClick={sluit} className="text-ink-400 hover:text-ink-600" aria-label="Sluiten"><X className="h-5 w-5" /></button>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label className={labelCls}>Datum {isISODatum(form.datum) && <span className="font-normal text-ink-400">· week {weekNummer(form.datum)}</span>}</label>
+                <DatumKiezer value={form.datum} onChange={(iso) => set({ datum: iso })} placeholder="Nog in te plannen" />
+              </div>
+              <div>
+                <label className={labelCls}>Tijd</label>
+                <TijdKiezer value={form.tijd} onChange={(tijd) => set({ tijd })} />
+              </div>
+            </div>
+            {formVakken.length > 0 && (
+              <div>
+                <div className={labelCls}>Tijdvakken van {dagKort(form.datum)}</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {formVakken.map((t) => {
+                    const bezet = bezetOp(form.datum, t);
+                    const gekozen = form.tijd === t;
+                    return (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => set({ tijd: t })}
+                        className={`rounded-lg border px-3 py-1.5 text-sm font-semibold ${gekozen ? "border-brand-600 bg-brand-600 text-white" : bezet ? "border-ink-200 bg-ink-50 text-ink-400" : "border-ink-200 bg-white text-ink-700 hover:border-brand-400"}`}
+                        title={bezet ? "Dit tijdvak is al gevuld" : undefined}
+                      >
+                        {tijdLabel(t)}{bezet && !gekozen ? " ·" : ""}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="mt-1 text-xs text-ink-400">Een punt achter de tijd betekent dat er al een afspraak in dat vak staat.</p>
+              </div>
+            )}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="sm:col-span-2"><label className={labelCls}>Straatnaam</label><input value={form.straat} onChange={(e) => set({ straat: e.target.value })} placeholder="Straatnaam" className={veld} /></div>
+              <div><label className={labelCls}>Huisnummer</label><input value={form.huisnummer} onChange={(e) => set({ huisnummer: e.target.value })} placeholder="12 of 12B" className={veld} /></div>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div><label className={labelCls}>Telefoonnummer</label><input value={form.telefoon} onChange={(e) => set({ telefoon: e.target.value })} inputMode="tel" placeholder="06 …" className={veld} /></div>
+              {isLeiding && (
+                <div>
+                  <label className={labelCls}>Werknemer</label>
+                  <WerknemerKiezer value={form.toegewezenAan} onChange={(id) => set({ toegewezenAan: id })} users={users} leegLabel="Niet toegewezen" />
+                </div>
+              )}
+            </div>
+            <div><label className={labelCls}>Opmerkingen (optioneel)</label><textarea value={form.notitie} onChange={(e) => set({ notitie: e.target.value })} rows={2} placeholder="Bijvoorbeeld: bel 15 min van tevoren" className={veld + " resize-none"} /></div>
+            {bewerkId && (
+              <div className="max-w-xs">
+                <label className={labelCls}>Status</label>
+                <Keuze value={form.status} onChange={(w) => set({ status: w as SchouwStatus })} opties={SCHOUW_STATUSSEN.map((st) => ({ waarde: st, label: st }))} title="Status" />
+              </div>
+            )}
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={opslaan} disabled={!form.straat.trim() || !form.huisnummer.trim()} className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-40">
+                <Plus className="h-4 w-4" /> {bewerkId ? "Opslaan" : "Toevoegen"}
+              </button>
+              <button type="button" onClick={sluit} className="rounded-lg border border-ink-200 bg-white px-5 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50">Annuleren</button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Afspraken zonder datum */}
+      {zonderDatum.length > 0 && (
+        <Card className="p-4">
+          <h3 className="mb-2 text-sm font-bold text-ink-900">Nog niet ingepland ({zonderDatum.length})</h3>
+          <div className="divide-y divide-ink-100">
+            {zonderDatum.map((a) => (
+              <div key={a.id} className="flex flex-wrap items-center gap-2 py-2 text-sm">
+                <span className="font-semibold text-ink-900">{a.straat} {a.huisnummer}</span>
+                {a.telefoon && <span className="text-ink-500">{a.telefoon}</span>}
+                <Badge tone={statusTone[a.status]}>{a.status}</Badge>
+                <span className="ml-auto flex gap-1.5">
+                  <button type="button" onClick={() => openBewerk(a)} className={knop}><Pencil className="h-3.5 w-3.5" /> Datum kiezen</button>
+                  {magVerwijderen(a) && (
+                    <button type="button" onClick={() => { if (confirm(`Schouwafspraak ${a.straat} ${a.huisnummer} verwijderen?`)) deleteSchouw(a.id); }} className="rounded-lg p-2 text-red-400 hover:bg-red-50 hover:text-red-600" title="Verwijderen"><Trash2 className="h-4 w-4" /></button>
+                  )}
+                </span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* Weekraster */}
+      <div className="flex items-center justify-between">
+        <h3 className="text-base font-bold text-ink-900">Week {nr} · {weekBereik(maandag)}</h3>
+        <span className="text-xs text-ink-500">{inWeek} {inWeek === 1 ? "afspraak" : "afspraken"} deze week</span>
+      </div>
+
+      {week.map((dag) => {
+        const aangepast = !!record?.weken?.[maandag]?.[dag.datum];
+        const open = tijdenDag === dag.datum;
+        const vakken = dag.regels.filter((r) => r.eigenVak).map((r) => r.tijd);
+        return (
+          <Card key={dag.datum} className="overflow-hidden p-0">
+            <div className="flex flex-wrap items-center gap-2 bg-amber-100/70 px-4 py-2.5">
+              <span className="text-sm font-bold text-ink-900">{dag.naam}</span>
+              <span className="text-sm text-ink-600">{dagKort(dag.datum)}</span>
+              {aangepast && <Badge tone="amber">Aangepaste tijdvakken</Badge>}
+              {kanTijdenAanpassen && (
+                <button type="button" onClick={() => setTijdenDag(open ? null : dag.datum)} className="ml-auto inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-ink-700 hover:bg-white/70">
+                  <Clock className="h-3.5 w-3.5" /> {open ? "Klaar" : "Tijdvakken aanpassen"}
+                </button>
+              )}
+            </div>
+
+            {open && (
+              <div className="space-y-2 border-b border-ink-100 bg-ink-50/60 px-4 py-3">
+                <div className="flex flex-wrap gap-1.5">
+                  {vakken.length === 0 && <span className="text-xs text-ink-500">Geen tijdvakken op deze dag.</span>}
+                  {vakken.map((t) => (
+                    <span key={t} className="inline-flex items-center gap-1 rounded-lg border border-ink-200 bg-white py-1 pl-3 pr-1.5 text-sm font-semibold text-ink-800">
+                      {tijdLabel(t)}
+                      <button type="button" onClick={() => zetDagTijden(dag.datum, vakken.filter((x) => x !== t))} className="rounded p-0.5 text-ink-400 hover:bg-red-50 hover:text-red-600" aria-label={`Tijdvak ${tijdLabel(t)} verwijderen`}><X className="h-3.5 w-3.5" /></button>
+                    </span>
+                  ))}
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="w-52">
+                    <TijdKiezer
+                      value=""
+                      placeholder="Tijdvak toevoegen…"
+                      onChange={(t) => { const n = normaliseerTijd(t); if (n) zetDagTijden(dag.datum, [...vakken, n]); }}
+                    />
+                  </div>
+                  {aangepast && (
+                    <button type="button" onClick={() => zetDagTijden(dag.datum, null)} className={knop}><RotateCcw className="h-3.5 w-3.5" /> Standaard herstellen</button>
+                  )}
+                </div>
+                <p className="text-xs text-ink-400">Geldt alleen voor deze dag in week {nr}. Afspraken die al in een verwijderd tijdvak staan blijven staan.</p>
+              </div>
+            )}
+
+            <div className="divide-y divide-ink-100">
+              {dag.regels.length === 0 && <div className="px-4 py-3 text-sm text-ink-400">Geen tijdvakken. Pas ze aan of voeg een afspraak toe.</div>}
+              {dag.regels.map((r) =>
+                r.afspraken.length === 0 ? (
+                  <div key={`${dag.datum}-${r.tijd}`} className="flex items-center gap-3 px-4 py-2">
+                    <span className="w-14 text-sm font-semibold tabular-nums text-ink-700">{tijdLabel(r.tijd)}</span>
+                    <span className="text-sm text-ink-400">Vrij</span>
+                    <button type="button" onClick={() => openNieuw(dag.datum, r.tijd)} className="ml-auto inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-brand-600 hover:bg-brand-50">
+                      <Plus className="h-3.5 w-3.5" /> Invullen
+                    </button>
+                  </div>
+                ) : (
+                  r.afspraken.map((a, i) => (
+                    <div key={a.id} className="flex flex-wrap items-start gap-x-3 gap-y-1 px-4 py-2.5">
+                      <span className="w-14 text-sm font-semibold tabular-nums text-ink-700">{i === 0 ? (r.tijd ? tijdLabel(r.tijd) : "—") : ""}</span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm font-bold text-ink-900">{a.straat} {a.huisnummer}</span>
+                          {a.status !== "Ingepland" && <Badge tone={statusTone[a.status]}>{a.status}</Badge>}
+                          {!r.eigenVak && r.tijd && <span className="text-xs text-ink-400">buiten de tijdvakken</span>}
+                        </div>
+                        <div className="mt-0.5 flex flex-wrap items-center gap-x-4 gap-y-0.5 text-xs text-ink-500">
+                          {a.telefoon && <a href={`tel:${a.telefoon}`} className="inline-flex items-center gap-1 text-brand-600"><Phone className="h-3.5 w-3.5" />{a.telefoon}</a>}
+                          {naamVan(a.toegewezenAan) && <span>{naamVan(a.toegewezenAan)}</span>}
+                        </div>
+                        {a.notitie && <p className="mt-1 text-sm text-ink-600">{a.notitie}</p>}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button type="button" onClick={() => openBewerk(a)} className="rounded-lg p-2 text-ink-500 hover:bg-ink-50" title="Bewerken"><Pencil className="h-4 w-4" /></button>
+                        {magVerwijderen(a) && (
+                          <button type="button" onClick={() => { if (confirm(`Schouwafspraak ${a.straat} ${a.huisnummer} verwijderen?`)) deleteSchouw(a.id); }} className="rounded-lg p-2 text-red-400 hover:bg-red-50 hover:text-red-600" title="Verwijderen"><Trash2 className="h-4 w-4" /></button>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                ),
+              )}
+            </div>
+          </Card>
+        );
+      })}
+
+      {week.every((d) => d.regels.length === 0) && (
+        <Card className="p-10 text-center">
+          <CalendarClock className="mx-auto h-10 w-10 text-ink-300" />
+          <p className="mt-3 text-sm text-ink-500">Er staat niets in deze week.</p>
+        </Card>
       )}
     </div>
   );

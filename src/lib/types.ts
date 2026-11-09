@@ -492,6 +492,18 @@ export type Schouwafspraak = {
   gearchiveerdOp?: string;  // ISO
 };
 
+// Map per stad / plaats voor de schouwafspraken. De afspraken zelf staan in `schouwafspraken` en horen bij
+// een map via hun `plaats` (zonder hoofdletter- en spatieverschillen). De week volgt automatisch uit de datum.
+// `weken` bewaart alleen de AANGEPASTE tijdvakken van een week; zonder invoer gelden de standaardtijden.
+export type SchouwWeekTijden = Record<string, string[]>; // ISO-datum → tijden ("HH:MM"), op volgorde
+export type SchouwMap = {
+  id: string;
+  naam: string;        // stad / plaats
+  aangemaakt: string;  // ISO
+  bijgewerktOp: string; // ISO — bij elke wijziging bijgewerkt, nodig om versies samen te voegen
+  weken?: Record<string, SchouwWeekTijden>; // sleutel = maandag van de week (ISO)
+};
+
 // ── Klanten & Database ──
 export type Klant = {
   id: string;
