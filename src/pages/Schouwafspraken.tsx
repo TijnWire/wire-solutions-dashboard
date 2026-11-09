@@ -140,7 +140,7 @@ function MapDetail({ overzicht, terug }: { overzicht: MapOverzicht; terug: () =>
   const [bezig, setBezig] = useState(false);
   const formRef = useRef<HTMLDivElement | null>(null);
 
-  const week = useMemo(() => bouwWeek(record, maandag, afspraken), [record, maandag, afspraken]);
+  const week = useMemo(() => bouwWeek(record, maandag, afspraken, overzicht.naam), [record, maandag, afspraken, overzicht.naam]);
   const zonderDatum = useMemo(() => afspraken.filter((a) => !a.datum || !isISODatum(a.datum)), [afspraken]);
   const wekenMetWerk = useMemo(() => {
     const t = new Map<string, number>();
@@ -165,7 +165,7 @@ function MapDetail({ overzicht, terug }: { overzicht: MapOverzicht; terug: () =>
     const ma = weekStartISO(iso);
     const dagIndex = (new Date(iso + "T00:00:00").getDay() + 6) % 7;
     if (dagIndex >= 5 && !record?.weken?.[ma]?.[iso]) return [];
-    return tijdenVan(record, ma, iso, dagIndex);
+    return tijdenVan(record, ma, iso, dagIndex, overzicht.naam);
   };
 
   const openNieuw = (datum = "", tijd = "") => {

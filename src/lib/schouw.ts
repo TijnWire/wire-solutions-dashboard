@@ -30,14 +30,27 @@ export function weekJaar(maandag: string): number {
   return d.getFullYear();
 }
 
-export const standaardTijden = (dagIndex: number): string[] => [...(dagIndex === 0 ? STANDAARD_TIJDEN_MAANDAG : STANDAARD_TIJDEN)];
+// Rotterdam werkt met halfuurvakken (planning week 44): maandag 10.00 t/m 15.30, dinsdag t/m vrijdag
+// 9.00 t/m 15.30, telkens zonder de middagpauze tussen 11.30 en 13.00.
+const ROTTERDAM_MAANDAG = ["10:00", "10:30", "11:00", "11:30", "13:00", "13:30", "14:00", "14:30", "15:00", "15:30"];
+const ROTTERDAM_WERKDAG = ["09:00", "09:30", ...ROTTERDAM_MAANDAG];
+const PLAATS_TIJDEN: Record<string, { maandag: string[]; werkdag: string[] }> = {
+  rotterdam: { maandag: ROTTERDAM_MAANDAG, werkdag: ROTTERDAM_WERKDAG },
+};
+
+// Standaardtijden van een dag; sommige plaatsen hebben hun eigen indeling, de rest de algemene.
+export const standaardTijden = (dagIndex: number, plaats?: string): string[] => {
+  const eigen = plaats ? PLAATS_TIJDEN[normPlaats(plaats)] : undefined;
+  if (eigen) return [...(dagIndex === 0 ? eigen.maandag : eigen.werkdag)];
+  return [...(dagIndex === 0 ? STANDAARD_TIJDEN_MAANDAG : STANDAARD_TIJDEN)];
+};
 
 export const sorteerOpTijd = (a: string, b: string): number => (a === b ? 0 : a === "" ? 1 : b === "" ? -1 : a.localeCompare(b));
 
 // De tijdvakken van één dag: de aangepaste lijst van deze week, anders de standaardtijden.
-export function tijdenVan(map: SchouwMap | undefined, maandag: string, iso: string, dagIndex: number): string[] {
+export function tijdenVan(map: SchouwMap | undefined, maandag: string, iso: string, dagIndex: number, plaats: string | undefined = map?.naam): string[] {
   const aangepast = map?.weken?.[maandag]?.[iso];
-  return (aangepast ? [...aangepast] : standaardTijden(dagIndex)).sort(sorteerOpTijd);
+  return (aangepast ? [...aangepast] : standaardTijden(dagIndex, plaats)).sort(sorteerOpTijd);
 }
 
 // "08:45" → "8.45" (zoals op de Stedin-planning); iets anders blijft staan zoals het is.
@@ -52,7 +65,7 @@ export type SchouwDag = { datum: string; dagIndex: number; naam: string; regels:
 // Bouwt de week: per dag de tijdvakken, met de afspraken die erin vallen. Een afspraak met een tijd die
 // niet in de vakken zit (of zonder tijd) krijgt een eigen regel, zodat er nooit iets verdwijnt.
 // Zaterdag en zondag verschijnen alleen als er iets op staat.
-export function bouwWeek(map: SchouwMap | undefined, maandag: string, afspraken: Schouwafspraak[]): SchouwDag[] {
+export function bouwWeek(map: SchouwMap | undefined, maandag: string, afspraken: Schouwafspraak[], plaats: string | undefined = map?.naam): SchouwDag[] {
   const perDag = new Map<string, Schouwafspraak[]>();
   for (const a of afspraken) {
     if (!a.datum || !isISODatum(a.datum)) continue;
@@ -64,7 +77,7 @@ export function bouwWeek(map: SchouwMap | undefined, maandag: string, afspraken:
   dagenVanWeek(maandag).forEach((iso, i) => {
     const opDag = perDag.get(iso) ?? [];
     if (i >= 5 && opDag.length === 0) return;
-    const vakken = i >= 5 ? [] : tijdenVan(map, maandag, iso, i);
+    const vakken = i >= 5 ? [] : tijdenVan(map, maandag, iso, i, plaats);
     const tijden = new Set<string>(vakken);
     for (const a of opDag) tijden.add(a.tijd || "");
     const regels = [...tijden].sort(sorteerOpTijd).map((t) => ({
