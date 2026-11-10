@@ -1,4 +1,4 @@
--- Wire Solutions — Saneren: wat er aan de deur gebeurt vastleggen
+-- WIRE Solutions — Saneren: wat er aan de deur gebeurt vastleggen
 -- Draaien:  npx wrangler d1 execute wire-solutions --remote --file cloudflare/schema-saneer-veldwerk.sql
 -- Terugdraaien: cloudflare/rollback/schema-saneer-veldwerk.rollback.sql
 --

@@ -208,7 +208,7 @@ function SysteemTab() {
       {/* App-info */}
       <Card className="p-5">
         <h3 className="mb-3 text-sm font-bold text-ink-900">App</h3>
-        <div className="text-sm text-ink-600">Wire Solutions dashboard · V{APP_VERSIE} · live</div>
+        <div className="text-sm text-ink-600">WIRE Solutions dashboard · V{APP_VERSIE} · live</div>
       </Card>
     </div>
   );

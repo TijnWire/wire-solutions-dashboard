@@ -1,4 +1,4 @@
-// Wire Solutions — centrale database op Cloudflare (Workers + D1)
+// WIRE Solutions — centrale database op Cloudflare (Workers + D1)
 // ─────────────────────────────────────────────────────────────────────────────
 // Vervangt Supabase. Eén Worker met eigen JWT-auth (HMAC) + wachtwoord-hashing (PBKDF2 via Web Crypto),
 // en een D1-database (SQLite) met dezelfde tabellen als voorheen. De frontend praat via fetch met de routes
@@ -60,7 +60,7 @@ export interface Env extends SpiegelEnv {
   // E-mail via Resend (secret). Staat deze ingesteld, dan kan de Worker een "wachtwoord vergeten"-mail
   // sturen. Zet 'm met:  wrangler secret put RESEND_API_KEY
   RESEND_API_KEY?: string;
-  // Afzender voor die mails, bv. "Wire Solutions <noreply@wiresolutions.nl>". Zonder geverifieerd
+  // Afzender voor die mails, bv. "WIRE Solutions <noreply@wiresolutions.nl>". Zonder geverifieerd
   // domein alleen "onboarding@resend.dev" toegestaan. Zet met:  wrangler secret put RESEND_FROM
   RESEND_FROM?: string;
   // Publieke URL van het dashboard (voor de inloglink in de mail). Bv. https://wire-solutions-dashboard.vercel.app
@@ -313,14 +313,14 @@ async function trekTokensIn(env: Env, email: string, nuSec: number): Promise<voi
 }
 
 // ── E-mail via Resend: nieuw wachtwoord na "wachtwoord vergeten" ──
-// Stuurt een nette HTML-mail (Wire Solutions-huisstijl) naar het account-adres. Retourneert true als
+// Stuurt een nette HTML-mail (WIRE Solutions-huisstijl) naar het account-adres. Retourneert true als
 // Resend de mail heeft geaccepteerd. Zonder RESEND_API_KEY wordt deze functie niet aangeroepen.
 function htmlEscape(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 async function stuurWachtwoordMail(env: Env, email: string, wachtwoord: string, appUrl: string): Promise<boolean> {
   if (!env.RESEND_API_KEY) return false;
-  const from = env.RESEND_FROM || "Wire Solutions <onboarding@resend.dev>";
+  const from = env.RESEND_FROM || "WIRE Solutions <onboarding@resend.dev>";
   const url = appUrl || "https://wire-solutions-dashboard.vercel.app";
   const ww = htmlEscape(wachtwoord);
   const veiligeUrl = htmlEscape(url);
@@ -329,12 +329,12 @@ async function stuurWachtwoordMail(env: Env, email: string, wachtwoord: string, 
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f1f5f9;padding:24px 12px;"><tr><td align="center">
 <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="width:560px;max-width:560px;background-color:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 1px 3px rgba(16,24,40,.1);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
   <tr><td style="background-color:#ea580c;padding:28px 32px;">
-    <span style="font-size:22px;font-weight:800;color:#ffffff;letter-spacing:.3px;">Wire Solutions</span>
+    <span style="font-size:22px;font-weight:800;color:#ffffff;letter-spacing:.3px;">WIRE Solutions</span>
     <div style="font-size:12px;font-weight:600;color:#ffffff;opacity:.85;letter-spacing:1px;text-transform:uppercase;margin-top:4px;">Wachtwoord opnieuw ingesteld</div>
   </td></tr>
   <tr><td style="padding:32px 32px 8px 32px;">
     <p style="margin:0;font-size:16px;color:#1e293b;font-weight:700;">Nieuw wachtwoord aangevraagd</p>
-    <p style="margin:12px 0 0 0;font-size:14px;line-height:1.6;color:#1e293b;">Je hebt een nieuw wachtwoord aangevraagd voor het Wire Solutions dashboard. Hiermee log je direct weer in.</p>
+    <p style="margin:12px 0 0 0;font-size:14px;line-height:1.6;color:#1e293b;">Je hebt een nieuw wachtwoord aangevraagd voor het WIRE Solutions dashboard. Hiermee log je direct weer in.</p>
   </td></tr>
   <tr><td style="padding:20px 32px 8px 32px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#fff7ed;border:1px solid #e2e8f0;border-radius:12px;"><tr><td style="padding:18px 20px;">
@@ -358,13 +358,13 @@ async function stuurWachtwoordMail(env: Env, email: string, wachtwoord: string, 
     </table>
   </td></tr>
   <tr><td style="background-color:#f8fafc;border-top:1px solid #e2e8f0;padding:18px 32px;">
-    <p style="margin:0;font-size:11px;line-height:1.5;color:#94a3b8;">Deze mail is automatisch verstuurd vanuit het Wire Solutions dashboard.</p>
+    <p style="margin:0;font-size:11px;line-height:1.5;color:#94a3b8;">Deze mail is automatisch verstuurd vanuit het WIRE Solutions dashboard.</p>
   </td></tr>
 </table></td></tr></table></body></html>`;
   const tekst = [
-    "Wire Solutions — nieuw wachtwoord",
+    "WIRE Solutions — nieuw wachtwoord",
     "",
-    "Je hebt een nieuw wachtwoord aangevraagd voor het Wire Solutions dashboard.",
+    "Je hebt een nieuw wachtwoord aangevraagd voor het WIRE Solutions dashboard.",
     "",
     `Website:    ${url}`,
     `E-mail:     ${email}`,
@@ -376,7 +376,7 @@ async function stuurWachtwoordMail(env: Env, email: string, wachtwoord: string, 
     const r = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from, to: [email], subject: "Je nieuwe wachtwoord voor het Wire Solutions dashboard", html, text: tekst }),
+      body: JSON.stringify({ from, to: [email], subject: "Je nieuwe wachtwoord voor het WIRE Solutions dashboard", html, text: tekst }),
     });
     return r.ok;
   } catch {
@@ -840,7 +840,7 @@ export default {
               "authorization": `Bearer ${env.OPENROUTER_KEY}`,
               // OpenRouter-attributie (optioneel maar netjes) — helpt bij het herkennen van het verkeer.
               "http-referer": "https://wire-solutions-dashboard.vercel.app",
-              "x-title": "Wire Solutions Dashboard",
+              "x-title": "WIRE Solutions Dashboard",
             },
             body: JSON.stringify(openaiVerzoek),
           });

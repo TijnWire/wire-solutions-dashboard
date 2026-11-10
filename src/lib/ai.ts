@@ -50,7 +50,7 @@ export async function vraagAssistent(apiKey: string, paginas: Pagina[], geschied
 
   const paginaLijst = paginas.map((p) => `- ${p.key} — ${p.label} (${p.groep})`).join("\n");
   const system =
-    "Je bent de behulpzame assistent van het interne Wire Solutions-dashboard. Je helpt de gebruiker snel op de juiste plek te komen. " +
+    "Je bent de behulpzame assistent van het interne WIRE Solutions-dashboard. Je helpt de gebruiker snel op de juiste plek te komen. " +
     "Je hebt exact twee mogelijke acties en je MOET er altijd één kiezen via een tool:\n" +
     "1) ga_naar_pagina: kies de best passende paginaKey uit de lijst hieronder als duidelijk is waar de gebruiker heen wil.\n" +
     "2) stel_verduidelijkende_vraag: als de vraag te vaag is of bij meerdere pagina's past, stel dan één korte vraag in het Nederlands.\n\n" +

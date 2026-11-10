@@ -1,4 +1,4 @@
--- Wire Solutions — Bodemonderzoek: bewaartermijn voor persoonsgegevens (Cloudflare D1)
+-- WIRE Solutions — Bodemonderzoek: bewaartermijn voor persoonsgegevens (Cloudflare D1)
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Draaien:  npx wrangler d1 execute wire-solutions --remote --file cloudflare/schema-bodem-bewaartermijn.sql
 -- Additief: twee nieuwe kolommen mét standaardwaarde op een tabel die wij zelf hebben aangemaakt.

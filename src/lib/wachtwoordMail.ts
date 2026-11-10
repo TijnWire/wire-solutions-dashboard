@@ -1,4 +1,4 @@
-// Wire Solutions huisstijl-mail voor nieuwe inloggegevens (HTML + platte tekst).
+// WIRE Solutions huisstijl-mail voor nieuwe inloggegevens (HTML + platte tekst).
 // E-mail-veilig opgemaakt: tabellen + inline-styles (geen externe CSS), werkt in Outlook, Gmail en Apple Mail.
 // De HTML-versie wordt gebruikt zodra server-side verzending (Resend) actief is; de platte tekst dient
 // als terugval (mailto) en als "text"-variant van de mail.
@@ -66,7 +66,7 @@ export function wachtwoordMailTekst(d: WachtwoordMailData): string {
 const esc = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-// ── Grafische HTML-variant in Wire Solutions-huisstijl ──
+// ── Grafische HTML-variant in WIRE Solutions-huisstijl ──
 export function wachtwoordMailHtml(d: WachtwoordMailData): string {
   const naam = esc(d.naam);
   const email = esc(d.email);

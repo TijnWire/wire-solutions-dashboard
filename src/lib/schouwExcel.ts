@@ -86,8 +86,8 @@ export async function bouwSchouwWerkboek(
     });
   });
 
-  wb.creator = "Wire Solutions";
-  wb.lastModifiedBy = "Wire Solutions";
+  wb.creator = "WIRE Solutions";
+  wb.lastModifiedBy = "WIRE Solutions";
   wb.modified = new Date();
   return (await wb.xlsx.writeBuffer()) as ArrayBuffer;
 }

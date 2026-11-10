@@ -1,4 +1,4 @@
--- Wire Solutions — Token-intrekking (Cloudflare D1)
+-- WIRE Solutions — Token-intrekking (Cloudflare D1)
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Draaien:  npx wrangler d1 execute wire-solutions --remote --file cloudflare/schema-token-revocaties.sql
 -- Additief: één nieuwe tabel, geen bestaande tabel wordt aangeraakt.

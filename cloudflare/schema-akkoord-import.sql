@@ -1,4 +1,4 @@
--- Wire Solutions — Bewonersakkoord: import onthouden en afgekeurde regels bewaren
+-- WIRE Solutions — Bewonersakkoord: import onthouden en afgekeurde regels bewaren
 -- Draaien:  npx wrangler d1 execute wire-solutions --remote --file cloudflare/schema-akkoord-import.sql
 -- Additief: twee nieuwe tabellen. Geen bestaande tabel wordt aangeraakt.
 

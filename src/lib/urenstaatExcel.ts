@@ -46,7 +46,7 @@ const LINKS = [0, 2, 3, 9]; // kolommen die links uitgelijnd staan; de rest gece
 
 const INK = "1e293b";          // ink-800, tekst
 const GRIJS = "f1f5f9";         // ink-100, gemarkeerde regels
-const BRAND = "ea580c";         // Wire Solutions oranje (brand-600)
+const BRAND = "ea580c";         // WIRE Solutions oranje (brand-600)
 const BRAND_DONKER = "c2410c";  // brand-700
 const BRAND_LICHT = "fff7ed";   // brand-50, zachte accentvulling
 const rand = { style: "thin" as const, color: { rgb: "D1D5DB" } };
@@ -69,7 +69,7 @@ export function exporteerUrenstaat(data: UrenExportData): void {
   const merges: XLSX.Range[] = [];
   const setStijl = (r: number, c: number, s: Record<string, unknown>) => stijlen.push({ addr: enc(r, c), s });
 
-  // ── Koptekst — Wire Solutions huisstijl ──
+  // ── Koptekst — WIRE Solutions huisstijl ──
   aoa.push([data.bedrijfsnaam]);
   setStijl(0, 0, { font: { bold: true, sz: 18, color: { rgb: BRAND } } });
   aoa.push(["Urenstaat"]);
@@ -203,7 +203,7 @@ export function exporteerUrenstaat(data: UrenExportData): void {
     R++;
   }
   aoa.push([]); R++;
-  aoa.push(["Detachering: facturatie pas na akkoord opdrachtgever. Gegenereerd via het Wire Solutions dashboard."]);
+  aoa.push(["Detachering: facturatie pas na akkoord opdrachtgever. Gegenereerd via het WIRE Solutions dashboard."]);
   setStijl(R, 0, { font: { italic: true, sz: 9, color: { rgb: "9CA3AF" } } });
 
   // ── Worksheet ──

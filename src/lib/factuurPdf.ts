@@ -172,13 +172,13 @@ export async function mailFactuur(f: Factuur): Promise<boolean> {
     return false;
   }
   const t = factuurTotalen(f);
-  const onderwerp = `Factuur ${f.nummer} — Wire Solutions`;
+  const onderwerp = `Factuur ${f.nummer} — WIRE Solutions`;
   const tekst =
     `Beste ${f.tav || f.klantNaam || "relatie"},\n\n` +
     `Hierbij ontvangt u factuur ${f.nummer} van ${new Date(f.datum + "T00:00:00").toLocaleDateString("nl-NL")} ` +
     `voor een bedrag van ${schoonEuro(t.totaal)} (incl. btw).\n` +
     `De factuur zit als PDF in het zojuist gedownloade bestand "Factuur_${veilig(f.nummer)}.pdf" — voeg dat toe als bijlage bij deze mail.\n\n` +
-    `Met vriendelijke groet,\nWire Solutions`;
+    `Met vriendelijke groet,\nWIRE Solutions`;
   window.location.href = `mailto:${f.email.trim()}?subject=${encodeURIComponent(onderwerp)}&body=${encodeURIComponent(tekst)}`;
   return true;
 }

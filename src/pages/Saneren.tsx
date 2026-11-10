@@ -33,7 +33,7 @@ const minEenDag = (iso: string) => { const t = new Date(iso + "T00:00:00"); if (
 const adresVol = (a: SaneerAdres) => !!(a.straat || a.huisnummer || a.naam || a.telefoon || a.postcode);
 const matchtZoek = (a: SaneerAdres, q: string) => !q || `${a.straat} ${a.huisnummer} ${a.postcode} ${a.plaats} ${a.naam} ${a.telefoon}`.toLowerCase().includes(q);
 const adresTekst = (a: SaneerAdres) => [`${a.straat} ${a.huisnummer}`.replace(/\s+/g, " ").trim(), `${a.postcode} ${a.plaats}`.replace(/\s+/g, " ").trim()].filter(Boolean).join(", ");
-const smsBevestiging = (a: SaneerAdres) => `Beste ${a.naam || "bewoner"}, hierbij de bevestiging van uw afspraak voor de saneringswerkzaamheden op ${datumKort(a.datum)}${a.tijd ? ` om ${a.tijd}` : ""}. Adres: ${adresTekst(a) || `${a.straat} ${a.huisnummer}`.trim()}. Met vriendelijke groet, Wire Solutions.`;
+const smsBevestiging = (a: SaneerAdres) => `Beste ${a.naam || "bewoner"}, hierbij de bevestiging van uw afspraak voor de saneringswerkzaamheden op ${datumKort(a.datum)}${a.tijd ? ` om ${a.tijd}` : ""}. Adres: ${adresTekst(a) || `${a.straat} ${a.huisnummer}`.trim()}. Met vriendelijke groet, WIRE Solutions.`;
 
 const openAdressen = (s: Sanering) => s.adressen.filter((a) => !a.bevestigd).length;
 
@@ -138,7 +138,7 @@ function SaneerAdresKaart({ adres, nr, bewerkbaar, magVerwijderen, onChange, onV
 }) {
   const [open, setOpen] = useState(false);
   const titel = `${adres.straat} ${adres.huisnummer}`.trim() || "Nieuw adres";
-  const bericht = `Beste ${adres.naam || "bewoner"}, voor de geplande saneringswerkzaamheden op ${adresTekst(adres) || titel} willen wij graag een afspraak met u maken. Met vriendelijke groet, Wire Solutions.`;
+  const bericht = `Beste ${adres.naam || "bewoner"}, voor de geplande saneringswerkzaamheden op ${adresTekst(adres) || titel} willen wij graag een afspraak met u maken. Met vriendelijke groet, WIRE Solutions.`;
   const tel = adres.telefoon.trim();
   return (
     <div className={`overflow-hidden rounded-xl border bg-white transition-shadow hover:shadow-card ${adres.bevestigd ? "border-green-300" : "border-ink-200"}`}>

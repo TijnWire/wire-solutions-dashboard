@@ -1,4 +1,4 @@
--- Wire Solutions — Bodemonderzoek: adressen als echte rijen (Cloudflare D1)
+-- WIRE Solutions — Bodemonderzoek: adressen als echte rijen (Cloudflare D1)
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Draaien:  npx wrangler d1 execute wire-solutions --remote --file cloudflare/schema-bodem-adressen.sql
 -- Veilig meerdere keren te draaien. VOLLEDIG ADDITIEF: één nieuwe tabel, geen wijziging aan bestaande.

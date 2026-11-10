@@ -1,4 +1,4 @@
-// Wire Solutions — Saneren: routes voor het dossier (fase A)
+// WIRE Solutions — Saneren: routes voor het dossier (fase A)
 // ─────────────────────────────────────────────────────────────────────────────
 // Aparte module naast de bodemonderzoek-routes in worker.ts. Bewust gescheiden: de flow is wezenlijk
 // anders (één datum voor een hele groep in plaats van losse tijdsloten), en door het uit elkaar te

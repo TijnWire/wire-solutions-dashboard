@@ -11,7 +11,7 @@ import ExcelJS from "exceljs";
 import { jsPDF } from "jspdf";
 import { ANTWOORD_INFO, BELSTATUS_INFO, type ExportData, type FlowAdres } from "./saneerflowWerk";
 
-const MERK = { r: 234, g: 88, b: 12 };   // brand-600 — de oranje van Wire Solutions
+const MERK = { r: 234, g: 88, b: 12 };   // brand-600 — de oranje van WIRE Solutions
 const GRIJS = { r: 100, g: 116, b: 139 };
 
 const adresTekst = (a: FlowAdres) => `${a.straat} ${a.huisnummer}${a.toevoeging}`.replace(/\s+/g, " ").trim();
@@ -38,7 +38,7 @@ const bestandsnaam = (d: ExportData, ext: string) =>
 // ── Excel ── vier bladen: adressen, groepen, alle antwoorden per ronde, en het wijzigingslog.
 export async function exporteerSaneerExcel(d: ExportData): Promise<void> {
   const wb = new ExcelJS.Workbook();
-  wb.creator = "Wire Solutions";
+  wb.creator = "WIRE Solutions";
   wb.created = new Date();
 
   const kop = (ws: ExcelJS.Worksheet, koppen: string[], breedtes: number[]) => {
@@ -193,7 +193,7 @@ export function exporteerSaneerPdf(d: ExportData): void {
   for (let p = 1; p <= totaal; p++) {
     doc.setPage(p);
     doc.setFontSize(8).setTextColor(GRIJS.r, GRIJS.g, GRIJS.b);
-    doc.text(`Wire Solutions · ${new Date().toLocaleDateString("nl-NL")} · pagina ${p} van ${totaal}`, PW / 2, PH - 24, { align: "center" });
+    doc.text(`WIRE Solutions · ${new Date().toLocaleDateString("nl-NL")} · pagina ${p} van ${totaal}`, PW / 2, PH - 24, { align: "center" });
   }
 
   doc.save(bestandsnaam(d, "pdf"));

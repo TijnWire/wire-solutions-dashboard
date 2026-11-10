@@ -1,4 +1,4 @@
--- Wire Solutions — Bodemonderzoek: afspraken met tijdslot (Cloudflare D1)
+-- WIRE Solutions — Bodemonderzoek: afspraken met tijdslot (Cloudflare D1)
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Draaien:  npx wrangler d1 execute wire-solutions --remote --file cloudflare/schema-bodem.sql
 -- Veilig meerdere keren te draaien. VOLLEDIG ADDITIEF: alleen nieuwe tabellen, geen enkele

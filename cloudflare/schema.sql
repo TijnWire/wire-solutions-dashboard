@@ -1,4 +1,4 @@
--- Wire Solutions — centrale database op Cloudflare D1 (SQLite)
+-- WIRE Solutions — centrale database op Cloudflare D1 (SQLite)
 -- Draaien:  npx wrangler d1 execute wire-solutions --remote --file cloudflare/schema.sql
 -- Veilig meerdere keren te draaien (idempotent: alleen 'create table if not exists').
 

@@ -66,7 +66,7 @@ export function Login() {
           </p>
         </div>
 
-        <div className="relative z-10 text-sm text-orange-100">© {new Date().getFullYear()} Wire Solutions</div>
+        <div className="relative z-10 text-sm text-orange-100">© {new Date().getFullYear()} WIRE Solutions</div>
       </div>
 
       {/* Rechterkant — formulier */}

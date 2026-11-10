@@ -1,6 +1,6 @@
 import * as XLSX from "xlsx-js-style";
 
-// ── Wire Solutions huisstijl-kleuren (gelijk aan urenstaatExcel.ts) ──
+// ── WIRE Solutions huisstijl-kleuren (gelijk aan urenstaatExcel.ts) ──
 const BRAND = "ea580c";        // brand-600 oranje
 const BRAND_LICHT = "fff7ed";  // brand-50, zachte accentvulling (zebra)
 const INK = "1e293b";          // ink-800 tekst
@@ -20,7 +20,7 @@ export type DocExportMeta = {
   opsteller?: string;
 };
 
-// Nette, uitgelijnde Excel-export in Wire Solutions huisstijl.
+// Nette, uitgelijnde Excel-export in WIRE Solutions huisstijl.
 // - Oranje titelbalk met bedrijfsnaam + merkband
 // - Oranje kolomkoppen, wit vet, gecentreerd
 // - Zebra-rijen (om-en-om zacht oranje), dunne randen overal

@@ -140,7 +140,7 @@ export function mailTauwNaarStedin(o: TauwOpdracht): string {
     "De Excel-planning is als bijlage toegevoegd.",
     "",
     "Met vriendelijke groet,",
-    "Wire Solutions",
+    "WIRE Solutions",
   ];
   return `mailto:?subject=${encodeURIComponent(onderwerp)}&body=${encodeURIComponent(lijnen.join("\n"))}`;
 }

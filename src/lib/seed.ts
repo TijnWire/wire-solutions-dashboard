@@ -21,7 +21,7 @@ export const SEED_KENNIS: KennisArtikel[] = [
   { id: "kb-2", categorie: "Veelgestelde vragen", titel: "Moet de klant thuis zijn?", inhoud: "Voor een voorschouw of afspraak is het fijn als er iemand thuis is, zodat de werknemer toegang heeft tot de meterkast. Voor het bezorgen van brieven hoeft niemand thuis te zijn." },
   { id: "kb-3", categorie: "Veelgestelde vragen", titel: "Hoe lang duurt het?", inhoud: "Een voorschouw of afspraak duurt gemiddeld 20 tot 30 minuten." },
   { id: "kb-4", categorie: "Veelgestelde vragen", titel: "Wat kost het de klant?", inhoud: "De werkzaamheden in opdracht van Stedin zijn voor de klant volledig kosteloos." },
-  { id: "kb-5", categorie: "Veelgestelde vragen", titel: "Mag de klant legitimatie vragen?", inhoud: "Ja, altijd. Toon je Wire Solutions-pas en de opdracht/brief van Stedin. Twijfelt de klant? Verwijs naar het Stedin-nummer op de brief." },
+  { id: "kb-5", categorie: "Veelgestelde vragen", titel: "Mag de klant legitimatie vragen?", inhoud: "Ja, altijd. Toon je WIRE Solutions-pas en de opdracht/brief van Stedin. Twijfelt de klant? Verwijs naar het Stedin-nummer op de brief." },
   { id: "kb-6", categorie: "Veelgestelde vragen", titel: "Kan de afspraak verzet worden?", inhoud: "Ja. Noteer dit en geef het door aan de planner, of verwijs de klant naar de planner. Maak in de app eventueel een nieuwe afspraak aan." },
 
   // Werkinstructies
@@ -55,11 +55,11 @@ export const SEED_COMM: Communicatie = {
   herinneringAan: true,
   fallbackTelefoon: "06 12345678",
   sjabloonBevestiging:
-    "Beste {klant}, hierbij bevestigen wij uw afspraak met Wire Solutions op {datum} om {tijd} op {adres}. Heeft u vragen? Reageer gerust. Met vriendelijke groet, Wire Solutions.",
+    "Beste {klant}, hierbij bevestigen wij uw afspraak met WIRE Solutions op {datum} om {tijd} op {adres}. Heeft u vragen? Reageer gerust. Met vriendelijke groet, WIRE Solutions.",
   sjabloonHerinnering:
-    "Beste {klant}, een herinnering: morgen om {tijd} hebben wij een afspraak op {adres}. Tot dan! Wire Solutions.",
+    "Beste {klant}, een herinnering: morgen om {tijd} hebben wij een afspraak op {adres}. Tot dan! WIRE Solutions.",
   sjabloonStatus:
-    "Beste {klant}, een update: we hebben {x} van de {y} buren gesproken. We houden u op de hoogte. Wire Solutions.",
+    "Beste {klant}, een update: we hebben {x} van de {y} buren gesproken. We houden u op de hoogte. WIRE Solutions.",
   faq: [
     { id: "fq1", vraag: "Hoe laat komen jullie?", antwoord: "U ontvangt 24 uur vooraf een herinnering met de exacte tijd van de afspraak." },
     { id: "fq2", vraag: "Moet ik thuis zijn?", antwoord: "Ja, het is fijn als er iemand thuis is zodat de werknemer toegang heeft tot de meterkast." },
@@ -74,7 +74,7 @@ export const SEED_LOONSTROKEN: Loonstrook[] = [];
 export const SEED_BOETES: Boete[] = [];
 
 export const SEED_BEDRIJF: Bedrijf = {
-  naam: "Wire Solutions B.V.",
+  naam: "WIRE Solutions B.V.",
   adres: "Reedijk 7 T 16",
   postcodePlaats: "3274 KE Heinenoord",
   telefoon: "06-51611469",

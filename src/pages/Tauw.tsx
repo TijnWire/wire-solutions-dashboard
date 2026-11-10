@@ -84,8 +84,8 @@ function TauwAdresKaart({ adres, nr, type, vergrendeld, magVerwijderen, geselect
   const titel = `${adres.straat} ${adres.huisnummer}`.trim() || "Nieuw adres";
   const plek = `${adres.straat} ${adres.huisnummer}`.trim();
   const bericht = type === "bodemonderzoek"
-    ? `Beste ${adres.bewoner || "bewoner"}, voor het geplande bodemonderzoek op ${plek} willen wij graag een afspraak met u maken. Met vriendelijke groet, Wire Solutions.`
-    : `Beste ${adres.bewoner || "bewoner"}, wij willen graag bij u langskomen op ${plek}. Met vriendelijke groet, Wire Solutions.`;
+    ? `Beste ${adres.bewoner || "bewoner"}, voor het geplande bodemonderzoek op ${plek} willen wij graag een afspraak met u maken. Met vriendelijke groet, WIRE Solutions.`
+    : `Beste ${adres.bewoner || "bewoner"}, wij willen graag bij u langskomen op ${plek}. Met vriendelijke groet, WIRE Solutions.`;
   return (
     <div className={`overflow-hidden rounded-xl border bg-white transition-shadow hover:shadow-card ${geselecteerd ? "border-brand-400 ring-2 ring-brand-200" : adres.bevestigd ? "border-green-300" : "border-ink-200"}`}>
       <div className={`flex items-center gap-2.5 px-3 py-2.5 ${adres.bevestigd ? "bg-green-50/60" : "bg-brand-50/40"}`}>

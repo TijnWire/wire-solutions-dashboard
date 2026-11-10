@@ -1,4 +1,4 @@
-// Wire Solutions — Saneren: clusters, ronden, antwoorden, poster en afronden (fase C t/m H)
+// WIRE Solutions — Saneren: clusters, ronden, antwoorden, poster en afronden (fase C t/m H)
 // ─────────────────────────────────────────────────────────────────────────────
 // Vervolg op akkoord.ts. Daar staan het dossier en de import; hier staat alles wat daarna gebeurt.
 // Gesplitst omdat het anders één bestand van duizend regels wordt waarin niemand meer iets vindt.

@@ -151,7 +151,7 @@ export function maakIcs(gebeurtenissen: AgendaGebeurtenis[], kalenderNaam: strin
   const r: string[] = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//Wire Solutions//Agenda//NL",
+    "PRODID:-//WIRE Solutions//Agenda//NL",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
     `X-WR-CALNAME:${esc(kalenderNaam)}`,
@@ -221,7 +221,7 @@ export function bouwPersoonlijkeFeed(bron: AgendaBronnen, gebruiker: User, nu: D
     rest.push(g);
   }
   const lijst = [...rest, ...verjaardagen.values()];
-  return { ics: maakIcs(lijst, `Wire Solutions – ${gebruiker.naam}`, nu), aantal: lijst.length };
+  return { ics: maakIcs(lijst, `WIRE Solutions – ${gebruiker.naam}`, nu), aantal: lijst.length };
 }
 
 // Nieuwe, moeilijk te raden sleutel voor de agenda-link (128 bit).

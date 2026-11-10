@@ -48,7 +48,7 @@ import { NavContext, type NavTarget } from "./store/NavContext";
 function Splash() {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-5 bg-white text-ink-500">
-      <img src="/wire-logo.png" alt="Wire Solutions" className="h-28 w-auto animate-pulse" />
+      <img src="/wire-logo.png" alt="WIRE Solutions" className="h-28 w-auto animate-pulse" />
       <div className="text-sm">Bezig met laden…</div>
     </div>
   );

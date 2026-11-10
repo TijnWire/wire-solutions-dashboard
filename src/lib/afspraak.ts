@@ -31,10 +31,10 @@ export function whatsappBevestiging(a: Afspraak): string {
   });
   const tekst =
     `Beste ${a.klantNaam || "klant"},\n\n` +
-    `Hierbij bevestigen wij uw afspraak met Wire Solutions op ${datum}${a.tijd ? ` om ${a.tijd}` : ""}.\n` +
+    `Hierbij bevestigen wij uw afspraak met WIRE Solutions op ${datum}${a.tijd ? ` om ${a.tijd}` : ""}.\n` +
     `Adres: ${adresVanAfspraak(a)}.\n\n` +
     `Heeft u vragen? Reageer gerust op dit bericht.\n\n` +
-    `Met vriendelijke groet,\nWire Solutions`;
+    `Met vriendelijke groet,\nWIRE Solutions`;
   const nummer = normaliseerTelefoon(a.telefoon);
   return `https://wa.me/${nummer}?text=${encodeURIComponent(tekst)}`;
 }
@@ -46,10 +46,10 @@ export function annuleringTekst(a: Afspraak): string {
     : "de geplande datum";
   return (
     `Beste ${a.klantNaam || "klant"},\n\n` +
-    `Helaas moeten wij uw afspraak met Wire Solutions${a.datum ? ` op ${datum}${a.tijd ? ` om ${a.tijd}` : ""}` : ""} annuleren.\n` +
+    `Helaas moeten wij uw afspraak met WIRE Solutions${a.datum ? ` op ${datum}${a.tijd ? ` om ${a.tijd}` : ""}` : ""} annuleren.\n` +
     `Adres: ${adresVanAfspraak(a)}.\n\n` +
     `Wij nemen contact met u op om een nieuwe afspraak te plannen. Onze excuses voor het ongemak.\n\n` +
-    `Met vriendelijke groet,\nWire Solutions`
+    `Met vriendelijke groet,\nWIRE Solutions`
   );
 }
 
@@ -58,7 +58,7 @@ export function whatsappAnnulering(a: Afspraak): string {
 }
 
 export function mailtoAnnulering(a: Afspraak): string {
-  const onderwerp = "Afspraak Wire Solutions geannuleerd";
+  const onderwerp = "Afspraak WIRE Solutions geannuleerd";
   return `mailto:${a.email ?? ""}?subject=${encodeURIComponent(onderwerp)}&body=${encodeURIComponent(annuleringTekst(a))}`;
 }
 

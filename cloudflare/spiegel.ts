@@ -1,4 +1,4 @@
-// Wire Solutions — Supabase als spiegel naast Cloudflare D1
+// WIRE Solutions — Supabase als spiegel naast Cloudflare D1
 // ─────────────────────────────────────────────────────────────────────────────
 // De Worker + D1 blijven de baas. Supabase is een TWEEDE KOPIE die precies gelijk loopt:
 //

@@ -34,7 +34,7 @@ function download(blob: Blob, naam: string): void {
 // ── Excel ── de volledige lijst, met een tweede blad met alleen de geplande afspraken.
 export async function exporteerBodemExcel(o: TauwOpdracht, naamVan: (id?: string) => string): Promise<void> {
   const wb = new ExcelJS.Workbook();
-  wb.creator = "Wire Solutions";
+  wb.creator = "WIRE Solutions";
   wb.created = new Date();
 
   const kop = (ws: ExcelJS.Worksheet, koppen: string[], breedtes: number[]) => {
@@ -198,7 +198,7 @@ export function exporteerBodemPdf(o: TauwOpdracht): void {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
     doc.setTextColor(GRIJS.r, GRIJS.g, GRIJS.b);
-    doc.text(`Wire Solutions  ·  pagina ${i} van ${paginas}`, PW / 2, PH - 24, { align: "center" });
+    doc.text(`WIRE Solutions  ·  pagina ${i} van ${paginas}`, PW / 2, PH - 24, { align: "center" });
   }
 
   download(doc.output("blob"), bestandsnaam(o, "pdf"));

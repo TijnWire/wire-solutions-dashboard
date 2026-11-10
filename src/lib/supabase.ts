@@ -1,4 +1,4 @@
-// Wire Solutions — centrale database via de Cloudflare Worker (voorheen Supabase).
+// WIRE Solutions — centrale database via de Cloudflare Worker (voorheen Supabase).
 // ─────────────────────────────────────────────────────────────────────────────
 // Dit bestand houdt bewust dezelfde exportnamen (sb...) als de oude Supabase-versie, zodat de rest van de
 // app niet hoeft te veranderen. De sync blijft local-first: een storing of trage database mag de login en

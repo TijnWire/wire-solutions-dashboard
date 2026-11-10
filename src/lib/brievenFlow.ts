@@ -46,7 +46,7 @@ export function bevestigingsMail(r: Brievenronde): string {
     `Totaal adressen: ${t.totaal}`,
     "",
     "Met vriendelijke groet,",
-    "Wire Solutions"
+    "WIRE Solutions"
   );
   return `mailto:?subject=${encodeURIComponent(onderwerp)}&body=${encodeURIComponent(lijnen.join("\n"))}`;
 }

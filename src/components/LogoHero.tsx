@@ -1,12 +1,12 @@
 import { useMemo, useRef, useState, type PointerEvent } from "react";
 
-// Bovenaan Mijn werk: het Wire Solutions-logo als bewegend 3D-model.
+// Bovenaan Mijn werk: het WIRE Solutions-logo als bewegend 3D-model.
 // ─────────────────────────────────────────────────────────────────────────────
 // Het logo is een draad-model (alleen lijnen). We "extruderen" het door dezelfde lijntekening in 13 lagen
 // achter elkaar te stapelen op verschillende diepte (translateZ). Zo krijgt het echte diepte zonder een
 // 3D-bibliotheek: puur CSS 3D + SVG, dus licht en vloeiend ook op een oudere telefoon.
 //   • het model zwaait rustig heen en weer, en kantelt mee met je vinger of muis;
-//   • er lopen lichtpulsen langs de draden (het is tenslotte Wire Solutions) en de knoop in het midden gloeit;
+//   • er lopen lichtpulsen langs de draden (het is tenslotte WIRE Solutions) en de knoop in het midden gloeit;
 //   • tik of klik op het logo en het draait één keer helemaal rond.
 // Met "beweging verminderen" aan staat het model stil.
 
@@ -74,14 +74,14 @@ export function LogoHero() {
   };
 
   return (
-    <section className="flex flex-col items-center pb-2 pt-4" aria-label="Wire Solutions">
+    <section className="flex flex-col items-center pb-2 pt-4" aria-label="WIRE Solutions">
       <div
         ref={vak}
         onPointerMove={beweeg}
         onPointerLeave={() => setKanteling({ x: 0, y: 0 })}
         onClick={() => setDraai((d) => d + 1)}
         role="img"
-        aria-label="Wire Solutions logo — tik om het te laten draaien"
+        aria-label="WIRE Solutions logo — tik om het te laten draaien"
         className="relative w-full max-w-[19rem] cursor-pointer select-none sm:max-w-[22rem]"
         style={{ perspective: "900px", touchAction: "pan-y" }}
       >
@@ -99,7 +99,7 @@ export function LogoHero() {
         </div>
       </div>
       {/* Woordmerk: exact het lettertype uit het logo (als vector uit het originele logo overgenomen) */}
-      <img src="/wire-woordmerk.svg" alt="Wire Solutions — Detachering &amp; Payrolling" className="relative z-10 mt-3 w-full max-w-[19rem] select-none sm:max-w-[22rem]" draggable={false} />
+      <img src="/wire-woordmerk.svg" alt="WIRE Solutions — Detachering &amp; Payrolling" className="relative z-10 mt-3 w-full max-w-[19rem] select-none sm:max-w-[22rem]" draggable={false} />
     </section>
   );
 }

@@ -1,4 +1,4 @@
--- Wire Solutions — Saneren: één uitvoeringsdatum per cluster
+-- WIRE Solutions — Saneren: één uitvoeringsdatum per cluster
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Draaien:  npx wrangler d1 execute wire-solutions --remote --file cloudflare/schema-saneerflow.sql
 -- Terugdraaien: cloudflare/rollback/schema-saneerflow.rollback.sql
@@ -176,7 +176,7 @@ create index if not exists saneer_log_dossier_idx on saneer_log (pd_nummer, tijd
 --   select gebeurtenis, count(*) from saneer_log group by 1;
 
 
--- Wire Solutions — Saneren: import onthouden en afgekeurde regels bewaren
+-- WIRE Solutions — Saneren: import onthouden en afgekeurde regels bewaren
 -- Draaien:  npx wrangler d1 execute wire-solutions --remote --file cloudflare/schema-saneerflow.sql
 -- Additief: twee nieuwe tabellen. Geen bestaande tabel wordt aangeraakt.
 

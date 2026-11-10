@@ -1287,6 +1287,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     );
   };
 
+  // De bedrijfsnaam schrijven we overal als "WIRE Solutions" (ook in al opgeslagen instellingen).
+  useEffect(() => {
+    if (hydrated && /\b[Ww]ire [Ss]olutions\b/.test(bedrijf.naam ?? "") && !/WIRE Solutions/.test(bedrijf.naam ?? "")) {
+      setBedrijf((prev) => ({ ...prev, naam: (prev.naam ?? "").replace(/\b[Ww]ire [Ss]olutions\b/g, "WIRE Solutions") }));
+    }
+  }, [hydrated, bedrijf.naam]);
+
   // Ook wat via de centrale database binnenkomt: "Werknemer"/"Monteur" als functie wordt "Medewerker".
   useEffect(() => {
     if (!hydrated) return;

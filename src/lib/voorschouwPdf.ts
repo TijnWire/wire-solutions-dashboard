@@ -201,13 +201,13 @@ export async function mailVoorschouwenNaarStedin(lijst: Voorschouw[]) {
   const adressen = lijst
     .map((v) => `- ${v.straatnaam || "Onbekend"}${v.plaats ? `, ${v.plaats}` : ""}`)
     .join("\n");
-  const onderwerp = `Voorschouwen Wire Solutions (${lijst.length} ${lijst.length === 1 ? "adres" : "adressen"})`;
+  const onderwerp = `Voorschouwen WIRE Solutions (${lijst.length} ${lijst.length === 1 ? "adres" : "adressen"})`;
   const tekst =
     `Beste Stedin,\n\n` +
     `Hierbij de ingevulde voorschouwen voor de volgende adressen:\n${adressen}\n\n` +
     `De bijbehorende PDF's zitten in het zojuist gedownloade bestand "Voorschouwen_Stedin".\n` +
     `Voeg dat bestand toe als bijlage bij deze mail.\n\n` +
-    `Met vriendelijke groet,\nWire Solutions`;
+    `Met vriendelijke groet,\nWIRE Solutions`;
 
   window.location.href = `mailto:${STEDIN_EMAIL}?subject=${encodeURIComponent(onderwerp)}&body=${encodeURIComponent(tekst)}`;
 }
@@ -221,9 +221,9 @@ export async function verstuurVoorschouwenNaarStedin(lijst: Voorschouw[]): Promi
   try { blob = await genereerZipBlob(lijst); } catch { meldFout(); return "fout"; }
   const bestand = `Voorschouwen_Stedin_${new Date().toISOString().slice(0, 10)}.zip`;
   const adressen = lijst.map((v) => `- ${v.straatnaam || "Onbekend"}${v.plaats ? `, ${v.plaats}` : ""}`).join("\n");
-  const onderwerp = `Voorschouwen Wire Solutions (${lijst.length} ${lijst.length === 1 ? "adres" : "adressen"})`;
+  const onderwerp = `Voorschouwen WIRE Solutions (${lijst.length} ${lijst.length === 1 ? "adres" : "adressen"})`;
   const kop = `Beste Stedin,\n\nHierbij de ingevulde voorschouwen voor de volgende adressen:\n${adressen}\n\n`;
-  const voet = `Met vriendelijke groet,\nWire Solutions`;
+  const voet = `Met vriendelijke groet,\nWIRE Solutions`;
 
   // 1) Telefoon/tablet: direct delen mét bijlage naar de mail-app.
   try {

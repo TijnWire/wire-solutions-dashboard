@@ -1,4 +1,4 @@
--- Wire Solutions — Bodemonderzoek: wijzigingslog (Cloudflare D1)
+-- WIRE Solutions — Bodemonderzoek: wijzigingslog (Cloudflare D1)
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Draaien:  npx wrangler d1 execute wire-solutions --remote --file cloudflare/schema-bodem-log.sql
 -- Additief: één nieuwe tabel, geen bestaande tabel wordt aangeraakt.

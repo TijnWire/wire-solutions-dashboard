@@ -1,7 +1,7 @@
 {
-  "name": "Wire Solutions",
+  "name": "WIRE Solutions",
   "short_name": "Wire",
-  "description": "Teamdashboard voor de Stedin-operatie van Wire Solutions",
+  "description": "Teamdashboard voor de Stedin-operatie van WIRE Solutions",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

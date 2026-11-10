@@ -1,4 +1,4 @@
--- Wire Solutions — Bewonersakkoord: één uitvoeringsdatum per cluster
+-- WIRE Solutions — Bewonersakkoord: één uitvoeringsdatum per cluster
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Draaien:  npx wrangler d1 execute wire-solutions --remote --file cloudflare/schema-akkoord.sql
 -- Terugdraaien: cloudflare/rollback/schema-akkoord.rollback.sql

@@ -526,8 +526,8 @@ function WachtwoordResetModal({ gebruiker, onSluit }: { gebruiker: User; onSluit
       email: gebruiker.email,
       wachtwoord: temp,
       url: window.location.origin,
-      bedrijfsnaam: bedrijf?.naam || "Wire Solutions",
-      afzender: currentUser?.naam || (bedrijf?.naam || "Wire Solutions"),
+      bedrijfsnaam: bedrijf?.naam || "WIRE Solutions",
+      afzender: currentUser?.naam || (bedrijf?.naam || "WIRE Solutions"),
       telefoon: bedrijf?.telefoon,
     };
     const onderwerp = wachtwoordMailOnderwerp(d);
