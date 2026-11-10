@@ -94,9 +94,6 @@ export function WerkgebiedKaart() {
           <path d={PAD_UTRECHT} fill="url(#wk-vlak)" stroke={ORANJE} strokeWidth="4" strokeLinejoin="round" />
           <path d={PAD_GRENS} fill="none" stroke={ORANJE} strokeWidth="2" strokeDasharray="2 10" strokeLinecap="round" strokeOpacity="0.9" />
 
-          <text x="120" y="500" fontSize="22" fontWeight="700" letterSpacing="7" fill={BRUIN} fillOpacity="0.38">ZUID-HOLLAND</text>
-          <text x="905" y="135" fontSize="22" fontWeight="700" letterSpacing="7" fill={BRUIN} fillOpacity="0.38" textAnchor="end">UTRECHT</text>
-
           {/* Verbindingsdraden tussen de regio's, met lichtpulsjes */}
           {draden.map(([a, b], i) => {
             const [x1, y1] = punt(a), [x2, y2] = punt(b);

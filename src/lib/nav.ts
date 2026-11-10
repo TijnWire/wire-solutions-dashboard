@@ -66,13 +66,13 @@ export const NAV: NavItem[] = [
   { key: "mededelingen", label: "Mededelingen", icon: Megaphone, group: "Werk", roles: BEHEER },
 
   { key: "brieven", label: "Brieven", icon: Mailbox, group: "Projecten", roles: ALLE },
+  { key: "tauw", label: "Bodemonderzoeken", icon: Shovel, group: "Projecten", roles: ALLE },
   // Buurtaanpak staat tijdelijk niet in het menu (30-07-2026, op verzoek). De pagina, de gegevens en
   // de code blijven bestaan: zodra dit project weer begint, hoeft alleen deze regel terug.
   // { key: "buurtaanpak", label: "Buurtaanpak", icon: Waypoints, group: "Projecten", roles: ALLE },
   { key: "saneren", label: "Saneren", icon: Building2, group: "Projecten", roles: ALLE },
   { key: "voorschouwen", label: "Voorschouwen", icon: ClipboardCheck, group: "Projecten", roles: ALLE },
   { key: "schouwafspraken", label: "Schouwafspraken", icon: CalendarClock, group: "Projecten", roles: ALLE },
-  { key: "tauw", label: "Bodemonderzoeken", icon: Shovel, group: "Projecten", roles: ALLE },
 
   // Afspraken staat niet meer in het menu (op verzoek). Pagina en gegevens blijven bestaan;
   // om het terug te zetten hoeft alleen `verborgen: true` weg.
