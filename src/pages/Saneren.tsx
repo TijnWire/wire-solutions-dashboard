@@ -13,6 +13,7 @@ import { afleidRegio } from "../lib/regio";
 import { waUrl, smsUrl } from "../lib/communicatie";
 import { leesStedinPlanning } from "../lib/tauwImport";
 import { legeSaneerAdres, TAUW_STATUS_VOLGORDE, TAUW_STATUS_LABEL, type Sanering, type SaneerAdres, type TauwStatus } from "../lib/types";
+import { isToegewezen, toegewezenIds, toewijzingPatch } from "../lib/toewijzing";
 
 const veld = "w-full rounded-lg border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100";
 const knopKlein = "inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-3 py-1.5 text-sm font-semibold text-ink-700 hover:bg-ink-50 disabled:cursor-not-allowed disabled:opacity-40";
@@ -209,8 +210,8 @@ function SaneringDetail({ sanering, onTerug }: { sanering: Sanering; onTerug: ()
   const scan = useSaneerScan();
 
   const isLeiding = currentUser?.rol === "eigenaar" || currentUser?.rol === "beheer" || currentUser?.rol === "hr";
-  const isToegewezen = !!currentUser && currentUser.id === sanering.toegewezenAan;
-  const magWerken = isLeiding || isToegewezen;
+  const ikBenToegewezen = !!currentUser && isToegewezen(sanering, currentUser.id);
+  const magWerken = isLeiding || ikBenToegewezen;
   const status = sanering.status;
   const bewerkbaar = magWerken && (status === "nieuw" || status === "toegewezen");
   const monteur = users.find((u) => u.id === sanering.toegewezenAan);
@@ -233,7 +234,7 @@ function SaneringDetail({ sanering, onTerug }: { sanering: Sanering; onTerug: ()
   const importeer = (file: File) => void scan.run(file, (adressen) => setAdressen([...sanering.adressen.filter(adresVol), ...adressen]));
 
   // Levenscyclus-overgangen (rol-gebonden) — zelfde stappen als TAUW.
-  const toewijzen = (id: string) => updateSanering(sanering.id, { toegewezenAan: id || undefined, status: id ? "toegewezen" : "nieuw", toegewezenOp: id ? nu() : undefined });
+  const toewijzen = (ids: string[]) => { const p = toewijzingPatch(ids); updateSanering(sanering.id, { ...p, status: p.toegewezenAan ? "toegewezen" : "nieuw", toegewezenOp: p.toegewezenAan ? (sanering.toegewezenOp ?? nu()) : undefined }); };
   const naarControle = () => updateSanering(sanering.id, { status: "ter_controle" });
   // Terugzetten/heropenen: ruim de (nu ongeldige) goedkeurings-/verstuurgegevens op.
   const terugNaarWerknemer = () => updateSanering(sanering.id, { status: "toegewezen", gecontroleerdDoor: undefined, gecontroleerdOp: undefined, verstuurdOp: undefined });
@@ -305,7 +306,7 @@ function SaneringDetail({ sanering, onTerug }: { sanering: Sanering; onTerug: ()
             <div className="flex flex-wrap items-center gap-2">
               <UserPlus className="h-4 w-4 text-ink-400" />
               <span className="text-sm text-ink-600">Wijs toe aan een werknemer:</span>
-              <WerknemerKiezer value={sanering.toegewezenAan ?? ""} onChange={toewijzen} users={users} leegLabel="Kies werknemer…" />
+              <WerknemerKiezer values={toegewezenIds(sanering)} onChange={toewijzen} users={users} leegLabel="Kies werknemer…" />
             </div>
           ) : <p className="text-sm text-ink-500">Nog niet vrijgegeven door de beheerder.</p>)}
 
@@ -314,7 +315,7 @@ function SaneringDetail({ sanering, onTerug }: { sanering: Sanering; onTerug: ()
               {magWerken ? (
                 <button type="button" onClick={() => setBevestigGereed(true)} className={knopPrimair}><Check className="h-4 w-4" /> Afspraken klaar → naar controle</button>
               ) : <p className="text-sm text-ink-500">Wordt afgewerkt door {monteur?.naam ?? "de werknemer"}.</p>}
-              {isLeiding && <WerknemerKiezer value={sanering.toegewezenAan ?? ""} onChange={toewijzen} users={users} leegLabel="Niet toegewezen" />}
+              {isLeiding && <WerknemerKiezer values={toegewezenIds(sanering)} onChange={toewijzen} users={users} leegLabel="Niet toegewezen" />}
             </div>
           )}
 
@@ -323,7 +324,7 @@ function SaneringDetail({ sanering, onTerug }: { sanering: Sanering; onTerug: ()
               <button type="button" onClick={goedkeuren} className={knopPrimair}><Check className="h-4 w-4" /> Goedkeuren</button>
               <button type="button" onClick={terugNaarWerknemer} className={knopKlein}><RotateCcw className="h-3.5 w-3.5" /> Terug naar werknemer</button>
             </div>
-          ) : isToegewezen ? (
+          ) : ikBenToegewezen ? (
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-sm text-ink-500">Klaar gemeld — wacht op controle.</span>
               <button type="button" onClick={terugNaarWerknemer} className={knopKlein}><RotateCcw className="h-3.5 w-3.5" /> Terug naar mezelf — nog iets aanpassen</button>
@@ -516,7 +517,7 @@ function OudeSaneringen({ initieelSanering }: { initieelSanering?: string }) {
 
   if (!currentUser) return null;
   const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr";
-  const zichtbaar = (isLeiding ? saneringen : saneringen.filter((s) => s.toegewezenAan === currentUser.id)).filter((s) => !s.gearchiveerd && !s.verwijderd);
+  const zichtbaar = (isLeiding ? saneringen : saneringen.filter((s) => isToegewezen(s, currentUser.id))).filter((s) => !s.gearchiveerd && !s.verwijderd);
   const verwijderdeProjecten = isLeiding ? saneringen.filter((s) => s.verwijderd) : [];
   const verwijderProject = (s: Sanering) => { updateSanering(s.id, { verwijderd: true, verwijderdOp: new Date().toISOString() }); setVraagVerwijder(null); };
   const herstelProject = (s: Sanering) => updateSanering(s.id, { verwijderd: false, verwijderdOp: undefined });

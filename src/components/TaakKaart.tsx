@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Clock, MessageSquare, Trash2, ChevronDown, Users2 } from "lucide-react";
+import { WerknemerKiezer } from "./WerknemerKiezer";
+import { toegewezenIds, toewijzingPatch } from "../lib/toewijzing";
 import { useApp } from "../store/AppContext";
-import { Keuze } from "./Keuze";
 import { TAAK_STATUSSEN, type Taak, type TaakStatus } from "../lib/types";
 
 const statusStyle: Record<TaakStatus, { actief: string; rand: string }> = {
@@ -43,7 +44,7 @@ export function TaakKaart({
                 <span className="flex h-4 w-4 items-center justify-center rounded-full bg-ink-800 text-[8px] font-semibold text-white">
                   {toegewezen.initialen}
                 </span>
-                {toegewezen.naam.split(" ")[0]}
+                {toegewezen.naam.split(" ")[0]}{taak.extraToegewezen?.length ? ` + ${taak.extraToegewezen.length}` : ""}
               </span>
             ) : taak.toegewezenAan === "" ? (
               <span className="inline-flex items-center gap-1 font-medium text-brand-600">
@@ -95,7 +96,7 @@ export function TaakKaart({
             <div className="flex items-center justify-between gap-2">
               <label className="flex items-center gap-2 text-xs text-ink-500">
                 Toegewezen aan:
-                <div className="w-40"><Keuze value={taak.toegewezenAan} onChange={(w) => updateTaak(taak.id, { toegewezenAan: w })} altijdZoeken opties={[{ waarde: "", label: "Hele team" }, ...users.map((u) => ({ waarde: u.id, label: u.naam }))]} size="sm" /></div>
+                <WerknemerKiezer size="sm" values={toegewezenIds(taak)} onChange={(ids) => { const p = toewijzingPatch(ids); updateTaak(taak.id, { toegewezenAan: p.toegewezenAan ?? "", extraToegewezen: p.extraToegewezen }); }} users={users} leegLabel="Hele team" />
               </label>
               <button
                 onClick={() => deleteTaak(taak.id)}

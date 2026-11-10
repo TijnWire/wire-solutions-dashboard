@@ -32,6 +32,7 @@ import {
   type AfspraakSoort,
   type AdresType,
 } from "../lib/types";
+import { isToegewezen, toegewezenIds, toewijzingPatch } from "../lib/toewijzing";
 
 const statusTone: Record<AfspraakStatus, string> = {
   Open: "amber",
@@ -328,7 +329,7 @@ function NieuweGroep({ onKlaar }: { onKlaar: () => void }) {
   const [straat, setStraat] = useState("");
   const [postcode, setPostcode] = useState("");
   const [plaats, setPlaats] = useState("");
-  const [toegewezenAan, setToegewezenAan] = useState(currentUser?.rol === "monteur" ? currentUser.id : "");
+  const [toegewezen, setToegewezen] = useState<string[]>(currentUser?.rol === "monteur" ? [currentUser.id] : []);
   const [regels, setRegels] = useState<RegelData[]>([]);
 
   const setRegel = (i: number, patch: Partial<RegelData>) =>
@@ -359,7 +360,7 @@ function NieuweGroep({ onKlaar }: { onKlaar: () => void }) {
         type: r.type,
         datum: r.datum,
         tijd: r.tijd,
-        toegewezenAan: toegewezenAan || undefined,
+        ...toewijzingPatch(toegewezen),
         status: r.status,
         notitie: r.notitie,
         email: r.email || undefined,
@@ -406,7 +407,7 @@ function NieuweGroep({ onKlaar }: { onKlaar: () => void }) {
         </div>
         <div>
           <label className={labelCls}>Wie gaat het doen?</label>
-          <Keuze value={toegewezenAan} onChange={setToegewezenAan} altijdZoeken opties={[{ waarde: "", label: "— Nog niet toewijzen —" }, ...users.map((u) => ({ waarde: u.id, label: u.naam }))]} title="Wie gaat het doen?" />
+          <WerknemerKiezer values={toegewezen} onChange={setToegewezen} users={users} leegLabel="— Nog niet toewijzen —" />
         </div>
       </Card>
 
@@ -436,7 +437,7 @@ function GroepDetail({ locatie, onTerug }: { locatie: string; onTerug: () => voi
   const [bevestig, setBevestig] = useState<{ titel: string; tekst: string; actie: () => void } | null>(null);
 
   const rijen = afspraken
-    .filter((a) => a.locatie === locatie && (isLeiding || a.toegewezenAan === currentUser?.id))
+    .filter((a) => a.locatie === locatie && (isLeiding || isToegewezen(a, currentUser?.id)))
     .sort((a, b) => a.huisnummer.localeCompare(b.huisnummer, "nl", { numeric: true }));
 
   if (rijen.length === 0) {
@@ -483,7 +484,7 @@ function GroepDetail({ locatie, onTerug }: { locatie: string; onTerug: () => voi
 
   const voegToe = (nr: string) => {
     if (rijen.some((a) => a.huisnummer === nr)) return;
-    addAfspraak({ locatie, soort: eerste.soort, klantNaam: "", telefoon: "", straat: eerste.straat, huisnummer: nr, postcode: eerste.postcode, plaats: eerste.plaats, type: "woning", datum: "", tijd: "", toegewezenAan: eerste.toegewezenAan, status: "Open", notitie: "" });
+    addAfspraak({ locatie, soort: eerste.soort, klantNaam: "", telefoon: "", straat: eerste.straat, huisnummer: nr, postcode: eerste.postcode, plaats: eerste.plaats, type: "woning", datum: "", tijd: "", toegewezenAan: eerste.toegewezenAan, extraToegewezen: eerste.extraToegewezen, status: "Open", notitie: "" });
   };
 
   const tel = (s: AfspraakStatus) => rijen.filter((a) => a.status === s).length;
@@ -595,7 +596,7 @@ export function Afspraken({ initieelLocatie }: { initieelLocatie?: string }) {
   if (!currentUser) return null;
   const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr";
 
-  const zichtbaar = isLeiding ? afspraken : afspraken.filter((a) => a.toegewezenAan === currentUser.id);
+  const zichtbaar = isLeiding ? afspraken : afspraken.filter((a) => isToegewezen(a, currentUser.id));
   // Vervallen afspraken waarvan de betrokkenen nog niet geïnformeerd zijn.
   const vervallen = zichtbaar.filter((a) => a.status === "Geannuleerd" && !a.annuleringGemeld);
   const naamVanUser = (id?: string) => users.find((u) => u.id === id)?.naam ?? "";
@@ -683,7 +684,7 @@ export function Afspraken({ initieelLocatie }: { initieelLocatie?: string }) {
                   {a.email && <a href={mailtoAnnulering(a)} className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 bg-white px-2.5 py-1 text-xs font-medium text-ink-700 hover:bg-ink-50"><Mail className="h-3.5 w-3.5" /> {a.email}</a>}
                   {a.toegewezenAan && (
                     <span className="inline-flex items-center gap-1.5 rounded-lg bg-ink-100 px-2.5 py-1 text-xs text-ink-600">
-                      Medewerker: {naamVanUser(a.toegewezenAan)}
+                      Medewerker: {toegewezenIds(a).map(naamVanUser).join(", ")}
                       {emailVanUser(a.toegewezenAan) && <a href={`mailto:${emailVanUser(a.toegewezenAan)}`} className="inline-flex items-center gap-1 font-medium text-brand-600"><Mail className="h-3 w-3" /> mail</a>}
                     </span>
                   )}
@@ -781,8 +782,8 @@ export function Afspraken({ initieelLocatie }: { initieelLocatie?: string }) {
                           <div className="mt-3 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                             <span className="text-xs font-medium text-ink-500">Wie doet het?</span>
                             <WerknemerKiezer
-                              value={g.rijen[0].toegewezenAan ?? ""}
-                              onChange={(id) => g.rijen.forEach((a) => updateAfspraak(a.id, { toegewezenAan: id || undefined }))}
+                              values={toegewezenIds(g.rijen[0])}
+                              onChange={(ids) => g.rijen.forEach((a) => updateAfspraak(a.id, toewijzingPatch(ids)))}
                               users={users}
                               leegLabel="— Niemand —"
                             />

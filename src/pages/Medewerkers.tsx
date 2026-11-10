@@ -19,6 +19,7 @@ import { useApp } from "../store/AppContext";
 import { useNav } from "../store/NavContext";
 import { Card, Badge } from "../components/ui";
 import { ROL_LABEL, PERIODE_TYPES, type User, type AfspraakStatus, type PeriodeType } from "../lib/types";
+import { isToegewezen } from "../lib/toewijzing";
 
 const euro = (n: number) => n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
 const rolTone: Record<string, string> = { eigenaar: "green", beheer: "amber", monteur: "slate" };
@@ -100,10 +101,10 @@ function MedewerkerDetail({ user, onTerug }: { user: User; onTerug: () => void }
   const { taken, rondes, afspraken, loonstroken, boetes, voorschouwen } = useApp();
   const { navigeer } = useNav();
 
-  const mijnTaken = taken.filter((t) => t.toegewezenAan === user.id || t.toegewezenAan === ""); // "" = hele team
+  const mijnTaken = taken.filter((t) => isToegewezen(t, user.id) || t.toegewezenAan === ""); // "" = hele team
   const openTaken = mijnTaken.filter((t) => t.status !== "Klaar");
-  const mijnRondes = rondes.filter((r) => r.toegewezenAan === user.id);
-  const afspraakLocaties = [...new Set(afspraken.filter((a) => a.toegewezenAan === user.id).map((a) => a.locatie))];
+  const mijnRondes = rondes.filter((r) => isToegewezen(r, user.id));
+  const afspraakLocaties = [...new Set(afspraken.filter((a) => isToegewezen(a, user.id)).map((a) => a.locatie))];
   const mijnLoon = loonstroken.filter((l) => l.medewerkerId === user.id);
   const mijnBoetes = boetes.filter((b) => b.medewerkerId === user.id);
   const openBoetes = mijnBoetes.filter((b) => b.status === "Open").reduce((s, b) => s + b.bedrag, 0);
@@ -201,7 +202,7 @@ function MedewerkerDetail({ user, onTerug }: { user: User; onTerug: () => void }
               );
             })}
             {afspraakLocaties.map((loc) => {
-              const rijen = afspraken.filter((a) => a.toegewezenAan === user.id && a.locatie === loc);
+              const rijen = afspraken.filter((a) => isToegewezen(a, user.id) && a.locatie === loc);
               const bevestigd = rijen.filter((a) => a.status === ("Bevestigd" as AfspraakStatus) || a.status === ("Afgerond" as AfspraakStatus)).length;
               return (
                 <button key={loc} type="button" onClick={() => navigeer("afspraken", { locatie: loc })} className="flex items-center gap-3 rounded-lg border border-ink-200 p-3 text-left hover:border-brand-300 hover:bg-ink-50">
@@ -314,8 +315,8 @@ export function Medewerkers({ initieelMedewerker }: { initieelMedewerker?: strin
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {users.map((u) => {
-          const openTaken = taken.filter((t) => (t.toegewezenAan === u.id || t.toegewezenAan === "") && t.status !== "Klaar").length; // "" = hele team
-          const werk = rondes.filter((r) => r.toegewezenAan === u.id).length + new Set(afspraken.filter((a) => a.toegewezenAan === u.id).map((a) => a.locatie)).size;
+          const openTaken = taken.filter((t) => (isToegewezen(t, u.id) || t.toegewezenAan === "") && t.status !== "Klaar").length; // "" = hele team
+          const werk = rondes.filter((r) => isToegewezen(r, u.id)).length + new Set(afspraken.filter((a) => isToegewezen(a, u.id)).map((a) => a.locatie)).size;
           const openBoetes = boetes.filter((b) => b.medewerkerId === u.id && b.status === "Open").reduce((s, b) => s + b.bedrag, 0);
           return (
             <button key={u.id} type="button" onClick={() => setSelId(u.id)} className="rounded-2xl border border-ink-200 bg-white p-4 text-left shadow-card transition-all hover:border-brand-300 hover:shadow-cardhover">

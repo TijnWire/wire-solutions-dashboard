@@ -42,6 +42,7 @@ import {
   genereerZipBlob,
 } from "../lib/voorschouwPdf";
 import type { Voorschouw, VoorschouwMap } from "../lib/types";
+import { isToegewezen, toegewezenIds, toewijzingPatch } from "../lib/toewijzing";
 
 // "Open" = nog geen foto toegevoegd (deze vragen nog aandacht).
 const vsZonderFoto = (v: Voorschouw) => !v.fotos || v.fotos.length === 0;
@@ -296,7 +297,7 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
   // hun losse adressen mogen dus ook niet meer als "zonder map" opduiken.
   const archiefMapIds = new Set(voorschouwMappen.filter((m) => m.gearchiveerd || m.gereedVoorStedin).map((m) => m.id));
   // Een monteur ziet: z'n eigen ingevulde voorschouwen én álle voorschouwen in mappen die aan hém zijn toegewezen.
-  const mijnMapIds = new Set(voorschouwMappen.filter((m) => m.toegewezenAan === currentUser.id).map((m) => m.id));
+  const mijnMapIds = new Set(voorschouwMappen.filter((m) => isToegewezen(m, currentUser.id)).map((m) => m.id));
   const zichtbaar = (isLeiding
     ? voorschouwen
     : voorschouwen.filter((v) => v.ingevuldDoor === currentUser.id || (v.mapId ? mijnMapIds.has(v.mapId) : false))
@@ -495,9 +496,15 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
   // z'n eigen voorschouwen in zitten — zo ziet hij precies wat hij moet oppakken (óók nog lege mappen).
   const zichtbareMappen = isLeiding
     ? actieveMappen
-    : actieveMappen.filter((m) => m.toegewezenAan === currentUser.id || zichtbaar.some((v) => v.mapId === m.id));
+    : actieveMappen.filter((m) => isToegewezen(m, currentUser.id) || zichtbaar.some((v) => v.mapId === m.id));
   const mapGroepen = zichtbareMappen.map((m) => ({ map: m, items: zichtbaar.filter((v) => v.mapId === m.id).sort(opPostcode) }));
-  const zetMapToegewezen = (id: string, userId: string) => updateVoorschouwMap(id, { toegewezenAan: userId || undefined });
+  // Klik op een naam zet die persoon erbij of haalt hem weg; meerdere medewerkers per map kan.
+  const zetMapToegewezen = (id: string, userId: string) => {
+    const map = voorschouwMappen.find((m) => m.id === id);
+    const huidig = toegewezenIds(map);
+    const ids = !userId ? [] : huidig.includes(userId) ? huidig.filter((x) => x !== userId) : [...huidig, userId];
+    updateVoorschouwMap(id, toewijzingPatch(ids));
+  };
   // Open = nog niet ingediend (concept) óf zonder foto — deze mappen vragen nog aandacht.
   const nOpen = (items: Voorschouw[]) => items.filter((v) => v.status !== "Ingediend" || !v.fotos || v.fotos.length === 0).length;
   mapGroepen.sort((ga, gb) => {
@@ -723,9 +730,10 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
   // ── Map-detailpagina: werkruimte voor één map (naam, toewijzen, nieuwe voorschouw, adressen) ──
   // Zichtbaar voor de leiding én voor de medewerker aan wie de map is toegewezen (die komt hier via "Mijn werk").
   const detailMap = mapDetailId ? voorschouwMappen.find((m) => m.id === mapDetailId) : null;
-  if (detailMap && (isLeiding || detailMap.toegewezenAan === currentUser.id)) {
+  if (detailMap && (isLeiding || isToegewezen(detailMap, currentUser.id))) {
     const items = itemsVanMap(detailMap.id).sort(opPostcode);
-    const toegewezen = detailMap.toegewezenAan ? users.find((u) => u.id === detailMap.toegewezenAan) : null;
+    const toegewezenLijst = toegewezenIds(detailMap).map((id) => users.find((u) => u.id === id)).filter((u): u is NonNullable<typeof u> => !!u);
+    const toegewezen = toegewezenLijst[0] ?? null;
     const zoek = naamZoek.trim().toLowerCase();
     const kandidaten = zoek
       ? [...users].filter((u) => u.naam.toLowerCase().includes(zoek)).sort((a, b) => {
@@ -767,11 +775,13 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
           <Card className="space-y-3 p-5">
             <div>
               <h3 className="text-sm font-bold text-ink-900">Wie moet deze map oppakken?</h3>
-              <p className="mt-0.5 text-xs text-ink-500">Typ een naam en klik op de juiste persoon. Hij ziet de map dan bij <b>Mijn werk</b>.</p>
+              <p className="mt-0.5 text-xs text-ink-500">Typ een naam en klik op de juiste persoon; je kunt er meerdere kiezen. Zij zien de map dan bij <b>Mijn werk</b>.</p>
             </div>
             {toegewezen && (
               <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-3 py-1 text-sm font-semibold text-brand-700 ring-1 ring-brand-200"><User className="h-4 w-4" /> {toegewezen.naam}</span>
+                {toegewezenLijst.map((u) => (
+                  <button key={u.id} type="button" onClick={() => zetMapToegewezen(detailMap.id, u.id)} title="Klik om deze medewerker weg te halen" className="inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-3 py-1 text-sm font-semibold text-brand-700 ring-1 ring-brand-200 hover:bg-brand-100"><User className="h-4 w-4" /> {u.naam} <X className="h-3.5 w-3.5" /></button>
+                ))}
                 <button type="button" onClick={() => setVraagToewijzingWeg(true)} className="text-xs font-medium text-red-500 hover:underline">Toewijzing verwijderen</button>
               </div>
             )}
@@ -782,7 +792,7 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
                   {kandidaten.length === 0 ? (
                     <p className="px-3 py-2 text-sm text-ink-400">Geen medewerker gevonden voor “{naamZoek.trim()}”.</p>
                   ) : kandidaten.map((u) => {
-                    const gekozen = detailMap.toegewezenAan === u.id;
+                    const gekozen = isToegewezen(detailMap, u.id);
                     return (
                       <button key={u.id} type="button" onClick={() => { zetMapToegewezen(detailMap.id, u.id); setNaamZoek(""); }} className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm hover:bg-brand-50 ${gekozen ? "bg-brand-50" : ""}`}>
                         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-ink-800 text-xs font-semibold text-white">{u.initialen}</span>
@@ -1055,7 +1065,7 @@ export function Voorschouwen({ initieelMap }: { initieelMap?: string }) {
                           <span title={`${zonderFoto} ${zonderFoto === 1 ? "adres" : "adressen"} zonder foto`} className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700 ring-1 ring-amber-200"><AlertTriangle className="h-3 w-3" /> {zonderFoto} zonder foto</span>
                         )}
                         {g.map?.toegewezenAan && (
-                          <span title="Toegewezen aan" className="inline-flex shrink-0 items-center gap-1 rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700 ring-1 ring-brand-200"><User className="h-3 w-3" /> {naamVan(g.map.toegewezenAan)}</span>
+                          <span title="Toegewezen aan" className="inline-flex shrink-0 items-center gap-1 rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700 ring-1 ring-brand-200"><User className="h-3 w-3" /> {toegewezenIds(g.map).map(naamVan).filter(Boolean).join(", ")}</span>
                         )}
                       </button>
                       <div className="flex w-full items-center gap-2 sm:w-auto">

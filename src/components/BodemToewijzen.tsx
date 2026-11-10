@@ -3,6 +3,7 @@ import { Search, X, UserPlus, CheckSquare, Square, Users } from "lucide-react";
 import { Card } from "./ui";
 import { sorteerRoute, voortgangVan } from "../lib/bodemonderzoek";
 import type { TauwAdres, User } from "../lib/types";
+import { isToegewezen } from "../lib/toewijzing";
 
 // Adressen handmatig verdelen, met filters op locatie en status.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -181,7 +182,7 @@ export function BodemToewijzen({ adressen, users, team, onWijzig }: {
       {team.length > 0 && (
         <div className="flex flex-wrap gap-2 border-t border-ink-100 pt-2">
           {team.map((id) => {
-            const eigen = adressen.filter((a) => a.toegewezenAan === id);
+            const eigen = adressen.filter((a) => isToegewezen(a, id));
             const v = voortgangVan(eigen);
             return (
               <span key={id} className="inline-flex items-center gap-1.5 rounded-full border border-ink-200 bg-white px-3 py-1 text-xs">

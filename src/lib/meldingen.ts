@@ -1,5 +1,6 @@
 import type { Bedrijf, Instellingen, Verlof, Taak, Brievenronde, Afspraak, Voorschouw, User, Project, ProjectPost, TauwOpdracht, Sanering, Buurtaanpak } from "./types";
 import { supabaseAan } from "./supabase";
+import { isToegewezen } from "./toewijzing";
 
 const isISODatum = (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d);
 const dezeISO = (offset = 0) => { const t = new Date(); t.setDate(t.getDate() + offset); return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`; };
@@ -52,31 +53,31 @@ export function meldingenVoor(user: User, data: MeldingData): Melding[] {
   const isLeiding = user.rol === "eigenaar" || user.rol === "beheer" || user.rol === "hr";
 
   // Open taken
-  const openTaken = taken.filter((t) => (t.toegewezenAan === user.id || t.toegewezenAan === "") && t.status !== "Klaar"); // "" = hele team
+  const openTaken = taken.filter((t) => (isToegewezen(t, user.id) || t.toegewezenAan === "") && t.status !== "Klaar"); // "" = hele team
   if (openTaken.length) m.push({ id: "taken", ernst: "info", titel: `${openTaken.length} ${openTaken.length === 1 ? "taak" : "taken"} te doen`, tekst: "Bekijk je openstaande taken in Mijn werk.", navKey: "mijnwerk" });
 
   // Toegewezen brievenrondes met nog te gooien adressen
-  for (const r of rondes.filter((r) => r.toegewezenAan === user.id && !r.verwijderd)) {
+  for (const r of rondes.filter((r) => isToegewezen(r, user.id) && !r.verwijderd)) {
     const open = r.adressen.filter((a) => !a.ontbreekt && a.status === "Te doen").length;
     if (open > 0) m.push({ id: "ronde-" + r.id, ernst: "info", titel: `Brieven: ${r.straat}`, tekst: `Nog ${open} adres${open === 1 ? "" : "sen"} te gooien.`, navKey: "brieven", target: { ronde: r.id } });
   }
 
   // Toegewezen afspraken (nog niet afgerond/geannuleerd), gegroepeerd per locatie
   const groepen = new Map<string, number>();
-  for (const a of afspraken.filter((a) => a.toegewezenAan === user.id && a.status !== "Afgerond" && a.status !== "Geannuleerd")) {
+  for (const a of afspraken.filter((a) => isToegewezen(a, user.id) && a.status !== "Afgerond" && a.status !== "Geannuleerd")) {
     groepen.set(a.locatie, (groepen.get(a.locatie) ?? 0) + 1);
   }
   for (const [loc, n] of groepen) m.push({ id: "afspr-" + loc, ernst: "info", titel: `Afspraken: ${loc}`, tekst: `${n} afspraak${n === 1 ? "" : "en"} te doen.`, navKey: "afspraken", target: { locatie: loc } });
 
   // Afspraak gaat niet door — waarschuw zolang de betrokkenen nog niet geïnformeerd zijn.
-  for (const a of afspraken.filter((a) => a.status === "Geannuleerd" && !a.annuleringGemeld && (isLeiding || a.toegewezenAan === user.id))) {
+  for (const a of afspraken.filter((a) => a.status === "Geannuleerd" && !a.annuleringGemeld && (isLeiding || isToegewezen(a, user.id)))) {
     m.push({ id: "afspr-annul-" + a.id, ernst: "waarschuwing", titel: `Afspraak vervalt: ${`${a.straat} ${a.huisnummer}`.trim() || a.locatie}`, tekst: `Informeer ${a.klantNaam || "de klant"} (${a.locatie}) dat de afspraak niet doorgaat.`, navKey: "afspraken", target: { locatie: a.locatie } });
   }
 
   // Saneren: bevestigings-sms 24u vóór de afspraak. Pas zodra bij élk adres een afspraak is gemaakt,
   // en alleen voor afspraken die vandaag of morgen plaatsvinden en nog geen bevestiging hebben gehad.
   const vandaag = dezeISO(0), morgen = dezeISO(1);
-  for (const s of saneringen.filter((s) => !s.gearchiveerd && !s.verwijderd && (isLeiding || s.toegewezenAan === user.id))) {
+  for (const s of saneringen.filter((s) => !s.gearchiveerd && !s.verwijderd && (isLeiding || isToegewezen(s, user.id)))) {
     if (s.adressen.length === 0 || !s.adressen.every((a) => a.bevestigd)) continue;
     const teVersturen = s.adressen.filter((a) => a.telefoon.trim() && isISODatum(a.datum) && !a.herinnerVerstuurdOp && a.datum >= vandaag && a.datum <= morgen).length;
     if (teVersturen > 0) m.push({ id: "san-sms-" + s.id, ernst: "waarschuwing", titel: `${teVersturen} bevestigings-sms te versturen`, tekst: `Stuur de bewoners van “${s.naam}” vandaag nog de afspraakbevestiging — hun afspraak is vandaag of morgen (24 uur vooraf).`, navKey: "saneren", target: { saneringId: s.id } });
@@ -84,7 +85,7 @@ export function meldingenVoor(user: User, data: MeldingData): Melding[] {
 
   // Buurtaanpak: SMS-herinnering 24u vóór de afspraak — voor bevestigde adressen met een telefoonnummer
   // waarvan de uitvoerdatum vandaag of morgen is en die nog geen herinnering hebben gehad.
-  for (const b of buurtaanpak.filter((b) => !b.gearchiveerd && (isLeiding || b.toegewezenAan === user.id))) {
+  for (const b of buurtaanpak.filter((b) => !b.gearchiveerd && (isLeiding || isToegewezen(b, user.id)))) {
     const teVersturen = b.adressen.filter((a) => a.bevestigd && a.telefoon.trim() && isISODatum(a.datum) && !a.herinnerVerstuurdOp && a.datum >= vandaag && a.datum <= morgen).length;
     if (teVersturen > 0) m.push({ id: "buurt-sms-" + b.id, ernst: "waarschuwing", titel: `${teVersturen} SMS-herinnering${teVersturen === 1 ? "" : "en"} te versturen`, tekst: `Stuur de bewoners van “${b.naam}” de afspraakbevestiging namens Stedin — hun afspraak is vandaag of morgen (24 uur vooraf).`, navKey: "buurtaanpak", target: { buurtaanpakId: b.id } });
   }
@@ -113,7 +114,7 @@ export function meldingenVoor(user: User, data: MeldingData): Melding[] {
   const projectById = new Map(projects.map((p) => [p.id, p]));
   const voornaam = (id: string) => users.find((u) => u.id === id)?.naam.split(" ")[0] ?? "Iemand";
   const inProject = (p: Project) =>
-    isLeiding || p.toegewezenAan.includes(user.id) || taken.some((t) => t.projectId === p.id && (t.toegewezenAan === user.id || t.toegewezenAan === ""));
+    isLeiding || p.toegewezenAan.includes(user.id) || taken.some((t) => t.projectId === p.id && (isToegewezen(t, user.id) || t.toegewezenAan === ""));
   const projectNav = isLeiding ? "projecten" : "mijnwerk";
   for (const post of projectPosts) {
     if (post.afgehandeld) continue;
@@ -136,7 +137,7 @@ export function meldingenVoor(user: User, data: MeldingData): Melding[] {
   }
 
   // TAUW: aan mij toegewezen mappen — herinnering met openstaande adressen, of een nudge "klaar voor controle"
-  for (const o of tauwOpdrachten.filter((t) => t.toegewezenAan === user.id && (t.status === "toegewezen" || t.status === "nieuw"))) {
+  for (const o of tauwOpdrachten.filter((t) => isToegewezen(t, user.id) && (t.status === "toegewezen" || t.status === "nieuw"))) {
     const open = o.adressen.filter((a) => !a.bevestigd).length;
     m.push({ id: "tauw-" + o.id, ernst: "info", titel: `${o.opdrachtgever ?? "TAUW"}: ${o.referentie || o.regio || "opdracht"}`, tekst: open > 0 ? `Nog ${open} adres${open === 1 ? "" : "sen"} af te ronden.` : "Klaar om naar controle te sturen.", navKey: "tauw", target: { tauwId: o.id } });
   }

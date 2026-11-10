@@ -62,6 +62,7 @@ export type Taak = {
   projectId: string;
   titel: string;
   toegewezenAan: string; // user id
+  extraToegewezen?: string[]; // overige medewerkers naast toegewezenAan (zie lib/toewijzing.ts)
   deadline: string;
   status: TaakStatus;
   notitie: string;
@@ -146,6 +147,7 @@ export type VoorschouwMap = {
   id: string;
   naam: string;
   toegewezenAan?: string; // user id — de medewerker die deze map moet oppakken
+  extraToegewezen?: string[]; // overige medewerkers naast toegewezenAan (zie lib/toewijzing.ts)
   volgorde?: number; // handmatige positie in de actieve lijst (lager = hoger); ontbreekt → achteraan
   aangemaakt?: string; // ISO — voor "nieuwste eerst"-sortering
   gearchiveerd?: boolean; // naar de database verstuurd → uit de actieve lijst, bewaard onder "Voorschouwen"
@@ -216,6 +218,7 @@ export type Brievenronde = {
   plaats: string;
   projectId?: string;
   toegewezenAan?: string; // user id — de medewerker die deze ronde moet lopen
+  extraToegewezen?: string[]; // overige medewerkers naast toegewezenAan (zie lib/toewijzing.ts)
   aangemaakt: string;
   adressen: Adres[];
   // ── Rol-gebaseerde levenscyclus (zelfde stappen als TAUW — zie TauwStatus) ──
@@ -269,6 +272,7 @@ export type Afspraak = {
   datum: string; // "2026-06-03"
   tijd: string; // "14:00"
   toegewezenAan?: string; // monteur (user id)
+  extraToegewezen?: string[]; // overige medewerkers naast toegewezenAan (zie lib/toewijzing.ts)
   status: AfspraakStatus;
   notitie: string;
   email?: string; // e-mail van de klant (o.a. om te informeren bij annulering)
@@ -490,6 +494,7 @@ export type Schouwafspraak = {
   datum: string; // ISO datum ("" = nog niet ingepland)
   tijd: string;  // "HH:MM" ("" = geen tijd)
   toegewezenAan?: string; // user id van de schouwer
+  extraToegewezen?: string[]; // overige medewerkers naast toegewezenAan (zie lib/toewijzing.ts)
   status: SchouwStatus;
   notitie: string;
   aangemaakt: string; // ISO
@@ -654,6 +659,7 @@ export type Sanering = {
   naam: string; // projectnaam = wijk / buurt / gemeente
   regio: string;
   toegewezenAan?: string; // user id (werknemer die de afspraken maakt)
+  extraToegewezen?: string[]; // overige medewerkers naast toegewezenAan (zie lib/toewijzing.ts)
   // Rol-gebaseerde levenscyclus (zelfde stappen als TAUW — zie TauwStatus).
   status: TauwStatus;
   toegewezenOp?: string; // ISO — wanneer het project aan de werknemer is afgegeven
@@ -716,6 +722,7 @@ export type Buurtaanpak = {
   regio: string;
   opdrachtgever: string; // bv. "Stedin / FUES"
   toegewezenAan?: string; // user id
+  extraToegewezen?: string[]; // overige medewerkers naast toegewezenAan (zie lib/toewijzing.ts)
   adressen: BuurtAdres[];
   deadline?: string; // ISO yyyy-mm-dd
   afgerondOp?: string; // ISO — klaar, klaar voor de boekhouding
@@ -838,6 +845,7 @@ export type TauwOpdracht = {
   regio: string;
   pdNummer?: string; // optioneel Stedin PD-nummer — koppelt de opdracht aan de boekhouding
   toegewezenAan?: string; // user id (werknemer)
+  extraToegewezen?: string[]; // overige medewerkers naast toegewezenAan (zie lib/toewijzing.ts)
   toegewezenOp?: string; // ISO — wanneer de map aan de werknemer is afgegeven
   deadline?: string; // ISO yyyy-mm-dd — door de beheerder gezet
   adressen: TauwAdres[];

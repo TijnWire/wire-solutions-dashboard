@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useCallback, memo, Fragment } from "react";
 import { Plus, ArrowLeft, Trash2, Upload, MessageSquare, Send, Check, Copy, Cable, ChevronRight, Phone, Search, Download, CalendarDays } from "lucide-react";
+import { WerknemerKiezer } from "../components/WerknemerKiezer";
 import { useApp } from "../store/AppContext";
 import { useProjectFilter } from "../components/ProjectFilter";
 import { Card, Badge, Bevestig } from "../components/ui";
@@ -7,6 +8,7 @@ import { DatumKiezer } from "../components/DatumKiezer";
 import { Keuze } from "../components/Keuze";
 import { BUURT_SOORTEN, BUURT_SOORT_KORT, BUURT_SOORT_LABEL, legeBuurtAdres, type Buurtaanpak as BuurtaanpakT, type BuurtAdres } from "../lib/types";
 import { parseKlantafspraaklijst, whatsappPerDag, groepeerPerDatum, smsHerinneringTekst, smsLink, datumLabelNL } from "../lib/buurtaanpak";
+import { isToegewezen, toegewezenIds, toewijzingPatch } from "../lib/toewijzing";
 
 const veld = "w-full rounded-lg border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100";
 const klein = "rounded-lg border border-ink-200 px-2.5 py-1.5 text-sm outline-none focus:border-brand-400";
@@ -134,7 +136,7 @@ export function Buurtaanpak({ initieelId }: { initieelId?: string }) {
   const [importFout, setImportFout] = useState<string | null>(null);
 
   const gekozen = buurtaanpak.find((b) => b.id === selId);
-  const vanMij = isLeiding ? buurtaanpak : buurtaanpak.filter((b) => b.toegewezenAan === currentUser?.id);
+  const vanMij = isLeiding ? buurtaanpak : buurtaanpak.filter((b) => isToegewezen(b, currentUser?.id));
   const filter = useProjectFilter(vanMij, {
     datum: (b) => b.aangemaakt,
     isOpen: (b) => !b.afgerondOp,
@@ -465,7 +467,7 @@ function Detail({ project, onTerug, isLeiding }: { project: BuurtaanpakT; onTeru
             </div>
             <div>
               <label className="mb-1 block text-xs font-semibold text-ink-600">Uitvoerder (werknemer)</label>
-              <Keuze value={project.toegewezenAan ?? ""} onChange={(w) => updateBuurtaanpak(project.id, { toegewezenAan: w || undefined })} altijdZoeken opties={[{ waarde: "", label: "— Nog niet toewijzen —" }, ...users.map((u) => ({ waarde: u.id, label: u.naam }))]} title="Uitvoerder" />
+              <WerknemerKiezer values={toegewezenIds(project)} onChange={(ids) => updateBuurtaanpak(project.id, toewijzingPatch(ids))} users={users} leegLabel="— Nog niet toewijzen —" />
             </div>
             <div>
               <label className="mb-1 block text-xs font-semibold text-ink-600">Opdrachtgever</label>

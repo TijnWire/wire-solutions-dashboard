@@ -22,6 +22,7 @@ import {
   TAUW_TYPES, TAUW_TYPE_LABEL, TAUW_STATUS_LABEL, TAUW_STATUS_VOLGORDE, TAUW_OPDRACHTGEVERS,
   type TauwAdres, type TauwOpdracht, type TauwType, type TauwStatus, type TauwOpdrachtgever,
 } from "../lib/types";
+import { isToegewezen, toegewezenIds, toewijzingPatch } from "../lib/toewijzing";
 
 const veld = "w-full min-w-0 rounded-lg border border-ink-200 px-2.5 py-1.5 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100 disabled:bg-ink-50 disabled:text-ink-500";
 const knopKlein = "inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-3.5 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-50 disabled:cursor-not-allowed disabled:opacity-40";
@@ -305,12 +306,12 @@ function TauwDetail({ opdracht, onTerug }: { opdracht: TauwOpdracht; onTerug: ()
   const [naamBewerken, setNaamBewerken] = useState(false);
   const [naamConcept, setNaamConcept] = useState("");
   const isLeiding = currentUser?.rol === "eigenaar" || currentUser?.rol === "beheer" || currentUser?.rol === "hr";
-  const isToegewezen = !!currentUser && (
-    currentUser.id === opdracht.toegewezenAan ||
+  const ikBenToegewezen = !!currentUser && (
+    isToegewezen(opdracht, currentUser.id) ||
     (opdracht.team ?? []).includes(currentUser.id) ||
-    opdracht.adressen.some((a) => a.toegewezenAan === currentUser.id)
+    opdracht.adressen.some((a) => isToegewezen(a, currentUser.id))
   );
-  const magWerken = isLeiding || isToegewezen;
+  const magWerken = isLeiding || ikBenToegewezen;
   const status = opdracht.status;
   const bewerkbaar = magWerken && (status === "nieuw" || status === "toegewezen");
   const monteur = users.find((u) => u.id === opdracht.toegewezenAan);
@@ -383,8 +384,8 @@ function TauwDetail({ opdracht, onTerug }: { opdracht: TauwOpdracht; onTerug: ()
   const rondeVoor = rondeUser ?? currentUser?.id ?? "";
   const adressenVan = (uid: string) => sorteerRoute(
     adressen.some((a) => a.toegewezenAan)
-      ? adressen.filter((a) => a.toegewezenAan === uid)
-      : isToegewezen ? adressen : []
+      ? adressen.filter((a) => isToegewezen(a, uid))
+      : ikBenToegewezen ? adressen : []
   );
   const eigenAdressen = adressenVan(rondeVoor);
   const isBodem = opdracht.type === "bodemonderzoek";
@@ -434,7 +435,7 @@ function TauwDetail({ opdracht, onTerug }: { opdracht: TauwOpdracht; onTerug: ()
   const loopUrl = googleMapsRoute(geselecteerd.map(adresTekst), "walking");
 
   // Levenscyclus-overgangen (rol-gebonden).
-  const toewijzen = (uid: string) => updateTauw(opdracht.id, { toegewezenAan: uid || undefined, status: uid ? "toegewezen" : "nieuw", toegewezenOp: uid ? nu() : undefined });
+  const toewijzen = (ids: string[]) => { const p = toewijzingPatch(ids); updateTauw(opdracht.id, { ...p, status: p.toegewezenAan ? "toegewezen" : "nieuw", toegewezenOp: p.toegewezenAan ? (opdracht.toegewezenOp ?? nu()) : undefined }); };
   const naarControle = () => updateTauw(opdracht.id, { status: "ter_controle" });
   // Heropenen: ruim de (nu ongeldige) goedkeurings-/verstuurgegevens op.
   const terugNaarWerknemer = () => updateTauw(opdracht.id, { status: "toegewezen", gecontroleerdDoor: undefined, gecontroleerdOp: undefined, verstuurdOp: undefined });
@@ -724,7 +725,7 @@ function TauwDetail({ opdracht, onTerug }: { opdracht: TauwOpdracht; onTerug: ()
             <div className="flex flex-wrap items-center gap-2">
               <UserPlus className="h-4 w-4 text-ink-400" />
               <span className="text-sm text-ink-600">Wijs toe aan een werknemer:</span>
-              <WerknemerKiezer value={opdracht.toegewezenAan ?? ""} onChange={toewijzen} users={users} leegLabel="Kies werknemer…" />
+              <WerknemerKiezer values={toegewezenIds(opdracht)} onChange={toewijzen} users={users} leegLabel="Kies werknemer…" />
             </div>
           ) : <p className="text-sm text-ink-500">Nog niet vrijgegeven door de beheerder.</p>)}
 
@@ -734,7 +735,7 @@ function TauwDetail({ opdracht, onTerug }: { opdracht: TauwOpdracht; onTerug: ()
                 <button type="button" onClick={() => setBevestigGereed(true)} className={knopPrimair}><Check className="h-4 w-4" /> Map gereed → naar controle</button>
               ) : <p className="text-sm text-ink-500">Wordt afgewerkt door {monteur?.naam ?? "de werknemer"}.</p>}
               {isLeiding && (
-                <WerknemerKiezer value={opdracht.toegewezenAan ?? ""} onChange={toewijzen} users={users} leegLabel="Niet toegewezen" />
+                <WerknemerKiezer values={toegewezenIds(opdracht)} onChange={toewijzen} users={users} leegLabel="Niet toegewezen" />
               )}
             </div>
           )}
@@ -744,7 +745,7 @@ function TauwDetail({ opdracht, onTerug }: { opdracht: TauwOpdracht; onTerug: ()
               <button type="button" onClick={goedkeuren} className={knopPrimair}><Check className="h-4 w-4" /> Goedkeuren</button>
               <button type="button" onClick={terugNaarWerknemer} className={knopKlein}><RotateCcw className="h-3.5 w-3.5" /> Terug naar werknemer</button>
             </div>
-          ) : isToegewezen ? (
+          ) : ikBenToegewezen ? (
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-sm text-ink-500">Klaar gemeld — wacht op controle.</span>
               <button type="button" onClick={terugNaarWerknemer} className={knopKlein}><RotateCcw className="h-3.5 w-3.5" /> Terug naar mezelf — nog iets aanpassen</button>
@@ -884,9 +885,9 @@ export function Tauw({ initieelTauw }: { initieelTauw?: string }) {
   // geheel aan jou is toegewezen, maar ook als je in het team zit of als er adressen op jouw naam staan —
   // anders werken je collega's in een map die jij niet eens ziet.
   const hoortBijMij = (o: TauwOpdracht) =>
-    o.toegewezenAan === currentUser?.id ||
+    isToegewezen(o, currentUser?.id) ||
     (o.team ?? []).includes(currentUser?.id ?? "") ||
-    o.adressen.some((a) => a.toegewezenAan === currentUser?.id);
+    o.adressen.some((a) => isToegewezen(a, currentUser?.id));
   // Dezelfde drie beelden als op de andere projectpagina's. "Verstuurd" betekent hier: het werk is
   // terug bij de opdrachtgever, dus klaar om door te geven. Gearchiveerd is afgehandeld en uit beeld
   // — maar nooit weg: de map blijft in de database staan en is met één klik terug.

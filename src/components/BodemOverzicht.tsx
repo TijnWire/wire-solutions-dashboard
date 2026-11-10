@@ -5,6 +5,7 @@ import { dagLabel, telefoonNet, voortgangVan, TIJDSLOTS } from "../lib/bodemonde
 import { exporteerBodemExcel, exporteerBodemPdf } from "../lib/bodemExport";
 import { sbBodemLog, type BodemLogRegel } from "../lib/supabase";
 import type { TauwAdres, TauwOpdracht, User } from "../lib/types";
+import { isToegewezen } from "../lib/toewijzing";
 
 // Wat de beheerder ziet als de ronde loopt: hoe ver het staat, wat er per dag gepland is, en de knop
 // om het naar TAUW of Van der Helm te sturen.
@@ -109,7 +110,7 @@ export function BodemOverzicht({ opdracht, users }: { opdracht: TauwOpdracht; us
           </div>
           <div className="space-y-1.5">
             {(opdracht.team ?? []).map((id) => {
-              const eigen = opdracht.adressen.filter((a) => a.toegewezenAan === id);
+              const eigen = opdracht.adressen.filter((a) => isToegewezen(a, id));
               const ev = voortgangVan(eigen);
               const pct = ev.totaal ? Math.round((ev.behandeld / ev.totaal) * 100) : 0;
               return (

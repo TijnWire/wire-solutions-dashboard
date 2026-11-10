@@ -5,6 +5,7 @@ import { DatumKiezer } from "./DatumKiezer";
 import { verdeelOverTeam, dagenVanVenster, dagLabel, voortgangVan, sorteerRoute, vensterRuimte, TIJDSLOTS, STANDAARD_WERKDAGEN, DAGNAMEN } from "../lib/bodemonderzoek";
 import { sbBodemPlanning } from "../lib/supabase";
 import type { TauwAdres, TauwOpdracht, TauwSlot, User } from "../lib/types";
+import { isToegewezen } from "../lib/toewijzing";
 
 // Voorbereiding van een bodemonderzoek-ronde, voor de beheerder.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -325,7 +326,7 @@ export function BodemPlanning({ opdracht, users, onWijzig, deel = "alles" }: {
         <div className="flex flex-wrap gap-2">
           {users.map((u) => {
             const aan = team.includes(u.id);
-            const aantal = opdracht.adressen.filter((a) => a.toegewezenAan === u.id).length;
+            const aantal = opdracht.adressen.filter((a) => isToegewezen(a, u.id)).length;
             return (
               <button
                 key={u.id}
@@ -400,7 +401,7 @@ export function BodemPlanning({ opdracht, users, onWijzig, deel = "alles" }: {
             <span>Medewerker</span><span className="text-right">Totaal</span><span className="text-right">Klaar</span><span className="text-right">Erbij</span>
           </div>
           {team.map((id) => {
-            const eigen = opdracht.adressen.filter((a) => a.toegewezenAan === id);
+            const eigen = opdracht.adressen.filter((a) => isToegewezen(a, id));
             const v = voortgangVan(eigen);
             return (
               <div key={id} className="grid grid-cols-[1fr_3.25rem_3.25rem_3.25rem] gap-1 px-3 py-1.5 text-sm">

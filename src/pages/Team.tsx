@@ -2,6 +2,7 @@ import { Users2 } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { Card } from "../components/ui";
 import { ROL_LABEL } from "../lib/types";
+import { isToegewezen } from "../lib/toewijzing";
 
 export function Team() {
   const { users, projects, taken } = useApp();
@@ -19,7 +20,7 @@ export function Team() {
         </div>
         <div className="grid grid-cols-1 divide-y divide-ink-100 sm:grid-cols-2 sm:divide-y-0 lg:grid-cols-3">
           {users.map((u) => {
-            const ut = taken.filter((t) => t.toegewezenAan === u.id || t.toegewezenAan === ""); // "" = hele team telt voor iedereen
+            const ut = taken.filter((t) => isToegewezen(t, u.id) || t.toegewezenAan === ""); // "" = hele team telt voor iedereen
             const open = ut.filter((t) => t.status !== "Klaar").length;
             const projectenVan = projects.filter((p) => p.toegewezenAan.includes(u.id) || ut.some((t) => t.projectId === p.id)).length;
             return (

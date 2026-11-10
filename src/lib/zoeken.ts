@@ -1,5 +1,6 @@
 import type { Afspraak, Brievenronde, Voorschouw, Klant, Factuur, User, KennisArtikel, Project } from "./types";
 import { factuurTotalen, euro } from "./factuurPdf";
+import { isToegewezen } from "./toewijzing";
 
 export type ZoekItem = {
   id: string;
@@ -82,7 +83,7 @@ export function zoekResultaten(query: string, data: ZoekData, user: User | null)
 
   // Afspraken
   data.afspraken
-    .filter((a) => (isLeiding || a.toegewezenAan === user.id) && hit(a.klantNaam, a.straat, a.huisnummer, a.locatie, a.plaats, a.postcode))
+    .filter((a) => (isLeiding || isToegewezen(a, user.id)) && hit(a.klantNaam, a.straat, a.huisnummer, a.locatie, a.plaats, a.postcode))
     .slice(0, MAX)
     .forEach((a) =>
       items.push({
@@ -99,7 +100,7 @@ export function zoekResultaten(query: string, data: ZoekData, user: User | null)
   // Brieven & Routes
   const rondeHit = (r: Brievenronde) => hit(r.straat, r.plaats, r.postcode) || r.adressen.some((ad) => hit(r.straat, ad.huisnummer));
   data.rondes
-    .filter((r) => (isLeiding || r.toegewezenAan === user.id) && rondeHit(r))
+    .filter((r) => (isLeiding || isToegewezen(r, user.id)) && rondeHit(r))
     .slice(0, MAX)
     .forEach((r) => {
       const te = r.adressen.filter((ad) => !ad.ontbreekt);

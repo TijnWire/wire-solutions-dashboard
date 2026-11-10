@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Plus, FolderKanban, X, FileScan, CalendarRange, Send, ArrowUpRight, Check, ChevronRight, Database, Trash2 } from "lucide-react";
+import { WerknemerKiezer } from "../components/WerknemerKiezer";
 import { useApp } from "../store/AppContext";
 import { useNav } from "../store/NavContext";
 import { Card, Badge, Bevestig } from "../components/ui";
@@ -41,7 +42,7 @@ function ProjectKaart({ project, initieelProject, onScan }: { project: Project; 
   const [taakTitel, setTaakTitel] = useState("");
   const [taakNotitie, setTaakNotitie] = useState("");
   const [taakDeadline, setTaakDeadline] = useState("");
-  const [taakPersoon, setTaakPersoon] = useState(""); // "" = hele team
+  const [taakPersonen, setTaakPersonen] = useState<string[]>([]); // leeg = hele team
 
   const projectTaken = taken.filter((t) => t.projectId === project.id);
   const rondeOpties: KeuzeOptie[] = rondes.map((b) => ({ waarde: b.id, label: [b.straat, b.plaats].filter(Boolean).join(", ") || "Ronde" }));
@@ -55,7 +56,7 @@ function ProjectKaart({ project, initieelProject, onScan }: { project: Project; 
   };
   const voegTaakToe = () => {
     if (!taakTitel.trim()) return;
-    addTaak({ projectId: project.id, titel: taakTitel.trim(), toegewezenAan: taakPersoon, deadline: taakDeadline ? datumKort(taakDeadline) : "Nog te plannen", status: "Te doen", notitie: taakNotitie.trim() });
+    addTaak({ projectId: project.id, titel: taakTitel.trim(), toegewezenAan: taakPersonen[0] ?? "", extraToegewezen: taakPersonen.length > 1 ? taakPersonen.slice(1) : undefined, deadline: taakDeadline ? datumKort(taakDeadline) : "Nog te plannen", status: "Te doen", notitie: taakNotitie.trim() });
     setTaakTitel(""); setTaakNotitie(""); setTaakDeadline(""); setTaakOpen(false);
   };
 
@@ -201,7 +202,7 @@ function ProjectKaart({ project, initieelProject, onScan }: { project: Project; 
                 <div className="flex flex-wrap items-end gap-2">
                   <label className="block">
                     <span className="mb-1 block text-[11px] font-semibold text-ink-500">Voor wie?</span>
-                    <Keuze value={taakPersoon} onChange={setTaakPersoon} altijdZoeken opties={[{ waarde: "", label: "Hele team" }, ...users.map((u) => ({ waarde: u.id, label: u.naam }))]} />
+                    <WerknemerKiezer values={taakPersonen} onChange={setTaakPersonen} users={users} leegLabel="Hele team" />
                   </label>
                   <label className="block w-48">
                     <span className="mb-1 block text-[11px] font-semibold text-ink-500">Deadline (optioneel)</span>
@@ -216,7 +217,7 @@ function ProjectKaart({ project, initieelProject, onScan }: { project: Project; 
             ) : (
               <button
                 type="button"
-                onClick={() => { setTaakOpen(true); setTaakTitel(""); setTaakNotitie(""); setTaakDeadline(""); setTaakPersoon(""); }}
+                onClick={() => { setTaakOpen(true); setTaakTitel(""); setTaakNotitie(""); setTaakDeadline(""); setTaakPersonen([]); }}
                 className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-medium text-ink-500 hover:bg-ink-50 hover:text-ink-700"
               >
                 <Plus className="h-4 w-4" />

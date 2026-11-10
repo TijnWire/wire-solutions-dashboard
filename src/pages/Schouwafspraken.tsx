@@ -12,6 +12,7 @@ import {
   bouwWeek, dagenVanWeek, exportDagen, mapOverzicht, normPlaats, sorteerOpTijd, tijdLabel, tijdenVan, verwijderdeDagen, WEEKDAG_NAMEN, type MapOverzicht, isDenHaag, TIJDEN_VERSIE
 } from "../lib/schouw";
 import { exporteerSchouwPlanning } from "../lib/schouwExcel";
+import { isToegewezen, toegewezenIds, toewijzingPatch } from "../lib/toewijzing";
 
 const veld = "w-full rounded-xl border border-ink-200 px-3.5 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100";
 const labelCls = "mb-1 block text-xs font-semibold text-ink-600";
@@ -128,7 +129,7 @@ export function Schouwafspraken() {
 }
 
 // ───────────────────────── Eén map: weekplanning ─────────────────────────
-type FormState = { datum: string; tijd: string; straat: string; huisnummer: string; telefoon: string; notitie: string; toegewezenAan: string; status: SchouwStatus };
+type FormState = { datum: string; tijd: string; straat: string; huisnummer: string; telefoon: string; notitie: string; toegewezenAan: string[]; status: SchouwStatus };
 
 function MapDetail({ overzicht, terug }: { overzicht: MapOverzicht; terug: () => void }) {
   const { users, currentUser, addSchouw, updateSchouw, deleteSchouw, addSchouwMap, updateSchouwMap } = useApp();
@@ -163,7 +164,7 @@ function MapDetail({ overzicht, terug }: { overzicht: MapOverzicht; terug: () =>
   if (!currentUser) return null;
   const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr";
   const naamVan = (id?: string) => users.find((u) => u.id === id)?.naam ?? "";
-  const magVerwijderen = (a: Schouwafspraak) => isLeiding || !a.toegewezenAan || a.toegewezenAan === currentUser.id;
+  const magVerwijderen = (a: Schouwafspraak) => isLeiding || !a.toegewezenAan || isToegewezen(a, currentUser.id);
   const nr = weekNummer(maandag);
   const kanTijdenAanpassen = overzicht.sleutel !== ""; // "Zonder plaats" is geen echte map
 
@@ -178,12 +179,12 @@ function MapDetail({ overzicht, terug }: { overzicht: MapOverzicht; terug: () =>
 
   const openNieuw = (datum = "", tijd = "") => {
     setBewerkId(null);
-    setForm({ datum, tijd, straat: "", huisnummer: "", telefoon: "", notitie: "", toegewezenAan: currentUser.id, status: "In te plannen" });
+    setForm({ datum, tijd, straat: "", huisnummer: "", telefoon: "", notitie: "", toegewezenAan: [currentUser.id], status: "In te plannen" });
     setTimeout(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
   };
   const openBewerk = (a: Schouwafspraak) => {
     setBewerkId(a.id);
-    setForm({ datum: a.datum, tijd: a.tijd, straat: a.straat, huisnummer: a.huisnummer, telefoon: a.telefoon, notitie: a.notitie, toegewezenAan: a.toegewezenAan ?? "", status: a.status });
+    setForm({ datum: a.datum, tijd: a.tijd, straat: a.straat, huisnummer: a.huisnummer, telefoon: a.telefoon, notitie: a.notitie, toegewezenAan: toegewezenIds(a), status: a.status });
     setTimeout(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
   };
   const sluit = () => { setForm(null); setBewerkId(null); };
@@ -197,7 +198,7 @@ function MapDetail({ overzicht, terug }: { overzicht: MapOverzicht; terug: () =>
     const status: SchouwStatus = handmatig ? form.status : form.datum ? "Ingepland" : "In te plannen";
     const data = {
       straat: form.straat.trim(), huisnummer: form.huisnummer.trim(), telefoon: form.telefoon.trim(), notitie: form.notitie.trim(),
-      datum: form.datum, tijd: form.tijd, toegewezenAan: form.toegewezenAan || undefined, status,
+      datum: form.datum, tijd: form.tijd, ...toewijzingPatch(form.toegewezenAan), status,
     };
     if (bewerkId) updateSchouw(bewerkId, data);
     else addSchouw({ ...data, postcode: "", plaats: overzicht.sleutel ? overzicht.naam : "", contactNaam: "" });
@@ -353,7 +354,7 @@ function MapDetail({ overzicht, terug }: { overzicht: MapOverzicht; terug: () =>
               {isLeiding && (
                 <div>
                   <label className={labelCls}>Werknemer</label>
-                  <WerknemerKiezer value={form.toegewezenAan} onChange={(id) => set({ toegewezenAan: id })} users={users} leegLabel="Niet toegewezen" />
+                  <WerknemerKiezer values={form.toegewezenAan} onChange={(ids) => set({ toegewezenAan: ids })} users={users} leegLabel="Niet toegewezen" />
                 </div>
               )}
             </div>
@@ -474,7 +475,7 @@ function MapDetail({ overzicht, terug }: { overzicht: MapOverzicht; terug: () =>
                         </div>
                         <div className="mt-0.5 flex flex-wrap items-center gap-x-4 gap-y-0.5 text-xs text-ink-500">
                           {a.telefoon && <a href={`tel:${a.telefoon}`} className="inline-flex items-center gap-1 text-brand-600"><Phone className="h-3.5 w-3.5" />{a.telefoon}</a>}
-                          {naamVan(a.toegewezenAan) && <span>{naamVan(a.toegewezenAan)}</span>}
+                          {toegewezenIds(a).length > 0 && <span>{toegewezenIds(a).map(naamVan).filter(Boolean).join(", ")}</span>}
                         </div>
                         {a.notitie && <p className="mt-1 text-sm text-ink-600">{a.notitie}</p>}
                       </div>

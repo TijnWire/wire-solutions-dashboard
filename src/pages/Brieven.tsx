@@ -56,6 +56,7 @@ import {
   type BriefStatus,
   type TauwStatus,
 } from "../lib/types";
+import { isToegewezen, toegewezenIds, toewijzingPatch } from "../lib/toewijzing";
 
 // ── Levenscyclus (zelfde stappen als TAUW) ──
 const STATUS_TONE: Record<TauwStatus, string> = { nieuw: "slate", toegewezen: "amber", ter_controle: "indigo", gecontroleerd: "green", verstuurd: "green" };
@@ -237,8 +238,8 @@ function RondeDetail({ ronde, onTerug }: { ronde: Brievenronde; onTerug: () => v
 
   // Rol-gebaseerde levenscyclus (zelfde stappen als TAUW).
   const status = ronde.status;
-  const isToegewezen = !!currentUser && currentUser.id === ronde.toegewezenAan;
-  const magWerken = isLeiding || isToegewezen;
+  const ikBenToegewezen = !!currentUser && isToegewezen(ronde, currentUser.id);
+  const magWerken = isLeiding || ikBenToegewezen;
   // Bewerken (adressen, reeksen, gaten melden) mag alleen zolang de ronde nog niet ter controle ligt.
   const bewerkbaar = magWerken && (status === "nieuw" || status === "toegewezen");
   const monteur = users.find((u) => u.id === ronde.toegewezenAan);
@@ -255,7 +256,7 @@ function RondeDetail({ ronde, onTerug }: { ronde: Brievenronde; onTerug: () => v
   };
 
   // Levenscyclus-overgangen (rol-gebonden) — identiek aan TAUW/Saneren.
-  const toewijzen = (id: string) => updateRonde(ronde.id, { toegewezenAan: id || undefined, status: id ? "toegewezen" : "nieuw", toegewezenOp: id ? nu() : undefined });
+  const toewijzen = (ids: string[]) => { const p = toewijzingPatch(ids); updateRonde(ronde.id, { ...p, status: p.toegewezenAan ? "toegewezen" : "nieuw", toegewezenOp: p.toegewezenAan ? (ronde.toegewezenOp ?? nu()) : undefined }); };
   // Klaarmelden boekt de ronde meteen af. Wie een straat loopt gooit alles en tikt onderweg niets
   // aan — dertig huisnummers los aanvinken doet niemand. Bleef dat staan, dan ging de ronde ter
   // controle met negen adressen op "Te doen" en moest de beheerder gaan raden of die vergeten of
@@ -401,7 +402,7 @@ function RondeDetail({ ronde, onTerug }: { ronde: Brievenronde; onTerug: () => v
             <div className="flex flex-wrap items-center gap-2">
               <UserPlus className="h-4 w-4 text-ink-400" />
               <span className="text-sm text-ink-600">Wijs toe aan een werknemer:</span>
-              <WerknemerKiezer value={ronde.toegewezenAan ?? ""} onChange={toewijzen} users={users} leegLabel="Kies werknemer…" />
+              <WerknemerKiezer values={toegewezenIds(ronde)} onChange={toewijzen} users={users} leegLabel="Kies werknemer…" />
             </div>
           ) : <p className="text-sm text-ink-500">Nog niet vrijgegeven door de beheerder.</p>)}
 
@@ -410,7 +411,7 @@ function RondeDetail({ ronde, onTerug }: { ronde: Brievenronde; onTerug: () => v
               {magWerken ? (
                 <button type="button" onClick={() => setBevestigGereed(true)} className={knopPrimair}><Check className="h-4 w-4" /> Brieven gegooid → naar controle</button>
               ) : <p className="text-sm text-ink-500">Wordt gelopen door {monteur?.naam ?? "de werknemer"}.</p>}
-              {isLeiding && <WerknemerKiezer value={ronde.toegewezenAan ?? ""} onChange={toewijzen} users={users} leegLabel="Niet toegewezen" />}
+              {isLeiding && <WerknemerKiezer values={toegewezenIds(ronde)} onChange={toewijzen} users={users} leegLabel="Niet toegewezen" />}
             </div>
           )}
 
@@ -419,7 +420,7 @@ function RondeDetail({ ronde, onTerug }: { ronde: Brievenronde; onTerug: () => v
               <button type="button" onClick={goedkeuren} className={knopPrimair}><Check className="h-4 w-4" /> Goedkeuren</button>
               <button type="button" onClick={terugNaarWerknemer} className={knopKlein}><RotateCcw className="h-3.5 w-3.5" /> Terug naar werknemer</button>
             </div>
-          ) : isToegewezen ? (
+          ) : ikBenToegewezen ? (
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-sm text-ink-500">Klaar gemeld — wacht op controle.</span>
               <button type="button" onClick={terugNaarWerknemer} className={knopKlein}><RotateCcw className="h-3.5 w-3.5" /> Terug naar mezelf — nog iets aanpassen</button>
@@ -802,9 +803,10 @@ function NieuweRonde({ onKlaar }: { onKlaar: () => void }) {
   const [postcode, setPostcode] = useState("");
   const [plaats, setPlaats] = useState("");
   const [pdCijfers, setPdCijfers] = useState("");
-  const [toegewezenAan, setToegewezenAan] = useState(
-    currentUser?.rol === "monteur" ? currentUser.id : ""
+  const [toegewezen, setToegewezen] = useState<string[]>(
+    currentUser?.rol === "monteur" ? [currentUser.id] : []
   );
+  const toegewezenAan = toegewezen[0] ?? "";
   const [van, setVan] = useState("");
   const [tot, setTot] = useState("");
   const [kant, setKant] = useState<"alle" | "oneven" | "even">("alle");
@@ -818,7 +820,7 @@ function NieuweRonde({ onKlaar }: { onKlaar: () => void }) {
       straat: straat.trim(),
       postcode: postcode.trim(),
       plaats: plaats.trim(),
-      toegewezenAan: toegewezenAan || undefined,
+      ...toewijzingPatch(toegewezen),
       aangemaakt: new Date().toISOString(),
       // Direct toegewezen → "Bij werknemer", anders "Aangemaakt".
       status: toegewezenAan ? "toegewezen" : "nieuw",
@@ -859,7 +861,7 @@ function NieuweRonde({ onKlaar }: { onKlaar: () => void }) {
         </div>
         <label className="block">
           <span className="mb-1.5 block text-sm font-medium text-ink-700">Toewijzen aan medewerker</span>
-          <Keuze value={toegewezenAan} onChange={setToegewezenAan} opties={[{ waarde: "", label: "— Nog niet toewijzen —" }, ...users.map((u) => ({ waarde: u.id, label: `${u.naam} (${u.functie})` }))]} title="Toewijzen aan medewerker" />
+          <WerknemerKiezer values={toegewezen} onChange={setToegewezen} users={users} leegLabel="— Nog niet toewijzen —" />
           <span className="mt-1 block text-xs text-ink-400">
             De medewerker ziet deze ronde direct op zijn eigen account.
           </span>
@@ -1002,7 +1004,7 @@ function MapDetail({ naam, rondes, isLeiding, onOpenRonde, onTerug }: { naam: st
   });
   const { teBezorgen, openA, pct, alAfgerond, pd, regel } = mapStats(rondes);
   const deadline = rondes.find((r) => r.deadline)?.deadline ?? "";
-  const toegewezen = rondes.find((r) => r.toegewezenAan)?.toegewezenAan ?? "";
+  const toegewezen = toegewezenIds(rondes.find((r) => r.toegewezenAan));
 
   const routeStops = straten.flatMap((r) => sorteerAdr(r.adressen.filter((a) => !a.ontbreekt)).map((a) => adresVolledig(r.straat, r.postcode, r.plaats, a)));
   const routeDelen = googleMapsRouteVanTeksten(routeStops);
@@ -1010,13 +1012,13 @@ function MapDetail({ naam, rondes, isLeiding, onOpenRonde, onTerug }: { naam: st
   const hernoem = (v: string) => { const n = v.trim(); if (n) rondes.forEach((r) => updateRonde(r.id, { mapNaam: n })); setNaamBewerk(null); };
   const zetPd = (v: string) => rondes.forEach((r) => updateRonde(r.id, { pdNummer: v.trim() || undefined }));
   const zetDeadline = (d: string) => rondes.forEach((r) => updateRonde(r.id, { deadline: d || undefined }));
-  const zetToegewezen = (id: string) => rondes.forEach((r) => updateRonde(
+  const zetToegewezen = (ids: string[]) => rondes.forEach((r) => updateRonde(
     r.id,
-    id
-      ? (r.status === "nieuw" ? { toegewezenAan: id, status: "toegewezen", toegewezenOp: nu() } : { toegewezenAan: id })
+    ids.length
+      ? (r.status === "nieuw" ? { ...toewijzingPatch(ids), status: "toegewezen", toegewezenOp: nu() } : toewijzingPatch(ids))
       // "Niemand" gekozen: haal de toewijzing weg én zet een nog-niet-gestarte ronde terug naar "nieuw"
       // (anders blijft 'ie in "toegewezen" hangen zonder monteur en kan niemand 'm meer oppakken).
-      : { toegewezenAan: undefined, status: r.status === "toegewezen" ? "nieuw" : r.status, toegewezenOp: undefined },
+      : { toegewezenAan: undefined, extraToegewezen: undefined, status: r.status === "toegewezen" ? "nieuw" : r.status, toegewezenOp: undefined },
   ));
   // De hele map afronden: alles wat nog op "Te doen" staat wordt meteen afgegooid, zodat álle
   // huisnummers als gedaan geregistreerd staan voor de factuur. Selecteren is dus niet nodig.
@@ -1116,7 +1118,7 @@ function MapDetail({ naam, rondes, isLeiding, onOpenRonde, onTerug }: { naam: st
               </div>
               <div>
                 <span className="mb-1 block text-xs font-semibold text-ink-600">Toewijzen</span>
-                <WerknemerKiezer value={toegewezen} onChange={zetToegewezen} users={users} leegLabel="Niemand" />
+                <WerknemerKiezer values={toegewezen} onChange={zetToegewezen} users={users} leegLabel="Niemand" />
               </div>
             </div>
           )}
@@ -1275,7 +1277,7 @@ export function Brieven({ initieelRonde, initieelMap }: { initieelRonde?: string
   const isLeiding = currentUser?.rol === "eigenaar" || currentUser?.rol === "beheer" || currentUser?.rol === "hr";
   const zichtbaar = (isLeiding
     ? rondes
-    : rondes.filter((r) => r.toegewezenAan === currentUser?.id)
+    : rondes.filter((r) => isToegewezen(r, currentUser?.id))
   ).filter((r) => !r.gearchiveerd && !r.verwijderd);
 
   // De filterbalk hoort boven élke return te staan: hooks moeten bij iedere render in dezelfde
@@ -1303,9 +1305,9 @@ export function Brieven({ initieelRonde, initieelMap }: { initieelRonde?: string
   // Klaar voor Stedin: mappen die met de knop "Naar boekhouding" zijn doorgestuurd en nog niet
   // gefactureerd zijn. Dit is dus geen apart vinkje maar precies de stand die die knop al zet —
   // anders zou je twee dingen bijhouden die uit de pas kunnen gaan lopen.
-  const klaarRondes = (isLeiding ? rondes : rondes.filter((r) => r.toegewezenAan === currentUser?.id))
+  const klaarRondes = (isLeiding ? rondes : rondes.filter((r) => isToegewezen(r, currentUser?.id)))
     .filter((r) => !r.gearchiveerd && !r.verwijderd && r.boekhouding === "te_factureren");
-  const archiefRondes = (isLeiding ? rondes : rondes.filter((r) => r.toegewezenAan === currentUser?.id))
+  const archiefRondes = (isLeiding ? rondes : rondes.filter((r) => isToegewezen(r, currentUser?.id)))
     .filter((r) => r.gearchiveerd && !r.verwijderd);
 
   // Rondes uit dezelfde aanlevering horen bij elkaar; los ze anders per straat.

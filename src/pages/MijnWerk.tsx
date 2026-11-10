@@ -35,6 +35,7 @@ import { MededelingenBord } from "../components/MededelingenBord";
 import { LogoHero } from "../components/LogoHero";
 import { WerkgebiedKaart } from "../components/WerkgebiedKaart";
 import type { LucideIcon } from "lucide-react";
+import { isToegewezen } from "../lib/toewijzing";
 
 export function MijnWerk({ initieelProject }: { initieelProject?: string }) {
   const { currentUser, projects, taken, rondes, afspraken, tauwOpdrachten, addTaak, voorschouwen, voorschouwMappen, buurtaanpak, updateBuurtaanpak } = useApp();
@@ -58,7 +59,7 @@ export function MijnWerk({ initieelProject }: { initieelProject?: string }) {
   const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr";
   const vandaagDt = vandaagISO(), morgenDt = morgenISO();
   const smsTeVersturen = buurtaanpak
-    .filter((b) => !b.gearchiveerd && (isLeiding || b.toegewezenAan === currentUser.id))
+    .filter((b) => !b.gearchiveerd && (isLeiding || isToegewezen(b, currentUser.id)))
     .flatMap((b) => b.adressen
       .filter((a) => a.bevestigd && /^\d{4}-\d{2}-\d{2}$/.test(a.datum) && a.datum >= vandaagDt && a.datum <= morgenDt && (!a.herinnerVerstuurdOp || netVerstuurd.has(a.id)))
       .map((a) => ({ buurt: b, a })));
@@ -70,7 +71,7 @@ export function MijnWerk({ initieelProject }: { initieelProject?: string }) {
     setTimeout(() => setNetVerstuurd((prev) => { const n = new Set(prev); n.delete(id); return n; }), 2500);
   };
 
-  const mijnTaken = taken.filter((t) => t.toegewezenAan === currentUser.id || t.toegewezenAan === ""); // "" = hele team
+  const mijnTaken = taken.filter((t) => isToegewezen(t, currentUser.id) || t.toegewezenAan === ""); // "" = hele team
   const mijnProjecten = projects.filter(
     (p) =>
       p.toegewezenAan.includes(currentUser.id) ||
@@ -111,7 +112,7 @@ export function MijnWerk({ initieelProject }: { initieelProject?: string }) {
   };
 
   const werkbonnen: Werkbon[] = [];
-  for (const r of rondes.filter((r) => r.toegewezenAan === currentUser.id)) {
+  for (const r of rondes.filter((r) => isToegewezen(r, currentUser.id))) {
     const teBezorgen = r.adressen.filter((a) => !a.ontbreekt);
     const gegooid = teBezorgen.filter((a) => a.status === "Gegooid").length;
     werkbonnen.push({
@@ -127,7 +128,7 @@ export function MijnWerk({ initieelProject }: { initieelProject?: string }) {
     });
   }
   const afspraakGroepen: Record<string, typeof afspraken> = {};
-  for (const a of afspraken.filter((a) => a.toegewezenAan === currentUser.id)) {
+  for (const a of afspraken.filter((a) => isToegewezen(a, currentUser.id))) {
     (afspraakGroepen[a.locatie] ??= []).push(a);
   }
   for (const [locatie, rijen] of Object.entries(afspraakGroepen)) {
@@ -146,7 +147,7 @@ export function MijnWerk({ initieelProject }: { initieelProject?: string }) {
   }
   // TAUW-mappen die de manager aan mij heeft toegewezen (nog niet verstuurd)
   const vandaag = vandaagISO();
-  for (const o of tauwOpdrachten.filter((t) => t.toegewezenAan === currentUser.id && t.status !== "verstuurd")) {
+  for (const o of tauwOpdrachten.filter((t) => isToegewezen(t, currentUser.id) && t.status !== "verstuurd")) {
     const bevestigd = o.adressen.filter((a) => a.bevestigd).length;
     const afgegevenWk = weekNr(o.toegewezenOp ?? o.aangemaakt);
     const teLaat = !!o.deadline && o.deadline < vandaag;
@@ -169,7 +170,7 @@ export function MijnWerk({ initieelProject }: { initieelProject?: string }) {
     });
   }
   // Buurtaanpak die de manager aan mij heeft toegewezen
-  for (const b of buurtaanpak.filter((b) => b.toegewezenAan === currentUser.id)) {
+  for (const b of buurtaanpak.filter((b) => isToegewezen(b, currentUser.id))) {
     const totaal = b.adressen.length;
     const uitgevoerd = b.adressen.filter((a) => a.uitgevoerd).length;
     werkbonnen.push({
@@ -185,7 +186,7 @@ export function MijnWerk({ initieelProject }: { initieelProject?: string }) {
     });
   }
   // Voorschouw-mappen die de manager aan mij heeft toegewezen
-  for (const m of voorschouwMappen.filter((m) => !m.gearchiveerd && m.toegewezenAan === currentUser.id)) {
+  for (const m of voorschouwMappen.filter((m) => !m.gearchiveerd && isToegewezen(m, currentUser.id))) {
     const items = voorschouwen.filter((v) => v.mapId === m.id);
     const metFoto = items.filter((v) => v.fotos && v.fotos.length > 0).length;
     werkbonnen.push({

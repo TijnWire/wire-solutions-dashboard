@@ -4,6 +4,7 @@
 // (brievenronde, sanering, bodemonderzoek, buurtaanpak, schouwafspraak) heeft een plaats of regio én
 // een medewerker aan wie het is toegewezen. De plaatsnaam koppelen we hier aan één van de drie
 // werkgebieden. Er is dus niets extra bij te houden: wijs werk toe en de kaart volgt vanzelf.
+import { toegewezenIds, type Toewijsbaar } from "./toewijzing";
 import type { Brievenronde, Buurtaanpak, Sanering, Schouwafspraak, TauwOpdracht } from "./types";
 
 export type RegioKey = "rotterdam" | "denhaag" | "utrecht";
@@ -79,32 +80,32 @@ export function werkgebiedStand(bron: WerkgebiedBron, vandaagISO: string): Recor
     denhaag: { ids: new Set(), lopend: 0 },
     utrecht: { ids: new Set(), lopend: 0 },
   };
-  const tel = (regio: RegioKey | null, wie?: string) => {
+  const tel = (regio: RegioKey | null, item: Toewijsbaar) => {
     if (!regio) return;
     uit[regio].lopend += 1;
-    if (wie) uit[regio].ids.add(wie);
+    for (const id of toegewezenIds(item)) uit[regio].ids.add(id);
   };
 
   for (const r of bron.rondes) {
     if (r.status === "verstuurd" || r.gearchiveerd) continue;
-    tel(regioVan(r.plaats, r.regio, r.mapNaam), r.toegewezenAan);
+    tel(regioVan(r.plaats, r.regio, r.mapNaam), r);
   }
   for (const s of bron.saneringen) {
     if (s.status === "verstuurd" || s.gearchiveerd) continue;
-    tel(regioVan(s.regio, s.naam, s.adressen?.[0]?.plaats), s.toegewezenAan);
+    tel(regioVan(s.regio, s.naam, s.adressen?.[0]?.plaats), s);
   }
   for (const o of bron.tauwOpdrachten) {
     if (o.status === "verstuurd" || o.gearchiveerd) continue;
-    tel(regioVan(o.regio, o.adressen?.[0]?.plaats), o.toegewezenAan);
+    tel(regioVan(o.regio, o.adressen?.[0]?.plaats), o);
   }
   for (const b of bron.buurtaanpak) {
     if (b.afgerondOp || b.gearchiveerd) continue;
-    tel(regioVan(b.regio, b.naam), b.toegewezenAan);
+    tel(regioVan(b.regio, b.naam), b);
   }
   for (const a of bron.schouwafspraken) {
     // Alleen wat nog komt (of nog geen datum heeft) telt als lopend werk.
     if (a.datum && a.datum < vandaagISO) continue;
-    tel(regioVan(a.plaats), a.toegewezenAan);
+    tel(regioVan(a.plaats), a);
   }
 
   const res = {} as Record<RegioKey, RegioStand>;
