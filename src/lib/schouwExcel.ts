@@ -54,6 +54,10 @@ export async function bouwSchouwWerkboek(
   ws.getCell("G2").value = `Week ${weekNummer(o.maandag)}`;
   ws.getCell("I2").value = weekJaar(o.maandag);
 
+  // Kolomkoppen: "Tijd" met hoofdletter en de straatkolom krijgt een naam (in het sjabloon leeg).
+  ws.getCell(4, KOL.tijd).value = "Tijd";
+  ws.getCell(4, KOL.straat).value = "Straatnaam";
+
   let r = RIJ.eersteDag;
   o.dagen.forEach((dag, di) => {
     zetRij(r, di === 0 ? stijl.eersteDag : stijl.dag);
