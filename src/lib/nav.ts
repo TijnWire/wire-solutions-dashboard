@@ -94,8 +94,7 @@ export const NAV: NavItem[] = [
   { key: "boetes", label: "Boetes", icon: AlertTriangle, group: "Boekhouding", roles: ALLE },
   { key: "medewerkers", label: "Medewerkers", icon: Users, group: "Boekhouding", roles: LEIDING },
 
-  // Het bedrijfsdashboard is alleen voor eigenaren en beheerders.
-  { key: "overzicht", label: "Dashboard", icon: LayoutDashboard, group: "Bedrijfsdata", roles: ["eigenaar", "beheer"] },
+  { key: "overzicht", label: "Dashboard", icon: LayoutDashboard, group: "Bedrijfsdata", roles: LEIDING },
   { key: "team", label: "Team", icon: Users, group: "Bedrijfsdata", roles: LEIDING },
   { key: "beheer", label: "Gebruikers & toegang", icon: UserCog, group: "Systeem", roles: LEIDING },
   // Bij de werknemer staat hier alleen het tabblad Sync & back-up: kan mijn telefoon bij de gegevens

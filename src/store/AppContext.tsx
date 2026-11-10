@@ -361,6 +361,8 @@ const nextId = (prefix: string) => `${prefix}-${++idCounter}`;
 
 const VERWIJDERDE_GEBRUIKERS = ["u-nathalie"]; // Nathalie Kerdel
 const VERWIJDERDE_NAMEN = ["nathalie kerdel"];
+// Alles van vóór dit moment is opgeruimd: fictieve brieven en Riedermorgen (zie de opruiming in AppProvider).
+const OPRUIM_GRENS = "2026-11-10T14:50:00.000Z";
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [hydrated, setHydrated] = useState(false);
@@ -1437,6 +1439,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setSaneringen((prev) => prev.filter((s) => s.id !== id));
     tomb("saneringen", id);
   };
+
+  // ── Eenmalige opruiming (10-11-2026, op verzoek van de eigenaar) ──
+  // De brieven tot nu toe waren fictief en Riedermorgen hoort niet meer bij Saneren. Alles wat vóór dit
+  // moment is aangemaakt gaat weg; wat daarna wordt toegevoegd blijft gewoon staan. Via de grafsteentjes
+  // verdwijnt het ook op de server en op andere toestellen, ook als het daar pas later binnenkomt.
+  useEffect(() => {
+    if (!hydrated) return;
+    const oud = rondes.filter((r) => !r.aangemaakt || r.aangemaakt < OPRUIM_GRENS);
+    if (oud.length) {
+      setRondes((prev) => prev.filter((r) => r.aangemaakt && r.aangemaakt >= OPRUIM_GRENS));
+      tomb("rondes", ...oud.map((r) => r.id));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated, rondes]);
+  useEffect(() => {
+    if (!hydrated) return;
+    for (const s of saneringen) if (/riedermorgen/i.test(`${s.naam} ${s.regio}`)) deleteSanering(s.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated, saneringen]);
+  // Saneerdossiers staan op de server: een eigenaar/beheerder ruimt Riedermorgen daar op (één keer per sessie).
+  useEffect(() => {
+    if (!supabaseAan || !currentUser || !["eigenaar", "beheer", "hr"].includes(currentUser.rol)) return;
+    try { if (sessionStorage.getItem("wire.opruim.riedermorgen")) return; sessionStorage.setItem("wire.opruim.riedermorgen", "1"); } catch { /* geen opslag: gewoon proberen */ }
+    void (async () => {
+      const { haalDossiers, verwijderDossier } = await import("../lib/saneerflow");
+      for (const d of await haalDossiers()) {
+        if (/riedermorgen/i.test(`${d.gebouw} ${d.omschrijving} ${d.pd_nummer}`)) await verwijderDossier(d.pd_nummer);
+      }
+    })();
+  }, [currentUser]);
 
   const addBuurtaanpak: AppState["addBuurtaanpak"] = (b) => {
     const id = nextId("ba");

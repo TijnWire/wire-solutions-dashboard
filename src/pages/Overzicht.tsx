@@ -10,7 +10,7 @@ import {
   Tooltip,
 } from "recharts";
 import type { ComponentType } from "react";
-import { Card, CardHeader, Badge } from "../components/ui";
+import { Card, CardHeader } from "../components/ui";
 import { StatCard } from "../components/StatCard";
 import { useApp } from "../store/AppContext";
 import { useNav } from "../store/NavContext";
@@ -184,26 +184,6 @@ export function Overzicht() {
         <StatCard icon={Receipt} label="Openstaande facturen" value={String(openFacturen.length)} sub={`${euro(openBedrag)} totaal`} tone="amber" />
         <StatCard icon={HardHat} label="Medewerkers actief" value={`${actief} / ${werknemers.length}`} sub="Niet met verlof vandaag" tone="green" />
       </div>
-
-      {/* Lopende projecten: één regel per soort werk per regio */}
-      <Card>
-        <CardHeader title="Lopende projecten" subtitle="Per soort werk en regio — bijv. Saneren in Regio Den Haag is één project" action={<Badge tone="green">{lopend.length}</Badge>} />
-        {lopend.length === 0 ? (
-          <div className="px-5 py-8 text-sm text-ink-500">Er lopen op dit moment geen projecten.</div>
-        ) : (
-          <div className="grid gap-px bg-ink-100 sm:grid-cols-2 lg:grid-cols-3">
-            {lopend.map((p) => (
-              <button key={`${p.soort}|${p.regio}`} type="button" onClick={() => navigeer(p.navKey)} className="group flex items-center gap-3 bg-white px-5 py-3 text-left hover:bg-ink-50/70">
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-semibold text-ink-900">{p.soort}</div>
-                  <div className="truncate text-xs text-ink-500">{p.regio} · {p.onderdelen} {p.onderdelen === 1 ? "onderdeel" : "onderdelen"}</div>
-                </div>
-                <ArrowRight className="h-4 w-4 shrink-0 text-ink-300 transition group-hover:translate-x-0.5 group-hover:text-brand-500" />
-              </button>
-            ))}
-          </div>
-        )}
-      </Card>
 
       {/* Operaties — klikbaar overzicht van alle modules */}
       <div>
