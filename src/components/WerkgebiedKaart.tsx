@@ -18,8 +18,8 @@ const KORT: Record<RegioKey, string> = { rotterdam: "Rotterdam", denhaag: "Den H
 
 // Waar het naamlabel naast het knooppunt staat (in kaarteenheden), zodat niets over de kust valt.
 const LABEL: Record<RegioKey, { dx: number; dy: number; anker: "start" | "middle" | "end" }> = {
-  denhaag: { dx: -30, dy: -52, anker: "end" },
-  rotterdam: { dx: 34, dy: 58, anker: "start" },
+  denhaag: { dx: -28, dy: -46, anker: "end" },
+  rotterdam: { dx: 0, dy: 66, anker: "middle" },
   utrecht: { dx: 0, dy: 70, anker: "middle" },
 };
 
@@ -132,8 +132,8 @@ export function WerkgebiedKaart() {
                 <circle cx={x} cy={y} r="8" fill={n > 0 ? ORANJE : "#f3c08b"} />
 
                 {/* Naam + aantal */}
-                <text x={lx} y={ly} textAnchor={l.anker} fontSize="38" fontWeight="800" fill={BRUIN} letterSpacing="1">{KORT[k]}</text>
-                <text x={lx} y={ly + 34} textAnchor={l.anker} fontSize="28" fontWeight="700" fill={ORANJE}>
+                <text x={lx} y={ly} textAnchor={l.anker} fontSize="38" fontWeight="800" stroke="#fff" strokeWidth="9" strokeLinejoin="round" paintOrder="stroke" fill={BRUIN} letterSpacing="1">{KORT[k]}</text>
+                <text x={lx} y={ly + 34} textAnchor={l.anker} fontSize="28" fontWeight="700" fill={ORANJE} stroke="#fff" strokeWidth="8" strokeLinejoin="round" paintOrder="stroke">
                   {n === 0 ? "niemand actief" : `${n} actief`}{jij ? " · jij" : ""}
                 </text>
 
@@ -170,12 +170,12 @@ export function WerkgebiedKaart() {
               onMouseLeave={() => setFocus(null)}
               onClick={() => setFocus((f) => (f === k ? null : k))}
               aria-pressed={focus === k}
-              className={`px-2 py-3 text-center transition-colors sm:px-4 ${focus === k ? "bg-brand-50" : "hover:bg-ink-50"}`}
+              className={`flex flex-col items-center justify-start px-2 py-3 text-center transition-colors sm:px-4 ${focus === k ? "bg-brand-50" : "hover:bg-ink-50"}`}
             >
               <div className="truncate text-[11px] font-semibold uppercase tracking-wide text-ink-400 sm:text-xs"><span className="hidden sm:inline">Regio </span>{KORT[k]}</div>
               <div className="mt-0.5 text-xl font-bold text-ink-900">{s.medewerkers.length}</div>
               <div className="text-[11px] text-ink-500">actief<span className="hidden sm:inline"> · {s.lopend} lopend</span></div>
-              {jij && <div className="mt-1 inline-block rounded-full bg-brand-600 px-2 py-0.5 text-[10px] font-bold text-white">Jij</div>}
+              {jij && <div className="mt-1 rounded-full bg-brand-600 px-2 py-0.5 text-[10px] font-bold text-white">Jij</div>}
             </button>
           );
         })}
