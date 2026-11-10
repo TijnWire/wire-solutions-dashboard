@@ -285,8 +285,9 @@ export const Topbar = memo(function Topbar({
 
       {/* Zoeken — mobiel: schermvullend venster (buiten de header, anders beperkt backdrop-blur het fixed-venster) */}
       {mobielZoek && (
-        <div className="fixed inset-0 z-[60] flex flex-col bg-white md:hidden">
-          <div className="flex items-center gap-2 border-b border-ink-200 px-3 py-3">
+        <div className="fixed inset-0 z-[60] flex flex-col bg-white pb-[env(safe-area-inset-bottom)] md:hidden">
+          {/* Ruimte voor klok en camera-uitsparing van de iPhone, anders valt de zoekbalk eronder */}
+          <div className="flex items-center gap-2 border-b border-ink-200 px-3 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))]">
             <div className="relative flex-1">
               <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" />
               <input
