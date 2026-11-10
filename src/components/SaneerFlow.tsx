@@ -6,11 +6,13 @@ import {
 import { useApp } from "../store/AppContext";
 import { SaneerWerklijst, WerklijstZeef, type Beeld } from "./SaneerWerklijst";
 import { SaneerImport } from "./SaneerImport";
+import { SaneerChecklists, splitsAdres, adresSleutel } from "./SaneerChecklists";
+import type { SaneerChecklist } from "../lib/types";
 import { SaneerVerdelen, SaneerClusterWerk } from "./SaneerCluster";
 import { haalDossier, STATUS_INFO, type Dossier, type DossierDetail } from "../lib/saneerflow";
 import {
   haalFlowAdressen, haalTaken, vinkTaak, rondDossierAf,
-  haalExport, type FlowAdres, type Taak,
+  haalExport, wijzigFlowAdres, type FlowAdres, type Taak,
 } from "../lib/saneerflowWerk";
 import { exporteerSaneerExcel, exporteerSaneerPdf } from "../lib/saneerflowExport";
 import { maakChecklists } from "../lib/saneerChecklist";
@@ -29,11 +31,12 @@ import { maakChecklists } from "../lib/saneerChecklist";
 // Vier regels beeldscherm voordat je één adres zag, en op een telefoon was dat de halve pagina. En
 // erger: "Langs de deur" en "Bellen" waren aparte stappen, terwijl het hetzelfde adres is — vul je
 // aan de deur een nummer in, dan schoof het onder je handen naar een andere pagina.
-type StapKey = "inlezen" | "verdelen" | "poster" | "afronden" | "afboeken";
+type StapKey = "inlezen" | "verdelen" | "checklists" | "poster" | "afronden" | "afboeken";
 
 const EXTRAS: { key: StapKey; titel: string; Icon: typeof ListPlus }[] = [
   { key: "inlezen",  titel: "Inlezen",  Icon: ListPlus },
   { key: "verdelen", titel: "Verdelen", Icon: Users },
+  { key: "checklists", titel: "Checklists", Icon: ClipboardList },
   { key: "poster",   titel: "Poster",   Icon: StickyNote },
   { key: "afronden", titel: "Afronden", Icon: FileCheck2 },
   { key: "afboeken", titel: "Afboeken", Icon: FileCheck2 },
@@ -72,7 +75,7 @@ const dagNL = (iso: string) => {
 const kortNL = (iso: string) => (iso ? iso.slice(0, 10).split("-").reverse().map(Number).join("-") : "");
 
 export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void }) {
-  const { users, currentUser } = useApp();
+  const { users, currentUser, saneerChecklists } = useApp();
   const [detail, setDetail] = useState<DossierDetail | null>(null);
   const [adressen, setAdressen] = useState<FlowAdres[]>([]);
   const [taken, setTaken] = useState<Taak[]>([]);
@@ -95,6 +98,30 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
   }, [pd]);
   useEffect(() => { void laad(); }, [laad]);
 
+  // Gegevens van een checklist naar de adressen van dit dossier: alleen lege namen/telefoons aanvullen,
+  // nooit iets overschrijven. Huisnummers die niet in het dossier staan, melden we.
+  const checklistNaarDossier = async (c: SaneerChecklist): Promise<string> => {
+    const { straat } = splitsAdres(c.velden.adres ?? "");
+    let bijgewerkt = 0, gelijk = 0;
+    const niet: string[] = [];
+    for (const b of c.bewoners) {
+      const nr = b.huisnr.trim();
+      if (!nr) continue;
+      const a = adressen.find((x) => adresSleutel(x.straat, `${x.huisnummer}${x.toevoeging ?? ""}`) === adresSleutel(straat, nr) || (!straat && `${x.huisnummer}${x.toevoeging ?? ""}`.toLowerCase() === nr.toLowerCase()));
+      if (!a) { niet.push(nr); continue; }
+      const patch: Partial<FlowAdres> = {};
+      if (!a.bewoner && b.naam) patch.bewoner = b.naam;
+      if (!a.telefoon && b.telefoon) patch.telefoon = b.telefoon;
+      if (!a.opmerking && b.opmerking) patch.opmerking = b.opmerking;
+      if (Object.keys(patch).length) { const r = await wijzigFlowAdres(a.id, patch); if (r.ok) bijgewerkt++; } else gelijk++;
+    }
+    if (bijgewerkt) void laad();
+    const delen = [`${bijgewerkt} adres${bijgewerkt === 1 ? "" : "sen"} aangevuld`];
+    if (gelijk) delen.push(`${gelijk} al compleet`);
+    if (niet.length) delen.push(`niet in dit dossier: ${niet.join(", ")}`);
+    return delen.join(" · ") + ".";
+  };
+
   const clusters = detail?.clusters ?? [];
   const verdeeld = clusters.filter((k) => k.toegewezen_aan).length;
   const openTaken = taken.filter((t) => !t.afgevinkt_op).length;
@@ -106,6 +133,7 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
     poster: taken.length > 0 && openTaken === 0,
     afronden: detail?.dossier.status === "afgerond" || detail?.dossier.status === "afgeboekt",
     afboeken: detail?.dossier.status === "afgeboekt",
+    checklists: saneerChecklists.some((c) => c.pdNummer === pd),
   };
 
   // Geen stap is het gewone geval: dan zie je de werklijst. Een zijpad kies je bewust, en met de
@@ -146,6 +174,8 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
             <ChevronRight className="h-5 w-5 shrink-0 text-ink-400" />
           </button>
         ))}
+        {/* Checklists aan de deur: foto maken, nalopen, ingevuld formulier downloaden */}
+        <SaneerChecklists pdNummer={pd} bewerkbaar={mijn.length > 0} overnemen={checklistNaarDossier} />
       </div>
     );
   }
@@ -244,6 +274,8 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
           ? <Leeg Icon={ListPlus} titel="Nog geen adressen" tekst="Lees eerst het bestand van de opdrachtgever in bij stap 1. Daarna maakt de app hier vanzelf groepen op postcode." knop="Naar Inlezen" onKlik={() => setStap("inlezen")} />
           : <SaneerVerdelen dossier={dossier} adressen={adressen} clusters={clusters} veldwerkers={veldwerkers} naamVan={naamVan} onWijzig={() => void laad()} />
       )}
+
+      {actief === "checklists" && <SaneerChecklists pdNummer={pd} bewerkbaar overnemen={checklistNaarDossier} />}
 
       {actief === "poster" && <Posters taken={taken} naamVan={naamVan} onWijzig={() => void laad()} />}
       {actief === "afronden" && <Afronden dossier={dossier} clusters={clusters} adressen={adressen} taken={taken} onWijzig={() => void laad()} />}

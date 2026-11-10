@@ -7,6 +7,7 @@ import { useApp } from "../store/AppContext";
 import { Card, Badge, Bevestig } from "../components/ui";
 import { WerknemerKiezer } from "../components/WerknemerKiezer";
 import { SaneerDossiers } from "./SaneerDossiers";
+import { SaneerChecklists, checklistNaarSaneerAdressen } from "../components/SaneerChecklists";
 import { DatumKiezer } from "../components/DatumKiezer";
 import { TijdKiezer } from "../components/TijdKiezer";
 import { afleidRegio } from "../lib/regio";
@@ -368,6 +369,17 @@ function SaneringDetail({ sanering, onTerug }: { sanering: Sanering; onTerug: ()
         {bewerkbaar && <button type="button" onClick={() => updateSanering(sanering.id, { regio: afleidRegio(eerstePostcode?.postcode ?? "", eerstePostcode?.plaats ?? "") })} className={knopKlein}><Wand2 className="h-3.5 w-3.5" /> Auto uit postcode</button>}
       </Card>
 
+
+      {/* Checklists consument saneren: inscannen → nalopen/aanvullen → ingevuld formulier */}
+      <SaneerChecklists
+        saneringId={sanering.id}
+        bewerkbaar={magWerken}
+        overnemen={(c) => {
+          const { adressen, n } = checklistNaarSaneerAdressen(c, sanering.adressen);
+          if (n) setAdressen(adressen);
+          return n ? `${n} adres${n === 1 ? "" : "sen"} bijgewerkt of toegevoegd bij deze sanering.` : "Geen huisnummers om over te nemen.";
+        }}
+      />
 
       {/* Adressen */}
       <Card className="space-y-3 p-4">

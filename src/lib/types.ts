@@ -677,6 +677,22 @@ export type Sanering = {
   verwijderdOp?: string; // ISO
 };
 
+// Eén "Checklist Consument Saneren" (één gebouw/postcode). `velden` volgt CHECKLIST_VELDEN in
+// lib/checklistVelden.ts (key → waarde; bij keuzevelden het gekozen label, bv. "Ja" of "GPLK").
+export type ChecklistBewoner = { huisnr: string; naam: string; telefoon: string; opmerking: string };
+export type SaneerChecklist = {
+  id: string;
+  aangemaakt: string; // ISO
+  bijgewerktOp: string; // ISO
+  bron: "pdf" | "ai" | "handmatig"; // hoe hij erin kwam: tekst-PDF uitgelezen, foto/scan via AI, of leeg begonnen
+  pdNummer?: string;   // hoort bij dit saneerdossier (PD-nummer)…
+  saneringId?: string; // …of bij deze (oudere) sanering
+  bestandNaam?: string;
+  velden: Record<string, string>;
+  bewoners: ChecklistBewoner[];
+  opmerkingen: string;
+};
+
 // Het stappenplan met de vijf fases is uit het scherm gehaald. Wat teams eerder hebben afgevinkt
 // blijft wél bewaard: het type en het veld hieronder houden die gegevens intact, zodat een oude
 // sanering niets kwijtraakt en het terug te zetten is als het ooit weer nodig blijkt.
