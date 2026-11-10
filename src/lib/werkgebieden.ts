@@ -5,7 +5,7 @@
 // een medewerker aan wie het is toegewezen. De plaatsnaam koppelen we hier aan één van de drie
 // werkgebieden. Er is dus niets extra bij te houden: wijs werk toe en de kaart volgt vanzelf.
 import { toegewezenIds, type Toewijsbaar } from "./toewijzing";
-import type { Brievenronde, Buurtaanpak, Sanering, Schouwafspraak, TauwOpdracht } from "./types";
+import type { Buurtaanpak, Sanering, Schouwafspraak, TauwOpdracht } from "./types";
 
 export type RegioKey = "rotterdam" | "denhaag" | "utrecht";
 
@@ -65,12 +65,15 @@ export type RegioStand = {
   lopend: number;        // aantal lopende onderdelen in dit gebied
 };
 
+// Alleen deze projecten tellen mee voor de werkgebieden: Buurtaanpak, Bodemonderzoeken, Saneren
+// (oude saneringen én de saneerdossiers van de server) en Schouwafspraken. Brieven horen er niet bij.
+export type DossierMedewerkers = { regio: string; gebouw: string; status: string; medewerkers: string[] };
 export type WerkgebiedBron = {
-  rondes: Brievenronde[];
   saneringen: Sanering[];
   tauwOpdrachten: TauwOpdracht[];
   buurtaanpak: Buurtaanpak[];
   schouwafspraken: Schouwafspraak[];
+  dossiers?: DossierMedewerkers[];
 };
 
 /** Per werkgebied: welke medewerkers er nu actief zijn en hoeveel werk er loopt. */
@@ -86,10 +89,6 @@ export function werkgebiedStand(bron: WerkgebiedBron, vandaagISO: string): Recor
     for (const id of toegewezenIds(item)) uit[regio].ids.add(id);
   };
 
-  for (const r of bron.rondes) {
-    if (r.status === "verstuurd" || r.gearchiveerd) continue;
-    tel(regioVan(r.plaats, r.regio, r.mapNaam), r);
-  }
   for (const s of bron.saneringen) {
     if (s.status === "verstuurd" || s.gearchiveerd) continue;
     tel(regioVan(s.regio, s.naam, s.adressen?.[0]?.plaats), s);
@@ -101,6 +100,10 @@ export function werkgebiedStand(bron: WerkgebiedBron, vandaagISO: string): Recor
   for (const b of bron.buurtaanpak) {
     if (b.afgerondOp || b.gearchiveerd) continue;
     tel(regioVan(b.regio, b.naam), b);
+  }
+  for (const d of bron.dossiers ?? []) {
+    if (d.status === "afgerond" || d.status === "afgeboekt") continue;
+    tel(regioVan(d.regio, d.gebouw), { extraToegewezen: d.medewerkers });
   }
   for (const a of bron.schouwafspraken) {
     // Alleen wat nog komt (of nog geen datum heeft) telt als lopend werk.

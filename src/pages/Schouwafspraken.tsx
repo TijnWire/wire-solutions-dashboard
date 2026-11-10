@@ -353,7 +353,7 @@ function MapDetail({ overzicht, terug }: { overzicht: MapOverzicht; terug: () =>
               <div><label className={labelCls}>Telefoonnummer</label><input value={form.telefoon} onChange={(e) => set({ telefoon: e.target.value })} inputMode="tel" placeholder="06 …" className={veld} /></div>
               {isLeiding && (
                 <div>
-                  <label className={labelCls}>Werknemer</label>
+                  <label className={labelCls}>Medewerker</label>
                   <WerknemerKiezer values={form.toegewezenAan} onChange={(ids) => set({ toegewezenAan: ids })} users={users} leegLabel="Niet toegewezen" />
                 </div>
               )}

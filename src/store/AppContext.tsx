@@ -359,6 +359,9 @@ const AppCtx = createContext<AppState | null>(null);
 let idCounter = Date.now();
 const nextId = (prefix: string) => `${prefix}-${++idCounter}`;
 
+const VERWIJDERDE_GEBRUIKERS = ["u-nathalie"]; // Nathalie Kerdel
+const VERWIJDERDE_NAMEN = ["nathalie kerdel"];
+
 export function AppProvider({ children }: { children: ReactNode }) {
   const [hydrated, setHydrated] = useState(false);
   const [users, setUsers] = useState<User[]>(SEED_USERS);
@@ -471,8 +474,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         });
         localStorage.setItem("wire.credsSync", CRED_SYNC_TAG);
       }
-      // Bestaande gebruikers: oude functie "Monteur" → "Werknemer" (we noemen ze nu werknemers).
-      setUsers(basisUsers.map((x) => (x.functie === "Monteur" ? { ...x, functie: "Werknemer" } : x)));
+      // Iedereen heet "Medewerker": oude functies "Monteur" en "Werknemer" worden omgezet.
+      setUsers(basisUsers.map((x) => (x.functie === "Monteur" || x.functie === "Werknemer" ? { ...x, functie: "Medewerker" } : x)));
       setProjects(p);
       setTaken(t);
       // Repareer oudere posts zonder reacties-array
@@ -1282,6 +1285,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     );
   };
 
+  // Ook wat via de centrale database binnenkomt: "Werknemer"/"Monteur" als functie wordt "Medewerker".
+  useEffect(() => {
+    if (!hydrated) return;
+    if (users.some((u) => u.functie === "Werknemer" || u.functie === "Monteur")) {
+      setUsers((prev) => prev.map((u) => (u.functie === "Werknemer" || u.functie === "Monteur" ? { ...u, functie: "Medewerker" } : u)));
+    }
+  }, [hydrated, users]);
+
+  // Op verzoek uit het systeem gehaald (10-11-2026). Het grafsteentje zorgt dat het account ook op de
+  // server en op andere toestellen verdwijnt en niet terugkomt bij het samenvoegen.
+  useEffect(() => {
+    if (!hydrated) return;
+    const weg = users.filter((u) => VERWIJDERDE_GEBRUIKERS.includes(u.id) || VERWIJDERDE_NAMEN.includes(u.naam.trim().toLowerCase()));
+    for (const u of weg) deleteUser(u.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated, users]);
+
   const updateProject: AppState["updateProject"] = (id, patch) =>
     setProjects((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
 
@@ -1507,8 +1527,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return id;
   };
 
+  // Bij het opslaan van adressen stempelen we het moment waarop een brief "Gegooid" wordt, zodat het
+  // dashboard per maand kan tellen. Gaat hij terug naar een andere status, dan vervalt de stempel.
   const updateRonde: AppState["updateRonde"] = (id, patch) =>
-    setRondes((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+    setRondes((prev) => prev.map((r) => {
+      if (r.id !== id) return r;
+      if (!patch.adressen) return { ...r, ...patch };
+      const oud = new Map(r.adressen.map((a) => [a.id, a]));
+      const nu = new Date().toISOString();
+      const adressen = patch.adressen.map((a) => {
+        if (a.status !== "Gegooid") return a.gegooidOp ? { ...a, gegooidOp: undefined } : a;
+        if (a.gegooidOp) return a;
+        return { ...a, gegooidOp: oud.get(a.id)?.status === "Gegooid" ? oud.get(a.id)?.gegooidOp : nu };
+      });
+      return { ...r, ...patch, adressen };
+    }));
 
   const deleteRonde: AppState["deleteRonde"] = (id) => {
     setRondes((prev) => prev.filter((r) => r.id !== id));

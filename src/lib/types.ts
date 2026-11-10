@@ -134,7 +134,7 @@ export const ROL_LABEL: Record<Role, string> = {
   eigenaar: "Eigenaar",
   beheer: "Beheer",
   hr: "HR",
-  monteur: "Werknemer",
+  monteur: "Medewerker",
 };
 
 // ── Voorschouw (Stedin "Informatie voorschouw" formulier) ──
@@ -206,6 +206,7 @@ export type Adres = {
   status: BriefStatus;
   ontbreekt: boolean; // huisnummer mist / onbekend (te melden aan Stedin)
   notitie: string;
+  gegooidOp?: string; // ISO — wanneer de brief op "Gegooid" is gezet (voor de maandcijfers op het dashboard)
 };
 
 // Fase in de Brieven-werkstroom (concept → gecontroleerd → bevestigd → gefactureerd).

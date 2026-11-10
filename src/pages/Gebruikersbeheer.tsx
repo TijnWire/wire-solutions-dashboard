@@ -238,7 +238,7 @@ function GebruikerEditor({
         </label>
         <label className="block">
           <span className="mb-1.5 block text-sm font-medium text-ink-700">Functie</span>
-          <input value={functie} onChange={(e) => setFunctie(e.target.value)} placeholder="bijv. Werknemer" className={inputCls} />
+          <input value={functie} onChange={(e) => setFunctie(e.target.value)} placeholder="bijv. Medewerker" className={inputCls} />
         </label>
         <label className="block">
           <span className="mb-1.5 block text-sm font-medium text-ink-700">E-mailadres (inlog)</span>
@@ -632,7 +632,7 @@ export function Gebruikersbeheer() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="truncate text-sm font-semibold text-ink-900">{u.naam}</span>
-                    <Badge tone={rolTone[u.rol]}>{ROL_LABEL[u.rol]}{u.rol === "beheer" && u.werknemer ? " + Werknemer" : ""}</Badge>
+                    <Badge tone={rolTone[u.rol]}>{ROL_LABEL[u.rol]}{u.rol === "beheer" && u.werknemer ? " + Medewerker" : ""}</Badge>
                     {u.id === currentUser.id && <span className="text-xs text-ink-400">(jij)</span>}
                   </div>
                   <div className="mt-0.5 flex flex-wrap items-center gap-x-4 gap-y-0.5 text-xs text-ink-500">

@@ -1,4 +1,5 @@
 import {
+  Waypoints,
   LayoutDashboard,
   CalendarCheck,
   Mailbox,
@@ -65,12 +66,10 @@ export const NAV: NavItem[] = [
 
   { key: "brieven", label: "Brieven", icon: Mailbox, group: "Projecten", roles: ALLE },
   { key: "tauw", label: "Bodemonderzoeken", icon: Shovel, group: "Projecten", roles: ALLE },
-  // Buurtaanpak staat tijdelijk niet in het menu (30-07-2026, op verzoek). De pagina, de gegevens en
-  // de code blijven bestaan: zodra dit project weer begint, hoeft alleen deze regel terug.
-  // { key: "buurtaanpak", label: "Buurtaanpak", icon: Waypoints, group: "Projecten", roles: ALLE },
+  { key: "buurtaanpak", label: "Buurtaanpak", icon: Waypoints, group: "Projecten", roles: ALLE },
   { key: "saneren", label: "Saneren", icon: Building2, group: "Projecten", roles: ALLE },
-  { key: "voorschouwen", label: "Voorschouwen", icon: ClipboardCheck, group: "Projecten", roles: ALLE },
   { key: "schouwafspraken", label: "Schouwafspraken", icon: CalendarClock, group: "Projecten", roles: ALLE },
+  { key: "voorschouwen", label: "Voorschouwen", icon: ClipboardCheck, group: "Projecten", roles: ALLE },
 
   // Afspraken staat niet meer in het menu (op verzoek). Pagina en gegevens blijven bestaan;
   // om het terug te zetten hoeft alleen `verborgen: true` weg.
@@ -83,7 +82,8 @@ export const NAV: NavItem[] = [
 
   { key: "projectbeheer", label: "Projectbeheer", icon: Briefcase, group: "Boekhouding", roles: LEIDING },
   { key: "facturen", label: "Facturen", icon: Receipt, group: "Boekhouding", roles: LEIDING },
-  { key: "urenstaat", label: "Urenstaat", icon: Clock, group: "Boekhouding", roles: LEIDING },
+  // Urenstaat is niet meer nodig (uit het menu op verzoek); de pagina en gegevens blijven bewaard.
+  { key: "urenstaat", label: "Urenstaat", icon: Clock, group: "Boekhouding", roles: LEIDING, verborgen: true },
   // Loonstroken en Boetes staan ook bij de werknemer in het menu. De pagina's laten hem uitsluitend
   // zijn eigen regels zien (filter op medewerkerId) en alle knoppen om iets aan te maken, te wijzigen
   // of te verwijderen zijn leiding-only. Je eigen loonstrook is van jou; die van een ander niet.
@@ -94,7 +94,8 @@ export const NAV: NavItem[] = [
   { key: "boetes", label: "Boetes", icon: AlertTriangle, group: "Boekhouding", roles: ALLE },
   { key: "medewerkers", label: "Medewerkers", icon: Users, group: "Boekhouding", roles: LEIDING },
 
-  { key: "overzicht", label: "Dashboard", icon: LayoutDashboard, group: "Bedrijfsdata", roles: LEIDING },
+  // Het bedrijfsdashboard is alleen voor eigenaren en beheerders.
+  { key: "overzicht", label: "Dashboard", icon: LayoutDashboard, group: "Bedrijfsdata", roles: ["eigenaar", "beheer"] },
   { key: "team", label: "Team", icon: Users, group: "Bedrijfsdata", roles: LEIDING },
   { key: "beheer", label: "Gebruikers & toegang", icon: UserCog, group: "Systeem", roles: LEIDING },
   // Bij de werknemer staat hier alleen het tabblad Sync & back-up: kan mijn telefoon bij de gegevens

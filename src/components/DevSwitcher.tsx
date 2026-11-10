@@ -8,7 +8,7 @@ const isDev =
   (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.DEV) ||
   (typeof window !== "undefined" && /^(localhost|127\.0\.0\.1|0\.0\.0\.0)$/.test(window.location.hostname));
 
-const ROL_LABEL: Record<Role, string> = { eigenaar: "Eigenaar", beheer: "Beheer", hr: "HR", monteur: "Werknemer" };
+const ROL_LABEL: Record<Role, string> = { eigenaar: "Eigenaar", beheer: "Beheer", hr: "HR", monteur: "Medewerker" };
 const initialen = (naam: string) => naam.split(" ").map((d) => d[0]).slice(0, 2).join("").toUpperCase();
 
 export function DevSwitcher() {

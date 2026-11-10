@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { CalendarCheck, Mailbox, Receipt, HardHat, MessageCircle, CheckCircle2, MapPin, Building2, ClipboardList, CheckSquare, ArrowRight, Bell, Banknote, Plane, Send, Sparkles, Loader2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { CalendarCheck, Mailbox, Receipt, HardHat, MessageCircle, CheckCircle2, MapPin, Building2, ClipboardList, FolderKanban, ArrowRight, Bell,  Sparkles, Loader2 } from "lucide-react";
 import {
   ResponsiveContainer,
   BarChart,
@@ -8,10 +8,6 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  PieChart,
-  Pie,
-  Cell,
-  Legend,
 } from "recharts";
 import type { ComponentType } from "react";
 import { Card, CardHeader, Badge } from "../components/ui";
@@ -19,7 +15,10 @@ import { StatCard } from "../components/StatCard";
 import { useApp } from "../store/AppContext";
 import { useNav } from "../store/NavContext";
 import { analyseerDashboard, aiResterend } from "../lib/ai";
-import type { Factuur, AfspraakStatus } from "../lib/types";
+import { afsprakenInWerkweek, brievenPerMaand, laatsteMaanden, lopendeProjecten, werkweek, type DossierLicht } from "../lib/dashboardCijfers";
+import { haalDossiers } from "../lib/saneerflow";
+import { supabaseAan } from "../lib/supabase";
+import type { Factuur } from "../lib/types";
 
 const euro = (n: number) =>
   n.toLocaleString("nl-NL", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
@@ -46,13 +45,6 @@ function geleden(isoTijd: string): string {
 }
 const factuurTotaal = (f: Factuur) => f.regels.reduce((s, r) => s + r.aantal * r.prijs, 0) * (1 + (f.btwPercentage ?? 21) / 100);
 
-const AFSPRAAK_KLEUR: Record<AfspraakStatus, string> = {
-  Open: "#fdba74",
-  Bevestigd: "#ea580c",
-  Afgerond: "#22c55e",
-  Geannuleerd: "#cbd5e1",
-};
-const TAAK_TONE: Record<string, string> = { "Te doen": "slate", "Mee bezig": "amber", Klaar: "green" };
 
 // Eén klikbare kaart per operatie/module.
 function OperatieKaart({ icon: Icon, label, waarde, sub, onClick }: { icon: ComponentType<{ className?: string }>; label: string; waarde: number | string; sub: string; onClick: () => void }) {
@@ -70,7 +62,15 @@ function OperatieKaart({ icon: Icon, label, waarde, sub, onClick }: { icon: Comp
 }
 
 export function Overzicht() {
-  const { afspraken, rondes, voorschouwen, facturen, taken, users, saneringen, tauwOpdrachten, verlof, projects, projectPosts, buurtaanpak, currentUser, instellingen } = useApp();
+  const { afspraken, rondes, voorschouwen, voorschouwMappen, facturen, taken, users, saneringen, tauwOpdrachten, verlof, projects, projectPosts, buurtaanpak, schouwafspraken, currentUser, instellingen } = useApp();
+  // Saneerdossiers staan op de server; die halen we op voor het tellen van de lopende projecten.
+  const [dossiers, setDossiers] = useState<DossierLicht[]>([]);
+  useEffect(() => {
+    if (!supabaseAan) return;
+    let actief = true;
+    void haalDossiers().then((d) => { if (actief) setDossiers(d); });
+    return () => { actief = false; };
+  }, []);
   const { navigeer } = useNav();
   const [aiTekst, setAiTekst] = useState("");
   const [aiBezig, setAiBezig] = useState(false);
@@ -78,10 +78,8 @@ export function Overzicht() {
   const naamVan = (id?: string) => users.find((u) => u.id === id)?.naam ?? "—";
   const projectNaam = (id: string) => projects.find((p) => p.id === id)?.naam ?? "Project";
 
-  const { start: wkStart, eind: wkEind } = weekGrenzen();
+  const { start: wkStart } = weekGrenzen();
   const vandaag = iso(new Date());
-  const morgenD = new Date(); morgenD.setDate(morgenD.getDate() + 1);
-  const morgen = iso(morgenD);
   const actieveRondes = rondes.filter((r) => !r.gearchiveerd);
   const actieveBuurt = buurtaanpak.filter((b) => !b.gearchiveerd);
   const actieveSaneer = saneringen.filter((s) => !s.gearchiveerd);
@@ -89,7 +87,12 @@ export function Overzicht() {
   const werknemers = users.filter((u) => u.rol === "monteur");
 
   // ── KPI's ──
-  const afsprakenWeek = afspraken.filter((a) => a.datum >= wkStart && a.datum <= wkEind && a.status !== "Geannuleerd").length;
+  const { ma: werkMa, vr: werkVr } = werkweek();
+  const afsprakenWeek = afsprakenInWerkweek({ afspraken, schouwafspraken, saneringen, buurtaanpak, tauwOpdrachten }, werkMa, werkVr);
+  const lopend = lopendeProjecten({ rondes, tauwOpdrachten, saneringen, dossiers, schouwafspraken, buurtaanpak, voorschouwMappen }, wkStart);
+  const maanden6 = laatsteMaanden(6);
+  const brievenMaand = brievenPerMaand(rondes, maanden6);
+  const gegooidMaand = brievenMaand[brievenMaand.length - 1]?.gegooid ?? 0;
   const teBezorgen = actieveRondes.flatMap((r) => r.adressen.filter((a) => !a.ontbreekt));
   const gegooid = teBezorgen.filter((a) => a.status === "Gegooid").length;
   const openFacturen = facturen.filter((f) => f.status === "Verstuurd");
@@ -111,28 +114,9 @@ export function Overzicht() {
   const afsprakenVandaag = afspraken.filter((a) => a.datum === vandaag && a.status !== "Geannuleerd").length;
   const openTaken = taken.filter((t) => t.status !== "Klaar");
 
-  // SMS-herinneringen (24u vooraf) — buurtaanpak + saneren samen, zelfde criteria als bij Mijn werk.
-  const telSms = (adressen: { bevestigd?: boolean; telefoon?: string; datum?: string; herinnerVerstuurdOp?: string }[]) =>
-    adressen.filter((a) => a.bevestigd && (a.telefoon ?? "").trim() && isISO(a.datum ?? "") && !a.herinnerVerstuurdOp && (a.datum ?? "") >= vandaag && (a.datum ?? "") <= morgen).length;
-  const smsBuurt = actieveBuurt.reduce((acc, b) => acc + telSms(b.adressen), 0);
-  const smsSaneer = actieveSaneer.reduce((acc, s) => acc + telSms(s.adressen), 0);
-  const smsTotaal = smsBuurt + smsSaneer;
-
   // Klaar voor facturatie: afgeronde brievenrondes + afgeronde projecten die nog naar de boekhouding moeten.
   const teFactureren = rondes.filter((r) => r.boekhouding === "te_factureren").length + projects.filter((p) => p.afgerondOp && !p.boekhouding).length;
   const verlofOpen = verlof.filter((v) => v.status === "Aangevraagd").length;
-
-  // ── Actie vereist (alleen tonen wat openstaat) ──
-  type Actie = { label: string; n: number; navKey: string; icon: ComponentType<{ className?: string }>; urgent?: boolean };
-  const acties: Actie[] = [
-    { label: smsTotaal === 1 ? "SMS-herinnering te versturen (24u)" : "SMS-herinneringen te versturen (24u)", n: smsTotaal, navKey: smsBuurt >= smsSaneer ? "buurtaanpak" : "saneren", icon: Send, urgent: true },
-    { label: "TAUW klaar voor controle", n: tauwControle, navKey: "tauw", icon: HardHat, urgent: true },
-    { label: "Afspraken vandaag", n: afsprakenVandaag, navKey: "afspraken", icon: CalendarCheck },
-    { label: "Klaar voor facturatie", n: teFactureren, navKey: "facturen", icon: Banknote },
-    { label: "Voorschouwen nog in concept", n: vsConcept, navKey: "voorschouwen", icon: ClipboardList },
-    { label: "Brieven nog te gooien", n: brievenTeGooien, navKey: "brieven", icon: Mailbox },
-    { label: verlofOpen === 1 ? "Verlofaanvraag te beoordelen" : "Verlofaanvragen te beoordelen", n: verlofOpen, navKey: "agenda", icon: Plane },
-  ].filter((a) => a.n > 0);
 
   // ── Operaties (klikbaar, dekt alle modules) ──
   const operaties = [
@@ -140,29 +124,10 @@ export function Overzicht() {
     { key: "brieven", icon: Mailbox, label: "Brieven", waarde: actieveRondes.length, sub: `${gegooid}/${teBezorgen.length} gegooid` },
     { key: "buurtaanpak", icon: MapPin, label: "Buurtaanpak", waarde: actieveBuurt.length, sub: `${buurtBevestigd} bevestigd · ${buurtUitgevoerd} uitgevoerd` },
     { key: "saneren", icon: Building2, label: "Saneren", waarde: actieveSaneer.length, sub: `${saneerAdressen} adres${saneerAdressen === 1 ? "" : "sen"}` },
-    { key: "tauw", icon: HardHat, label: "TAUW", waarde: tauwOpen, sub: tauwControle > 0 ? `${tauwControle} ter controle` : "open opdrachten" },
+    { key: "tauw", icon: HardHat, label: "Bodemonderzoeken", waarde: tauwOpen, sub: tauwControle > 0 ? `${tauwControle} ter controle` : "open opdrachten" },
     { key: "afspraken", icon: CalendarCheck, label: "Afspraken", waarde: afsprakenOpen, sub: `${afsprakenVandaag} vandaag` },
     { key: "facturen", icon: Receipt, label: "Facturen", waarde: openFacturen.length, sub: `${euro(openBedrag)} openstaand` },
-    { key: "mijnwerk", icon: CheckSquare, label: "Taken", waarde: openTaken.length, sub: "open taken" },
   ];
-
-  // ── Grafiek: brieven per wijk ──
-  const wijkMap = new Map<string, { wijk: string; gegooid: number; open: number }>();
-  for (const r of actieveRondes) {
-    const w = wijkMap.get(r.plaats) ?? { wijk: r.plaats || "Onbekend", gegooid: 0, open: 0 };
-    for (const a of r.adressen) {
-      if (a.ontbreekt) continue;
-      if (a.status === "Gegooid") w.gegooid++;
-      else w.open++;
-    }
-    wijkMap.set(r.plaats, w);
-  }
-  const brievenPerWijk = [...wijkMap.values()].sort((a, b) => b.gegooid + b.open - (a.gegooid + a.open)).slice(0, 8);
-
-  // ── Grafiek: afspraakstatus ──
-  const afspraakStatusData = (Object.keys(AFSPRAAK_KLEUR) as AfspraakStatus[])
-    .map((s) => ({ naam: s, waarde: afspraken.filter((a) => a.status === s).length, kleur: AFSPRAAK_KLEUR[s] }))
-    .filter((x) => x.waarde > 0);
 
   // ── Omzet per project — gekoppeld via PD-nummer of via de gekoppelde brievenronde → factuur ──
   const factuurById = new Map(facturen.map((f) => [f.id, f]));
@@ -176,10 +141,10 @@ export function Overzicht() {
   const omzetPerProject = projects.map((p) => ({ naam: p.naam || "Project", omzet: Math.round(omzetVanProject(p)) })).filter((x) => x.omzet > 0).sort((a, b) => b.omzet - a.omzet).slice(0, 8);
 
   // ── Omzet per maand (laatste 6) ──
-  const NL_MAAND = ["jan", "feb", "mrt", "apr", "mei", "jun", "jul", "aug", "sep", "okt", "nov", "dec"];
   const maandMap = new Map<string, number>();
   for (const f of facturen) { if (!isISO(f.datum)) continue; const k = f.datum.slice(0, 7); maandMap.set(k, (maandMap.get(k) ?? 0) + factuurTotaal(f)); }
-  const omzetPerMaand = [...maandMap.entries()].sort(([a], [b]) => a.localeCompare(b)).slice(-6).map(([k, v]) => { const [j, m] = k.split("-"); return { maand: `${NL_MAAND[Number(m) - 1]} '${j.slice(2)}`, omzet: Math.round(v) }; });
+  // Altijd de laatste 6 kalendermaanden, ook maanden zonder facturen (die staan op € 0).
+  const omzetPerMaand = maanden6.map((m) => ({ maand: m.label, omzet: Math.round(maandMap.get(m.sleutel) ?? 0) }));
 
   // ── Factuurbedragen per status ──
   const bedragBetaald = facturen.filter((f) => f.status === "Betaald").reduce((s, f) => s + factuurTotaal(f), 0);
@@ -197,7 +162,7 @@ export function Overzicht() {
     `TAUW: ${tauwOpen} open, ${tauwControle} ter controle.`,
     `Openstaande taken: ${openTaken.length}. Openstaande verlofaanvragen: ${verlofOpen}. Klaar voor facturatie: ${teFactureren}.`,
     `Facturen: ${openFacturen.length} openstaand (${euro(openBedrag)}); totaal gefactureerd ${euro(totaalOmzet)}, betaald ${euro(bedragBetaald)}, concept ${euro(bedragConcept)}.`,
-    `Werknemers actief vandaag: ${actief}/${werknemers.length}.`,
+    `Medewerkers actief vandaag: ${actief}/${werknemers.length}.`,
     omzetPerProject.length ? `Omzet per project (top): ${omzetPerProject.slice(0, 5).map((p) => `${p.naam}: ${euro(p.omzet)}`).join(", ")}.` : "Nog geen omzet aan projecten gekoppeld.",
   ].join("\n");
 
@@ -212,39 +177,30 @@ export function Overzicht() {
   return (
     <div className="space-y-6">
       {/* KPI's */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard icon={CalendarCheck} label="Afspraken deze week" value={String(afsprakenWeek)} sub="Ma t/m zo" tone="green" />
-        <StatCard icon={Mailbox} label="Brieven gegooid" value={gegooid.toLocaleString("nl-NL")} sub={`van ${teBezorgen.length.toLocaleString("nl-NL")} totaal`} tone="green" />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <StatCard icon={FolderKanban} label="Lopende projecten" value={String(lopend.length)} sub="Per soort werk en regio" tone="green" />
+        <StatCard icon={CalendarCheck} label="Afspraken deze week" value={String(afsprakenWeek)} sub="Ma t/m vr" tone="green" />
+        <StatCard icon={Mailbox} label="Brieven gegooid" value={gegooidMaand.toLocaleString("nl-NL")} sub={`in ${maanden6[maanden6.length - 1].label.replace(" '", " 20")}`} tone="green" />
         <StatCard icon={Receipt} label="Openstaande facturen" value={String(openFacturen.length)} sub={`${euro(openBedrag)} totaal`} tone="amber" />
-        <StatCard icon={HardHat} label="Werknemers actief" value={`${actief} / ${werknemers.length}`} sub="Niet met verlof vandaag" tone="green" />
+        <StatCard icon={HardHat} label="Medewerkers actief" value={`${actief} / ${werknemers.length}`} sub="Niet met verlof vandaag" tone="green" />
       </div>
 
-      {/* Actie vereist */}
-      <Card className={acties.some((a) => a.urgent) ? "border-orange-200" : undefined}>
-        <CardHeader
-          title="Actie vereist"
-          subtitle="Wat er vandaag opgepakt moet worden"
-          action={<Badge tone={acties.length ? "amber" : "green"}>{acties.length ? `${acties.reduce((s, a) => s + a.n, 0)} openstaand` : "alles bij"}</Badge>}
-        />
-        {acties.length === 0 ? (
-          <div className="flex items-center gap-3 px-5 py-8 text-sm text-ink-500">
-            <CheckCircle2 className="h-5 w-5 text-green-500" /> Niets dringends — alles is bijgewerkt. 🎉
-          </div>
+      {/* Lopende projecten: één regel per soort werk per regio */}
+      <Card>
+        <CardHeader title="Lopende projecten" subtitle="Per soort werk en regio — bijv. Saneren in Regio Den Haag is één project" action={<Badge tone="green">{lopend.length}</Badge>} />
+        {lopend.length === 0 ? (
+          <div className="px-5 py-8 text-sm text-ink-500">Er lopen op dit moment geen projecten.</div>
         ) : (
-          <div className="divide-y divide-ink-100">
-            {acties.map((a) => {
-              const Icon = a.icon;
-              return (
-                <button key={a.label} type="button" onClick={() => navigeer(a.navKey)} className="group flex w-full items-center gap-3 px-5 py-3 text-left hover:bg-ink-50/70">
-                  <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${a.urgent ? "bg-orange-100 text-orange-600" : "bg-ink-100 text-ink-600"}`}>
-                    <Icon className="h-[18px] w-[18px]" />
-                  </div>
-                  <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink-800">{a.label}</span>
-                  <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-bold ${a.urgent ? "bg-orange-500 text-white" : "bg-ink-800 text-white"}`}>{a.n}</span>
-                  <ArrowRight className="h-4 w-4 shrink-0 text-ink-300 transition group-hover:translate-x-0.5 group-hover:text-brand-500" />
-                </button>
-              );
-            })}
+          <div className="grid gap-px bg-ink-100 sm:grid-cols-2 lg:grid-cols-3">
+            {lopend.map((p) => (
+              <button key={`${p.soort}|${p.regio}`} type="button" onClick={() => navigeer(p.navKey)} className="group flex items-center gap-3 bg-white px-5 py-3 text-left hover:bg-ink-50/70">
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-semibold text-ink-900">{p.soort}</div>
+                  <div className="truncate text-xs text-ink-500">{p.regio} · {p.onderdelen} {p.onderdelen === 1 ? "onderdeel" : "onderdelen"}</div>
+                </div>
+                <ArrowRight className="h-4 w-4 shrink-0 text-ink-300 transition group-hover:translate-x-0.5 group-hover:text-brand-500" />
+              </button>
+            ))}
           </div>
         )}
       </Card>
@@ -262,49 +218,21 @@ export function Overzicht() {
         </div>
       </div>
 
-      {/* Grafieken */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <CardHeader title="Brieven per wijk" subtitle="Gegooid en nog te doen" />
-          <div className="h-72 px-3 py-4">
-            {brievenPerWijk.length === 0 ? (
-              <div className="flex h-full items-center justify-center text-center text-sm text-ink-400">Nog geen brievenrondes. Maak er een aan bij Brieven &amp; Routes.</div>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={brievenPerWijk} barGap={4}>
-                  <CartesianGrid vertical={false} stroke="#e2e8f0" />
-                  <XAxis dataKey="wijk" tickLine={false} axisLine={false} fontSize={12} stroke="#94a3b8" />
-                  <YAxis tickLine={false} axisLine={false} fontSize={12} stroke="#94a3b8" width={32} />
-                  <Tooltip cursor={{ fill: "#f1f5f9" }} contentStyle={{ borderRadius: 12, border: "1px solid #e2e8f0", fontSize: 12, boxShadow: "0 10px 30px -12px rgb(15 23 42 / 0.18)" }} />
-                  <Bar dataKey="gegooid" name="Gegooid" fill="#ea580c" radius={[6, 6, 0, 0]} />
-                  <Bar dataKey="open" name="Te doen" fill="#fdba74" radius={[6, 6, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-        </Card>
-
-        <Card>
-          <CardHeader title="Afspraakstatus" subtitle="Alle afspraken" />
-          <div className="h-72 px-3 py-4">
-            {afspraakStatusData.length === 0 ? (
-              <div className="flex h-full items-center justify-center text-center text-sm text-ink-400">Nog geen afspraken.</div>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={afspraakStatusData} dataKey="waarde" nameKey="naam" innerRadius={55} outerRadius={85} paddingAngle={3}>
-                    {afspraakStatusData.map((s) => (
-                      <Cell key={s.naam} fill={s.kleur} />
-                    ))}
-                  </Pie>
-                  <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid #e2e8f0", fontSize: 12 }} />
-                  <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} formatter={(v) => <span className="text-ink-600">{v}</span>} />
-                </PieChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-        </Card>
-      </div>
+      {/* Brieven gegooid per maand */}
+      <Card>
+        <CardHeader title="Brieven gegooid per maand" subtitle="Laatste 6 maanden" />
+        <div className="h-72 px-3 py-4">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={brievenMaand} barSize={38}>
+              <CartesianGrid vertical={false} stroke="#e2e8f0" />
+              <XAxis dataKey="maand" tickLine={false} axisLine={false} fontSize={12} stroke="#94a3b8" />
+              <YAxis tickLine={false} axisLine={false} fontSize={12} stroke="#94a3b8" width={40} allowDecimals={false} />
+              <Tooltip cursor={{ fill: "#f1f5f9" }} contentStyle={{ borderRadius: 12, border: "1px solid #e2e8f0", fontSize: 12, boxShadow: "0 10px 30px -12px rgb(15 23 42 / 0.18)" }} />
+              <Bar dataKey="gegooid" name="Brieven gegooid" fill="#ea580c" radius={[6, 6, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </Card>
 
       {/* Omzet & projecten */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -348,7 +276,7 @@ export function Overzicht() {
       </div>
 
       {/* Omzet per maand */}
-      {omzetPerMaand.length > 0 && (
+      {(
         <Card>
           <CardHeader title="Omzet per maand" subtitle="Laatste 6 maanden" />
           <div className="h-64 px-3 py-4">
@@ -366,8 +294,8 @@ export function Overzicht() {
       )}
 
       {/* Activiteit + taken */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
+      <div className="grid grid-cols-1 gap-6">
+        <Card>
           <CardHeader title="Recente activiteit" subtitle="Updates en vragen van het team" />
           {recente.length === 0 ? (
             <div className="px-5 py-10 text-center text-sm text-ink-400">Nog geen activiteit. Zodra het team projecten bijwerkt, verschijnt het hier.</div>
@@ -390,30 +318,6 @@ export function Overzicht() {
           )}
         </Card>
 
-        {/* Openstaande taken & deadlines */}
-        <Card>
-          <CardHeader title="Openstaande taken" subtitle="Per medewerker" />
-          {openTaken.length === 0 ? (
-            <div className="px-5 py-10 text-center text-sm text-ink-400">Geen openstaande taken.</div>
-          ) : (
-            <ul className="divide-y divide-ink-100">
-              {openTaken.slice(0, 8).map((t) => {
-                const teamtaak = t.toegewezenAan === "";
-                const u = users.find((x) => x.id === t.toegewezenAan);
-                return (
-                  <li key={t.id} className="flex items-center gap-3 px-5 py-3 hover:bg-ink-50/60">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-ink-800 text-xs font-semibold text-white">{teamtaak ? "•" : u?.initialen ?? "?"}</div>
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-medium text-ink-800">{t.titel}</div>
-                      <div className="truncate text-xs text-ink-400">{teamtaak ? "Hele team" : u?.naam ?? "—"}{t.deadline ? ` · ${t.deadline}` : ""}</div>
-                    </div>
-                    <Badge tone={TAAK_TONE[t.status] ?? "slate"}>{t.status}</Badge>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </Card>
       </div>
 
       {/* AI-analyse — optioneel, kostenbewust (goedkoop model + dag-cap) */}

@@ -3,14 +3,16 @@
 // In de stijl van het logo: de provincies als oranje "draadmodel" met een paar gestapelde lagen voor
 // diepte, de drie steden als knooppunten (zoals de cirkel in het logo) en verbindingsdraden waar
 // lichtpulsjes overheen lopen. Hoe meer mensen er in een regio actief zijn, hoe sterker die pulseert.
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MapPin, Users } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { Card } from "./ui";
 import {
   KAART_HOOGTE, PAD_GRENS, PAD_UTRECHT, PAD_ZUID_HOLLAND, REGIO_VOLGORDE, STAD, proj, werkgebiedStand,
-  type RegioKey,
+  type DossierMedewerkers, type RegioKey,
 } from "../lib/werkgebieden";
+import { haalDossier, haalDossiers } from "../lib/saneerflow";
+import { supabaseAan } from "../lib/supabase";
 
 const ORANJE = "#e08a33";
 const BRUIN = "#4f2a08";
@@ -31,13 +33,29 @@ const vandaagISO = () => {
 const rustig = () => typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
 export function WerkgebiedKaart() {
-  const { rondes, saneringen, tauwOpdrachten, buurtaanpak, schouwafspraken, users, currentUser } = useApp();
+  const { saneringen, tauwOpdrachten, buurtaanpak, schouwafspraken, users, currentUser } = useApp();
+  // Saneerdossiers staan op de server: haal de lopende op, met wie er per groep aan werkt.
+  const [dossiers, setDossiers] = useState<DossierMedewerkers[]>([]);
+  useEffect(() => {
+    if (!supabaseAan) return;
+    let actief = true;
+    void (async () => {
+      const lijst = (await haalDossiers()).filter((d) => d.status !== "afgerond" && d.status !== "afgeboekt");
+      const details = await Promise.all(lijst.map((d) => haalDossier(d.pd_nummer).catch(() => null)));
+      if (!actief) return;
+      setDossiers(lijst.map((d, i) => ({
+        regio: d.regio, gebouw: d.gebouw, status: d.status,
+        medewerkers: [...new Set((details[i]?.clusters ?? []).map((k) => k.toegewezen_aan).filter((x): x is string => !!x))],
+      })));
+    })();
+    return () => { actief = false; };
+  }, []);
   const [focus, setFocus] = useState<RegioKey | null>(null);
   const beweging = !rustig();
 
   const stand = useMemo(
-    () => werkgebiedStand({ rondes, saneringen, tauwOpdrachten, buurtaanpak, schouwafspraken }, vandaagISO()),
-    [rondes, saneringen, tauwOpdrachten, buurtaanpak, schouwafspraken],
+    () => werkgebiedStand({ saneringen, tauwOpdrachten, buurtaanpak, schouwafspraken, dossiers }, vandaagISO()),
+    [saneringen, tauwOpdrachten, buurtaanpak, schouwafspraken, dossiers],
   );
   const initialen = (id: string) => users.find((u) => u.id === id)?.initialen ?? "?";
   const naam = (id: string) => users.find((u) => u.id === id)?.naam ?? "Onbekend";
@@ -52,7 +70,7 @@ export function WerkgebiedKaart() {
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600"><MapPin className="h-5 w-5" /></span>
         <div className="min-w-0 flex-1">
           <h3 className="text-sm font-bold text-ink-900">Onze werkgebieden</h3>
-          <p className="text-xs text-ink-500">Zuid-Holland & Utrecht · waar het team nu aan het werk is</p>
+          <p className="text-xs text-ink-500">Buurtaanpak, bodemonderzoeken, saneren en schouwafspraken · waar het team nu aan het werk is</p>
         </div>
         <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-ink-100 px-2.5 py-1 text-xs font-semibold text-ink-600" title="Medewerkers met lopend werk">
           <Users className="h-3.5 w-3.5" /> {totaalActief} actief
