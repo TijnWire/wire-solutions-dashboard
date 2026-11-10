@@ -55,9 +55,6 @@ function kort(tekst: string, max = 60): string {
   return t.length > max ? t.slice(0, max - 1).trimEnd() + "…" : t;
 }
 
-// Mededelingen zijn alleen voor eigenaren en beheerders.
-export const magMededelingen = (rol?: string) => rol === "eigenaar" || rol === "beheer";
-
 // ── Voor de Agenda-pagina: alles wat tussen twee data (inclusief) valt ──
 // `leiding` bepaalt wat je van meetings en mededelingen ziet (leiding alles, een werknemer wat voor hem is).
 // `mededelingen: false` laat ze helemaal weg: alleen eigenaren en beheerders zien mededelingen.
@@ -199,7 +196,7 @@ export function bouwPersoonlijkeFeed(bron: AgendaBronnen, gebruiker: User, nu: D
   const van = `${jaar - 1}-01-01`;
   const tot = `${jaar + 2}-12-31`;
   const leiding = false; // persoonlijk: alleen wat voor jou is, ook voor de leiding
-  const alles = gebeurtenissenTussen(bron, van, tot, { id: gebruiker.id, leiding, mededelingen: magMededelingen(gebruiker.rol) });
+  const alles = gebeurtenissenTussen(bron, van, tot, { id: gebruiker.id, leiding });
 
   const verjaardagen = new Map<string, AgendaGebeurtenis>();
   const rest: AgendaGebeurtenis[] = [];

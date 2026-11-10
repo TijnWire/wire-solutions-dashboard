@@ -291,8 +291,8 @@ export function MijnWerk({ initieelProject }: { initieelProject?: string }) {
         </div>
       )}
 
-      {/* Mededelingen: alleen voor eigenaren en beheerders */}
-      {(currentUser.rol === "eigenaar" || currentUser.rol === "beheer") && <MededelingenBord />}
+      {/* Mededelingen: iedereen leest ze, alleen eigenaren en beheerders plaatsen ze */}
+      <MededelingenBord />
 
       {/* Onze werkgebieden: Zuid-Holland & Utrecht, met wie waar actief is */}
       <WerkgebiedKaart />

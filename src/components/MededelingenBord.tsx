@@ -5,7 +5,7 @@ import { Card } from "./ui";
 import { DatumKiezer } from "./DatumKiezer";
 import { Keuze } from "./Keuze";
 import { WERK_CATEGORIEEN, werkCategorieNaam, werkNaam } from "../lib/lopendWerk";
-import { isMededelingVoor, ontvangersLabel, ontvangersVan } from "../lib/mededelingen";
+import { isMededelingVoor, ontvangersLabel, ontvangersVan, magMededelingPlaatsen } from "../lib/mededelingen";
 
 const datumKort = (iso: string) => { const d = iso.slice(0, 10).split("-"); return d.length === 3 ? `${d[2]}-${d[1]}-${d[0]}` : iso; };
 function vandaagISO(): string { const t = new Date(); return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`; }
@@ -32,8 +32,7 @@ export function MededelingComposer({ className = "" }: { className?: string }) {
   const [deadline, setDeadline] = useState("");
 
   if (!currentUser) return null;
-  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr";
-  if (!isLeiding) return null;
+  if (!magMededelingPlaatsen(currentUser.rol)) return null;
 
   const naamVan = (id?: string) => users.find((u) => u.id === id)?.naam ?? "Onbekend";
   const kandidaten = users.filter((u) => u.id !== currentUser.id).sort((a, b) => a.naam.localeCompare(b.naam, "nl"));
@@ -159,7 +158,7 @@ export function MededelingenFeed({ scrollClass = "max-h-96" }: { scrollClass?: s
                       </button>
                     )}
                     {m.gezienDoor.length > 0 && <span className="text-xs text-ink-400" title={m.gezienDoor.map(naamVan).join(", ")}>{m.gezienDoor.length} gezien</span>}
-                    {isLeiding && (
+                    {magMededelingPlaatsen(currentUser.rol) && (
                       <div className="ml-auto flex items-center gap-1">
                         <button type="button" onClick={() => toggleMededelingPin(m.id)} title={m.vastgepind ? "Losmaken" : "Bovenaan vastzetten"} aria-label="Vastzetten" className="rounded-lg p-1.5 text-ink-400 hover:bg-ink-100 hover:text-amber-600">{m.vastgepind ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}</button>
                         <button type="button" onClick={() => deleteMededeling(m.id)} title="Verwijderen" aria-label="Mededeling verwijderen" className="rounded-lg p-1.5 text-red-400 hover:bg-red-50 hover:text-red-600"><Trash2 className="h-3.5 w-3.5" /></button>
@@ -191,7 +190,7 @@ export function MededelingenBord({ compose = false }: { compose?: boolean }) {
         <span className="hidden text-xs text-ink-400 sm:inline">van de beheerder voor het team</span>
         {aantal > 0 && <span className="ml-auto rounded-full bg-ink-100 px-2 py-0.5 text-xs font-medium text-ink-500">{aantal}</span>}
       </div>
-      {compose && isLeiding && (
+      {compose && magMededelingPlaatsen(currentUser.rol) && (
         <div className="border-b border-ink-100 p-4">
           <MededelingComposer />
         </div>

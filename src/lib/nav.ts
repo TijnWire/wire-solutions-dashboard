@@ -45,8 +45,6 @@ export type NavItem = {
 // HR ziet alles (personeelszaken/boekhouding) — daarom in élke rol-groep opgenomen.
 const ALLE: Role[] = ["eigenaar", "beheer", "hr", "monteur"];
 const LEIDING: Role[] = ["eigenaar", "beheer", "hr"];
-// Alleen eigenaren en beheerders (bijv. Mededelingen).
-const BEHEER: Role[] = ["eigenaar", "beheer"];
 
 // Project-onderdelen waarvan de eigenaar de toegang per werknemer kan aan-/uitzetten (Toegang-pagina).
 // Werk (Mijn werk, Projecten, Agenda, Mededelingen), Kennisbank en Communicatie blijven ALTIJD zichtbaar;
@@ -63,7 +61,7 @@ export const WERKNEMER_TOEGANG_KEYS = WERKNEMER_TOEGANG.map((x) => x.key);
 export const NAV: NavItem[] = [
   { key: "mijnwerk", label: "Mijn werk", icon: ClipboardList, group: "Werk", roles: ALLE },
   { key: "agenda", label: "Agenda", icon: CalendarDays, group: "Werk", roles: ALLE },
-  { key: "mededelingen", label: "Mededelingen", icon: Megaphone, group: "Werk", roles: BEHEER },
+  { key: "mededelingen", label: "Mededelingen", icon: Megaphone, group: "Werk", roles: ALLE },
 
   { key: "brieven", label: "Brieven", icon: Mailbox, group: "Projecten", roles: ALLE },
   { key: "tauw", label: "Bodemonderzoeken", icon: Shovel, group: "Projecten", roles: ALLE },

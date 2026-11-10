@@ -156,7 +156,6 @@ function MapDetail({ overzicht, terug }: { overzicht: MapOverzicht; terug: () =>
   const naamVan = (id?: string) => users.find((u) => u.id === id)?.naam ?? "";
   const magVerwijderen = (a: Schouwafspraak) => isLeiding || !a.toegewezenAan || a.toegewezenAan === currentUser.id;
   const nr = weekNummer(maandag);
-  const isHuidigeWeek = maandag === weekStartISO(vandaagISO());
   const kanTijdenAanpassen = overzicht.sleutel !== ""; // "Zonder plaats" is geen echte map
 
   // Tijdvakken van een willekeurige datum (voor de tijdknoppen in het formulier).
@@ -274,9 +273,6 @@ function MapDetail({ overzicht, terug }: { overzicht: MapOverzicht; terug: () =>
             <DatumKiezer value={maandag} onChange={(iso) => iso && setMaandag(weekStartISO(iso))} weergave={`Week ${nr} · ${weekBereik(maandag)}`} />
           </div>
           <button type="button" onClick={() => setMaandag(verschuifWeek(maandag, 1))} className={knop} aria-label="Volgende week"><ChevronRight className="h-4 w-4" /></button>
-          {!isHuidigeWeek && (
-            <button type="button" onClick={() => setMaandag(weekStartISO(vandaagISO()))} className={knop}>Deze week</button>
-          )}
           <button type="button" onClick={download} disabled={bezig || week.length === 0} className="ml-auto inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50">
             <Download className="h-4 w-4" /> {bezig ? "Bezig…" : `Planning week ${nr} voor Stedin (Excel)`}
           </button>

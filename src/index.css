@@ -32,15 +32,8 @@
       font-size: 14px;
     }
   }
-  /* Invoervelden op ALLE touch-apparaten minstens 16px, anders zoomt iOS automatisch in bij het
-     focussen (bv. de zoekbalk). !important omdat Tailwind's tekst-utilities (text-sm/…) anders winnen. */
-  @media (pointer: coarse) {
-    input:not([type="checkbox"]):not([type="radio"]),
-    textarea,
-    select {
-      font-size: 16px !important;
-    }
-  }
+  /* Invoervelden gebruiken hetzelfde lettertype en dezelfde maat als de rest van de app. Inzoomen bij
+     focussen op iOS wordt voorkomen door maximum-scale=1 in de viewport (index.html). */
 }
 
 @layer utilities {

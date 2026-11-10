@@ -22,3 +22,6 @@ export function ontvangersLabel(ids: string[], naamVan: (id: string) => string):
   if (namen.length === 2) return `${namen[0]} en ${namen[1]}`;
   return `${namen[0]}, ${namen[1]} en ${namen.length - 2} ${namen.length - 2 === 1 ? "andere" : "anderen"}`;
 }
+
+// Alleen eigenaren en beheerders plaatsen, pinnen of verwijderen mededelingen; iedereen kan ze lezen.
+export const magMededelingPlaatsen = (rol?: string) => rol === "eigenaar" || rol === "beheer";

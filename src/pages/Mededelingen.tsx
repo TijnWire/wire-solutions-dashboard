@@ -2,13 +2,15 @@ import { Megaphone, MessagesSquare } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { Card } from "../components/ui";
 import { MededelingComposer, MededelingenFeed } from "../components/MededelingenBord";
+import { magMededelingPlaatsen } from "../lib/mededelingen";
 
 // Tweekoloms-layout: links stuur je een melding, rechts staat de chat met álle mededelingen.
 // Werknemers (geen leiding) zien alleen de chat.
 export function Mededelingen() {
   const { currentUser } = useApp();
   if (!currentUser) return null;
-  const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr";
+  // Alleen eigenaren en beheerders plaatsen mededelingen; iedereen leest mee.
+  const isLeiding = magMededelingPlaatsen(currentUser.rol);
 
   const chat = (
     <Card className="flex flex-col overflow-hidden">

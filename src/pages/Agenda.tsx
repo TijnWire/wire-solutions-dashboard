@@ -8,7 +8,7 @@ import { Keuze } from "../components/Keuze";
 import { VERLOF_TYPES, type VerlofType, type VerlofStatus, type Verlof as VerlofT } from "../lib/types";
 import { useVerlofBeslissingen } from "../lib/verlofBeslissingen";
 import { TelefoonAgenda } from "../components/TelefoonAgenda";
-import { AGENDA_SOORTEN, AGENDA_SOORT_LABEL, gebeurtenissenTussen, magMededelingen, valtOp, type AgendaGebeurtenis, type AgendaSoort } from "../lib/agendaFeed";
+import { AGENDA_SOORTEN, AGENDA_SOORT_LABEL, gebeurtenissenTussen, valtOp, type AgendaGebeurtenis, type AgendaSoort } from "../lib/agendaFeed";
 
 const MAANDEN = ["januari", "februari", "maart", "april", "mei", "juni", "juli", "augustus", "september", "oktober", "november", "december"];
 const DAGEN = ["ma", "di", "wo", "do", "vr", "za", "zo"];
@@ -151,7 +151,7 @@ export function Agenda() {
 
   const verlofStatus = useMemo(() => Object.fromEntries(Object.entries(beslissingen).map(([id, b]) => [id, b.status as string])), [beslissingen]);
   const alle = useMemo(
-    () => (currentUser ? gebeurtenissenTussen({ users, verlof, agendaItems, mededelingen, verlofStatus }, vanISO, totISO, { id: currentUser.id, leiding: isLeiding, mededelingen: magMededelingen(currentUser.rol) }) : []),
+    () => (currentUser ? gebeurtenissenTussen({ users, verlof, agendaItems, mededelingen, verlofStatus }, vanISO, totISO, { id: currentUser.id, leiding: isLeiding }) : []),
     [users, verlof, agendaItems, mededelingen, verlofStatus, vanISO, totISO, currentUser, isLeiding],
   );
   // Verlof en meetings kun je op medewerker filteren; feestdagen, verjaardagen en mededelingen blijven staan.
@@ -211,7 +211,7 @@ export function Agenda() {
   const filterBalk = (
     <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-ink-200 bg-ink-50/50 p-2">
       <span className="inline-flex items-center gap-1 text-xs font-semibold text-ink-500"><Filter className="h-3.5 w-3.5" /> Toon</span>
-      {AGENDA_SOORTEN.filter((s) => s !== "mededeling" || magMededelingen(currentUser.rol)).map((s) => {
+      {AGENDA_SOORTEN.map((s) => {
         const aan = zichtbareSoorten.has(s);
         const Icoon = SOORT_STIJL[s].icoon;
         return (
@@ -231,7 +231,7 @@ export function Agenda() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold text-ink-900">Agenda</h2>
-          <p className="text-sm text-ink-500">{magMededelingen(currentUser.rol) ? "Verlof, meetings, mededelingen, verjaardagen en feestdagen." : "Verlof, meetings, verjaardagen en feestdagen."}</p>
+          <p className="text-sm text-ink-500">Verlof, meetings, mededelingen, verjaardagen en feestdagen.</p>
         </div>
         <div className="flex items-center gap-2">
           <button type="button" onClick={() => { setFormOpen(true); setVMedewerker(currentUser.id); }} className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-brand-700">
