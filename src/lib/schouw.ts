@@ -34,8 +34,17 @@ export function weekJaar(maandag: string): number {
 // 9.00 t/m 15.30, telkens zonder de middagpauze tussen 11.30 en 13.00.
 const ROTTERDAM_MAANDAG = ["10:00", "10:30", "11:00", "11:30", "13:00", "13:30", "14:00", "14:30", "15:00", "15:30"];
 const ROTTERDAM_WERKDAG = ["09:00", "09:30", ...ROTTERDAM_MAANDAG];
+// Den Haag: 8.00, 8.45 en 9.15 alleen dinsdag t/m vrijdag; daarna 10.00, 10.30, 11.30, 13.00, 13.45,
+// 14.15 en 15.15 (ook op maandag).
+const DEN_HAAG_MAANDAG = ["10:00", "10:30", "11:30", "13:00", "13:45", "14:15", "15:15"];
+const DEN_HAAG_WERKDAG = ["08:00", "08:45", "09:15", ...DEN_HAAG_MAANDAG];
+const DEN_HAAG = { maandag: DEN_HAAG_MAANDAG, werkdag: DEN_HAAG_WERKDAG };
 const PLAATS_TIJDEN: Record<string, { maandag: string[]; werkdag: string[] }> = {
   rotterdam: { maandag: ROTTERDAM_MAANDAG, werkdag: ROTTERDAM_WERKDAG },
+  "den haag": DEN_HAAG,
+  "'s-gravenhage": DEN_HAAG,
+  "s-gravenhage": DEN_HAAG,
+  "’s-gravenhage": DEN_HAAG,
 };
 
 // Standaardtijden van een dag; sommige plaatsen hebben hun eigen indeling, de rest de algemene.
