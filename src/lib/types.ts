@@ -509,6 +509,7 @@ export type SchouwMap = {
   bijgewerktOp: string; // ISO — bij elke wijziging bijgewerkt, nodig om versies samen te voegen
   weken?: Record<string, SchouwWeekTijden>; /* key = maandag ISO */
   verwijderdeDagen?: Record<string, string[]>; /* key = maandag ISO → ISO-datums die in die week niet doorgaan */ // sleutel = maandag van de week (ISO)
+  tijdenVersie?: number; // eenmalige omzetting naar nieuwe vaste tijdvakken van een plaats is gedaan
 };
 
 // ── Klanten & Database ──

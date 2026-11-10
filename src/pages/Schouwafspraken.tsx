@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, CalendarClock, CalendarX, ChevronLeft, ChevronRight, Clock, Download, FolderOpen, FolderPlus, Pencil, Phone, Plus, RotateCcw, Trash2, X } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { Card, Badge } from "../components/ui";
@@ -9,7 +9,7 @@ import { Keuze } from "../components/Keuze";
 import { SCHOUW_STATUSSEN, type SchouwStatus, type Schouwafspraak } from "../lib/types";
 import { isISODatum, toISO, verschuifWeek, weekBereik, weekNummer, weekStartISO } from "../lib/week";
 import {
-  bouwWeek, dagenVanWeek, exportDagen, mapOverzicht, normPlaats, sorteerOpTijd, tijdLabel, tijdenVan, verwijderdeDagen, WEEKDAG_NAMEN, type MapOverzicht,
+  bouwWeek, dagenVanWeek, exportDagen, mapOverzicht, normPlaats, sorteerOpTijd, tijdLabel, tijdenVan, verwijderdeDagen, WEEKDAG_NAMEN, type MapOverzicht, isDenHaag, TIJDEN_VERSIE
 } from "../lib/schouw";
 import { exporteerSchouwPlanning } from "../lib/schouwExcel";
 
@@ -150,6 +150,15 @@ function MapDetail({ overzicht, terug }: { overzicht: MapOverzicht; terug: () =>
     }
     return [...t.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   }, [afspraken]);
+
+  // Eenmalig voor Den Haag: eerder opgeslagen tijdvakken van deze en latere weken vervallen, zodat de
+  // nieuwe vaste indeling (8.00/8.45/9.15 niet op maandag) overal geldt. Afgelopen weken blijven staan.
+  useEffect(() => {
+    if (!record || (record.tijdenVersie ?? 0) >= TIJDEN_VERSIE || !isDenHaag(record.naam)) return;
+    const huidige = weekStartISO(vandaagISO());
+    const weken = Object.fromEntries(Object.entries(record.weken ?? {}).filter(([ma]) => ma < huidige));
+    updateSchouwMap(record.id, { weken, tijdenVersie: TIJDEN_VERSIE });
+  }, [record, updateSchouwMap]);
 
   if (!currentUser) return null;
   const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr";

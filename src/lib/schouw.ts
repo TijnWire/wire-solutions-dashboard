@@ -51,8 +51,21 @@ const PLAATS_TIJDEN: Record<string, { maandag: string[]; werkdag: string[] }> = 
 // Dagen (ISO) die in de week van `maandag` zijn verwijderd, bijvoorbeeld door een feestdag of een vrije dag.
 export const verwijderdeDagen = (map: SchouwMap | undefined, maandag: string): string[] => map?.verwijderdeDagen?.[maandag] ?? [];
 
+// De vaste indeling van een plaats. Herkent ook varianten als "Den Haag Centrum" of "Rotterdam-Zuid".
+export const plaatsIndeling = (plaats?: string): { maandag: string[]; werkdag: string[] } | undefined => {
+  const n = plaats ? normPlaats(plaats) : "";
+  if (!n) return undefined;
+  if (PLAATS_TIJDEN[n]) return PLAATS_TIJDEN[n];
+  const sleutel = Object.keys(PLAATS_TIJDEN).find((k) => n.includes(k));
+  return sleutel ? PLAATS_TIJDEN[sleutel] : undefined;
+};
+export const isDenHaag = (plaats?: string): boolean => plaatsIndeling(plaats) === DEN_HAAG;
+
+// Versie van de vaste tijdvakken; ophogen zodra een plaats nieuwe tijden krijgt (zie Schouwafspraken).
+export const TIJDEN_VERSIE = 1;
+
 export const standaardTijden = (dagIndex: number, plaats?: string): string[] => {
-  const eigen = plaats ? PLAATS_TIJDEN[normPlaats(plaats)] : undefined;
+  const eigen = plaatsIndeling(plaats);
   if (eigen) return [...(dagIndex === 0 ? eigen.maandag : eigen.werkdag)];
   return [...(dagIndex === 0 ? STANDAARD_TIJDEN_MAANDAG : STANDAARD_TIJDEN)];
 };
