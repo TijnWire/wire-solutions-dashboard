@@ -50,7 +50,7 @@ export async function postClaude(_apiKey: string, body: Record<string, unknown>,
     return { ok: false, status: 0, fout: "Kon de AI-dienst niet bereiken. Controleer je internetverbinding." };
   }
   if (res.status === 503) {
-    return { ok: false, status: 503, fout: "De AI staat nog niet aan op de server. Vraag de beheerder de OpenRouter-sleutel in te stellen." };
+    return { ok: false, status: 503, fout: "AI staat nog niet aan: op de server is nog geen OpenRouter-sleutel ingesteld (eenmalig door de eigenaar, zie Instellingen)." };
   }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) return { ok: false, status: res.status, fout: (data as { error?: string | { message?: string } })?.error && typeof (data as { error?: unknown }).error === "object" ? ((data as { error: { message?: string } }).error.message || `AI-fout (status ${res.status}).`) : ((data as { error?: string }).error || `AI-fout (status ${res.status}).`) };

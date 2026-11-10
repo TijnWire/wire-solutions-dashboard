@@ -79,7 +79,7 @@ const base64Van = (dataUrl: string) => {
 };
 
 function foutTekst(status: number, detail: string): string {
-  if (status === 503) return "De AI staat nog niet aan op de server. Vraag de beheerder de OpenRouter-sleutel in te stellen.";
+  if (status === 503) return "AI staat nog niet aan: op de server is nog geen OpenRouter-sleutel ingesteld (eenmalig door de eigenaar, zie Instellingen).";
   if (status === 401 || status === 403) return "Geen toegang tot de AI. Log opnieuw in.";
   if (status === 413) return "Het bestand is te groot voor de AI. Probeer een kleiner of gesplitst bestand.";
   if (status === 429) return "Te veel AI-aanvragen tegelijk. Wacht even en probeer opnieuw.";

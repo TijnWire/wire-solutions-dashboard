@@ -8,6 +8,9 @@ import {
   type ImportRij, type Mapping, type Raster,
 } from "../lib/bodemImport";
 import { leesAdressenViaAi } from "../lib/saneerAiImport";
+import { leesPdfAlsRaster } from "../lib/pdfRaster";
+import type { ChecklistGegevens } from "../lib/checklistScan";
+import { useApp } from "../store/AppContext";
 import { aiBeschikbaar } from "../lib/aiTransport";
 import { haalMapping, stuurAdressen, type FlowAdres } from "../lib/saneerflowWerk";
 import { zoekPostcodes } from "../lib/postcodeZoeker";
@@ -57,6 +60,7 @@ export function SaneerImport({ dossier, aantalNu, bestaandeAdressen, onKlaar }: 
   bestaandeAdressen?: { straat: string; huisnummer: string; toevoeging?: string; postcode: string }[];
   onKlaar: () => void;
 }) {
+  const { addSaneerChecklist } = useApp();
   const invoer = useRef<HTMLInputElement>(null);
   const aiInvoer = useRef<HTMLInputElement>(null);
   const [scan, setScan] = useState<ScanStap | null>(null);
@@ -83,20 +87,30 @@ export function SaneerImport({ dossier, aantalNu, bestaandeAdressen, onKlaar }: 
     setScan("lezen");
     await adem(350);
 
-    const gelezen = await leesRaster(file);
+    // PDF's lezen we zonder AI uit (checklist, Stedin-brieven of een tabel); al het andere als Excel/CSV.
+    const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
+    const pdf = isPdf ? await leesPdfAlsRaster(file) : null;
+    const gelezen = pdf ?? await leesRaster(file);
     if (!gelezen.ok) { setScan(null); setFout(gelezen.fout); return; }
     const raster: Raster = gelezen.raster;
+    const vasteMapping: Mapping | undefined = pdf?.ok ? pdf.mapping : undefined;
+    // Een ingelezen checklist bewaren we ook als geheel bij dit dossier (te vinden onder Checklists).
+    const cl: ChecklistGegevens | undefined = pdf?.ok ? pdf.checklist : undefined;
+    if (cl) {
+      const nu = new Date().toISOString();
+      addSaneerChecklist({ id: `cl-${Math.random().toString(36).slice(2, 10)}`, aangemaakt: nu, bijgewerktOp: nu, bron: "pdf", bestandNaam: file.name, pdNummer: dossier.pd_nummer, velden: cl.velden, bewoners: cl.bewoners, opmerkingen: cl.opmerkingen });
+    }
 
     setScan("herkennen");
     await adem(450);
     // De indeling van de vorige aanlevering van dezelfde opdrachtgever is een voorstel, geen wet:
     // klopt hij niet met dit bestand, dan wint wat we zelf in de kolommen herkennen.
     const zelf = raadKop(raster);
-    const onthouden = await haalMapping(dossier.opdrachtgever ?? "");
-    const kopIndex = onthouden.mapping && !herkenningCompleet(zelf.mapping) ? (onthouden.kopIndex ?? 0) : zelf.kopIndex;
-    const mapping: Mapping = onthouden.mapping && !herkenningCompleet(zelf.mapping)
+    const onthouden = vasteMapping ? { mapping: null } : await haalMapping(dossier.opdrachtgever ?? "");
+    const kopIndex = vasteMapping ? 0 : onthouden.mapping && !herkenningCompleet(zelf.mapping) ? (onthouden.kopIndex ?? 0) : zelf.kopIndex;
+    const mapping: Mapping = vasteMapping ?? (onthouden.mapping && !herkenningCompleet(zelf.mapping)
       ? (onthouden.mapping as Mapping)
-      : zelf.mapping;
+      : zelf.mapping);
 
     setScan("sorteren");
     await adem(450);
@@ -270,9 +284,9 @@ export function SaneerImport({ dossier, aantalNu, bestaandeAdressen, onKlaar }: 
 
   return (
     <div className="space-y-4">
-      <input ref={invoer} type="file" accept=".xlsx,.xls,.csv" className="hidden"
+      <input ref={invoer} type="file" accept=".xlsx,.xls,.csv,.pdf,application/pdf" className="hidden"
         onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void kies(f); }} />
-      <input ref={aiInvoer} type="file" accept=".pdf,.csv,.txt,image/*" className="hidden"
+      <input ref={aiInvoer} type="file" accept="image/*" className="hidden"
         onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void kiesAi(f); }} />
 
       {aantalNu > 0 && !klaar && !scan && (
@@ -340,19 +354,19 @@ export function SaneerImport({ dossier, aantalNu, bestaandeAdressen, onKlaar }: 
             {aantalNu > 0 ? "Sleep nog een bestand hierheen of klik om te kiezen" : "Sleep het bestand hierheen of klik om te kiezen"}
           </div>
           <div className="mt-1 text-sm text-ink-500">
-            Excel (.xlsx, .xls) of CSV — de kolommen worden zelf herkend. PDF of ander bestand? Gebruik de AI-knop hieronder.
+            Excel (.xlsx, .xls), CSV of PDF (zoals de Checklist Consument Saneren of Stedin-brieven) — de gegevens worden zelf herkend en in het systeem gezet.
           </div>
         </div>
       )}
 
-      {/* Extra manieren om adressen toe te voegen: AI voor PDF/rommelige bestanden, en handmatig. */}
+      {/* Extra manieren om adressen toe te voegen: AI voor foto's, en handmatig. */}
       {!klaar && !scan && !handmatig && (
         <div className="flex flex-col gap-2 sm:flex-row">
-          <button type="button" onClick={() => { if (aiBeschikbaar()) aiInvoer.current?.click(); else setFout("De AI staat nog niet aan op de server. Vraag de beheerder de OpenRouter-sleutel in te stellen."); }}
+          <button type="button" onClick={() => { if (aiBeschikbaar()) aiInvoer.current?.click(); else setFout("Foto's uitlezen kan alleen als je online bent ingelogd."); }}
             disabled={aiBezig}
             className={`${knop} flex-1 border-2 border-dashed border-brand-300 bg-brand-50/50 text-brand-800 hover:bg-brand-50 disabled:opacity-60`}>
             {aiBezig ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-            {aiBezig ? "AI leest het bestand…" : "PDF of rommelig bestand? Laat de AI het uitlezen"}
+            {aiBezig ? "AI leest de foto…" : "Geen PDF of rommelig bestand? Laat AI een foto uitlezen"}
           </button>
           <button type="button" onClick={() => { setFout(""); setHandmatig(true); }}
             className={`${knop} border border-ink-200 bg-white text-ink-700 hover:bg-ink-50 sm:flex-none`}>
