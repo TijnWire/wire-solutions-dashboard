@@ -1460,21 +1460,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hydrated, rondes]);
+  // Ook Oesterbank 19 is op verzoek van de eigenaar uit Saneren gehaald (11-11-2026).
+  const WEG_UIT_SANEREN = /riedermorgen|oesterbank\s*19(?!\d)/i;
   useEffect(() => {
     if (!hydrated) return;
-    for (const s of saneringen) if (/riedermorgen/i.test(`${s.naam} ${s.regio}`)) deleteSanering(s.id);
+    for (const s of saneringen) {
+      const enigAdres = s.adressen?.length === 1 ? `${s.adressen[0].straat} ${s.adressen[0].huisnummer}` : "";
+      if (WEG_UIT_SANEREN.test(`${s.naam} ${s.regio} ${enigAdres}`)) deleteSanering(s.id);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hydrated, saneringen]);
-  // Saneerdossiers staan op de server: een eigenaar/beheerder ruimt Riedermorgen daar op (één keer per sessie).
+  useEffect(() => {
+    if (!hydrated) return;
+    for (const c of saneerChecklists) if (WEG_UIT_SANEREN.test(Object.values(c.velden ?? {}).join(" "))) deleteSaneerChecklist(c.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated, saneerChecklists]);
+  // Saneerdossiers staan op de server: een eigenaar/beheerder ruimt ze daar op (één keer per sessie).
   useEffect(() => {
     if (!supabaseAan || !currentUser || !["eigenaar", "beheer", "hr"].includes(currentUser.rol)) return;
-    try { if (sessionStorage.getItem("wire.opruim.riedermorgen")) return; sessionStorage.setItem("wire.opruim.riedermorgen", "1"); } catch { /* geen opslag: gewoon proberen */ }
+    try { if (sessionStorage.getItem("wire.opruim.saneren2")) return; sessionStorage.setItem("wire.opruim.saneren2", "1"); } catch { /* geen opslag: gewoon proberen */ }
     void (async () => {
       const { haalDossiers, verwijderDossier } = await import("../lib/saneerflow");
       for (const d of await haalDossiers()) {
-        if (/riedermorgen/i.test(`${d.gebouw} ${d.omschrijving} ${d.pd_nummer}`)) await verwijderDossier(d.pd_nummer);
+        if (WEG_UIT_SANEREN.test(`${d.gebouw} ${d.omschrijving} ${d.pd_nummer}`)) await verwijderDossier(d.pd_nummer);
       }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser]);
 
   const addBuurtaanpak: AppState["addBuurtaanpak"] = (b) => {
