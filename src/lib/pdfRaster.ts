@@ -6,7 +6,7 @@
 //  2. Stedin-afschakelbrieven ("Aan de bewoners van …") → één adres per brief.
 //  3. Elke andere PDF met een tabel → regels en kolommen op basis van waar de tekst op de pagina staat.
 // Een gescande PDF (alleen een plaatje) heeft geen tekst; daarvoor is de foto-knop met AI.
-import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+import workerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 import type { Mapping, Raster } from "./bodemImport";
 import { leesChecklistTekstPdf, type ChecklistGegevens } from "./checklistScan";
 import { leesPdfTekst } from "./extract/pdfTekst";
@@ -35,7 +35,7 @@ let pdfjsKlaar: Promise<typeof import("pdfjs-dist")> | null = null;
 async function laadPdfjs() {
   if (!pdfjsKlaar) {
     pdfjsKlaar = (async () => {
-      const pdfjs = await import("pdfjs-dist");
+      const pdfjs = (await import("pdfjs-dist/legacy/build/pdf.mjs")) as unknown as typeof import("pdfjs-dist"); // legacy-build: werkt ook in oudere Safari (iPhone/iPad)
       pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
       return pdfjs;
     })();
