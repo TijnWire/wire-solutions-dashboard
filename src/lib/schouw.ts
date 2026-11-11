@@ -30,17 +30,26 @@ export function weekJaar(maandag: string): number {
   return d.getFullYear();
 }
 
-// Rotterdam werkt met halfuurvakken (planning week 44): maandag 10.00 t/m 15.30, dinsdag t/m vrijdag
-// 9.00 t/m 15.30, telkens zonder de middagpauze tussen 11.30 en 13.00.
-const ROTTERDAM_MAANDAG = ["10:00", "10:30", "11:00", "11:30", "13:00", "13:30", "14:00", "14:30", "15:00", "15:30"];
-const ROTTERDAM_WERKDAG = ["09:00", "09:30", ...ROTTERDAM_MAANDAG];
+// Rotterdam: maandag 10.30, 11.30, 13.30 en 15.00; dinsdag t/m donderdag komt daar 9.00 bij. Op vrijdag
+// worden geen afspraken ingepland. Elke dag heeft twee planningen met dezelfde tijdvakken; op de Stedin-
+// planning staat tussen de twee een oranje balk.
+const ROTTERDAM_MAANDAG = ["10:30", "11:30", "13:30", "15:00"];
+const ROTTERDAM_WERKDAG = ["09:00", ...ROTTERDAM_MAANDAG];
 // Den Haag: 8.00, 8.45 en 9.15 alleen dinsdag t/m vrijdag; daarna 10.00, 10.30, 11.30, 13.00, 13.45,
 // 14.15 en 15.15 (ook op maandag).
 const DEN_HAAG_MAANDAG = ["10:00", "10:30", "11:30", "13:00", "13:45", "14:15", "15:15"];
 const DEN_HAAG_WERKDAG = ["08:00", "08:45", "09:15", ...DEN_HAAG_MAANDAG];
-const DEN_HAAG = { maandag: DEN_HAAG_MAANDAG, werkdag: DEN_HAAG_WERKDAG };
-const PLAATS_TIJDEN: Record<string, { maandag: string[]; werkdag: string[] }> = {
-  rotterdam: { maandag: ROTTERDAM_MAANDAG, werkdag: ROTTERDAM_WERKDAG },
+export type PlaatsIndeling = {
+  maandag: string[];
+  werkdag: string[];
+  geenVrijdag?: boolean;  // vrijdag staat niet in het raster (tenzij er toch iets op staat)
+  tweeBlokken?: boolean;  // twee planningen per dag, gescheiden door een oranje balk
+  versie: number;         // ophogen zodra deze plaats nieuwe vaste tijden krijgt (zie Schouwafspraken)
+};
+const DEN_HAAG: PlaatsIndeling = { maandag: DEN_HAAG_MAANDAG, werkdag: DEN_HAAG_WERKDAG, versie: 1 };
+const ROTTERDAM: PlaatsIndeling = { maandag: ROTTERDAM_MAANDAG, werkdag: ROTTERDAM_WERKDAG, geenVrijdag: true, tweeBlokken: true, versie: 2 };
+const PLAATS_TIJDEN: Record<string, PlaatsIndeling> = {
+  rotterdam: ROTTERDAM,
   "den haag": DEN_HAAG,
   "'s-gravenhage": DEN_HAAG,
   "s-gravenhage": DEN_HAAG,
@@ -52,21 +61,24 @@ const PLAATS_TIJDEN: Record<string, { maandag: string[]; werkdag: string[] }> = 
 export const verwijderdeDagen = (map: SchouwMap | undefined, maandag: string): string[] => map?.verwijderdeDagen?.[maandag] ?? [];
 
 // De vaste indeling van een plaats. Herkent ook varianten als "Den Haag Centrum" of "Rotterdam-Zuid".
-export const plaatsIndeling = (plaats?: string): { maandag: string[]; werkdag: string[] } | undefined => {
+export const plaatsIndeling = (plaats?: string): PlaatsIndeling | undefined => {
   const n = plaats ? normPlaats(plaats) : "";
   if (!n) return undefined;
   if (PLAATS_TIJDEN[n]) return PLAATS_TIJDEN[n];
   const sleutel = Object.keys(PLAATS_TIJDEN).find((k) => n.includes(k));
   return sleutel ? PLAATS_TIJDEN[sleutel] : undefined;
 };
-export const isDenHaag = (plaats?: string): boolean => plaatsIndeling(plaats) === DEN_HAAG;
-
-// Versie van de vaste tijdvakken; ophogen zodra een plaats nieuwe tijden krijgt (zie Schouwafspraken).
-export const TIJDEN_VERSIE = 1;
+export const heeftTweeBlokken = (plaats?: string): boolean => !!plaatsIndeling(plaats)?.tweeBlokken;
+export const geenVrijdag = (plaats?: string): boolean => !!plaatsIndeling(plaats)?.geenVrijdag;
+// Versie van de vaste tijdvakken van een plaats (0 = geen eigen indeling).
+export const tijdenVersie = (plaats?: string): number => plaatsIndeling(plaats)?.versie ?? 0;
 
 export const standaardTijden = (dagIndex: number, plaats?: string): string[] => {
   const eigen = plaatsIndeling(plaats);
-  if (eigen) return [...(dagIndex === 0 ? eigen.maandag : eigen.werkdag)];
+  if (eigen) {
+    if (dagIndex === 4 && eigen.geenVrijdag) return [];
+    return [...(dagIndex === 0 ? eigen.maandag : eigen.werkdag)];
+  }
   return [...(dagIndex === 0 ? STANDAARD_TIJDEN_MAANDAG : STANDAARD_TIJDEN)];
 };
 
@@ -84,12 +96,13 @@ export const tijdLabel = (t: string): string => {
   return m ? `${Number(m[1])}.${m[2]}` : t || "";
 };
 
-export type SchouwRegel = { tijd: string; afspraken: Schouwafspraak[]; eigenVak: boolean };
+export type SchouwRegel = { tijd: string; afspraken: Schouwafspraak[]; eigenVak: boolean; blok: 1 | 2 };
 export type SchouwDag = { datum: string; dagIndex: number; naam: string; regels: SchouwRegel[] };
 
 // Bouwt de week: per dag de tijdvakken, met de afspraken die erin vallen. Een afspraak met een tijd die
 // niet in de vakken zit (of zonder tijd) krijgt een eigen regel, zodat er nooit iets verdwijnt.
-// Zaterdag en zondag verschijnen alleen als er iets op staat.
+// Zaterdag en zondag verschijnen alleen als er iets op staat (net als vrijdag bij plaatsen zonder vrijdag).
+// Plaatsen met twee planningen per dag krijgen de tijdvakken twee keer: eerst planning 1, dan planning 2.
 export function bouwWeek(map: SchouwMap | undefined, maandag: string, afspraken: Schouwafspraak[], plaats: string | undefined = map?.naam): SchouwDag[] {
   const perDag = new Map<string, Schouwafspraak[]>();
   for (const a of afspraken) {
@@ -100,27 +113,36 @@ export function bouwWeek(map: SchouwMap | undefined, maandag: string, afspraken:
   }
   const uit: SchouwDag[] = [];
   const weg = new Set(verwijderdeDagen(map, maandag));
+  const twee = heeftTweeBlokken(plaats);
+  const zonderVrijdag = geenVrijdag(plaats);
   dagenVanWeek(maandag).forEach((iso, i) => {
     const opDag = perDag.get(iso) ?? [];
-    if (i >= 5 && opDag.length === 0) return;
+    const eigenVrijdag = i === 4 && zonderVrijdag && !map?.weken?.[maandag]?.[iso];
+    if ((i >= 5 || eigenVrijdag) && opDag.length === 0) return;
     // Een verwijderde dag verdwijnt uit het raster en dus ook uit de Excel. Staat er toch een afspraak
     // op (later alsnog ingevuld), dan blijft de dag staan, zodat er nooit iets uit de planning valt.
     if (weg.has(iso) && opDag.length === 0) return;
     const vakken = i >= 5 ? [] : tijdenVan(map, maandag, iso, i, plaats);
-    const tijden = new Set<string>(vakken);
-    for (const a of opDag) tijden.add(a.tijd || "");
-    const regels = [...tijden].sort(sorteerOpTijd).map((t) => ({
-      tijd: t,
-      afspraken: opDag.filter((a) => (a.tijd || "") === t),
-      eigenVak: vakken.includes(t),
-    }));
+    const blokRegels = (blok: 1 | 2, lijst: Schouwafspraak[]): SchouwRegel[] => {
+      const tijden = new Set<string>(vakken);
+      for (const a of lijst) tijden.add(a.tijd || "");
+      return [...tijden].sort(sorteerOpTijd).map((t) => ({
+        tijd: t,
+        afspraken: lijst.filter((a) => (a.tijd || "") === t),
+        eigenVak: vakken.includes(t),
+        blok,
+      }));
+    };
+    const regels = twee
+      ? [...blokRegels(1, opDag.filter((a) => a.blok !== 2)), ...blokRegels(2, opDag.filter((a) => a.blok === 2))]
+      : blokRegels(1, opDag);
     uit.push({ datum: iso, dagIndex: i, naam: WEEKDAG_NAMEN[i], regels });
   });
   return uit;
 }
 
 // ── Excel ──
-export type SchouwExportRegel = { tijd: string; straat: string; huisnummer: string; telefoon: string; opmerking: string };
+export type SchouwExportRegel = { tijd: string; straat: string; huisnummer: string; telefoon: string; opmerking: string; blok?: 1 | 2 };
 export type SchouwExportDag = { datum: string; naam: string; regels: SchouwExportRegel[] };
 
 // Zet de week om in precies de rijen die op de Stedin-planning komen. Geannuleerde afspraken staan er niet
@@ -132,8 +154,8 @@ export function exportDagen(week: SchouwDag[]): SchouwExportDag[] {
       naam: d.naam,
       regels: d.regels.flatMap<SchouwExportRegel>((r) => {
         const actief = r.afspraken.filter((a) => a.status !== "Geannuleerd");
-        if (actief.length === 0) return r.eigenVak ? [{ tijd: r.tijd, straat: "", huisnummer: "", telefoon: "", opmerking: "" }] : [];
-        return actief.map((a) => ({ tijd: r.tijd, straat: a.straat.trim(), huisnummer: a.huisnummer.trim(), telefoon: a.telefoon.trim(), opmerking: a.notitie.trim() }));
+        if (actief.length === 0) return r.eigenVak ? [{ tijd: r.tijd, straat: "", huisnummer: "", telefoon: "", opmerking: "", blok: r.blok }] : [];
+        return actief.map((a) => ({ tijd: r.tijd, straat: a.straat.trim(), huisnummer: a.huisnummer.trim(), telefoon: a.telefoon.trim(), opmerking: a.notitie.trim(), blok: r.blok }));
       }),
     }))
     // Een weekdag blijft altijd staan (ook zonder regels); het weekend alleen als er echt iets op staat.

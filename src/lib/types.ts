@@ -494,6 +494,7 @@ export type Schouwafspraak = {
   telefoon: string;
   datum: string; // ISO datum ("" = nog niet ingepland)
   tijd: string;  // "HH:MM" ("" = geen tijd)
+  blok?: 2; // tweede planning van de dag (Rotterdam); leeg = eerste planning
   toegewezenAan?: string; // user id van de schouwer
   extraToegewezen?: string[]; // overige medewerkers naast toegewezenAan (zie lib/toewijzing.ts)
   status: SchouwStatus;

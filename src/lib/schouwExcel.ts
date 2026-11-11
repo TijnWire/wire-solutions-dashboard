@@ -34,6 +34,14 @@ export async function bouwSchouwWerkboek(
     return m;
   };
   const stijl = { eersteDag: pak(RIJ.eersteDag), dag: pak(RIJ.dag), eersteRegelMaandag: pak(RIJ.eersteRegelMaandag), eersteRegel: pak(RIJ.eersteRegel), regel: pak(RIJ.regel), laatsteRegel: pak(RIJ.laatsteRegel) };
+  // Oranje tussenbalk tussen de twee planningen van een dag (Rotterdam): de dagbalk, maar dan oranje en leeg.
+  const ORANJE = "FFFFC000";
+  const tussen: Record<number, unknown> = {};
+  for (let c = KOL_VAN; c <= KOL_TOT; c++) {
+    const st = kloon(stijl.dag[c]) as { fill?: unknown };
+    st.fill = { type: "pattern", pattern: "solid", fgColor: { argb: ORANJE }, bgColor: { indexed: 64 } };
+    tussen[c] = st;
+  }
   const dagHoogte = ws.getRow(RIJ.eersteDag).height || 15.75;
   const origEinde = Math.max(ws.rowCount, RIJ.laatsteRegel);
 
@@ -71,8 +79,15 @@ export async function bouwSchouwWerkboek(
     // Een dag zonder regels krijgt toch één lege regel, zodat het kader netjes sluit.
     const regels = dag.regels.length ? dag.regels : [{ tijd: "", straat: "", huisnummer: "", telefoon: "", opmerking: "" }];
     regels.forEach((x, i) => {
+      // Begin van de tweede planning: eerst de oranje balk (zonder plaatsnaam of tekst).
+      const tweedeStart = x.blok === 2 && (i === 0 || regels[i - 1].blok !== 2);
+      if (tweedeStart) {
+        zetRij(r, tussen);
+        ws.getRow(r).height = dagHoogte;
+        r++;
+      }
       const laatste = di === o.dagen.length - 1 && i === regels.length - 1;
-      zetRij(r, laatste ? stijl.laatsteRegel : i === 0 ? (di === 0 ? stijl.eersteRegelMaandag : stijl.eersteRegel) : stijl.regel);
+      zetRij(r, laatste ? stijl.laatsteRegel : i === 0 || tweedeStart ? (di === 0 && !tweedeStart ? stijl.eersteRegelMaandag : stijl.eersteRegel) : stijl.regel);
       if (x.tijd) ws.getCell(r, KOL.tijd).value = tijdLabel(x.tijd);
       if (x.straat) ws.getCell(r, KOL.straat).value = x.straat;
       // Alleen cijfers → als getal (zoals in het voorbeeld); "142B" of "90 & 92" blijft tekst.
@@ -81,7 +96,7 @@ export async function bouwSchouwWerkboek(
       if (x.telefoon) ws.getCell(r, KOL.telefoon).value = x.telefoon;
       if (x.opmerking) ws.getCell(r, KOL.opmerking).value = x.opmerking;
       // Net als in het voorbeeld is de laatste regel van een dag (met de dikke onderrand) iets hoger.
-      if (i === regels.length - 1) ws.getRow(r).height = dagHoogte;
+      if (i === regels.length - 1 || regels[i + 1]?.blok !== x.blok) ws.getRow(r).height = dagHoogte;
       r++;
     });
   });
