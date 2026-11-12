@@ -6,7 +6,7 @@
 //  2. Een foto, een gescande PDF zonder tekst, of als route 1 te weinig oplevert: de afbeelding gaat via
 //     de AI-proxy (lib/aiTransport) naar een multimodaal model, dat de velden via een vast schema teruggeeft.
 // Het resultaat is altijd een voorstel: de medewerker ziet alles op een pagina en kan het aanpassen.
-import workerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
+import { laadPdfjs } from "./pdfjsLaden";
 import { postClaude, aiBeschikbaar } from "./aiTransport";
 import { CHECKLIST_ANKERS, CHECKLIST_OPMERKINGEN, CHECKLIST_TABEL, CHECKLIST_VELDEN, type ChecklistVeld } from "./checklistVelden";
 import type { ChecklistBewoner } from "./types";
@@ -31,17 +31,6 @@ export function kiesOptie(veld: ChecklistVeld, waarde: string): string {
 }
 
 // ── Route 1: tekst-PDF ──
-let pdfjsKlaar: Promise<typeof import("pdfjs-dist")> | null = null;
-async function laadPdfjs() {
-  if (!pdfjsKlaar) {
-    pdfjsKlaar = (async () => {
-      const pdfjs = (await import("pdfjs-dist/legacy/build/pdf.mjs")) as unknown as typeof import("pdfjs-dist"); // legacy-build: werkt ook in oudere Safari (iPhone/iPad)
-      pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
-      return pdfjs;
-    })();
-  }
-  return pdfjsKlaar;
-}
 
 type Stukje = { tekst: string; x0: number; x1: number; ym: number };
 

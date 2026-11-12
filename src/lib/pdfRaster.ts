@@ -6,7 +6,7 @@
 //  2. Stedin-afschakelbrieven ("Aan de bewoners van …") → één adres per brief.
 //  3. Elke andere PDF met een tabel → regels en kolommen op basis van waar de tekst op de pagina staat.
 // Een gescande PDF (alleen een plaatje) heeft geen tekst; daarvoor is de foto-knop met AI.
-import workerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
+import { laadPdfjs } from "./pdfjsLaden";
 import type { Mapping, Raster } from "./bodemImport";
 import { leesChecklistTekstPdf, type ChecklistGegevens } from "./checklistScan";
 import { leesPdfTekst } from "./extract/pdfTekst";
@@ -31,17 +31,6 @@ function splitsNummer(nr: string): [string, string] {
   return m ? [m[1], m[2].trim()] : [nr.trim(), ""];
 }
 
-let pdfjsKlaar: Promise<typeof import("pdfjs-dist")> | null = null;
-async function laadPdfjs() {
-  if (!pdfjsKlaar) {
-    pdfjsKlaar = (async () => {
-      const pdfjs = (await import("pdfjs-dist/legacy/build/pdf.mjs")) as unknown as typeof import("pdfjs-dist"); // legacy-build: werkt ook in oudere Safari (iPhone/iPad)
-      pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
-      return pdfjs;
-    })();
-  }
-  return pdfjsKlaar;
-}
 
 // Route 3: tekst op positie → regels en kolommen.
 async function tabelUitPdf(file: File): Promise<string[][]> {
@@ -114,7 +103,7 @@ export async function leesPdfAlsRaster(file: File): Promise<PdfRasterUitkomst> {
     const rijen = await tabelUitPdf(file);
     if (rijen.length < 2) return { ok: false, fout: "In deze PDF staat geen leesbare tekst. Is het een scan of foto? Gebruik dan de foto-knop (AI)." };
     return { ok: true, soort: "tabel", raster: { rijen, bladNamen: ["PDF"], blad: "PDF" } };
-  } catch {
-    return { ok: false, fout: "Kon de PDF niet lezen." };
+  } catch (e) {
+    return { ok: false, fout: `Kon de PDF niet lezen${e instanceof Error && e.message ? ` (${e.message})` : ""}.` };
   }
 }

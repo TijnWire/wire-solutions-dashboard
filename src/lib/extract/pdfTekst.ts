@@ -4,21 +4,10 @@
 //   <straat> <huisnummer> [toevoeging]
 //   <postcode> <PLAATS>
 // We lezen de tekst van álle pagina's uit en halen elk adres-blok eruit.
-import workerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
+import { laadPdfjs } from "../pdfjsLaden";
 import { netjesPlaats } from "../brieven";
 import type { RuweRij } from "./types";
 
-let pdfjsKlaar: Promise<typeof import("pdfjs-dist")> | null = null;
-async function laadPdfjs() {
-  if (!pdfjsKlaar) {
-    pdfjsKlaar = (async () => {
-      const pdfjs = (await import("pdfjs-dist/legacy/build/pdf.mjs")) as unknown as typeof import("pdfjs-dist"); // legacy-build: werkt ook in oudere Safari (iPhone/iPad)
-      pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
-      return pdfjs;
-    })();
-  }
-  return pdfjsKlaar;
-}
 
 // Het adres-blok: na "Aan de bewoners van" komt straat+nr(+toevoeging), dan postcode + plaats,
 // tot aan het volgende vaste kopje van de brief.
