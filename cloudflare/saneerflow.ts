@@ -27,7 +27,8 @@ export const DOSSIER_STATUSSEN = [
 ] as const;
 export type DossierStatus = (typeof DOSSIER_STATUSSEN)[number];
 
-export const REGIOS = ["Zuid", "Noord"] as const;
+// "Zuid" en "Noord" blijven geldig voor oudere app-versies; nieuwe dossiers kiezen Den Haag, Rotterdam of Utrecht.
+export const REGIOS = ["Den Haag", "Rotterdam", "Utrecht", "Zuid", "Noord"] as const;
 
 // Velden die de gebruiker mag zetten bij aanmaken of bijwerken.
 const INVOER = [
@@ -113,7 +114,7 @@ export async function saneerRoutes(
 
     const regio = String(body.regio ?? "");
     if (!bijwerken && !REGIOS.includes(regio as (typeof REGIOS)[number])) {
-      return json({ error: "Kies een regio: Zuid of Noord." }, 400);
+      return json({ error: "Kies een regio: Den Haag, Rotterdam of Utrecht." }, 400);
     }
     const van = String(body.uitvoering_van ?? ""), tot = String(body.uitvoering_tot ?? "");
     if (van && tot && van > tot) return json({ error: "De uitvoeringsperiode eindigt vóór hij begint." }, 400);

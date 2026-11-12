@@ -59,10 +59,7 @@ const speelruimteTot = (dag: string) => {
 
 // ── Nieuw dossier ──
 function NieuwDossier({ onKlaar, onAnnuleer }: { onKlaar: (pd: string) => void; onAnnuleer: () => void }) {
-  const [cijfers, setCijfers] = useState("");
-  const pd = cijfers ? `PD${cijfers}` : "";
   const [regio, setRegio] = useState<Regio | "">("");
-  const [opdrachtgever, setOpdrachtgever] = useState("");
   const [gebouw, setGebouw] = useState("");
   const [omschrijving, setOmschrijving] = useState("");
   const [dag, setDag] = useState("");
@@ -70,22 +67,27 @@ function NieuwDossier({ onKlaar, onAnnuleer }: { onKlaar: (pd: string) => void; 
   const [fout, setFout] = useState("");
   const [washerstel, setWasHerstel] = useState(false);
 
-  const pdNet = netPd(pd);
-  const pdFoutief = cijfers.length > 0 && !pdGeldig(pd);
+  // Het PD-nummer vul je niet meer zelf in: de app geeft elk dossier een eigen nummer (de sleutel
+  // waaronder alles bij elkaar blijft). De opdrachtgever is altijd Stedin.
+  const [pdNet] = useState(() => netPd(`PD${Date.now()}`));
 
   const bewaar = async (herstelEerst = false) => {
     setFout("");
-    if (!pdGeldig(pd)) return setFout("Vul de cijfers van het PD-nummer in, bijvoorbeeld 123456.");
+    if (!pdGeldig(pdNet)) return setFout("Er ging iets mis met het dossiernummer. Probeer het opnieuw.");
     if (!regio) return setFout("Kies een regio.");
+    if (!gebouw.trim()) return setFout("Vul de straatnaam en huisnummers in.");
     setBezig(true);
     try {
       if (herstelEerst) await verwijderDossier(pdNet, true);
+      // De server kent (tot de volgende update) alleen Zuid/Noord bij het aanmaken; de gekozen regio
+      // zetten we er daarom direct daarna op. Bijwerken accepteert elke regio.
       const r = await bewaarDossier({
-        pd_nummer: pdNet, regio, opdrachtgever, gebouw, omschrijving,
+        pd_nummer: pdNet, regio: "Zuid", opdrachtgever: "Stedin", gebouw: gebouw.trim(), omschrijving,
         uitvoering_van: dag, uitvoering_tot: speelruimteTot(dag), starttijd: "08:00",
         bijwerken: herstelEerst,
       });
       if (!r.ok) { setFout(r.fout ?? "Niet gelukt."); setWasHerstel(!!r.verwijderd); return; }
+      await bewaarDossier({ pd_nummer: pdNet, regio, bijwerken: true });
       onKlaar(pdNet);
     } finally { setBezig(false); }
   };
@@ -98,32 +100,11 @@ function NieuwDossier({ onKlaar, onAnnuleer }: { onKlaar: (pd: string) => void; 
 
       <div>
         <h2 className="text-2xl font-bold text-ink-900 lg:text-3xl">Nieuw dossier</h2>
-        <p className="text-sm text-ink-500">Alles onder dit PD-nummer hoort bij elkaar en wordt straks in één keer afgeboekt.</p>
+        <p className="text-sm text-ink-500">Alles in dit dossier hoort bij elkaar en wordt straks in één keer afgeboekt. Opdrachtgever: Stedin.</p>
       </div>
 
       <div className="space-y-5 rounded-2xl border border-ink-200 bg-white p-5 shadow-sm lg:grid lg:grid-cols-2 lg:gap-x-8 lg:gap-y-6 lg:space-y-0 lg:p-8">
-        <label className="block lg:col-span-1">
-          <span className={label}>PD-nummer</span>
-          {/* De PD staat er vast voor: die typ je bij elk dossier opnieuw en dat is precies waar
-              typefouten insluipen. Je vult alleen de cijfers in. Plak je een heel nummer ("PD123456"),
-              dan halen we de letters er zelf af. */}
-          <div className={`flex items-stretch overflow-hidden rounded-xl border ${pdFoutief ? "border-amber-400" : "border-ink-200"} focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-100`}>
-            <span className="flex select-none items-center bg-ink-50 px-4 font-mono text-base font-bold tracking-wide text-ink-500">PD</span>
-            <input
-              value={cijfers}
-              onChange={(e) => { setCijfers(e.target.value.replace(/\D/g, "").slice(0, 12)); setFout(""); setWasHerstel(false); }}
-              placeholder="123456"
-              inputMode="numeric"
-              autoComplete="off"
-              className="w-full px-4 py-3 font-mono text-base tracking-wide outline-none"
-            />
-          </div>
-          {pdFoutief
-            ? <span className="mt-1 block text-xs text-amber-700">Vul de cijfers van het PD-nummer in.</span>
-            : pdNet && <span className="mt-1 block text-xs text-ink-500">Wordt opgeslagen als <span className="font-mono font-semibold">{pdNet}</span></span>}
-        </label>
-
-        <div className="lg:col-span-1">
+        <div className="lg:col-span-2">
           <span className={label}>Regio</span>
           <div className="flex gap-2">
             {REGIOS.map((r) => (
@@ -141,16 +122,10 @@ function NieuwDossier({ onKlaar, onAnnuleer }: { onKlaar: (pd: string) => void; 
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:col-span-2">
-          <label className="block">
-            <span className={label}>Opdrachtgever</span>
-            <input value={opdrachtgever} onChange={(e) => setOpdrachtgever(e.target.value)} placeholder="bijv. Stedin" className={veld} />
-          </label>
-          <label className="block">
-            <span className={label}>Gebouw of locatie</span>
-            <input value={gebouw} onChange={(e) => setGebouw(e.target.value)} placeholder="bijv. Kerkstraat 1-40" className={veld} />
-          </label>
-        </div>
+        <label className="block lg:col-span-2">
+          <span className={label}>Straatnaam en huisnummers</span>
+          <input value={gebouw} onChange={(e) => { setGebouw(e.target.value); setFout(""); }} placeholder="bijv. Kerkstraat 1-40" className={veld} />
+        </label>
 
         <label className="block lg:col-span-2">
           <span className={label}>Omschrijving werkzaamheden</span>

@@ -6,7 +6,7 @@
 
 import { cloudGet, cloudPost, cloudDelete } from "./supabase";
 
-export const REGIOS = ["Zuid", "Noord"] as const;
+export const REGIOS = ["Den Haag", "Rotterdam", "Utrecht"] as const;
 export type Regio = (typeof REGIOS)[number];
 
 export const DOSSIER_STATUSSEN = [
