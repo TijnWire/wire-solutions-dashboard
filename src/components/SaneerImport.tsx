@@ -257,15 +257,21 @@ export function SaneerImport({ dossier, aantalNu, bestaandeAdressen, onKlaar }: 
       }
     }
     setFout("");
-    setKlaar((k) => k
-      ? { ...k, goed: [...k.goed, ...rijen], opgezocht: k.opgezocht + opgezocht }
-      : { goed: rijen, afgekeurd: [], bestandsnaam: "Handmatig toegevoegd", mapping: {}, kopIndex: 0, leegAantal: 0, opgezocht });
-    setHandmatig(false);
-    return true;
+    // Staat er al een ingelezen bestand klaar om te controleren, dan komen deze adressen erbij. Anders
+    // gaan ze meteen het dossier in: één klik, geen tweede "toevoegen"-stap die je kunt vergeten.
+    if (klaar) {
+      setKlaar({ ...klaar, goed: [...klaar.goed, ...rijen], opgezocht: klaar.opgezocht + opgezocht });
+      setHandmatig(false);
+      return true;
+    }
+    const gelukt = await verstuur({ goed: rijen, afgekeurd: [], bestandsnaam: "Handmatig toegevoegd", mapping: {}, kopIndex: 0, leegAantal: 0, opgezocht });
+    if (gelukt) setHandmatig(false);
+    return gelukt;
   }
 
-  async function verstuur() {
-    if (!klaar) return;
+  async function verstuur(lijst: typeof klaar = klaar): Promise<boolean> {
+    const klaar = lijst;
+    if (!klaar) return false;
     setBezig(true); setFout("");
     const r = await stuurAdressen({
       pd_nummer: dossier.pd_nummer,
@@ -280,10 +286,11 @@ export function SaneerImport({ dossier, aantalNu, bestaandeAdressen, onKlaar }: 
       })),
     });
     setBezig(false);
-    if (!r.ok) { setFout(r.fout ?? "Versturen mislukt."); return; }
+    if (!r.ok) { setFout(r.fout ?? "Versturen mislukt."); return false; }
     setUitslag(r.uitslag ?? null);
     setKlaar(null);
     onKlaar();
+    return true;
   }
 
   // Een afgekeurde regel alsnog rechtzetten. Zodra hij klopt, schuift hij naar de goede lijst.
@@ -599,11 +606,11 @@ export function HandmatigAdres({ onToevoegen, onAnnuleer }: {
       <div className="mt-3 flex items-center gap-2">
         <button type="button" onClick={toevoegen} disabled={!kanToe}
           className={`${knop} bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-40`}>
-          <Plus className="h-4 w-4" /> {bezig ? "Postcodes opzoeken…" : aantal > 1 ? `${aantal} adressen toevoegen` : "Toevoegen aan de lijst"}
+          <Plus className="h-4 w-4" /> {bezig ? "Bezig met toevoegen…" : aantal > 1 ? `${aantal} adressen toevoegen` : "Adres toevoegen"}
         </button>
         <button type="button" onClick={onAnnuleer} className={`${knop} bg-ink-100 text-ink-700 hover:bg-ink-200`}>Annuleren</button>
       </div>
-      <p className="mt-2 text-xs text-ink-500">Meerdere huisnummers scheid je met een komma; “20-26” is 20, 22, 24 en 26 en “45B-47E” is 45B t/m 45E en 47A t/m 47E. Klopt er een nummer niet, haal het dan weg met het kruisje. Per huisnummer vul je daarna telefoon en bewoner in. Laat je de postcode leeg, dan zoekt de app hem per adres op. De adressen komen in het voorbeeld hieronder — controleer en klik daarna op “toevoegen”.</p>
+      <p className="mt-2 text-xs text-ink-500">Meerdere huisnummers scheid je met een komma; “20-26” is 20, 22, 24 en 26 en “45B-47E” is 45B t/m 45E en 47A t/m 47E. Klopt er een nummer niet, haal het dan weg met het kruisje. Per huisnummer vul je daarna telefoon en bewoner in. Laat je de postcode leeg, dan zoekt de app hem per adres op. De adressen gaan direct het dossier in.</p>
     </div>
   );
 }
