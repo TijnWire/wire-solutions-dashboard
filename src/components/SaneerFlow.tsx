@@ -1,22 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Check, ArrowLeft, ListPlus, Users, StickyNote, FileCheck2,
-  Loader2, AlertTriangle, CalendarCheck, ChevronRight, FileSpreadsheet, FileText, ShieldAlert, ClipboardList,
+  Loader2, AlertTriangle, CalendarCheck, ChevronRight, ShieldAlert,
   Settings, Trash2,
 } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { SaneerWerklijst, WerklijstZeef, type Beeld } from "./SaneerWerklijst";
 import { SaneerImport } from "./SaneerImport";
-import { SaneerChecklists, splitsAdres, adresSleutel } from "./SaneerChecklists";
-import type { SaneerChecklist } from "../lib/types";
 import { SaneerVerdelen, SaneerClusterWerk } from "./SaneerCluster";
 import { haalDossier, bewaarDossier, verwijderDossier, speelruimteTot, STATUS_INFO, type Dossier, type DossierDetail } from "../lib/saneerflow";
 import {
   haalFlowAdressen, haalTaken, vinkTaak, rondDossierAf,
-  haalExport, wijzigFlowAdres, type FlowAdres, type Taak,
+  type FlowAdres, type Taak,
 } from "../lib/saneerflowWerk";
-import { exporteerSaneerExcel, exporteerSaneerPdf } from "../lib/saneerflowExport";
-import { maakChecklists } from "../lib/saneerChecklist";
 
 // Saneren — één dossier, stap voor stap.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -32,12 +28,11 @@ import { maakChecklists } from "../lib/saneerChecklist";
 // Vier regels beeldscherm voordat je één adres zag, en op een telefoon was dat de halve pagina. En
 // erger: "Langs de deur" en "Bellen" waren aparte stappen, terwijl het hetzelfde adres is — vul je
 // aan de deur een nummer in, dan schoof het onder je handen naar een andere pagina.
-type StapKey = "inlezen" | "verdelen" | "checklists" | "poster" | "afronden" | "afboeken" | "instellingen";
+type StapKey = "inlezen" | "verdelen" | "poster" | "afronden" | "afboeken" | "instellingen";
 
 const EXTRAS: { key: StapKey; titel: string; Icon: typeof ListPlus }[] = [
   { key: "inlezen",  titel: "Inlezen",  Icon: ListPlus },
   { key: "verdelen", titel: "Verdelen", Icon: Users },
-  { key: "checklists", titel: "Checklists", Icon: ClipboardList },
   { key: "poster",   titel: "Poster",   Icon: StickyNote },
   { key: "afronden", titel: "Afronden", Icon: FileCheck2 },
   { key: "afboeken", titel: "Afboeken", Icon: FileCheck2 },
@@ -77,7 +72,7 @@ const dagNL = (iso: string) => {
 const kortNL = (iso: string) => (iso ? iso.slice(0, 10).split("-").reverse().map(Number).join("-") : "");
 
 export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void }) {
-  const { users, currentUser, saneerChecklists } = useApp();
+  const { users, currentUser } = useApp();
   const [detail, setDetail] = useState<DossierDetail | null>(null);
   const [adressen, setAdressen] = useState<FlowAdres[]>([]);
   const [taken, setTaken] = useState<Taak[]>([]);
@@ -102,27 +97,6 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
 
   // Gegevens van een checklist naar de adressen van dit dossier: alleen lege namen/telefoons aanvullen,
   // nooit iets overschrijven. Huisnummers die niet in het dossier staan, melden we.
-  const checklistNaarDossier = async (c: SaneerChecklist): Promise<string> => {
-    const { straat } = splitsAdres(c.velden.adres ?? "");
-    let bijgewerkt = 0, gelijk = 0;
-    const niet: string[] = [];
-    for (const b of c.bewoners) {
-      const nr = b.huisnr.trim();
-      if (!nr) continue;
-      const a = adressen.find((x) => adresSleutel(x.straat, `${x.huisnummer}${x.toevoeging ?? ""}`) === adresSleutel(straat, nr) || (!straat && `${x.huisnummer}${x.toevoeging ?? ""}`.toLowerCase() === nr.toLowerCase()));
-      if (!a) { niet.push(nr); continue; }
-      const patch: Partial<FlowAdres> = {};
-      if (!a.bewoner && b.naam) patch.bewoner = b.naam;
-      if (!a.telefoon && b.telefoon) patch.telefoon = b.telefoon;
-      if (!a.opmerking && b.opmerking) patch.opmerking = b.opmerking;
-      if (Object.keys(patch).length) { const r = await wijzigFlowAdres(a.id, patch); if (r.ok) bijgewerkt++; } else gelijk++;
-    }
-    if (bijgewerkt) void laad();
-    const delen = [`${bijgewerkt} adres${bijgewerkt === 1 ? "" : "sen"} aangevuld`];
-    if (gelijk) delen.push(`${gelijk} al compleet`);
-    if (niet.length) delen.push(`niet in dit dossier: ${niet.join(", ")}`);
-    return delen.join(" · ") + ".";
-  };
 
   const clusters = detail?.clusters ?? [];
   const verdeeld = clusters.filter((k) => k.toegewezen_aan).length;
@@ -135,7 +109,6 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
     poster: taken.length > 0 && openTaken === 0,
     afronden: detail?.dossier.status === "afgerond" || detail?.dossier.status === "afgeboekt",
     afboeken: detail?.dossier.status === "afgeboekt",
-    checklists: saneerChecklists.some((c) => c.pdNummer === pd),
     instellingen: false,
   };
 
@@ -177,8 +150,6 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
             <ChevronRight className="h-5 w-5 shrink-0 text-ink-400" />
           </button>
         ))}
-        {/* Checklists aan de deur: foto maken, nalopen, ingevuld formulier downloaden */}
-        <SaneerChecklists pdNummer={pd} bewerkbaar={mijn.length > 0} overnemen={checklistNaarDossier} />
       </div>
     );
   }
@@ -278,7 +249,6 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
           : <SaneerVerdelen dossier={dossier} adressen={adressen} clusters={clusters} veldwerkers={veldwerkers} naamVan={naamVan} onWijzig={() => void laad()} />
       )}
 
-      {actief === "checklists" && <SaneerChecklists pdNummer={pd} bewerkbaar overnemen={checklistNaarDossier} />}
 
       {actief === "poster" && <Posters taken={taken} naamVan={naamVan} onWijzig={() => void laad()} />}
       {actief === "afronden" && <Afronden dossier={dossier} clusters={clusters} adressen={adressen} taken={taken} onWijzig={() => void laad()} />}
@@ -389,7 +359,7 @@ function Posters({ taken, naamVan, onWijzig }: { taken: Taak[]; naamVan: (id?: s
   const [bezig, setBezig] = useState("");
   const vandaag = new Date().toISOString().slice(0, 10);
 
-  if (taken.length === 0) return <Leeg Icon={StickyNote} titel="Nog geen poster nodig" tekst="Zodra met een groep een dag is afgesproken, verschijnt hier vanzelf de taak om de aankondiging op te hangen — met een herinnering die blijft komen tot hij hangt." />;
+  if (taken.length === 0) return <Leeg Icon={StickyNote} titel="Nog geen poster nodig" tekst="Zodra met alle bewoners een dag is afgesproken, verschijnt hier vanzelf de taak om de aankondiging op te hangen — met een herinnering die blijft komen tot hij hangt." />;
 
   return (
     <div className="space-y-2">
@@ -509,26 +479,6 @@ function Afronden({ dossier, clusters, adressen, taken, onWijzig }: {
     onWijzig();
   }
 
-  // De Checklist M&A Saneren: het papieren formulier dat de schouwer invult, met de adressen en
-  // telefoonnummers er al in. Eén per groep, want een groep is één postcode en dus één gebouw.
-  async function checklists() {
-    setBezig("checklist"); setFout("");
-    const groepen = clusters
-      .map((k) => ({ cluster: k as unknown as Parameters<typeof maakChecklists>[1][number]["cluster"], adressen: adressen.filter((a) => a.cluster_id === k.id) }))
-      .filter((g) => g.adressen.length > 0);
-    const r = await maakChecklists(dossier, groepen);
-    setBezig("");
-    if (!r.ok) setFout(r.fout ?? "De checklists konden niet gemaakt worden.");
-  }
-
-  async function exporteer(soort: "xlsx" | "pdf") {
-    setBezig(soort); setFout("");
-    const data = await haalExport(dossier.pd_nummer);
-    if (!data) { setBezig(""); setFout("Ophalen van de gegevens mislukte."); return; }
-    if (soort === "xlsx") await exporteerSaneerExcel(data); else exporteerSaneerPdf(data);
-    setBezig("");
-  }
-
   return (
     <div className="space-y-4">
       <div className={`rounded-2xl border p-4 ${klaar ? "border-green-300 bg-green-50" : "border-amber-200 bg-amber-50"}`}>
@@ -591,17 +541,6 @@ function Afronden({ dossier, clusters, adressen, taken, onWijzig }: {
         ))}
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <button type="button" onClick={() => void exporteer("xlsx")} disabled={!!bezig} className={`${knop} bg-white text-ink-700 ring-1 ring-ink-200 hover:bg-ink-50`}>
-          {bezig === "xlsx" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />} Excel
-        </button>
-        <button type="button" onClick={() => void exporteer("pdf")} disabled={!!bezig} className={`${knop} bg-white text-ink-700 ring-1 ring-ink-200 hover:bg-ink-50`}>
-          {bezig === "pdf" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />} Uitvoeringslijst (PDF)
-        </button>
-        <button type="button" onClick={() => void checklists()} disabled={!!bezig || adressen.length === 0} className={`${knop} bg-white text-ink-700 ring-1 ring-ink-200 hover:bg-ink-50`}>
-          {bezig === "checklist" ? <Loader2 className="h-4 w-4 animate-spin" /> : <ClipboardList className="h-4 w-4" />} Checklists schouwer
-        </button>
-      </div>
 
       {fout && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{fout}</p>}
 
