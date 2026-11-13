@@ -218,7 +218,10 @@ export function SaneerImport({ dossier, aantalNu, bestaandeAdressen, onKlaar }: 
 
   // ── Handmatig adressen toevoegen: één straat met één of meer huisnummers ──
   async function voegHandmatigToe(velden: HandVelden): Promise<boolean> {
-    const { straat, nummers, fout: splitsFout } = splitsStraatEnHuisnummers(velden.straatEnNummers);
+    const gesplitst = splitsStraatEnHuisnummers(velden.straatEnNummers);
+    const { straat, fout: splitsFout } = gesplitst;
+    const nummers = gesplitst.nummers.filter((n) => !velden.weg.includes(n.huisnummer + n.toevoeging));
+    if (!splitsFout && nummers.length === 0) { setFout("Er staat geen huisnummer meer in de lijst."); return false; }
     const postcode = netPostcode(velden.postcode.trim());
     if (!straat) { setFout("Vul de straatnaam en huisnummers in."); return false; }
     if (splitsFout) { setFout(splitsFout); return false; }
@@ -534,18 +537,19 @@ export function SaneerImport({ dossier, aantalNu, bestaandeAdressen, onKlaar }: 
 }
 
 // ── Klein formulier om adressen met de hand in te voeren: één straat, één of meer huisnummers ──
-type HandVelden = { straatEnNummers: string; postcode: string; plaats: string; perAdres: Record<string, { bewoner: string; telefoon: string }> };
-function HandmatigAdres({ onToevoegen, onAnnuleer }: {
+type HandVelden = { straatEnNummers: string; postcode: string; plaats: string; perAdres: Record<string, { bewoner: string; telefoon: string }>; weg: string[] };
+export function HandmatigAdres({ onToevoegen, onAnnuleer }: {
   onToevoegen: (velden: HandVelden) => Promise<boolean>;
   onAnnuleer: () => void;
 }) {
-  const [v, setV] = useState<HandVelden>({ straatEnNummers: "", postcode: "", plaats: "", perAdres: {} });
+  const [v, setV] = useState<HandVelden>({ straatEnNummers: "", postcode: "", plaats: "", perAdres: {}, weg: [] });
   const [bezig, setBezig] = useState(false);
   const set = (p: Partial<HandVelden>) => setV((s) => ({ ...s, ...p }));
   const veld = "w-full rounded-lg border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100";
   const lab = "mb-1 block text-xs font-semibold text-ink-600";
   const split = v.straatEnNummers.trim() ? splitsStraatEnHuisnummers(v.straatEnNummers) : null;
-  const aantal = split && !split.fout ? split.nummers.length : 0;
+  const zichtbaar = split && !split.fout ? split.nummers.filter((n) => !v.weg.includes(n.huisnummer + n.toevoeging)) : [];
+  const aantal = zichtbaar.length;
   const kanToe = aantal > 0 && !bezig;
   const zetAdres = (sleutel: string, p: Partial<{ bewoner: string; telefoon: string }>) =>
     setV((s) => ({ ...s, perAdres: { ...s.perAdres, [sleutel]: { ...(s.perAdres[sleutel] ?? { bewoner: "", telefoon: "" }), ...p } } }));
@@ -565,7 +569,7 @@ function HandmatigAdres({ onToevoegen, onAnnuleer }: {
           <input autoFocus value={v.straatEnNummers} onChange={(e) => set({ straatEnNummers: e.target.value })} placeholder="Dorpsstraat 12, 14A, 20-26" className={veld} />
           {split && (
             <p className={`mt-1 text-xs ${split.fout ? "text-red-600" : "text-ink-500"}`}>
-              {split.fout ?? `${aantal} ${aantal === 1 ? "adres" : "adressen"}: ${split.straat} ${split.nummers.slice(0, 12).map((n) => n.huisnummer + n.toevoeging).join(", ")}${aantal > 12 ? " …" : ""}`}
+              {split.fout ?? `${aantal} ${aantal === 1 ? "adres" : "adressen"}: ${split.straat} ${zichtbaar.slice(0, 12).map((n) => n.huisnummer + n.toevoeging).join(", ")}${aantal > 12 ? " …" : ""}`}
             </p>
           )}
         </div>
@@ -575,13 +579,15 @@ function HandmatigAdres({ onToevoegen, onAnnuleer }: {
           <div className="col-span-2 sm:col-span-6">
             <span className={lab}>Per huisnummer</span>
             <div className="divide-y divide-ink-100 rounded-lg border border-ink-200">
-              {split.nummers.map((n) => {
+              {zichtbaar.map((n) => {
                 const k = n.huisnummer + n.toevoeging;
                 const d = v.perAdres[k];
                 return (
-                  <div key={k} className="grid grid-cols-[4.5rem_1fr] items-center gap-2 p-2 sm:grid-cols-[6rem_1fr_1fr]">
+                  <div key={k} className="grid grid-cols-[4.5rem_1fr_auto] items-center gap-2 p-2 sm:grid-cols-[6rem_1fr_1fr_auto]">
                     <span className="row-span-2 text-sm font-semibold text-ink-800 sm:row-span-1">{k}</span>
                     <input value={d?.telefoon ?? ""} onChange={(e) => zetAdres(k, { telefoon: e.target.value })} placeholder="Telefoon 06 …" inputMode="tel" className={veld} />
+                    <button type="button" onClick={() => set({ weg: [...v.weg, k] })} title={`${k} weghalen`} aria-label={`${k} weghalen`}
+                      className="row-span-2 rounded-lg p-1.5 text-ink-400 hover:bg-ink-100 hover:text-red-600 sm:order-last sm:row-span-1"><X className="h-4 w-4" /></button>
                     <input value={d?.bewoner ?? ""} onChange={(e) => zetAdres(k, { bewoner: e.target.value })} placeholder="Bewoner (optioneel)" className={veld} />
                   </div>
                 );
@@ -597,7 +603,7 @@ function HandmatigAdres({ onToevoegen, onAnnuleer }: {
         </button>
         <button type="button" onClick={onAnnuleer} className={`${knop} bg-ink-100 text-ink-700 hover:bg-ink-200`}>Annuleren</button>
       </div>
-      <p className="mt-2 text-xs text-ink-500">Meerdere huisnummers scheid je met een komma; “20-26” is 20, 22, 24 en 26. Per huisnummer vul je daarna telefoon en bewoner in. Laat je de postcode leeg, dan zoekt de app hem per adres op. De adressen komen in het voorbeeld hieronder — controleer en klik daarna op “toevoegen”.</p>
+      <p className="mt-2 text-xs text-ink-500">Meerdere huisnummers scheid je met een komma; “20-26” is 20, 22, 24 en 26 en “45B-47E” is 45B t/m 45E en 47A t/m 47E. Klopt er een nummer niet, haal het dan weg met het kruisje. Per huisnummer vul je daarna telefoon en bewoner in. Laat je de postcode leeg, dan zoekt de app hem per adres op. De adressen komen in het voorbeeld hieronder — controleer en klik daarna op “toevoegen”.</p>
     </div>
   );
 }
