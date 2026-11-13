@@ -14,6 +14,7 @@ import { useApp } from "../store/AppContext";
 import { aiBeschikbaar } from "../lib/aiTransport";
 import { haalMapping, stuurAdressen, type FlowAdres } from "../lib/saneerflowWerk";
 import { zoekPostcodes } from "../lib/postcodeZoeker";
+import { splitsStraatEnHuisnummers } from "../lib/huisnummers";
 import type { Dossier } from "../lib/saneerflow";
 
 // Saneren — stap 2: het adressenbestand inlezen.
@@ -215,25 +216,49 @@ export function SaneerImport({ dossier, aantalNu, bestaandeAdressen, onKlaar }: 
     });
   }
 
-  // ── Handmatig één adres toevoegen ──
-  function voegHandmatigToe(velden: { straat: string; huisnummer: string; toevoeging: string; postcode: string; plaats: string; bewoner: string; telefoon: string }) {
-    const straat = velden.straat.trim(), huisnummer = velden.huisnummer.trim();
+  // ── Handmatig adressen toevoegen: één straat met één of meer huisnummers ──
+  async function voegHandmatigToe(velden: HandVelden): Promise<boolean> {
+    const { straat, nummers, fout: splitsFout } = splitsStraatEnHuisnummers(velden.straatEnNummers);
     const postcode = netPostcode(velden.postcode.trim());
-    const fouten: string[] = [];
-    if (!straat) fouten.push("Straat ontbreekt");
-    if (!huisnummer) fouten.push("Huisnummer ontbreekt");
-    if (!postcodeGeldig(postcode)) fouten.push(postcode ? "Postcode klopt niet" : "Postcode ontbreekt");
-    if (fouten.length > 0) { setFout(fouten.join(" · ")); return; }
-    const rij: ImportRij = {
-      bron: (klaar?.goed.length ?? 0) + 1, straat, huisnummer, toevoeging: velden.toevoeging.trim(),
-      postcode, plaats: velden.plaats.trim(), wijk: "", perceel: "", bewoner: velden.bewoner.trim(),
-      telefoon: velden.telefoon.trim(), opmerking: "", fouten: [], waarschuwingen: ["handmatig toegevoegd"], dubbelInBestand: false, bestaatAl: false,
-    };
+    if (!straat) { setFout("Vul de straatnaam en huisnummers in."); return false; }
+    if (splitsFout) { setFout(splitsFout); return false; }
+    if (postcode && !postcodeGeldig(postcode)) { setFout("Postcode klopt niet"); return false; }
+    const start = klaar?.goed.length ?? 0;
+    const rijen: ImportRij[] = nummers.map((n, i) => ({
+      bron: start + i + 1, straat, huisnummer: n.huisnummer, toevoeging: n.toevoeging,
+      postcode, plaats: velden.plaats.trim(), wijk: "", perceel: "",
+      // Bewoner en telefoon horen bij één adres; bij meerdere huisnummers vul je die later per adres in.
+      bewoner: nummers.length === 1 ? velden.bewoner.trim() : "",
+      telefoon: nummers.length === 1 ? velden.telefoon.trim() : "",
+      opmerking: "", fouten: [], waarschuwingen: ["handmatig toegevoegd"], dubbelInBestand: false, bestaatAl: false,
+    }));
+    // Geen postcode ingevuld? Dan zoeken we die per huisnummer op (aan de even en oneven kant kan hij verschillen).
+    let opgezocht = 0;
+    if (!postcode) {
+      setZoeken({ gedaan: 0, totaal: rijen.length });
+      const uitslag = await zoekPostcodes(
+        rijen,
+        (rij, treffer) => {
+          rij.postcode = treffer.postcode;
+          if (!rij.plaats.trim() && treffer.plaats) rij.plaats = treffer.plaats;
+          rij.waarschuwingen = [...rij.waarschuwingen, "postcode opgezocht"];
+        },
+        (gedaan, totaal) => setZoeken({ gedaan, totaal }),
+      );
+      opgezocht = uitslag.gevonden;
+      setZoeken(null);
+      const mist = rijen.filter((r) => !postcodeGeldig(r.postcode));
+      if (mist.length > 0) {
+        setFout(`Geen postcode gevonden voor ${mist.map((r) => `${r.straat} ${r.huisnummer}${r.toevoeging}`).join(", ")}. Vul de postcode (en plaats) in en probeer opnieuw.`);
+        return false;
+      }
+    }
     setFout("");
     setKlaar((k) => k
-      ? { ...k, goed: [...k.goed, rij] }
-      : { goed: [rij], afgekeurd: [], bestandsnaam: "Handmatig toegevoegd", mapping: {}, kopIndex: 0, leegAantal: 0, opgezocht: 0 });
+      ? { ...k, goed: [...k.goed, ...rijen], opgezocht: k.opgezocht + opgezocht }
+      : { goed: rijen, afgekeurd: [], bestandsnaam: "Handmatig toegevoegd", mapping: {}, kopIndex: 0, leegAantal: 0, opgezocht });
     setHandmatig(false);
+    return true;
   }
 
   async function verstuur() {
@@ -370,7 +395,7 @@ export function SaneerImport({ dossier, aantalNu, bestaandeAdressen, onKlaar }: 
           </button>
           <button type="button" onClick={() => { setFout(""); setHandmatig(true); }}
             className={`${knop} border border-ink-200 bg-white text-ink-700 hover:bg-ink-50 sm:flex-none`}>
-            <Plus className="h-4 w-4" /> Adres handmatig
+            <Plus className="h-4 w-4" /> Adressen handmatig
           </button>
         </div>
       )}
@@ -508,39 +533,57 @@ export function SaneerImport({ dossier, aantalNu, bestaandeAdressen, onKlaar }: 
   );
 }
 
-// ── Klein formulier om één adres met de hand in te voeren ──
+// ── Klein formulier om adressen met de hand in te voeren: één straat, één of meer huisnummers ──
+type HandVelden = { straatEnNummers: string; postcode: string; plaats: string; bewoner: string; telefoon: string };
 function HandmatigAdres({ onToevoegen, onAnnuleer }: {
-  onToevoegen: (velden: { straat: string; huisnummer: string; toevoeging: string; postcode: string; plaats: string; bewoner: string; telefoon: string }) => void;
+  onToevoegen: (velden: HandVelden) => Promise<boolean>;
   onAnnuleer: () => void;
 }) {
-  const [v, setV] = useState({ straat: "", huisnummer: "", toevoeging: "", postcode: "", plaats: "", bewoner: "", telefoon: "" });
-  const set = (p: Partial<typeof v>) => setV((s) => ({ ...s, ...p }));
+  const [v, setV] = useState<HandVelden>({ straatEnNummers: "", postcode: "", plaats: "", bewoner: "", telefoon: "" });
+  const [bezig, setBezig] = useState(false);
+  const set = (p: Partial<HandVelden>) => setV((s) => ({ ...s, ...p }));
   const veld = "w-full rounded-lg border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100";
   const lab = "mb-1 block text-xs font-semibold text-ink-600";
-  const kanToe = v.straat.trim() && v.huisnummer.trim() && v.postcode.trim();
+  const split = v.straatEnNummers.trim() ? splitsStraatEnHuisnummers(v.straatEnNummers) : null;
+  const aantal = split && !split.fout ? split.nummers.length : 0;
+  const kanToe = aantal > 0 && !bezig;
+  const toevoegen = async () => {
+    setBezig(true);
+    try { await onToevoegen(v); } finally { setBezig(false); }
+  };
   return (
     <div className="rounded-2xl border-2 border-brand-200 bg-white p-4 shadow-sm">
       <div className="mb-3 flex items-center justify-between">
-        <h4 className="text-sm font-bold text-ink-900">Adres handmatig toevoegen</h4>
+        <h4 className="text-sm font-bold text-ink-900">Adressen handmatig toevoegen</h4>
         <button type="button" onClick={onAnnuleer} className="text-ink-400 hover:text-ink-600"><X className="h-5 w-5" /></button>
       </div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-6">
-        <div className="col-span-2 sm:col-span-3"><label className={lab}>Straat *</label><input autoFocus value={v.straat} onChange={(e) => set({ straat: e.target.value })} placeholder="Dorpsstraat" className={veld} /></div>
-        <div><label className={lab}>Huisnr *</label><input value={v.huisnummer} onChange={(e) => set({ huisnummer: e.target.value })} placeholder="12" className={veld} /></div>
-        <div><label className={lab}>Toev.</label><input value={v.toevoeging} onChange={(e) => set({ toevoeging: e.target.value })} placeholder="A" className={veld} /></div>
-        <div><label className={lab}>Postcode *</label><input value={v.postcode} onChange={(e) => set({ postcode: e.target.value })} placeholder="1234 AB" className={veld} /></div>
-        <div className="col-span-2 sm:col-span-3"><label className={lab}>Plaats</label><input value={v.plaats} onChange={(e) => set({ plaats: e.target.value })} placeholder="Rotterdam" className={veld} /></div>
-        <div className="col-span-2 sm:col-span-2"><label className={lab}>Bewoner</label><input value={v.bewoner} onChange={(e) => set({ bewoner: e.target.value })} placeholder="Naam (optioneel)" className={veld} /></div>
-        <div className="col-span-2 sm:col-span-1"><label className={lab}>Telefoon</label><input value={v.telefoon} onChange={(e) => set({ telefoon: e.target.value })} placeholder="06 …" className={veld} /></div>
+        <div className="col-span-2 sm:col-span-6">
+          <label className={lab}>Straatnaam en huisnummers *</label>
+          <input autoFocus value={v.straatEnNummers} onChange={(e) => set({ straatEnNummers: e.target.value })} placeholder="Dorpsstraat 12, 14A, 20-26" className={veld} />
+          {split && (
+            <p className={`mt-1 text-xs ${split.fout ? "text-red-600" : "text-ink-500"}`}>
+              {split.fout ?? `${aantal} ${aantal === 1 ? "adres" : "adressen"}: ${split.straat} ${split.nummers.slice(0, 12).map((n) => n.huisnummer + n.toevoeging).join(", ")}${aantal > 12 ? " …" : ""}`}
+            </p>
+          )}
+        </div>
+        <div className="col-span-1 sm:col-span-2"><label className={lab}>Postcode</label><input value={v.postcode} onChange={(e) => set({ postcode: e.target.value })} placeholder="1234 AB" className={veld} /></div>
+        <div className="col-span-1 sm:col-span-4"><label className={lab}>Plaats</label><input value={v.plaats} onChange={(e) => set({ plaats: e.target.value })} placeholder="Rotterdam" className={veld} /></div>
+        {aantal <= 1 && (
+          <>
+            <div className="col-span-2 sm:col-span-3"><label className={lab}>Bewoner</label><input value={v.bewoner} onChange={(e) => set({ bewoner: e.target.value })} placeholder="Naam (optioneel)" className={veld} /></div>
+            <div className="col-span-2 sm:col-span-3"><label className={lab}>Telefoon</label><input value={v.telefoon} onChange={(e) => set({ telefoon: e.target.value })} placeholder="06 …" className={veld} /></div>
+          </>
+        )}
       </div>
       <div className="mt-3 flex items-center gap-2">
-        <button type="button" onClick={() => onToevoegen(v)} disabled={!kanToe}
+        <button type="button" onClick={toevoegen} disabled={!kanToe}
           className={`${knop} bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-40`}>
-          <Plus className="h-4 w-4" /> Toevoegen aan de lijst
+          <Plus className="h-4 w-4" /> {bezig ? "Postcodes opzoeken…" : aantal > 1 ? `${aantal} adressen toevoegen` : "Toevoegen aan de lijst"}
         </button>
         <button type="button" onClick={onAnnuleer} className={`${knop} bg-ink-100 text-ink-700 hover:bg-ink-200`}>Annuleren</button>
       </div>
-      <p className="mt-2 text-xs text-ink-500">* Straat, huisnummer en postcode zijn nodig. Het adres komt in het voorbeeld hieronder — controleer en klik daarna op “toevoegen”.</p>
+      <p className="mt-2 text-xs text-ink-500">Meerdere huisnummers scheid je met een komma; “20-26” is 20, 22, 24 en 26. Laat je de postcode leeg, dan zoekt de app hem per adres op. De adressen komen in het voorbeeld hieronder — controleer en klik daarna op “toevoegen”.</p>
     </div>
   );
 }
