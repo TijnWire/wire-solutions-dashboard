@@ -22,7 +22,7 @@ import {
   TAUW_TYPES, TAUW_TYPE_LABEL, TAUW_STATUS_LABEL, TAUW_STATUS_VOLGORDE, TAUW_OPDRACHTGEVERS,
   type TauwAdres, type TauwOpdracht, type TauwType, type TauwStatus, type TauwOpdrachtgever,
 } from "../lib/types";
-import { isToegewezen, toegewezenIds, toewijzingPatch } from "../lib/toewijzing";
+import { isToegewezen, toegewezenIds, toewijzingPatch, kanUitvoeren } from "../lib/toewijzing";
 
 const veld = "w-full min-w-0 rounded-lg border border-ink-200 px-2.5 py-1.5 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100 disabled:bg-ink-50 disabled:text-ink-500";
 const knopKlein = "inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-3.5 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-50 disabled:cursor-not-allowed disabled:opacity-40";
@@ -821,7 +821,7 @@ function TauwDetail({ opdracht, onTerug }: { opdracht: TauwOpdracht; onTerug: ()
         <BodemFlow
           opdracht={werkOpdracht}
           users={users}
-          veldwerkers={users.filter((u) => u.rol === "monteur" || u.werknemer)}
+          veldwerkers={users.filter(kanUitvoeren)}
           magWissen={magAlles(currentUser)}
           onWijzig={(patch) => updateTauw(opdracht.id, patch)}
           onAdressen={bewaarLijst}

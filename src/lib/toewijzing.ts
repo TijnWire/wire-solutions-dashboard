@@ -34,3 +34,7 @@ export function toegewezenLabel(ids: string[], naamVan: (id: string) => string, 
   if (namen.length === 2) return `${namen[0]} & ${namen[1]}`;
   return `${namen[0]} + ${namen.length - 1}`;
 }
+
+/** Wie werk kan uitvoeren: medewerkers, beheerders die ook medewerker zijn, en de eigenaar. */
+export const kanUitvoeren = (u: { rol: string; werknemer?: boolean }): boolean =>
+  u.rol === "monteur" || u.rol === "eigenaar" || !!u.werknemer;

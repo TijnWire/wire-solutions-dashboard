@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { kanUitvoeren } from "../lib/toewijzing";
 import {
   FileUp, AlertTriangle, CheckCircle2, Phone, PhoneOff, Pencil, X, Loader2, RotateCcw, Save, Search, Sparkles, Plus, Check,
 } from "lucide-react";
@@ -63,7 +64,7 @@ export function SaneerImport({ dossier, aantalNu, bestaandeAdressen, onKlaar }: 
 }) {
   const { addSaneerChecklist, users, currentUser } = useApp();
   // Wie voert dit uit? Dat kies je hier, bij het toevoegen van de adressen. Standaard: jijzelf.
-  const kiesbaar = users.filter((u) => u.id === currentUser?.id || u.rol === "monteur" || u.werknemer);
+  const kiesbaar = users.filter((u) => u.id === currentUser?.id || kanUitvoeren(u));
   const [uitvoerder, setUitvoerder] = useState<string>(currentUser?.id ?? "");
   const invoer = useRef<HTMLInputElement>(null);
   const aiInvoer = useRef<HTMLInputElement>(null);

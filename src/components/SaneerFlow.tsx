@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { kanUitvoeren } from "../lib/toewijzing";
 import {
   Check, ArrowLeft, ListPlus, Users, StickyNote, FileCheck2,
   Loader2, AlertTriangle, CalendarCheck, ChevronRight, ShieldAlert,
@@ -84,7 +85,7 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
   const [zoek, setZoek] = useState("");
 
   const isLeiding = currentUser?.rol === "eigenaar" || currentUser?.rol === "beheer" || currentUser?.rol === "hr";
-  const veldwerkers = useMemo(() => users.filter((u) => u.rol === "monteur" || u.werknemer), [users]);
+  const veldwerkers = useMemo(() => users.filter(kanUitvoeren), [users]);
   const naamVan = useCallback((id?: string | null) => users.find((u) => u.id === id)?.naam ?? "—", [users]);
 
   const laad = useCallback(async () => {
