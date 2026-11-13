@@ -447,7 +447,7 @@ function Afboeken({ dossier, onWijzig }: { dossier: Dossier; onWijzig: () => voi
   );
 }
 
-function Afronden({ dossier, clusters, adressen, taken, onWijzig }: {
+function Afronden({ dossier, clusters, adressen, onWijzig }: {
   dossier: Dossier;
   clusters: DossierDetail["clusters"];
   adressen: FlowAdres[];
@@ -457,8 +457,6 @@ function Afronden({ dossier, clusters, adressen, taken, onWijzig }: {
   const [bezig, setBezig] = useState("");
   const [fout, setFout] = useState("");
 
-  const zonderDatum = clusters.filter((k) => !k.definitieve_datum);
-  const zonderNummer = adressen.filter((a) => !a.telefoon.trim() && a.belstatus !== "weigert");
 
   // Per uitvoeringsdag, want zo wordt het gereden. Zonder dag komt onderaan te staan.
   const datumVan = (a: FlowAdres) => clusters.find((k) => k.id === a.cluster_id)?.definitieve_datum || "—";
@@ -468,8 +466,6 @@ function Afronden({ dossier, clusters, adressen, taken, onWijzig }: {
     m.get(d)!.push(a);
     return m;
   }, new Map<string, FlowAdres[]>())].sort((x, y) => (x[0] === "—" ? 1 : y[0] === "—" ? -1 : x[0].localeCompare(y[0])));
-  const openTaken = taken.filter((t) => !t.afgevinkt_op);
-  const klaar = clusters.length > 0 && zonderDatum.length === 0 && openTaken.length === 0 && zonderNummer.length === 0;
 
   async function doe(soort: "afronden") {
     setBezig(soort); setFout("");
@@ -481,23 +477,6 @@ function Afronden({ dossier, clusters, adressen, taken, onWijzig }: {
 
   return (
     <div className="space-y-4">
-      <div className={`rounded-2xl border p-4 ${klaar ? "border-green-300 bg-green-50" : "border-amber-200 bg-amber-50"}`}>
-        <div className="flex items-center gap-2 font-bold text-ink-900">
-          {klaar ? <Check className="h-5 w-5 text-green-600" /> : <AlertTriangle className="h-5 w-5 text-amber-600" />}
-          {klaar ? "Alles staat klaar" : "Er staat nog werk open"}
-        </div>
-        <ul className="mt-2 space-y-1 text-sm text-ink-700">
-          <li>{clusters.length} groepen, {clusters.length - zonderDatum.length} met een definitieve datum</li>
-          {zonderDatum.length > 0 && <li className="text-amber-800">{zonderDatum.map((k) => k.naam || k.postcode).join(", ")} — nog geen datum</li>}
-          {openTaken.length > 0 && <li className="text-amber-800">{openTaken.length} poster(s) nog niet opgehangen</li>}
-          {zonderNummer.length > 0 && (
-            <li className="text-amber-800">
-              Van {zonderNummer.length} {zonderNummer.length === 1 ? "adres" : "adressen"} is geen telefoonnummer bekend —
-              daar is niemand te bereiken als de dag verschuift
-            </li>
-          )}
-        </ul>
-      </div>
 
       {/* ── De lijst waar het om draait ──
           Per adres: wie er woont, op welk nummer je hem bereikt en wanneer de werkzaamheden zijn.

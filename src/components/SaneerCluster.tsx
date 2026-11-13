@@ -137,10 +137,6 @@ export function SaneerVerdelen({ dossier, adressen, clusters, veldwerkers, naamV
       {clusters.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-ink-300 bg-white p-8 text-center">
           <Users className="mx-auto h-8 w-8 text-ink-300" />
-          <p className="mt-2 text-sm text-ink-600">
-            De adressen worden gegroepeerd op volledige postcode. Elke groep krijgt straks één datum
-            waarop iedereen thuis moet zijn.
-          </p>
           <button type="button" onClick={() => void cluster()} disabled={bezig || adressen.length === 0}
             className={`${knop} mt-4 bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-60`}>
             {bezig ? <Loader2 className="h-4 w-4 animate-spin" /> : <Users className="h-4 w-4" />} Groepen maken
