@@ -133,8 +133,8 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
       <div className="space-y-4">
         <button type="button" onClick={onTerug} className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-700"><ArrowLeft className="h-4 w-4" /> Alle dossiers</button>
         <div>
-          <h2 className="text-xl font-bold text-ink-900">{dossier.pd_nummer}</h2>
-          <p className="text-sm text-ink-500">{[dossier.opdrachtgever, dossier.gebouw].filter(Boolean).join(" · ")}</p>
+          <h2 className="text-xl font-bold text-ink-900">{dossier.gebouw || dossier.omschrijving || "Sanering"}</h2>
+          <p className="text-sm text-ink-500">{[dossier.opdrachtgever, dossier.regio].filter(Boolean).join(" · ")}</p>
         </div>
         {mijn.length === 0 ? (
           <p className="rounded-xl bg-ink-50 px-4 py-3 text-sm text-ink-600">Er is nog geen groep aan jou toegewezen.</p>
@@ -194,15 +194,13 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
             <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
               {/* De plek staat groot, het PD-nummer klein eronder. Je herkent een klus aan het
                   gebouw, niet aan elf cijfers — die heb je pas nodig als je gaat afboeken. */}
-              <h2 className="min-w-0 truncate text-xl font-bold leading-7 text-ink-900">{dossier.gebouw || dossier.omschrijving || dossier.pd_nummer}</h2>
+              <h2 className="min-w-0 truncate text-xl font-bold leading-7 text-ink-900">{dossier.gebouw || dossier.omschrijving || "Sanering"}</h2>
               <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-bold ${KLEUR[STATUS_INFO[dossier.status]?.kleur ?? "slate"]}`}>
                 {STATUS_INFO[dossier.status]?.label}
               </span>
             </div>
             <p className="mt-0.5 truncate text-xs text-ink-500">
-              <span className="font-mono">{dossier.pd_nummer}</span>
-              {[dossier.opdrachtgever, dossier.regio].filter(Boolean).map((t) => ` · ${t}`).join("")}
-              {dossier.uitvoering_van && ` · uitvoering ${kortNL(dossier.uitvoering_van)}`}
+              {[dossier.opdrachtgever, dossier.regio, dossier.uitvoering_van ? `uitvoering ${kortNL(dossier.uitvoering_van)}` : ""].filter(Boolean).join(" · ")}
             </p>
           </div>
 

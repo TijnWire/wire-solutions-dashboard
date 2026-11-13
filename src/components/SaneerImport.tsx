@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import {
-  FileUp, AlertTriangle, CheckCircle2, Phone, PhoneOff, Pencil, X, Loader2, RotateCcw, Save, Search, Sparkles, Plus,
+  FileUp, AlertTriangle, CheckCircle2, Phone, PhoneOff, Pencil, X, Loader2, RotateCcw, Save, Search, Sparkles, Plus, Check,
 } from "lucide-react";
 import { ImportScan, type ScanStap } from "./ImportScan";
 import {
@@ -12,7 +12,7 @@ import { leesPdfAlsRaster } from "../lib/pdfRaster";
 import type { ChecklistGegevens } from "../lib/checklistScan";
 import { useApp } from "../store/AppContext";
 import { aiBeschikbaar } from "../lib/aiTransport";
-import { haalMapping, stuurAdressen, type FlowAdres } from "../lib/saneerflowWerk";
+import { haalMapping, stuurAdressen, maakClusters, wijsAllesToe, type FlowAdres } from "../lib/saneerflowWerk";
 import { zoekPostcodes } from "../lib/postcodeZoeker";
 import { splitsStraatEnHuisnummers } from "../lib/huisnummers";
 import type { Dossier } from "../lib/saneerflow";
@@ -61,7 +61,10 @@ export function SaneerImport({ dossier, aantalNu, bestaandeAdressen, onKlaar }: 
   bestaandeAdressen?: { straat: string; huisnummer: string; toevoeging?: string; postcode: string }[];
   onKlaar: () => void;
 }) {
-  const { addSaneerChecklist } = useApp();
+  const { addSaneerChecklist, users, currentUser } = useApp();
+  // Wie voert dit uit? Dat kies je hier, bij het toevoegen van de adressen. Standaard: jijzelf.
+  const kiesbaar = users.filter((u) => u.id === currentUser?.id || u.rol === "monteur" || u.werknemer);
+  const [uitvoerder, setUitvoerder] = useState<string>(currentUser?.id ?? "");
   const invoer = useRef<HTMLInputElement>(null);
   const aiInvoer = useRef<HTMLInputElement>(null);
   const [scan, setScan] = useState<ScanStap | null>(null);
@@ -289,6 +292,11 @@ export function SaneerImport({ dossier, aantalNu, bestaandeAdressen, onKlaar }: 
     if (!r.ok) { setFout(r.fout ?? "Versturen mislukt."); return false; }
     setUitslag(r.uitslag ?? null);
     setKlaar(null);
+    // Groepen maken en alles op de gekozen persoon zetten: dat hoeft daarna niet meer apart.
+    if (uitvoerder) {
+      const g = await maakClusters(dossier.pd_nummer);
+      if (g.ok) await wijsAllesToe(dossier.pd_nummer, uitvoerder);
+    }
     onKlaar();
     return true;
   }
@@ -323,6 +331,29 @@ export function SaneerImport({ dossier, aantalNu, bestaandeAdressen, onKlaar }: 
         onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void kies(f); }} />
       <input ref={aiInvoer} type="file" accept="image/*" className="hidden"
         onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void kiesAi(f); }} />
+
+      {/* Wie voert het uit? Gekozen bij het toevoegen, zodat het daarna gewoon klaarstaat. */}
+      {kiesbaar.length > 0 && (
+        <div className="rounded-2xl border border-ink-200 bg-white p-4 shadow-sm">
+          <p className="text-sm font-semibold text-ink-800">Tik op uw naam om het formulier toe te wijzen</p>
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+            {kiesbaar.map((u) => {
+              const aan = uitvoerder === u.id;
+              const initialen = u.naam.split(" ").filter(Boolean).slice(0, 2).map((d) => d[0]).join("").toUpperCase();
+              return (
+                <button key={u.id} type="button" onClick={() => setUitvoerder(aan ? "" : u.id)}
+                  className={`flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-colors ${
+                    aan ? "border-brand-500 bg-brand-50 ring-1 ring-brand-500" : "border-ink-200 bg-white hover:border-brand-300 hover:bg-brand-50/50"}`}>
+                  <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${aan ? "bg-brand-600 text-white" : "bg-ink-100 text-ink-600"}`}>
+                    {aan ? <Check className="h-4 w-4" /> : initialen}
+                  </span>
+                  <span className={`min-w-0 flex-1 truncate text-sm font-semibold ${aan ? "text-brand-800" : "text-ink-800"}`}>{u.naam}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {aantalNu > 0 && !klaar && !scan && (
         <div className="rounded-xl bg-brand-50 px-4 py-3 text-sm text-brand-900">

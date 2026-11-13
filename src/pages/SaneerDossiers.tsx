@@ -244,7 +244,7 @@ export function SaneerDossiers({ onEerder }: { onEerder: () => void }) {
       {(dossiers?.length ?? 0) > 4 && (
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" />
-          <input value={zoek} onChange={(e) => setZoek(e.target.value)} placeholder="PD-nummer, opdrachtgever of gebouw…"
+          <input value={zoek} onChange={(e) => setZoek(e.target.value)} placeholder="Zoek op straat of regio…"
             className="w-full rounded-xl border border-ink-200 py-2.5 pl-9 pr-3 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100" />
         </div>
       )}
@@ -259,8 +259,8 @@ export function SaneerDossiers({ onEerder }: { onEerder: () => void }) {
           <p className="mt-3 text-sm text-ink-500">
             {zoek ? `Geen dossier gevonden voor "${zoek}".`
               : tab === "stedin" ? "Nog niets klaar voor Stedin. Zodra het werk van een dossier is afgerond, staat het hier klaar om af te boeken."
-              : tab === "archief" ? "Het archief is nog leeg. Hier komen de dossiers die op hun PD-nummer zijn afgeboekt."
-              : isLeiding ? "Nog geen dossiers. Maak er een aan met het PD-nummer van de opdracht." : "Er zijn nog geen dossiers."}
+              : tab === "archief" ? "Het archief is nog leeg."
+              : isLeiding ? "Nog geen saneringen. Maak er een aan met Nieuwe sanering." : "Er zijn nog geen dossiers."}
           </p>
         </div>
       ) : (
@@ -280,12 +280,9 @@ export function SaneerDossiers({ onEerder }: { onEerder: () => void }) {
                 <div className="flex items-center gap-3">
                   <div className="rounded-lg bg-brand-50 p-2.5 text-brand-600"><Building2 className="h-5 w-5" /></div>
                   <div className="min-w-0 flex-1">
-                    <div className="truncate font-semibold text-ink-900">{d.gebouw || d.omschrijving || d.pd_nummer}</div>
+                    <div className="truncate font-semibold text-ink-900">{d.gebouw || d.omschrijving || "Sanering"}</div>
                     <div className="truncate text-xs text-ink-500">
-                      <span className="font-mono">{d.pd_nummer}</span>
-                      {d.opdrachtgever ? ` · ${d.opdrachtgever}` : ""}
-                      {d.regio ? ` · ${d.regio}` : ""}
-                      {d.adressen ? ` · ${d.adressen} adressen` : ""}
+                      {[d.opdrachtgever, d.regio, d.adressen ? `${d.adressen} adressen` : ""].filter(Boolean).join(" · ")}
                     </div>
                   </div>
                   <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${STATUS_KLEUR[info.kleur]}`}>{info.label}</span>
