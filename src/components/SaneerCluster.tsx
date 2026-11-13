@@ -67,6 +67,14 @@ export function SaneerVerdelen({ dossier, adressen, clusters, veldwerkers, naamV
     setUitslag(r.uitslag ?? null);
     onWijzig();
   }
+  // Groepen maken gebeurt vanzelf zodra er adressen zijn: daar hoef je niet zelf op te klikken.
+  const [autoGedaan, setAutoGedaan] = useState(false);
+  useEffect(() => {
+    if (autoGedaan || clusters.length > 0 || adressen.length === 0) return;
+    setAutoGedaan(true);
+    void cluster();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoGedaan, clusters.length, adressen.length]);
 
 
   // Het hele project naar één naam. Eén opdracht aan de server, dus of alles gaat mee of niets —
@@ -135,12 +143,8 @@ export function SaneerVerdelen({ dossier, adressen, clusters, veldwerkers, naamV
   return (
     <div className="space-y-4">
       {clusters.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-ink-300 bg-white p-8 text-center">
-          <Users className="mx-auto h-8 w-8 text-ink-300" />
-          <button type="button" onClick={() => void cluster()} disabled={bezig || adressen.length === 0}
-            className={`${knop} mt-4 bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-60`}>
-            {bezig ? <Loader2 className="h-4 w-4 animate-spin" /> : <Users className="h-4 w-4" />} Groepen maken
-          </button>
+        <div className="flex items-center justify-center gap-2 rounded-2xl border border-dashed border-ink-300 bg-white p-8 text-sm text-ink-500">
+          {fout ? <span className="text-red-700">{fout}</span> : <><Loader2 className="h-4 w-4 animate-spin" /> Even geduld…</>}
         </div>
       ) : (
         <>

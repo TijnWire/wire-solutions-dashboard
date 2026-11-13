@@ -28,14 +28,13 @@ import {
 // Vier regels beeldscherm voordat je één adres zag, en op een telefoon was dat de halve pagina. En
 // erger: "Langs de deur" en "Bellen" waren aparte stappen, terwijl het hetzelfde adres is — vul je
 // aan de deur een nummer in, dan schoof het onder je handen naar een andere pagina.
-type StapKey = "inlezen" | "verdelen" | "poster" | "afronden" | "afboeken" | "instellingen";
+type StapKey = "inlezen" | "verdelen" | "poster" | "afronden" | "instellingen";
 
 const EXTRAS: { key: StapKey; titel: string; Icon: typeof ListPlus }[] = [
   { key: "inlezen",  titel: "Inlezen",  Icon: ListPlus },
   { key: "verdelen", titel: "Verdelen", Icon: Users },
   { key: "poster",   titel: "Poster",   Icon: StickyNote },
   { key: "afronden", titel: "Afronden", Icon: FileCheck2 },
-  { key: "afboeken", titel: "Afboeken", Icon: FileCheck2 },
   { key: "instellingen", titel: "Wijzigen", Icon: Settings },
 ];
 const knop = "inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors";
@@ -108,7 +107,6 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
     verdelen: clusters.length > 0 && verdeeld === clusters.length,
     poster: taken.length > 0 && openTaken === 0,
     afronden: detail?.dossier.status === "afgerond" || detail?.dossier.status === "afgeboekt",
-    afboeken: detail?.dossier.status === "afgeboekt",
     instellingen: false,
   };
 
@@ -257,13 +255,6 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
         <DossierWijzigen dossier={dossier} onOpgeslagen={() => { setStap(null); void laad(); }} onVerwijderd={onTerug} />
       )}
 
-      {actief === "afboeken" && (
-        dossier.status === "afgerond" || dossier.status === "afgeboekt"
-          ? <Afboeken dossier={dossier} onWijzig={() => void laad()} />
-          : <Leeg Icon={FileCheck2} titel="Het werk is nog niet afgerond"
-              tekst="Afboeken kan pas als de afspraken staan en het dossier is afgerond. Dat doe je bij Afronden."
-              knop="Naar Afronden" onKlik={() => setStap("afronden")} />
-      )}
       </div>
     </div>
   );
@@ -395,58 +386,8 @@ function Posters({ taken, naamVan, onWijzig }: { taken: Taak[]; naamVan: (id?: s
   );
 }
 
-// ── Afronden en afboeken ──
-// De knop is geen meningsuiting: de server rekent na of alles echt klaar is en weigert anders. Wat er
-// nog openstaat, staat er letterlijk bij.
-// ── Afboeken — het sluitstuk aan het bureau ──
-// Eén knop, en met opzet niet meer dan dat. Dit is het moment waarop het dossier van "ons werk"
-// naar "klaar voor Stedin" gaat: daarna kan de facturatie erop en staat hij in het archief.
-function Afboeken({ dossier, onWijzig }: { dossier: Dossier; onWijzig: () => void }) {
-  const [bezig, setBezig] = useState(false);
-  const [fout, setFout] = useState("");
 
-  async function afboeken() {
-    setBezig(true); setFout("");
-    const r = await rondDossierAf(dossier.pd_nummer, { afboeken: true });
-    setBezig(false);
-    if (!r.ok) { setFout(r.fout ?? "Mislukt."); return; }
-    onWijzig();
-  }
-
-  if (dossier.status === "afgeboekt") {
-    return (
-      <div className="rounded-2xl border border-ink-200 bg-white p-6">
-        <div className="flex items-center gap-3">
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-green-50 text-green-600"><Check className="h-6 w-6" /></span>
-          <div className="min-w-0">
-            <h3 className="text-base font-bold text-ink-900">Afgeboekt op {dossier.pd_nummer}</h3>
-            <p className="text-sm text-ink-500">
-              Op {kortNL(dossier.afgeboekt_op)} afgeboekt. Het dossier staat in het archief en is alleen-lezen.
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-3">
-      <div className="rounded-2xl border border-ink-200 bg-white p-6">
-        <h3 className="text-base font-bold text-ink-900">Klaar om af te boeken</h3>
-        <p className="mt-1 text-sm text-ink-600">
-          Het werk is afgerond, dus het dossier staat nu bij <span className="font-semibold text-ink-800">Klaar voor Stedin</span>.
-          Boek het af op het PD-nummer zodra de facturatie eroverheen is; daarna is het afgehandeld en gaat het naar het archief.
-        </p>
-        <button type="button" onClick={() => void afboeken()} disabled={bezig}
-          className={`${knop} mt-4 w-full bg-ink-800 py-3.5 text-base text-white hover:bg-ink-900 disabled:opacity-60 sm:w-auto`}>
-          {bezig ? <Loader2 className="h-5 w-5 animate-spin" /> : <FileCheck2 className="h-5 w-5" />} Afboeken op {dossier.pd_nummer}
-        </button>
-      </div>
-      {fout && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{fout}</p>}
-    </div>
-  );
-}
-
+// ── Afronden: met "Dossier bevestigen" staat de sanering op afgerond ──
 function Afronden({ dossier, clusters, adressen, onWijzig }: {
   dossier: Dossier;
   clusters: DossierDetail["clusters"];
@@ -469,7 +410,7 @@ function Afronden({ dossier, clusters, adressen, onWijzig }: {
 
   async function doe(soort: "afronden") {
     setBezig(soort); setFout("");
-    const r = await rondDossierAf(dossier.pd_nummer, { afboeken: false });
+    const r = await rondDossierAf(dossier.pd_nummer, { afboeken: false, toch: true }) // bevestigen is genoeg: geen extra controles;
     setBezig("");
     if (!r.ok) { setFout(r.fout ?? "Mislukt."); return; }
     onWijzig();
@@ -531,11 +472,11 @@ function Afronden({ dossier, clusters, adressen, onWijzig }: {
         </p>
       ) : dossier.status === "afgerond" ? (
         <p className="rounded-xl bg-green-50 px-4 py-3 text-sm font-semibold text-green-800">
-          Het werk is afgerond. Het kantoor boekt het dossier af op {dossier.pd_nummer} — dat staat bij Afhandeling.
+          Dossier bevestigd — deze sanering staat op afgerond.
         </p>
       ) : (
         <button type="button" onClick={() => void doe("afronden")} disabled={!!bezig} className={`${knop} w-full bg-brand-600 py-3.5 text-base text-white hover:bg-brand-700 disabled:opacity-60 sm:w-auto`}>
-          {bezig === "afronden" ? <Loader2 className="h-5 w-5 animate-spin" /> : <FileCheck2 className="h-5 w-5" />} Dossier afronden
+          {bezig === "afronden" ? <Loader2 className="h-5 w-5 animate-spin" /> : <FileCheck2 className="h-5 w-5" />} Dossier bevestigen
         </button>
       )}
     </div>
