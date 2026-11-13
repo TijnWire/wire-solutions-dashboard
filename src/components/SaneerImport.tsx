@@ -227,9 +227,9 @@ export function SaneerImport({ dossier, aantalNu, bestaandeAdressen, onKlaar }: 
     const rijen: ImportRij[] = nummers.map((n, i) => ({
       bron: start + i + 1, straat, huisnummer: n.huisnummer, toevoeging: n.toevoeging,
       postcode, plaats: velden.plaats.trim(), wijk: "", perceel: "",
-      // Bewoner en telefoon horen bij één adres; bij meerdere huisnummers vul je die later per adres in.
-      bewoner: nummers.length === 1 ? velden.bewoner.trim() : "",
-      telefoon: nummers.length === 1 ? velden.telefoon.trim() : "",
+      // Bewoner en telefoon vul je per huisnummer in.
+      bewoner: (velden.perAdres[n.huisnummer + n.toevoeging]?.bewoner ?? "").trim(),
+      telefoon: (velden.perAdres[n.huisnummer + n.toevoeging]?.telefoon ?? "").trim(),
       opmerking: "", fouten: [], waarschuwingen: ["handmatig toegevoegd"], dubbelInBestand: false, bestaatAl: false,
     }));
     // Geen postcode ingevuld? Dan zoeken we die per huisnummer op (aan de even en oneven kant kan hij verschillen).
@@ -534,12 +534,12 @@ export function SaneerImport({ dossier, aantalNu, bestaandeAdressen, onKlaar }: 
 }
 
 // ── Klein formulier om adressen met de hand in te voeren: één straat, één of meer huisnummers ──
-type HandVelden = { straatEnNummers: string; postcode: string; plaats: string; bewoner: string; telefoon: string };
+type HandVelden = { straatEnNummers: string; postcode: string; plaats: string; perAdres: Record<string, { bewoner: string; telefoon: string }> };
 function HandmatigAdres({ onToevoegen, onAnnuleer }: {
   onToevoegen: (velden: HandVelden) => Promise<boolean>;
   onAnnuleer: () => void;
 }) {
-  const [v, setV] = useState<HandVelden>({ straatEnNummers: "", postcode: "", plaats: "", bewoner: "", telefoon: "" });
+  const [v, setV] = useState<HandVelden>({ straatEnNummers: "", postcode: "", plaats: "", perAdres: {} });
   const [bezig, setBezig] = useState(false);
   const set = (p: Partial<HandVelden>) => setV((s) => ({ ...s, ...p }));
   const veld = "w-full rounded-lg border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100";
@@ -547,6 +547,8 @@ function HandmatigAdres({ onToevoegen, onAnnuleer }: {
   const split = v.straatEnNummers.trim() ? splitsStraatEnHuisnummers(v.straatEnNummers) : null;
   const aantal = split && !split.fout ? split.nummers.length : 0;
   const kanToe = aantal > 0 && !bezig;
+  const zetAdres = (sleutel: string, p: Partial<{ bewoner: string; telefoon: string }>) =>
+    setV((s) => ({ ...s, perAdres: { ...s.perAdres, [sleutel]: { ...(s.perAdres[sleutel] ?? { bewoner: "", telefoon: "" }), ...p } } }));
   const toevoegen = async () => {
     setBezig(true);
     try { await onToevoegen(v); } finally { setBezig(false); }
@@ -569,11 +571,23 @@ function HandmatigAdres({ onToevoegen, onAnnuleer }: {
         </div>
         <div className="col-span-1 sm:col-span-2"><label className={lab}>Postcode</label><input value={v.postcode} onChange={(e) => set({ postcode: e.target.value })} placeholder="1234 AB" className={veld} /></div>
         <div className="col-span-1 sm:col-span-4"><label className={lab}>Plaats</label><input value={v.plaats} onChange={(e) => set({ plaats: e.target.value })} placeholder="Rotterdam" className={veld} /></div>
-        {aantal <= 1 && (
-          <>
-            <div className="col-span-2 sm:col-span-3"><label className={lab}>Bewoner</label><input value={v.bewoner} onChange={(e) => set({ bewoner: e.target.value })} placeholder="Naam (optioneel)" className={veld} /></div>
-            <div className="col-span-2 sm:col-span-3"><label className={lab}>Telefoon</label><input value={v.telefoon} onChange={(e) => set({ telefoon: e.target.value })} placeholder="06 …" className={veld} /></div>
-          </>
+        {aantal > 0 && split && (
+          <div className="col-span-2 sm:col-span-6">
+            <span className={lab}>Per huisnummer</span>
+            <div className="divide-y divide-ink-100 rounded-lg border border-ink-200">
+              {split.nummers.map((n) => {
+                const k = n.huisnummer + n.toevoeging;
+                const d = v.perAdres[k];
+                return (
+                  <div key={k} className="grid grid-cols-[4.5rem_1fr] items-center gap-2 p-2 sm:grid-cols-[6rem_1fr_1fr]">
+                    <span className="row-span-2 text-sm font-semibold text-ink-800 sm:row-span-1">{k}</span>
+                    <input value={d?.telefoon ?? ""} onChange={(e) => zetAdres(k, { telefoon: e.target.value })} placeholder="Telefoon 06 …" inputMode="tel" className={veld} />
+                    <input value={d?.bewoner ?? ""} onChange={(e) => zetAdres(k, { bewoner: e.target.value })} placeholder="Bewoner (optioneel)" className={veld} />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         )}
       </div>
       <div className="mt-3 flex items-center gap-2">
@@ -583,7 +597,7 @@ function HandmatigAdres({ onToevoegen, onAnnuleer }: {
         </button>
         <button type="button" onClick={onAnnuleer} className={`${knop} bg-ink-100 text-ink-700 hover:bg-ink-200`}>Annuleren</button>
       </div>
-      <p className="mt-2 text-xs text-ink-500">Meerdere huisnummers scheid je met een komma; “20-26” is 20, 22, 24 en 26. Laat je de postcode leeg, dan zoekt de app hem per adres op. De adressen komen in het voorbeeld hieronder — controleer en klik daarna op “toevoegen”.</p>
+      <p className="mt-2 text-xs text-ink-500">Meerdere huisnummers scheid je met een komma; “20-26” is 20, 22, 24 en 26. Per huisnummer vul je daarna telefoon en bewoner in. Laat je de postcode leeg, dan zoekt de app hem per adres op. De adressen komen in het voorbeeld hieronder — controleer en klik daarna op “toevoegen”.</p>
     </div>
   );
 }
