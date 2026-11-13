@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Check, ArrowLeft, ListPlus, Users, StickyNote, FileCheck2,
   Loader2, AlertTriangle, CalendarCheck, ChevronRight, FileSpreadsheet, FileText, ShieldAlert, ClipboardList,
+  Settings, Trash2,
 } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { SaneerWerklijst, WerklijstZeef, type Beeld } from "./SaneerWerklijst";
@@ -9,7 +10,7 @@ import { SaneerImport } from "./SaneerImport";
 import { SaneerChecklists, splitsAdres, adresSleutel } from "./SaneerChecklists";
 import type { SaneerChecklist } from "../lib/types";
 import { SaneerVerdelen, SaneerClusterWerk } from "./SaneerCluster";
-import { haalDossier, STATUS_INFO, type Dossier, type DossierDetail } from "../lib/saneerflow";
+import { haalDossier, bewaarDossier, verwijderDossier, speelruimteTot, STATUS_INFO, type Dossier, type DossierDetail } from "../lib/saneerflow";
 import {
   haalFlowAdressen, haalTaken, vinkTaak, rondDossierAf,
   haalExport, wijzigFlowAdres, type FlowAdres, type Taak,
@@ -31,7 +32,7 @@ import { maakChecklists } from "../lib/saneerChecklist";
 // Vier regels beeldscherm voordat je één adres zag, en op een telefoon was dat de halve pagina. En
 // erger: "Langs de deur" en "Bellen" waren aparte stappen, terwijl het hetzelfde adres is — vul je
 // aan de deur een nummer in, dan schoof het onder je handen naar een andere pagina.
-type StapKey = "inlezen" | "verdelen" | "checklists" | "poster" | "afronden" | "afboeken";
+type StapKey = "inlezen" | "verdelen" | "checklists" | "poster" | "afronden" | "afboeken" | "instellingen";
 
 const EXTRAS: { key: StapKey; titel: string; Icon: typeof ListPlus }[] = [
   { key: "inlezen",  titel: "Inlezen",  Icon: ListPlus },
@@ -40,6 +41,7 @@ const EXTRAS: { key: StapKey; titel: string; Icon: typeof ListPlus }[] = [
   { key: "poster",   titel: "Poster",   Icon: StickyNote },
   { key: "afronden", titel: "Afronden", Icon: FileCheck2 },
   { key: "afboeken", titel: "Afboeken", Icon: FileCheck2 },
+  { key: "instellingen", titel: "Wijzigen", Icon: Settings },
 ];
 const knop = "inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors";
 const knop2 = knop;
@@ -134,6 +136,7 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
     afronden: detail?.dossier.status === "afgerond" || detail?.dossier.status === "afgeboekt",
     afboeken: detail?.dossier.status === "afgeboekt",
     checklists: saneerChecklists.some((c) => c.pdNummer === pd),
+    instellingen: false,
   };
 
   // Geen stap is het gewone geval: dan zie je de werklijst. Een zijpad kies je bewust, en met de
@@ -236,7 +239,7 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
 
           {/* De zijpaden: klein en rechts, want je komt hier voor de adressen. */}
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
-            {EXTRAS.map((x) => (
+            {EXTRAS.filter((x) => x.key !== "instellingen" || isLeiding).map((x) => (
               <button key={x.key} type="button" onClick={() => { setStap(actief === x.key ? null : x.key); setCluster(null); }}
                 title={x.titel}
                 className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors ${
@@ -280,6 +283,10 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
       {actief === "poster" && <Posters taken={taken} naamVan={naamVan} onWijzig={() => void laad()} />}
       {actief === "afronden" && <Afronden dossier={dossier} clusters={clusters} adressen={adressen} taken={taken} onWijzig={() => void laad()} />}
 
+      {actief === "instellingen" && isLeiding && (
+        <DossierWijzigen dossier={dossier} onOpgeslagen={() => { setStap(null); void laad(); }} onVerwijderd={onTerug} />
+      )}
+
       {actief === "afboeken" && (
         dossier.status === "afgerond" || dossier.status === "afgeboekt"
           ? <Afboeken dossier={dossier} onWijzig={() => void laad()} />
@@ -292,6 +299,87 @@ export function SaneerFlow({ pd, onTerug }: { pd: string; onTerug: () => void })
   );
 }
 
+
+// ── Wijzigen: straatnaam en uitvoeringsdatum aanpassen, of de hele sanering verwijderen ──
+function DossierWijzigen({ dossier, onOpgeslagen, onVerwijderd }: { dossier: Dossier; onOpgeslagen: () => void; onVerwijderd: () => void }) {
+  const [gebouw, setGebouw] = useState(dossier.gebouw);
+  const [dag, setDag] = useState(dossier.uitvoering_van);
+  const [bezig, setBezig] = useState(false);
+  const [fout, setFout] = useState("");
+  const [zeker, setZeker] = useState(false);
+  const veld = "w-full rounded-lg border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100";
+  const gewijzigd = gebouw.trim() !== dossier.gebouw || dag !== dossier.uitvoering_van;
+
+  const opslaan = async () => {
+    if (!gebouw.trim()) return setFout("Vul de straatnaam en huisnummers in.");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dag)) return setFout("Kies een uitvoeringsdatum.");
+    setBezig(true); setFout("");
+    // Alles van het dossier meesturen, zodat instellingen die hier niet staan (poster, groepen) blijven zoals ze zijn.
+    const r = await bewaarDossier({ ...dossier, gebouw: gebouw.trim(), uitvoering_van: dag, uitvoering_tot: speelruimteTot(dag), bijwerken: true });
+    setBezig(false);
+    if (!r.ok) return setFout(r.fout ?? "Opslaan is niet gelukt.");
+    onOpgeslagen();
+  };
+
+  const verwijder = async () => {
+    setBezig(true); setFout("");
+    const r = await verwijderDossier(dossier.pd_nummer);
+    setBezig(false);
+    if (!r.ok) return setFout(r.fout ?? "Verwijderen is niet gelukt.");
+    onVerwijderd();
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-2xl border border-ink-200 bg-white p-4 shadow-sm">
+        <h3 className="mb-3 text-sm font-bold text-ink-900">Sanering wijzigen</h3>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block">
+            <span className="mb-1 block text-xs font-semibold text-ink-600">Straatnaam en huisnummers</span>
+            <input value={gebouw} onChange={(e) => { setGebouw(e.target.value); setFout(""); }} className={veld} />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs font-semibold text-ink-600">Uitvoeringsdatum</span>
+            <input type="date" value={dag} onChange={(e) => { setDag(e.target.value); setFout(""); }} className={veld} />
+          </label>
+        </div>
+        <p className="mt-2 text-xs text-ink-500">Afspraken die al met bewoners zijn gemaakt, blijven staan. Pas die zo nodig aan bij Verdelen.</p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <button type="button" onClick={() => void opslaan()} disabled={bezig || !gewijzigd}
+            className={`${knop} bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-40`}>
+            {bezig ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Opslaan
+          </button>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-red-200 bg-red-50/50 p-4">
+        <h3 className="text-sm font-bold text-red-800">Sanering verwijderen</h3>
+        <p className="mt-1 text-xs text-red-700">Haalt {dossier.gebouw || "deze sanering"} met alle adressen en afspraken weg uit Saneren.</p>
+        {!zeker ? (
+          <button type="button" onClick={() => setZeker(true)} disabled={bezig}
+            className={`${knop} mt-3 border border-red-300 bg-white text-red-700 hover:bg-red-100`}>
+            <Trash2 className="h-4 w-4" /> Verwijderen
+          </button>
+        ) : (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span className="text-sm font-semibold text-red-800">Weet je het zeker?</span>
+            <button type="button" onClick={() => void verwijder()} disabled={bezig}
+              className={`${knop} bg-red-600 text-white hover:bg-red-700 disabled:opacity-40`}>
+              {bezig ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />} Ja, verwijderen
+            </button>
+            <button type="button" onClick={() => setZeker(false)} disabled={bezig} className={`${knop} bg-ink-100 text-ink-700 hover:bg-ink-200`}>Annuleren</button>
+          </div>
+        )}
+      </div>
+
+      {fout && (
+        <div className="flex items-start gap-2 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> {fout}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ── Poster ──
 // De taak ontstaat vanzelf zodra een groep een datum heeft. Ophangen moet binnen twee weken ná die

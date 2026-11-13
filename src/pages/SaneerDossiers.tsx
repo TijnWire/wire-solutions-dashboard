@@ -9,7 +9,7 @@ import { SaneerFlow } from "../components/SaneerFlow";
 import { useProjectFilter } from "../components/ProjectFilter";
 import { WerkTabs, type WerkTab } from "../components/WerkTabs";
 import {
-  haalDossiers, bewaarDossier, verwijderDossier, netPd, pdGeldig,
+  haalDossiers, bewaarDossier, verwijderDossier, netPd, pdGeldig, speelruimteTot,
   REGIOS, STATUS_INFO, type Dossier, type Regio,
 } from "../lib/saneerflow";
 
@@ -50,12 +50,6 @@ const datumNL = (iso: string) => {
 // tweede veld is de speelruimte waarbinnen de app een andere dag mag voorstellen als iemand niet kan.
 // Dat hoeft niemand in te vullen — het volgt uit de gekozen dag.
 const SPEELRUIMTE_WEKEN = 8;
-const speelruimteTot = (dag: string) => {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dag)) return dag;
-  const d = new Date(`${dag}T12:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + SPEELRUIMTE_WEKEN * 7);
-  return d.toISOString().slice(0, 10);
-};
 
 // ── Nieuw dossier ──
 function NieuwDossier({ onKlaar, onAnnuleer }: { onKlaar: (pd: string) => void; onAnnuleer: () => void }) {

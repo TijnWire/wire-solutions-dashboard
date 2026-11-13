@@ -94,6 +94,14 @@ export async function zetStatus(pd: string, status: DossierStatus): Promise<{ ok
   return r.ok ? { ok: true } : { ok: false, fout: r.fout };
 }
 
+// Tot wanneer de app een andere dag mag voorstellen als een bewoner niet kan: 8 weken na de gekozen dag.
+export const speelruimteTot = (dag: string) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dag)) return dag;
+  const d = new Date(`${dag}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 8 * 7);
+  return d.toISOString().slice(0, 10);
+};
+
 export async function verwijderDossier(pd: string, herstel = false): Promise<{ ok: boolean; fout?: string }> {
   const r = await probeer(cloudDelete("/saneer/dossier", { pd_nummer: netPd(pd), herstel }));
   return r.ok ? { ok: true } : { ok: false, fout: r.fout };
