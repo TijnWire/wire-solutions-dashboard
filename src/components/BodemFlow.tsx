@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Check, ChevronRight, ArrowLeft, Settings2, ListPlus, Users, Footprints, ClipboardCheck } from "lucide-react";
+import { Check, ChevronRight, ArrowLeft, Settings2, ListPlus, Footprints, ClipboardCheck } from "lucide-react";
 import { BodemPlanning, BodemAfspraken } from "./BodemPlanning";
-import { BodemToewijzen } from "./BodemToewijzen";
 import { BodemOverzicht } from "./BodemOverzicht";
 import { BodemBewaartermijnKaart } from "./BodemBewaartermijn";
 import { dagenVanVenster, voortgangVan } from "../lib/bodemonderzoek";
@@ -14,36 +13,32 @@ import type { TauwAdres, TauwOpdracht, User } from "../lib/types";
 // waar je bent en wat er al af is. Je kunt vrij heen en weer springen — niets zit op slot, want een
 // beheerder moet ook halverwege iets kunnen bijstellen.
 
-export type StapKey = "instellen" | "adressen" | "verdelen" | "onderweg" | "resultaat";
+export type StapKey = "instellen" | "adressen" | "onderweg" | "resultaat";
 
 const STAPPEN: { key: StapKey; nr: number; titel: string; uitleg: string; Icon: typeof Settings2 }[] = [
   { key: "instellen", nr: 1, titel: "Instellen", uitleg: "Periode, werkdagen en tijdblokken", Icon: Settings2 },
   { key: "adressen", nr: 2, titel: "Adressen", uitleg: "Inlezen of zelf toevoegen", Icon: ListPlus },
-  { key: "verdelen", nr: 3, titel: "Verdelen", uitleg: "Wie loopt welke adressen", Icon: Users },
-  { key: "onderweg", nr: 4, titel: "Onderweg", uitleg: "De ronde langs de deuren", Icon: Footprints },
-  { key: "resultaat", nr: 5, titel: "Resultaat", uitleg: "Afspraken en export", Icon: ClipboardCheck },
+  { key: "onderweg", nr: 3, titel: "Onderweg", uitleg: "De ronde langs de deuren", Icon: Footprints },
+  { key: "resultaat", nr: 4, titel: "Afronding", uitleg: "Afspraken en export", Icon: ClipboardCheck },
 ];
 
-export function BodemFlow({ opdracht, users, veldwerkers, magWissen, onWijzig, onAdressen, adressenSectie, rondeStart }: {
+export function BodemFlow({ opdracht, users, veldwerkers, magWissen, onWijzig, adressenSectie, rondeStart }: {
   opdracht: TauwOpdracht;
   users: User[];
   veldwerkers: User[];
   magWissen: boolean; // alleen de eigenaar en HR mogen persoonsgegevens wissen
   onWijzig: (patch: Partial<TauwOpdracht>) => void;
-  onAdressen: (next: TauwAdres[]) => void;
+  onAdressen?: (next: TauwAdres[]) => void;
   adressenSectie: ReactNode;   // de bestaande adreslijst met import-knop
   rondeStart: ReactNode;       // het blok "Langs de deuren" voor wie zelf meeloopt
 }) {
   const v = voortgangVan(opdracht.adressen);
   const dagen = useMemo(() => dagenVanVenster(opdracht.venster), [opdracht.venster]);
-  const team = opdracht.team ?? [];
-  const verdeeld = opdracht.adressen.filter((a) => a.toegewezenAan).length;
 
   // Wanneer is een stap af? Puur informatief — je mag altijd overal heen.
   const af: Record<StapKey, boolean> = {
     instellen: dagen.length > 0,
     adressen: opdracht.adressen.length > 0,
-    verdelen: team.length > 0 && verdeeld > 0,
     onderweg: v.totaal > 0 && v.behandeld >= v.totaal,
     resultaat: false,
   };
@@ -62,7 +57,6 @@ export function BodemFlow({ opdracht, users, veldwerkers, magWissen, onWijzig, o
   const samenvatting: Record<StapKey, string> = {
     instellen: dagen.length ? `${dagen.length} dagen` : "nog niet ingesteld",
     adressen: opdracht.adressen.length ? `${opdracht.adressen.length}` : "geen",
-    verdelen: team.length ? `${verdeeld}/${opdracht.adressen.length}` : "nog niemand",
     onderweg: v.totaal ? `${v.behandeld}/${v.totaal}` : "—",
     resultaat: v.ja ? `${v.ja} afspraken` : "—",
   };
@@ -113,28 +107,13 @@ export function BodemFlow({ opdracht, users, veldwerkers, magWissen, onWijzig, o
           <BodemPlanning opdracht={opdracht} users={veldwerkers} onWijzig={onWijzig} deel="instellen" />
           {!af.instellen && (
             <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
-              Kies eerst een startdag. Zonder periode kan er aan de deur geen afspraak worden gemaakt.
+              Kies eerst de dagen. Zonder periode kan er aan de deur geen afspraak worden gemaakt.
             </p>
           )}
         </>
       )}
 
       {stap === "adressen" && adressenSectie}
-
-      {stap === "verdelen" && (
-        <>
-          {opdracht.adressen.length === 0 ? (
-            <p className="rounded-lg bg-amber-50 px-3 py-3 text-sm text-amber-800">
-              Er zijn nog geen adressen. Ga eerst terug naar stap 2.
-            </p>
-          ) : (
-            <>
-              <BodemPlanning opdracht={opdracht} users={veldwerkers} onWijzig={onWijzig} deel="verdelen" />
-              <BodemToewijzen adressen={opdracht.adressen} users={users} team={team} onWijzig={onAdressen} />
-            </>
-          )}
-        </>
-      )}
 
       {stap === "onderweg" && (
         <>

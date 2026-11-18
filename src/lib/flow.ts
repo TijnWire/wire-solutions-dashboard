@@ -19,12 +19,10 @@ export type StapDef = {
 // bezoekronde draait om regio bepalen en een route over lange afstanden.
 export const TAUW_STAP_DEFS: Record<TauwType, StapDef[]> = {
   bodemonderzoek: [
-    { key: "regio", label: "Regio bepalen", actie: { soort: "inline", paneel: "regio" } },
     { key: "contact", label: "Bewoners contacteren & afspraken bevestigen", hint: "Bel of WhatsApp elke bewoner en zet datum/tijd in de adres-balk.", actie: { soort: "markeer" } },
     { key: "informatie", label: "Bijzonderheden invullen", hint: "Noteer per adres de bijzonderheden uit het gesprek.", actie: { soort: "markeer" } },
   ],
   bezoekronde: [
-    { key: "regio", label: "Regio bepalen", actie: { soort: "inline", paneel: "regio" } },
     { key: "route", label: "Route aanmaken (lange afstanden)", hint: "Rijroute langs alle te bezoeken adressen via Google Maps.", actie: { soort: "inline", paneel: "route" } },
   ],
 };

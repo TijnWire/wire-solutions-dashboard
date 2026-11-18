@@ -1,11 +1,10 @@
 import { useMemo, useState } from "react";
-import { Users, Wand2, CalendarRange, MapPin, RotateCcw, Check, Clock, Loader2 } from "lucide-react";
+import { CalendarRange, Clock, Loader2, X } from "lucide-react";
 import { Card } from "./ui";
 import { DatumKiezer } from "./DatumKiezer";
-import { verdeelOverTeam, dagenVanVenster, dagLabel, voortgangVan, sorteerRoute, vensterRuimte, TIJDSLOTS, STANDAARD_WERKDAGEN, DAGNAMEN } from "../lib/bodemonderzoek";
+import { dagenVanVenster, dagLabel, vensterRuimte, maakTijdblokken, TIJDSLOTS, STANDAARD_WERKDAGEN, DAGNAMEN } from "../lib/bodemonderzoek";
 import { sbBodemPlanning } from "../lib/supabase";
-import type { TauwAdres, TauwOpdracht, TauwSlot, User } from "../lib/types";
-import { isToegewezen } from "../lib/toewijzing";
+import type { TauwOpdracht, TauwSlot, User } from "../lib/types";
 
 // Voorbereiding van een bodemonderzoek-ronde, voor de beheerder.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -14,8 +13,6 @@ import { isToegewezen } from "../lib/toewijzing";
 // Het verdelen gebeurt op looproute (postcode → straat → huisnummers), waarbij een straat nooit over
 // twee mensen wordt gesplitst — zie lib/bodemonderzoek.ts.
 
-const knopKlein = "inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-3.5 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-50 disabled:cursor-not-allowed disabled:opacity-40";
-const knopPrimair = "inline-flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-40";
 
 // ── Het resultaat van de ronde ── de scheiding waar het om draait: wie wil erbij zijn (en wanneer),
 // en bij wie mag de aannemer zo de tuin in. Voor de beheerder, om de aannemer mee aan te sturen.
@@ -85,26 +82,25 @@ export function BodemAfspraken({ opdracht, users }: { opdracht: TauwOpdracht; us
   );
 }
 
-export function BodemPlanning({ opdracht, users, onWijzig, deel = "alles" }: {
+// De tijden waaruit je de blokken kiest: elk half uur van 06:00 tot 21:00.
+const TIJDEN = Array.from({ length: 31 }, (_, i) => `${String(6 + Math.floor(i / 2)).padStart(2, "0")}:${i % 2 ? "30" : "00"}`);
+const BLOKLENGTES = [30, 45, 60, 90, 120];
+const STANDAARD_TIJDEN = { van: "08:00", tot: "16:00", minuten: 60 };
+
+export function BodemPlanning({ opdracht, onWijzig }: {
   opdracht: TauwOpdracht;
-  users: User[];
+  users?: User[];
   onWijzig: (patch: Partial<TauwOpdracht>) => void;
-  // De pagina toont per stap maar één ding: "instellen" is de periode en de tijdblokken,
-  // "verdelen" is het team en de verdeling over de medewerkers.
-  deel?: "alles" | "instellen" | "verdelen";
+  deel?: "alles" | "instellen";
 }) {
-  const toonInstellen = deel === "alles" || deel === "instellen";
-  const toonVerdelen = deel === "alles" || deel === "verdelen";
-  const [maxPer, setMaxPer] = useState<string>("");
-  const [locaties, setLocaties] = useState<Set<string>>(new Set()); // leeg = alle locaties
-  const [melding, setMelding] = useState("");
   const [serverBezig, setServerBezig] = useState(false);
   const [serverFout, setServerFout] = useState("");
 
-  const team = opdracht.team ?? [];
   const venster = opdracht.venster;
   const dagen = useMemo(() => dagenVanVenster(venster), [venster]);
   const werkdagen = venster?.werkdagen?.length ? venster.werkdagen : STANDAARD_WERKDAGEN;
+  const losse = !!venster?.losseDagen;
+  const tijden = venster?.tijden ?? STANDAARD_TIJDEN;
   const sloten: TauwSlot[] = venster?.sloten?.length ? venster.sloten : TIJDSLOTS.map((slot): TauwSlot => ({ slot, actief: true }));
 
   // Elke wijziging aan de planning gaat óók naar de server: die bewaakt bij het boeken de capaciteit,
@@ -112,148 +108,130 @@ export function BodemPlanning({ opdracht, users, onWijzig, deel = "alles" }: {
   const zetVenster = (patch: Partial<NonNullable<TauwOpdracht["venster"]>>) => {
     const v = { start: venster?.start ?? "", weken: venster?.weken ?? 2, ...venster, ...patch };
     onWijzig({ venster: v });
+    const alleDagen = dagenVanVenster(v);
+    // Bij losse dagen bewaakt de server de eerste t/m laatste dag en de weekdagen daarvan; de app
+    // laat aan de deur alleen de gekozen dagen zien.
+    const weekdagen = v.losseDagen
+      ? [...new Set(alleDagen.map((d) => { const [j, m, dd] = d.split("-").map(Number); return new Date(Date.UTC(j, m - 1, dd)).getUTCDay(); }))]
+      : (v.werkdagen?.length ? v.werkdagen : STANDAARD_WERKDAGEN);
     setServerBezig(true);
     void sbBodemPlanning(opdracht.id, {
-      periodeStart: v.start || undefined,
-      periodeEind: v.eind || (dagenVanVenster(v).slice(-1)[0] ?? undefined),
-      werkdagen: v.werkdagen?.length ? v.werkdagen : STANDAARD_WERKDAGEN,
+      periodeStart: (v.losseDagen ? alleDagen[0] : v.start) || undefined,
+      periodeEind: v.losseDagen ? alleDagen[alleDagen.length - 1] : (v.eind || (alleDagen.slice(-1)[0] ?? undefined)),
+      werkdagen: weekdagen.length ? weekdagen : STANDAARD_WERKDAGEN,
       sloten: (v.sloten?.length ? v.sloten : TIJDSLOTS.map((slot): TauwSlot => ({ slot, actief: true }))).map((x) => ({ slot: x.slot, actief: x.actief !== false, max: x.max })),
     }).then((r) => { setServerFout(r.ok ? "" : (r.error ?? "onbekende fout")); }).finally(() => setServerBezig(false));
   };
   const zetSlot = (slot: string, patch: Partial<TauwSlot>) =>
     zetVenster({ sloten: sloten.map((x) => (x.slot === slot ? { ...x, ...patch } : x)) });
-
-  // Beschikbare locaties (plaats) met aantallen — hiermee kun je de ronde beperken tot één plaats.
-  const perPlaats = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const a of opdracht.adressen) {
-      const p = (a.plaats || "Onbekend").trim();
-      m.set(p, (m.get(p) ?? 0) + 1);
-    }
-    return [...m.entries()].sort((a, b) => b[1] - a[1]);
-  }, [opdracht.adressen]);
-
-  const inFilter = (a: TauwAdres) => locaties.size === 0 || locaties.has((a.plaats || "Onbekend").trim());
-  const teVerdelen = opdracht.adressen.filter(inFilter);
-
-  const toggleLocatie = (p: string) => setLocaties((prev) => {
-    const n = new Set(prev);
-    if (n.has(p)) n.delete(p); else n.add(p);
-    return n;
-  });
-  const toggleTeamlid = (id: string) => {
-    const n = team.includes(id) ? team.filter((x) => x !== id) : [...team, id];
-    onWijzig({ team: n });
+  // Nieuwe tijden → nieuwe blokken. Een blok dat blijft bestaan houdt zijn instelling (aan/uit, max).
+  const zetTijden = (patch: Partial<typeof tijden>) => {
+    const t = { ...tijden, ...patch };
+    const blokken = maakTijdblokken(t.van, t.tot, t.minuten);
+    zetVenster({ tijden: t, sloten: blokken.map((slot) => sloten.find((x) => x.slot === slot) ?? { slot, actief: true }) });
   };
-
-  const verdeel = () => {
-    if (!team.length) { setMelding("Kies eerst wie er meelopen."); return; }
-    if (!teVerdelen.length) { setMelding("Er zijn geen adressen om te verdelen."); return; }
-    const max = maxPer.trim() ? Math.max(1, Number(maxPer)) : undefined;
-    const verdeling = verdeelOverTeam(teVerdelen, team, max ? { maxPerPersoon: max } : undefined);
-    const perAdres = new Map<string, string>();
-    for (const v of verdeling) for (const id of v.adresIds) perAdres.set(id, v.userId);
-    // Alleen de adressen binnen het filter krijgen een (nieuwe) eigenaar; de rest blijft zoals hij is.
-    const next = opdracht.adressen.map((a) =>
-      inFilter(a) ? { ...a, toegewezenAan: perAdres.get(a.id), bijgewerktOp: new Date().toISOString() } : a
-    );
-    onWijzig({ adressen: sorteerRoute(next) });
-    const verdeeld = perAdres.size;
-    const over = teVerdelen.length - verdeeld;
-    setMelding(`${verdeeld} adressen verdeeld over ${team.length} ${team.length === 1 ? "persoon" : "personen"}${over > 0 ? ` — ${over} bleven onverdeeld (limiet per persoon bereikt)` : ""}.`);
+  const voegDagToe = (iso: string) => {
+    if (!iso) return;
+    zetVenster({ dagen: [...new Set([...(venster?.dagen ?? []), iso])].sort() });
   };
-
-  const wisVerdeling = () => {
-    onWijzig({ adressen: opdracht.adressen.map((a) => (inFilter(a) ? { ...a, toegewezenAan: undefined } : a)) });
-    setMelding("Verdeling gewist.");
-  };
-
-  const naamVan = (id: string) => users.find((u) => u.id === id)?.naam ?? "Onbekend";
+  const select = "rounded-lg border border-ink-200 bg-white px-2.5 py-2 text-sm font-semibold text-ink-800 outline-none focus:border-brand-400";
 
   return (
     <Card className="space-y-4 p-4">
-      {deel === "alles" && <h3 className="text-sm font-bold text-ink-900">Ronde voorbereiden</h3>}
-
-      {toonInstellen && (<>
-      {/* 1. Afsprakenvenster — bepaalt welke dagen aan de deur gekozen kunnen worden */}
+      {/* 1. Afsprakenperiode — bepaalt welke dagen aan de deur gekozen kunnen worden */}
       <div>
         <div className="mb-1.5 flex items-center gap-1.5 text-sm font-semibold text-ink-700">
           <CalendarRange className="h-4 w-4 text-ink-400" /> Afsprakenperiode
         </div>
-        {/* Dezelfde kalender als op Afspraken en Agenda — niet de kale browser-picker. */}
-        <div className="flex flex-wrap items-end gap-3">
-          <div>
-            <span className="mb-1 block text-xs font-medium text-ink-500">Eerste dag</span>
-            <DatumKiezer value={venster?.start ?? ""} onChange={(iso) => zetVenster({ start: iso })} placeholder="Kies de startdag" />
-          </div>
-          <span className="pb-2.5 text-sm text-ink-400">t/m</span>
-          <div>
-            <span className="mb-1 block text-xs font-medium text-ink-500">Laatste dag</span>
-            <DatumKiezer
-              value={venster?.eind ?? (dagen.length ? dagen[dagen.length - 1] : "")}
-              onChange={(iso) => zetVenster({ eind: iso })}
-              placeholder="Kies de einddag"
-            />
-          </div>
-        </div>
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <span className="text-xs text-ink-500">of snel:</span>
-          {([1, 2, 3] as const).map((w) => (
-            <button
-              key={w}
-              type="button"
-              onClick={() => zetVenster({ weken: w, eind: undefined })}
-              className={`rounded-lg border-2 px-3.5 py-1.5 text-sm font-semibold transition-colors ${
-                venster?.weken === w && !venster?.eind ? "border-brand-500 bg-brand-50 text-brand-800" : "border-ink-200 bg-white text-ink-700 hover:bg-ink-50"
-              }`}
-            >
-              {w} {w === 1 ? "week" : "weken"}
+        <div className="mb-3 inline-flex rounded-lg border border-ink-200 bg-white p-0.5">
+          {([false, true] as const).map((l) => (
+            <button key={String(l)} type="button" onClick={() => zetVenster({ losseDagen: l })}
+              className={`rounded-md px-3 py-1.5 text-sm font-semibold transition-colors ${losse === l ? "bg-brand-600 text-white" : "text-ink-600 hover:bg-ink-50"}`}>
+              {l ? "Losse dagen" : "Van – tot"}
             </button>
           ))}
         </div>
 
-        {/* Werkdagen — standaard ma t/m vr; weekend aan te zetten als er ook zaterdag gelopen wordt */}
-        <div className="mt-2 flex flex-wrap items-center gap-1.5">
-          <span className="text-xs text-ink-500">werkdagen:</span>
-          {[1, 2, 3, 4, 5, 6, 0].map((d) => {
-            const aan = werkdagen.includes(d);
-            return (
-              <button
-                key={d}
-                type="button"
-                aria-pressed={aan}
-                onClick={() => zetVenster({ werkdagen: aan ? werkdagen.filter((x) => x !== d) : [...werkdagen, d].sort() })}
-                className={`h-9 w-9 rounded-lg border-2 text-xs font-bold uppercase transition-colors ${
-                  aan ? "border-brand-500 bg-brand-50 text-brand-800" : "border-ink-200 bg-white text-ink-400 hover:bg-ink-50"
-                }`}
-              >
-                {DAGNAMEN[d]}
-              </button>
-            );
-          })}
-        </div>
+        {losse ? (
+          <>
+            <div className="flex flex-wrap items-end gap-3">
+              <div>
+                <span className="mb-1 block text-xs font-medium text-ink-500">Dag toevoegen</span>
+                <DatumKiezer value="" onChange={voegDagToe} placeholder="Kies een dag" />
+              </div>
+            </div>
+            {dagen.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {dagen.map((d) => (
+                  <span key={d} className="inline-flex items-center gap-1 rounded-full border border-brand-300 bg-brand-50 py-1 pl-3 pr-1 text-sm font-semibold text-brand-800">
+                    {dagLabel(d)}
+                    <button type="button" onClick={() => zetVenster({ dagen: (venster?.dagen ?? []).filter((x) => x !== d) })}
+                      aria-label={`${dagLabel(d)} weghalen`} className="rounded-full p-1 text-brand-600 hover:bg-brand-100"><X className="h-3.5 w-3.5" /></button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            {/* Dezelfde kalender als op Afspraken en Agenda — niet de kale browser-picker. */}
+            <div className="flex flex-wrap items-end gap-3">
+              <div>
+                <span className="mb-1 block text-xs font-medium text-ink-500">Eerste dag</span>
+                <DatumKiezer value={venster?.start ?? ""} onChange={(iso) => zetVenster({ start: iso })} placeholder="Kies de startdag" />
+              </div>
+              <span className="pb-2.5 text-sm text-ink-400">t/m</span>
+              <div>
+                <span className="mb-1 block text-xs font-medium text-ink-500">Laatste dag</span>
+                <DatumKiezer
+                  value={venster?.eind ?? (dagen.length ? dagen[dagen.length - 1] : "")}
+                  onChange={(iso) => zetVenster({ eind: iso })}
+                  placeholder="Kies de einddag"
+                />
+              </div>
+            </div>
+
+            {/* Werkdagen — standaard ma t/m vr; weekend aan te zetten als er ook zaterdag gelopen wordt */}
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              <span className="text-xs text-ink-500">werkdagen:</span>
+              {[1, 2, 3, 4, 5, 6, 0].map((d) => {
+                const aan = werkdagen.includes(d);
+                return (
+                  <button
+                    key={d}
+                    type="button"
+                    aria-pressed={aan}
+                    onClick={() => zetVenster({ werkdagen: aan ? werkdagen.filter((x) => x !== d) : [...werkdagen, d].sort() })}
+                    className={`h-9 w-9 rounded-lg border-2 text-xs font-bold uppercase transition-colors ${
+                      aan ? "border-brand-500 bg-brand-50 text-brand-800" : "border-ink-200 bg-white text-ink-400 hover:bg-ink-50"
+                    }`}
+                  >
+                    {DAGNAMEN[d]}
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
 
         <div className="mt-1.5 text-xs text-ink-500">
           {dagen.length > 0
-            ? `${dagen.length} dagen: ${dagLabel(dagen[0])} t/m ${dagLabel(dagen[dagen.length - 1])} · feestdagen vallen automatisch weg.`
-            : "Kies een eerste dag. Zolang dit leeg is, kan er aan de deur geen moment worden afgesproken."}
+            ? (losse ? `${dagen.length} ${dagen.length === 1 ? "dag" : "dagen"} gekozen.` : `${dagen.length} dagen: ${dagLabel(dagen[0])} t/m ${dagLabel(dagen[dagen.length - 1])} · feestdagen vallen automatisch weg.`)
+            : losse ? "Voeg de dagen toe die de opdrachtgever heeft doorgegeven." : "Kies een eerste dag. Zolang dit leeg is, kan er aan de deur geen moment worden afgesproken."}
         </div>
 
-        {/* Past het werk erin? Dit hoor je te weten vóórdat het personeel op pad gaat, niet halverwege
-            de wijk. Met één afspraak per blok is een venster van twee weken zo vol. */}
+        {/* Past het werk erin? Dit hoor je te weten vóórdat het personeel op pad gaat. */}
         {dagen.length > 0 && opdracht.adressen.length > 0 && (() => {
           const r = vensterRuimte(dagen, sloten, opdracht.adressen);
           return (
             <div className={`mt-2 rounded-lg px-3 py-2 text-xs ${r.krap ? "bg-amber-50 text-amber-900" : "bg-green-50 text-green-800"}`}>
-              <span className="font-semibold">
-                {r.plaatsen} afspraken passen in dit venster
-              </span>
+              <span className="font-semibold">{r.plaatsen} afspraken passen in deze periode</span>
               {" · "}{r.adressen} adressen in de lijst
               {r.gepland > 0 && ` · ${r.gepland} al ingepland`}
               {r.krap && (
                 <span className="mt-0.5 block">
                   Dat is krap: ervaring leert dat ongeveer de helft van de bewoners erbij wil zijn.
-                  Verleng de periode, zet meer dagen aan, of verhoog het aantal per tijdblok.
+                  Voeg dagen toe, of verhoog het aantal per tijdblok.
                 </span>
               )}
             </div>
@@ -261,33 +239,45 @@ export function BodemPlanning({ opdracht, users, onWijzig, deel = "alles" }: {
         })()}
       </div>
 
-      {/* Tijdblokken: welke worden aangeboden, en hoeveel afspraken passen erin */}
+      {/* 2. Tijdblokken — per project anders, zoals de opdrachtgever het vraagt */}
       <div>
         <div className="mb-1.5 flex items-center gap-1.5 text-sm font-semibold text-ink-700">
           <Clock className="h-4 w-4 text-ink-400" /> Tijdblokken
           {serverBezig && <Loader2 className="h-3.5 w-3.5 animate-spin text-ink-400" />}
         </div>
+        <div className="mb-3 flex flex-wrap items-end gap-2">
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium text-ink-500">Van</span>
+            <select value={tijden.van} onChange={(e) => zetTijden({ van: e.target.value })} className={select}>
+              {TIJDEN.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium text-ink-500">Tot</span>
+            <select value={tijden.tot} onChange={(e) => zetTijden({ tot: e.target.value })} className={select}>
+              {TIJDEN.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium text-ink-500">Tijdvak</span>
+            <select value={tijden.minuten} onChange={(e) => zetTijden({ minuten: Number(e.target.value) })} className={select}>
+              {BLOKLENGTES.map((m) => <option key={m} value={m}>{m < 60 ? `${m} minuten` : m === 60 ? "1 uur" : `${m / 60} uur`.replace(".", ",")}</option>)}
+            </select>
+          </label>
+        </div>
         <p className="mb-2 text-xs text-ink-500">
           Zet blokken uit die je niet wilt aanbieden (bijvoorbeeld de lunch). Het aantal is hoeveel
-          afspraken er tegelijk in passen — net zoveel als de aannemer ploegen inzet. Leeg = onbeperkt.
+          afspraken er tegelijk in passen. Leeg = één.
         </p>
-        <div className="space-y-1.5">
-          {sloten.map((s) => {
+        <div className="overflow-hidden rounded-lg border border-ink-200">
+          {sloten.map((s, i) => {
             const aan = s.actief !== false;
             return (
-              <div key={s.slot} className={`flex items-center gap-2 rounded-lg border px-3 py-2 ${aan ? "border-ink-200 bg-white" : "border-ink-200 bg-ink-50"}`}>
-                <button
-                  type="button"
-                  aria-pressed={aan}
-                  onClick={() => zetSlot(s.slot, { actief: !aan })}
-                  className={`inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${aan ? "bg-brand-500" : "bg-ink-300"}`}
-                  aria-label={`${s.slot} ${aan ? "uitzetten" : "aanzetten"}`}
-                >
-                  <span className={`h-5 w-5 rounded-full bg-white transition-transform ${aan ? "translate-x-[22px]" : "translate-x-0.5"}`} />
-                </button>
-                <span className={`flex-1 text-sm font-semibold ${aan ? "text-ink-800" : "text-ink-400 line-through"}`}>
+              <div key={s.slot} className={`flex items-center gap-3 px-3 py-2 ${i ? "border-t border-ink-100" : ""} ${aan ? "bg-white" : "bg-ink-50"}`}>
+                <span className={`w-28 shrink-0 text-sm font-semibold ${aan ? "text-ink-800" : "text-ink-400 line-through"}`}>
                   {s.slot.replace("-", " – ")}
                 </span>
+                <span className="flex-1" />
                 <label className="flex items-center gap-1.5 text-xs text-ink-500">
                   max
                   <input
@@ -297,15 +287,25 @@ export function BodemPlanning({ opdracht, users, onWijzig, deel = "alles" }: {
                       zetSlot(s.slot, { max: cijfers === "" ? undefined : Math.max(0, Number(cijfers)) });
                     }}
                     disabled={!aan}
-                    placeholder="∞"
+                    placeholder="1"
                     inputMode="numeric"
                     aria-label={`Maximum aantal afspraken in ${s.slot}`}
-                    className="w-14 rounded-lg border border-ink-200 px-2 py-1.5 text-center text-sm outline-none focus:border-brand-400 disabled:bg-ink-100"
+                    className="w-12 rounded-lg border border-ink-200 px-2 py-1.5 text-center text-sm outline-none focus:border-brand-400 disabled:bg-ink-100"
                   />
                 </label>
+                <button
+                  type="button"
+                  aria-pressed={aan}
+                  onClick={() => zetSlot(s.slot, { actief: !aan })}
+                  className={`inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${aan ? "bg-brand-500" : "bg-ink-300"}`}
+                  aria-label={`${s.slot} ${aan ? "uitzetten" : "aanzetten"}`}
+                >
+                  <span className={`h-5 w-5 rounded-full bg-white transition-transform ${aan ? "translate-x-[22px]" : "translate-x-0.5"}`} />
+                </button>
               </div>
             );
           })}
+          {sloten.length === 0 && <p className="px-3 py-3 text-sm text-amber-700">Geen blokken: zet "Tot" later dan "Van".</p>}
         </div>
         {serverFout && (
           <div className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
@@ -314,112 +314,6 @@ export function BodemPlanning({ opdracht, users, onWijzig, deel = "alles" }: {
           </div>
         )}
       </div>
-
-      </>)}
-
-      {toonVerdelen && (<>
-      {/* 2. Wie lopen er mee */}
-      <div>
-        <div className="mb-1.5 flex items-center gap-1.5 text-sm font-semibold text-ink-700">
-          <Users className="h-4 w-4 text-ink-400" /> Wie lopen er mee
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {users.map((u) => {
-            const aan = team.includes(u.id);
-            const aantal = opdracht.adressen.filter((a) => isToegewezen(a, u.id)).length;
-            return (
-              <button
-                key={u.id}
-                type="button"
-                onClick={() => toggleTeamlid(u.id)}
-                aria-pressed={aan}
-                className={`inline-flex items-center gap-1.5 rounded-full border-2 px-3.5 py-1.5 text-sm font-semibold transition-colors ${
-                  aan ? "border-brand-500 bg-brand-50 text-brand-800" : "border-ink-200 bg-white text-ink-600 hover:bg-ink-50"
-                }`}
-              >
-                {aan && <Check className="h-3.5 w-3.5" />}
-                {u.naam}
-                {aantal > 0 && <span className="rounded-full bg-white/70 px-1.5 text-xs font-bold text-ink-600">{aantal}</span>}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* 3. Beperken tot bepaalde locaties */}
-      {perPlaats.length > 1 && (
-        <div>
-          <div className="mb-1.5 flex items-center gap-1.5 text-sm font-semibold text-ink-700">
-            <MapPin className="h-4 w-4 text-ink-400" /> Locatie
-            <span className="font-normal text-ink-400">{locaties.size === 0 ? "· alle" : `· ${teVerdelen.length} adressen`}</span>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {perPlaats.map(([p, n]) => (
-              <button
-                key={p}
-                type="button"
-                onClick={() => toggleLocatie(p)}
-                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-colors ${
-                  locaties.has(p) ? "border-brand-500 bg-brand-50 font-semibold text-brand-800" : "border-ink-200 bg-white text-ink-600 hover:bg-ink-50"
-                }`}
-              >
-                {p} <span className="text-xs text-ink-400">{n}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* 4. Verdelen */}
-      <div className="flex flex-wrap items-end gap-2 border-t border-ink-100 pt-3">
-        <label className="block">
-          <span className="mb-1 block text-xs font-semibold text-ink-600">Max. adressen per persoon</span>
-          <input
-            value={maxPer}
-            onChange={(e) => setMaxPer(e.target.value.replace(/\D/g, ""))}
-            placeholder="onbeperkt"
-            inputMode="numeric"
-            className="w-32 rounded-lg border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
-          />
-        </label>
-        <button type="button" onClick={verdeel} className={knopPrimair}>
-          <Wand2 className="h-4 w-4" /> Automatisch verdelen
-        </button>
-        {opdracht.adressen.some((a) => a.toegewezenAan) && (
-          <button type="button" onClick={wisVerdeling} className={knopKlein}>
-            <RotateCcw className="h-3.5 w-3.5" /> Verdeling wissen
-          </button>
-        )}
-      </div>
-
-      {melding && <div className="rounded-lg bg-ink-50 px-3 py-2 text-sm text-ink-700">{melding}</div>}
-
-      {/* 5. Wat staat er nu klaar per persoon */}
-      {team.length > 0 && (
-        <div className="overflow-hidden rounded-lg border border-ink-200">
-          <div className="grid grid-cols-[1fr_3.25rem_3.25rem_3.25rem] gap-1 bg-ink-50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-ink-500">
-            <span>Medewerker</span><span className="text-right">Totaal</span><span className="text-right">Klaar</span><span className="text-right">Erbij</span>
-          </div>
-          {team.map((id) => {
-            const eigen = opdracht.adressen.filter((a) => isToegewezen(a, id));
-            const v = voortgangVan(eigen);
-            return (
-              <div key={id} className="grid grid-cols-[1fr_3.25rem_3.25rem_3.25rem] gap-1 px-3 py-1.5 text-sm">
-                <span className="truncate text-ink-700">{naamVan(id)}</span>
-                <span className="text-right font-medium text-ink-800">{v.totaal}</span>
-                <span className="text-right font-medium text-ink-800">{v.afgerond}</span>
-                <span className="text-right font-medium text-green-700">{v.ja}</span>
-              </div>
-            );
-          })}
-          {opdracht.adressen.some((a) => !a.toegewezenAan) && (
-            <div className="border-t border-ink-100 px-3 py-1.5 text-xs text-amber-700">
-              {opdracht.adressen.filter((a) => !a.toegewezenAan).length} adressen zijn nog aan niemand toegewezen.
-            </div>
-          )}
-        </div>
-      )}
-      </>)}
     </Card>
   );
 }

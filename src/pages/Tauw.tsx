@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState } from "react";
-import { ArrowLeft, Plus, Shovel, Trash2, MessageCircle, Phone, Navigation, FileDown, FileUp, Mail, Check, Wand2, ChevronRight, ChevronDown, X, UserPlus, RotateCcw, Footprints, Search, CalendarClock, Pencil, Archive } from "lucide-react";
+import { ArrowLeft, Plus, Shovel, Trash2, MessageCircle, Phone, Navigation, FileDown, FileUp, Mail, Check, ChevronRight, ChevronDown, X, UserPlus, RotateCcw, Footprints, Search, Pencil, Archive } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { useProjectFilter } from "../components/ProjectFilter";
 import { WerkTabs, type WerkTab } from "../components/WerkTabs";
@@ -8,7 +8,6 @@ import { DatumKiezer } from "../components/DatumKiezer";
 import { TijdKiezer } from "../components/TijdKiezer";
 import { Card, Badge, Bevestig } from "../components/ui";
 import { PdVeld, pdWaarde } from "../components/PdVeld";
-import { afleidRegio } from "../lib/regio";
 import { magAlles } from "../lib/rechten";
 import { waUrl } from "../lib/communicatie";
 import { googleMapsRoute, MAX_ROUTE_STOPS } from "../lib/afspraak";
@@ -17,7 +16,7 @@ import { BodemImport } from "../components/BodemImport";
 import { BodemFlow } from "../components/BodemFlow";
 import { haalAdressen, zetAdressen, wijzigAdres, verwerkWachtrij, aantalWachtend } from "../lib/bodemAdressen";
 import { DeurRonde } from "./DeurRonde";
-import { sorteerRoute, voortgangVan } from "../lib/bodemonderzoek";
+import { sorteerRoute, voortgangVan, wijsToeAanProject } from "../lib/bodemonderzoek";
 import {
   TAUW_TYPES, TAUW_TYPE_LABEL, TAUW_STATUS_LABEL, TAUW_STATUS_VOLGORDE, TAUW_OPDRACHTGEVERS,
   type TauwAdres, type TauwOpdracht, type TauwType, type TauwStatus, type TauwOpdrachtgever,
@@ -29,6 +28,8 @@ const knopKlein = "inline-flex items-center gap-1.5 rounded-lg border border-ink
 const knopPrimair = "inline-flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-40";
 
 const STATUS_TONE: Record<TauwStatus, string> = { nieuw: "slate", toegewezen: "amber", ter_controle: "indigo", gecontroleerd: "green", verstuurd: "green" };
+// "Verstuurd" is alleen voor de beheerders en de eigenaar; een medewerker ziet daar gewoon "Goedgekeurd".
+const statusLabel = (s: TauwStatus, leiding: boolean) => (!leiding && s === "verstuurd" ? TAUW_STATUS_LABEL.gecontroleerd : TAUW_STATUS_LABEL[s]);
 
 const adresId = () => {
   try { return crypto.randomUUID(); } catch { return `ta-${Date.now()}-${Math.round(Math.random() * 1e6)}`; }
@@ -51,11 +52,6 @@ const VERZAMEL_LABEL: Record<TauwType, string> = { bodemonderzoek: "bevestigd", 
 const heeftInhoud = (a: TauwAdres) => !!(a.straat || a.huisnummer || a.postcode || a.plaats || a.bewoner || a.telefoon || a.notitie || a.datum || a.tijd);
 // Zoek-match binnen één map (q = reeds getrimd + lowercase). Leeg = alles.
 const matchtZoek = (a: TauwAdres, q: string) => !q || `${a.straat} ${a.huisnummer} ${a.postcode} ${a.plaats} ${a.bewoner}`.toLowerCase().includes(q);
-// Lokale kalenderdatum (yyyy-mm-dd) — consistent met weekStartISO; niet UTC.
-function vandaagISO(): string {
-  const t = new Date();
-  return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
-}
 
 // Sorteert adressen op looproute-volgorde: zelfde plaats → zelfde postcode → zelfde straat → oplopend
 // huisnummer (natuurlijk, dus 2 < 11 en 12a < 12b). Nederlandse postcodes zijn straat-/buurtgebonden,
@@ -188,7 +184,11 @@ function TypeKiezer({ waarde, onKies }: { waarde: TauwType; onKies: (t: TauwType
 
 // ── Nieuwe (lege) TAUW-opdracht handmatig ──
 function TauwIntake({ type, onKlaar }: { type: TauwType; onKlaar: (id?: string) => void }) {
-  const { addTauw } = useApp();
+  const { addTauw, users } = useApp();
+  // Wie voert dit uit? De beheerder of eigenaar kiest dat meteen bij het aanmaken; verdelen hoeft
+  // daarna niet meer. Zijn het meer mensen, dan krijgt ieder een eigen stuk van de looproute.
+  const [uitvoerders, setUitvoerders] = useState<string[]>([]);
+  const geenUitvoerder = uitvoerders.length === 0;
   const [referentie, setReferentie] = useState("");
   const [pdCijfers, setPdCijfers] = useState("");
   const [gekozen, setGekozen] = useState<TauwType>(type);
@@ -198,7 +198,10 @@ function TauwIntake({ type, onKlaar }: { type: TauwType; onKlaar: (id?: string) 
   const basis = () => ({
     aangemaakt: new Date().toISOString(),
     type: gekozen,
-    status: "nieuw" as const,
+    status: "toegewezen" as const,
+    toegewezenOp: new Date().toISOString(),
+    ...toewijzingPatch(uitvoerders),
+    team: uitvoerders,
     regio: "",
     opdrachtgever,
     pdNummer: pdWaarde(pdCijfers),
@@ -206,7 +209,7 @@ function TauwIntake({ type, onKlaar }: { type: TauwType; onKlaar: (id?: string) 
   });
 
   // Zelf invullen: één lege adresregel om mee te beginnen.
-  const maakLeeg = () => onKlaar(addTauw({ ...basis(), referentie: referentie.trim(), adressen: [leegAdres()] }));
+  const maakLeeg = () => onKlaar(addTauw({ ...basis(), referentie: referentie.trim(), adressen: wijsToeAanProject([leegAdres()], uitvoerders) }));
 
   return (
     <div className="mx-auto max-w-xl space-y-5">
@@ -239,7 +242,13 @@ function TauwIntake({ type, onKlaar }: { type: TauwType; onKlaar: (id?: string) 
         <div>
           <span className="mb-1.5 block text-sm font-medium text-ink-700">Soort opdracht</span>
           <TypeKiezer waarde={gekozen} onKies={setGekozen} />
-          <p className="mt-1.5 text-xs text-ink-500">{gekozen === "bodemonderzoek" ? "Langs de deuren: bewoners spreken en afspraken inplannen." : "Adressen bezoeken — regio bepalen en route plannen over lange afstanden."}</p>
+          <p className="mt-1.5 text-xs text-ink-500">{gekozen === "bodemonderzoek" ? "Langs de deuren: bewoners spreken en afspraken inplannen." : "Klantgegevens ophalen: adressen langs en de gegevens van de bewoners noteren."}</p>
+        </div>
+
+        <div>
+          <span className="mb-1.5 block text-sm font-medium text-ink-700">Wie voert dit werk uit? <span className="text-red-600">*</span></span>
+          <WerknemerKiezer values={uitvoerders} onChange={setUitvoerders} users={users.filter(kanUitvoeren)} leegLabel="Kies medewerker(s)…" />
+          {geenUitvoerder && <p className="mt-1.5 text-xs text-amber-700">Kies eerst wie het werk uitvoert.</p>}
         </div>
 
         <label className="block">
@@ -257,15 +266,16 @@ function TauwIntake({ type, onKlaar }: { type: TauwType; onKlaar: (id?: string) 
             bestaand={[]}
             onAnnuleer={() => setImportOpen(false)}
             onKlaar={(adressen, bestandsnaam) => {
-              onKlaar(addTauw({ ...basis(), referentie: referentie.trim() || bestandsnaam.replace(/\.[^.]+$/, ""), adressen: sorteerRoute(adressen) }));
+              onKlaar(addTauw({ ...basis(), referentie: referentie.trim() || bestandsnaam.replace(/\.[^.]+$/, ""), adressen: wijsToeAanProject(sorteerRoute(adressen), uitvoerders) }));
             }}
           />
         ) : (
           <>
             <button
               type="button"
+              disabled={geenUitvoerder}
               onClick={() => setImportOpen(true)}
-              className="flex w-full items-center gap-3 rounded-2xl border-2 border-dashed border-ink-300 bg-white px-5 py-6 text-left hover:border-brand-400 hover:bg-brand-50/40"
+              className="flex w-full items-center gap-3 rounded-2xl border-2 border-dashed disabled:cursor-not-allowed disabled:opacity-50 border-ink-300 bg-white px-5 py-6 text-left hover:border-brand-400 hover:bg-brand-50/40"
             >
               <span className="rounded-full border border-ink-200 bg-white p-2.5 text-ink-500"><FileUp className="h-5 w-5" /></span>
               <span className="min-w-0">
@@ -281,8 +291,9 @@ function TauwIntake({ type, onKlaar }: { type: TauwType; onKlaar: (id?: string) 
 
             <button
               type="button"
+              disabled={geenUitvoerder}
               onClick={maakLeeg}
-              className="flex w-full items-center gap-3 rounded-2xl border border-ink-200 bg-white px-5 py-4 text-left hover:border-brand-300 hover:bg-brand-50/40"
+              className="disabled:cursor-not-allowed disabled:opacity-50 flex w-full items-center gap-3 rounded-2xl border border-ink-200 bg-white px-5 py-4 text-left hover:border-brand-300 hover:bg-brand-50/40"
             >
               <span className="rounded-full border border-ink-200 bg-white p-2.5 text-ink-500"><Pencil className="h-5 w-5" /></span>
               <span className="min-w-0">
@@ -373,6 +384,18 @@ function TauwDetail({ opdracht, onTerug }: { opdracht: TauwOpdracht; onTerug: ()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [opdracht.id, isBodemMap]);
 
+  // Oudere projecten: staan er adressen zonder medewerker terwijl het project wél iemand heeft, dan
+  // zet de beheerder ze bij het openen in één keer goed (de server laat alleen de eigen adressen boeken).
+  useEffect(() => {
+    if (!isBodemMap || !dbAdressen || !isLeiding) return;
+    const mensen = [...new Set([...toegewezenIds(opdracht), ...(opdracht.team ?? [])])];
+    if (!mensen.length || !dbAdressen.some((a) => !a.toegewezenAan || !mensen.includes(a.toegewezenAan))) return;
+    const next = wijsToeAanProject(dbAdressen, mensen);
+    setDbAdressen(next);
+    void zetAdressen(opdracht.id, next).then((r) => setOffline(!r.ok));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dbAdressen === null, opdracht.toegewezenAan, (opdracht.team ?? []).join(",")]);
+
   // De rest van het scherm werkt met één lijst, waar die ook vandaan komt.
   const adressen = isBodemMap ? (dbAdressen ?? []) : opdracht.adressen;
   const werkOpdracht: TauwOpdracht = isBodemMap ? { ...opdracht, adressen } : opdracht;
@@ -392,8 +415,11 @@ function TauwDetail({ opdracht, onTerug }: { opdracht: TauwOpdracht; onTerug: ()
   const bodemVoortgang = voortgangVan(eigenAdressen);
 
 
-  // Hele lijst wegschrijven (import, verdelen, sorteren).
-  const bewaarLijst = (next: TauwAdres[]) => {
+  // Hele lijst wegschrijven (import, sorteren). Nieuwe adressen gaan meteen naar de mensen die bij
+  // het project horen, zodat verdelen niet nodig is.
+  const projectMensen = [...new Set([...toegewezenIds(opdracht), ...(opdracht.team ?? [])])];
+  const bewaarLijst = (lijst: TauwAdres[]) => {
+    const next = isBodemMap ? wijsToeAanProject(lijst, projectMensen) : lijst;
     if (!isBodemMap) { setAdressen(next); return; }
     setDbAdressen(next);
     void zetAdressen(opdracht.id, next).then((r) => setOffline(!r.ok));
@@ -408,14 +434,12 @@ function TauwDetail({ opdracht, onTerug }: { opdracht: TauwOpdracht; onTerug: ()
     });
   };
 
-  const eersteMetPostcode = opdracht.adressen.find((a) => a.postcode.trim());
   const bevestigd = opdracht.adressen.filter((a) => a.bevestigd).length;
   const nu = () => new Date().toISOString();
   const werknemerModus = !isLeiding; // de werknemer krijgt een gefocuste werkomgeving
   const magStructuur = isLeiding && bewerkbaar; // adressen toevoegen/verwijderen: alleen de beheerder
   const totaal = opdracht.adressen.length;
   const pct = totaal ? Math.round((bevestigd / totaal) * 100) : 0;
-  const teLaat = !!opdracht.deadline && opdracht.deadline < vandaagISO() && status !== "verstuurd";
 
   const toggleSelect = (id: string) => setSelectie((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   // Select-all werkt op de zichtbare (gefilterde) adressen; bestaande selectie buiten het filter blijft staan.
@@ -434,8 +458,16 @@ function TauwDetail({ opdracht, onTerug }: { opdracht: TauwOpdracht; onTerug: ()
   const rijUrl = googleMapsRoute(geselecteerd.map(adresTekst), "driving");
   const loopUrl = googleMapsRoute(geselecteerd.map(adresTekst), "walking");
 
-  // Levenscyclus-overgangen (rol-gebonden).
-  const toewijzen = (ids: string[]) => { const p = toewijzingPatch(ids); updateTauw(opdracht.id, { ...p, status: p.toegewezenAan ? "toegewezen" : "nieuw", toegewezenOp: p.toegewezenAan ? (opdracht.toegewezenOp ?? nu()) : undefined }); };
+  // Levenscyclus-overgangen (rol-gebonden). Andere mensen kiezen = de adressen gaan mee.
+  const toewijzen = (ids: string[]) => {
+    const p = toewijzingPatch(ids);
+    updateTauw(opdracht.id, { ...p, team: ids, status: p.toegewezenAan ? (status === "nieuw" ? "toegewezen" : status) : "nieuw", toegewezenOp: p.toegewezenAan ? (opdracht.toegewezenOp ?? nu()) : undefined });
+    if (isBodemMap && ids.length && dbAdressen) {
+      const next = wijsToeAanProject(dbAdressen, ids);
+      setDbAdressen(next);
+      void zetAdressen(opdracht.id, next).then((r) => setOffline(!r.ok));
+    }
+  };
   const naarControle = () => updateTauw(opdracht.id, { status: "ter_controle" });
   // Heropenen: ruim de (nu ongeldige) goedkeurings-/verstuurgegevens op.
   const terugNaarWerknemer = () => updateTauw(opdracht.id, { status: "toegewezen", gecontroleerdDoor: undefined, gecontroleerdOp: undefined, verstuurdOp: undefined });
@@ -521,8 +553,8 @@ function TauwDetail({ opdracht, onTerug }: { opdracht: TauwOpdracht; onTerug: ()
       open={bevestigGereed}
       titel="Map gereed melden?"
       tekst={openA > 0
-        ? `Er ${openA === 1 ? "staat" : "staan"} nog ${openA} adres${openA === 1 ? "" : "sen"} open (nog niet ${VERZAMEL_LABEL[opdracht.type]}). Weet je zeker dat de map gereed is? De beheerder controleert je werk en stuurt het door naar Stedin.`
-        : `Alle ${totaal} adressen zijn ${VERZAMEL_LABEL[opdracht.type]}. Weet je zeker dat je de map gereed meldt voor controle? De beheerder controleert je werk en stuurt het door naar Stedin.`}
+        ? `Er ${openA === 1 ? "staat" : "staan"} nog ${openA} adres${openA === 1 ? "" : "sen"} open (nog niet ${VERZAMEL_LABEL[opdracht.type]}). Weet je zeker dat de map gereed is? Hij gaat dan naar de beheerders en de eigenaar ter controle.`
+        : `Alle ${totaal} adressen zijn ${VERZAMEL_LABEL[opdracht.type]}. Weet je zeker dat je de map gereed meldt? Hij gaat dan naar de beheerders en de eigenaar ter controle.`}
       bevestigLabel="Ja, gereed melden"
       bevestigTone="brand"
       onBevestig={() => { setBevestigGereed(false); naarControle(); }}
@@ -630,9 +662,9 @@ function TauwDetail({ opdracht, onTerug }: { opdracht: TauwOpdracht; onTerug: ()
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-lg font-bold text-ink-900">{titel}</h2>
-                <Badge tone={STATUS_TONE[status]}>{TAUW_STATUS_LABEL[status]}</Badge>
+                <Badge tone={STATUS_TONE[status]}>{statusLabel(status, false)}</Badge>
               </div>
-              <p className="text-sm text-ink-500">{[opdracht.opdrachtgever ?? "TAUW", TAUW_TYPE_LABEL[opdracht.type], opdracht.regio, `${totaal} adressen`].filter(Boolean).join(" · ")}</p>
+              <p className="text-sm text-ink-500">{[opdracht.opdrachtgever ?? "TAUW", TAUW_TYPE_LABEL[opdracht.type], `${totaal} adressen`].filter(Boolean).join(" · ")}</p>
             </div>
           </div>
 
@@ -644,13 +676,6 @@ function TauwDetail({ opdracht, onTerug }: { opdracht: TauwOpdracht; onTerug: ()
             <div className="h-2.5 overflow-hidden rounded-full bg-ink-100"><div className="h-full rounded-full bg-brand-500 transition-all" style={{ width: `${pct}%` }} /></div>
           </div>
 
-          {opdracht.deadline && (
-            <div className="flex items-center gap-2 text-sm">
-              <CalendarClock className="h-4 w-4 text-ink-400" />
-              <span className="text-ink-600">Deadline: <span className={teLaat ? "font-bold text-red-600" : "font-semibold text-ink-800"}>{datumKort(opdracht.deadline)}{teLaat ? " · te laat" : ""}</span></span>
-            </div>
-          )}
-
           <div className="border-t border-ink-100 pt-3">
             {status === "toegewezen" ? (
               <div className="flex flex-wrap items-center gap-3">
@@ -658,11 +683,9 @@ function TauwDetail({ opdracht, onTerug }: { opdracht: TauwOpdracht; onTerug: ()
                 <span className="text-sm text-ink-500">Vul per adres datum, tijd en gegevens in en meld de map daarna gereed.</span>
               </div>
             ) : status === "ter_controle" ? (
-              <div className="rounded-lg bg-amber-50 px-3 py-2.5 text-sm font-medium text-amber-700">Ingeleverd voor controle — de beheerder controleert je werk en stuurt het door naar Stedin.</div>
-            ) : status === "gecontroleerd" ? (
-              <div className="rounded-lg bg-brand-50 px-3 py-2.5 text-sm font-medium text-brand-700">Goedgekeurd — wordt door de beheerder verstuurd naar Stedin.</div>
+              <div className="rounded-lg bg-amber-50 px-3 py-2.5 text-sm font-medium text-amber-700">Doorgestuurd naar de beheerders en de eigenaar — zij controleren je werk.</div>
             ) : (
-              <div className="rounded-lg bg-green-50 px-3 py-2.5 text-sm font-medium text-green-700">Verstuurd{opdracht.verstuurdOp ? ` op ${datumKort(opdracht.verstuurdOp)}` : ""} — afgerond. 🎉</div>
+              <div className="flex items-center gap-2 rounded-lg bg-green-50 px-3 py-2.5 text-sm font-semibold text-green-700"><Check className="h-4 w-4" /> Goedgekeurd — je werk voor deze opdracht is klaar.</div>
             )}
           </div>
         </Card>
@@ -696,7 +719,7 @@ function TauwDetail({ opdracht, onTerug }: { opdracht: TauwOpdracht; onTerug: ()
               <Badge tone={STATUS_TONE[status]}>{TAUW_STATUS_LABEL[status]}</Badge>
             </div>
           )}
-          <p className="text-sm text-ink-500">{[opdracht.regio, `${opdracht.adressen.length} adres${opdracht.adressen.length === 1 ? "" : "sen"}`, monteur ? monteur.naam : ""].filter(Boolean).join(" · ")}</p>
+          <p className="text-sm text-ink-500">{[`${opdracht.adressen.length} adres${opdracht.adressen.length === 1 ? "" : "sen"}`, toegewezenIds(opdracht).map((id) => users.find((u) => u.id === id)?.naam).filter(Boolean).join(", ")].filter(Boolean).join(" · ")}</p>
         </div>
         {isLeiding && (
           <button type="button" onClick={() => setVerwijder(true)} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50"><Trash2 className="h-4 w-4" /> Verwijderen</button>
@@ -768,22 +791,9 @@ function TauwDetail({ opdracht, onTerug }: { opdracht: TauwOpdracht; onTerug: ()
           )}
         </div>
 
-        {/* Deadline — door de beheerder ingesteld, door iedereen zichtbaar */}
-        <div className="flex flex-wrap items-center gap-2 border-t border-ink-100 pt-3">
-          <CalendarClock className="h-4 w-4 text-ink-400" />
-          <span className="text-sm text-ink-600">Deadline</span>
-          {isLeiding ? (
-            <>
-              <div className="w-full sm:w-48"><DatumKiezer value={opdracht.deadline ?? ""} onChange={(iso) => updateTauw(opdracht.id, { deadline: iso || undefined })} placeholder="Geen deadline" /></div>
-              {opdracht.deadline && <button type="button" onClick={() => updateTauw(opdracht.id, { deadline: undefined })} className="text-xs font-medium text-ink-400 hover:text-ink-600">wissen</button>}
-            </>
-          ) : (
-            <span className="text-sm font-semibold text-ink-800">{opdracht.deadline ? datumKort(opdracht.deadline) : "nog niet gezet"}</span>
-          )}
-        </div>
       </Card>
 
-      {/* Regio */}
+      {/* Opdrachtgever */}
       <Card className="flex flex-wrap items-center gap-x-3 gap-y-2 p-4">
         <span className="text-sm font-medium text-ink-600">Voor</span>
         <div className="flex gap-1.5">
@@ -801,9 +811,6 @@ function TauwDetail({ opdracht, onTerug }: { opdracht: TauwOpdracht; onTerug: ()
             </button>
           ))}
         </div>
-        <span className="text-sm font-medium text-ink-600">Regio</span>
-        <input value={opdracht.regio} disabled={!bewerkbaar} onChange={(e) => updateTauw(opdracht.id, { regio: e.target.value })} placeholder="Onbekend" className="w-full rounded-lg border border-ink-200 px-2.5 py-1.5 text-sm outline-none focus:border-brand-400 disabled:bg-ink-50 disabled:text-ink-500 sm:w-40" />
-        {bewerkbaar && <button type="button" onClick={() => updateTauw(opdracht.id, { regio: afleidRegio(eersteMetPostcode?.postcode ?? "", eersteMetPostcode?.plaats ?? "") })} className={knopKlein}><Wand2 className="h-3.5 w-3.5" /> Auto uit postcode</button>}
       </Card>
 
       {/* Bodemonderzoek: eerst de ronde voorbereiden (opdrachtgever, periode, team, verdeling), daarna
@@ -892,17 +899,19 @@ export function Tauw({ initieelTauw }: { initieelTauw?: string }) {
   // terug bij de opdrachtgever, dus klaar om door te geven. Gearchiveerd is afgehandeld en uit beeld
   // — maar nooit weg: de map blijft in de database staan en is met één klik terug.
   const vanMij = isLeiding ? tauwOpdrachten : tauwOpdrachten.filter(hoortBijMij);
-  const klaarLijst = vanMij.filter((o) => !o.gearchiveerd && o.status === "verstuurd");
+  // Voor de medewerker is het werk klaar zodra het is goedgekeurd; "verstuurd" is iets van de leiding.
+  const isKlaar = (o: TauwOpdracht) => o.status === "verstuurd" || (!isLeiding && o.status === "gecontroleerd");
+  const klaarLijst = vanMij.filter((o) => !o.gearchiveerd && isKlaar(o));
   const archiefLijst = vanMij.filter((o) => o.gearchiveerd);
   const metRol = tab === "stedin" ? klaarLijst
     : tab === "archief" ? archiefLijst
-    : vanMij.filter((o) => !o.gearchiveerd && o.status !== "verstuurd");
+    : vanMij.filter((o) => !o.gearchiveerd && !isKlaar(o));
   const toonOgFilter = new Set(metRol.map((o) => o.opdrachtgever ?? "TAUW")).size > 1;
   const naOpdrachtgever = ogFilter === "alle" ? metRol : metRol.filter((o) => (o.opdrachtgever ?? "TAUW") === ogFilter);
   // Zelfde filterbalk als op de andere projectpagina's: periode, alleen wat openstaat, nieuwste bovenaan.
   const filter = useProjectFilter(naOpdrachtgever, {
     datum: (o) => o.aangemaakt,
-    isOpen: (o) => o.status !== "verstuurd",
+    isOpen: (o) => !isKlaar(o),
   });
   const zichtbaar = filter.zichtbaar;
 
@@ -917,7 +926,6 @@ export function Tauw({ initieelTauw }: { initieelTauw?: string }) {
   if (open) return <TauwDetail opdracht={open} onTerug={() => setOpenId(null)} />;
 
   // Mappen sorteren op werkweek (peildatum) en groeperen, met open-tellingen voor één-oogopslag-overzicht.
-  const vandaag = vandaagISO();
   const gesorteerd = [...zichtbaar].sort((a, b) => {
     const oa = isOpenMap(a) ? 0 : 1, ob = isOpenMap(b) ? 0 : 1;
     if (oa !== ob) return oa - ob; // open werk bovenaan
@@ -942,7 +950,7 @@ export function Tauw({ initieelTauw }: { initieelTauw?: string }) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-bold text-ink-900 sm:text-xl">Bodemonderzoeken</h2>
-          <p className="text-sm text-ink-500">Bodemonderzoek en bezoekrondes: adressen erin, langs de deuren, en terug naar de opdrachtgever.</p>
+          <p className="text-sm text-ink-500">Bodemonderzoek en klantgegevens: adressen erin, langs de deuren, en terug naar de opdrachtgever.</p>
         </div>
         {isLeiding && (
           <button type="button" onClick={() => setNieuw(true)} className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700">
@@ -1012,7 +1020,6 @@ export function Tauw({ initieelTauw }: { initieelTauw?: string }) {
                     const totaalA = o.adressen.length;
                     const klaarA = o.adressen.filter((a) => a.bevestigd).length;
                     const openA = totaalA - klaarA;
-                    const teLaat = !!o.deadline && o.deadline < vandaag && o.status !== "verstuurd";
                     const titel = o.referentie || o.regio || "Opdracht";
                     return (
                       <div key={o.id} onClick={() => setOpenId(o.id)} className="cursor-pointer rounded-2xl border border-ink-200 bg-white p-4 text-left shadow-card transition-shadow hover:shadow-cardhover">
@@ -1020,14 +1027,13 @@ export function Tauw({ initieelTauw }: { initieelTauw?: string }) {
                           <div className="rounded-lg bg-brand-50 p-2.5 text-brand-600"><Shovel className="h-5 w-5" /></div>
                           <div className="min-w-0 flex-1">
                             <div className="truncate font-semibold text-ink-900">{titel}</div>
-                            <div className="truncate text-xs text-ink-500">{[o.opdrachtgever ?? "TAUW", TAUW_TYPE_LABEL[o.type], o.regio, `${o.adressen.length} adressen`].filter(Boolean).join(" · ")}</div>
+                            <div className="truncate text-xs text-ink-500">{[o.opdrachtgever ?? "TAUW", TAUW_TYPE_LABEL[o.type], `${o.adressen.length} adressen`].filter(Boolean).join(" · ")}</div>
                           </div>
-                          <Badge tone={STATUS_TONE[o.status]}>{TAUW_STATUS_LABEL[o.status]}</Badge>
+                          <Badge tone={STATUS_TONE[o.status]}>{statusLabel(o.status, isLeiding)}</Badge>
                           <ChevronRight className="h-5 w-5 shrink-0 text-ink-300" />
                         </div>
                         <div className="mt-3 flex items-center justify-between gap-2 text-xs">
                           <span className="text-ink-500">{klaarA}/{totaalA} {VERZAMEL_LABEL[o.type]}{o.status !== "verstuurd" ? ` · ${openA} open` : ""}</span>
-                          {o.deadline && <span className={`inline-flex items-center gap-1 font-semibold ${teLaat ? "text-red-600" : "text-ink-500"}`}><CalendarClock className="h-3.5 w-3.5" /> {teLaat ? "Te laat" : datumKort(o.deadline)}</span>}
                         </div>
                         <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-ink-100">
                           <div className="h-full rounded-full bg-green-500" style={{ width: `${totaalA ? Math.round((klaarA / totaalA) * 100) : 0}%` }} />

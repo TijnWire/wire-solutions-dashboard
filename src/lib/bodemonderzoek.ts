@@ -67,8 +67,40 @@ export function vensterDagen(startISO: string, weken: number, opties?: { eind?: 
 }
 
 // Het venster van een opdracht uitrekenen, met alle instellingen erbij.
-export function dagenVanVenster(v?: { start: string; weken: number; eind?: string; werkdagen?: number[] }): string[] {
-  return v ? vensterDagen(v.start, v.weken, { eind: v.eind, werkdagen: v.werkdagen }) : [];
+export function dagenVanVenster(v?: { start: string; weken: number; eind?: string; werkdagen?: number[]; losseDagen?: boolean; dagen?: string[] }): string[] {
+  if (!v) return [];
+  // Losse dagen: precies de gekozen datums, op volgorde.
+  if (v.losseDagen) return [...new Set((v.dagen ?? []).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)))].sort();
+  return vensterDagen(v.start, v.weken, { eind: v.eind, werkdagen: v.werkdagen });
+}
+
+// Tijdblokken van een vaste lengte tussen twee tijden, bijv. 08:00 tot 14:00 per uur → 6 blokken.
+const naarMin = (t: string) => { const [u, m] = t.split(":").map(Number); return (u || 0) * 60 + (m || 0); };
+const naarTijd = (n: number) => `${String(Math.floor(n / 60)).padStart(2, "0")}:${String(n % 60).padStart(2, "0")}`;
+export function maakTijdblokken(van: string, tot: string, minuten: number): string[] {
+  const a = naarMin(van), b = naarMin(tot), stap = Math.max(15, Math.round(minuten) || 60);
+  const uit: string[] = [];
+  for (let t = a; t + stap <= b && uit.length < 48; t += stap) uit.push(`${naarTijd(t)}-${naarTijd(t + stap)}`);
+  return uit;
+}
+
+// De tijdblokken die bij dit project horen (ingesteld door de beheerder), anders de standaard.
+export function blokkenVan(v?: { sloten?: { slot: string }[] }): string[] {
+  return v?.sloten?.length ? v.sloten.map((s) => s.slot) : [...TIJDSLOTS];
+}
+
+// Wijst adressen zonder (geldige) medewerker toe aan de mensen van het project. Eén persoon: alles
+// naar hem. Meer mensen: verdeeld op looproute, zonder straten te splitsen. Wie al een adres van een
+// van deze mensen heeft, houdt het.
+export function wijsToeAanProject(adressen: TauwAdres[], ids: string[]): TauwAdres[] {
+  const mensen = ids.filter(Boolean);
+  if (!mensen.length) return adressen;
+  const los = adressen.filter((a) => !a.toegewezenAan || !mensen.includes(a.toegewezenAan));
+  if (!los.length) return adressen;
+  const nieuw = new Map<string, string>();
+  if (mensen.length === 1) for (const a of los) nieuw.set(a.id, mensen[0]);
+  else for (const v of verdeelOverTeam(los, mensen)) for (const id of v.adresIds) nieuw.set(id, v.userId);
+  return adressen.map((a) => (nieuw.has(a.id) ? { ...a, toegewezenAan: nieuw.get(a.id) } : a));
 }
 
 // Staat dit blok aan? Zonder instelling staat elk blok aan.

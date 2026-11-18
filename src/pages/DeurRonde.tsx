@@ -4,7 +4,7 @@ import {
   DoorClosed, User, CheckCircle2, ChevronLeft, ListChecks, Ban, RotateCcw, Trash2, Loader2, ShieldCheck,
 } from "lucide-react";
 import {
-  TIJDSLOTS, dagenVanVenster, dagLabel, magAfronden, telefoonGeldig, bezetting, voortgangVan,
+  blokkenVan, dagenVanVenster, dagLabel, magAfronden, telefoonGeldig, bezetting, voortgangVan,
   slotActief, slotMax, slotEigenaar,
 } from "../lib/bodemonderzoek";
 import { boekAfspraak } from "../lib/bodemAdressen";
@@ -122,7 +122,7 @@ function TijdslotKiezer({ adres, alleAdressen, dagen, sloten, team, ikId, online
             </p>
           )}
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {TIJDSLOTS.map((s) => {
+            {blokkenVan({ sloten }).map((s) => {
               const gekozen = adres.tijdslot === s;
               const aan = slotActief(sloten, s);
               // Hoeveel bewoners staan er al in dit blok, en hoeveel passen er in?
@@ -470,7 +470,7 @@ export function DeurRonde({ opdracht, adressen, ikId, onOpslaan, onTerug }: {
       <div className="mt-3 space-y-3 rounded-2xl border border-ink-200 bg-white p-4 shadow-sm">
         <label className="block">
           <span className="mb-1.5 flex items-center gap-1.5 text-sm font-semibold text-ink-700">
-            <User className="h-4 w-4 text-ink-400" /> Naam bewoner
+            <User className="h-4 w-4 text-ink-400" /> Naam bewoner <span className="text-red-600">*</span>
           </span>
           <input
             value={adres.bewoner}

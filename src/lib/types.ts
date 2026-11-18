@@ -834,13 +834,16 @@ export type TauwVenster = {
   eind?: string;          // vrije einddatum (ISO); heeft voorrang op `weken`
   werkdagen?: number[];   // 0 = zondag … 6 = zaterdag. Ontbreekt = ma t/m vr.
   sloten?: TauwSlot[];    // per tijdblok aan/uit + capaciteit. Ontbreekt = alle blokken aan, onbeperkt.
+  losseDagen?: boolean;   // true = alleen de dagen in `dagen` (bijv. ma 17-11, di 18-11 en vr 21-11)
+  dagen?: string[];       // ISO-datums bij losse dagen
+  tijden?: { van: string; tot: string; minuten: number }; // waaruit de tijdblokken zijn gemaakt
 };
 
 export type TauwType = "bodemonderzoek" | "bezoekronde";
 export const TAUW_TYPES: TauwType[] = ["bodemonderzoek", "bezoekronde"];
 export const TAUW_TYPE_LABEL: Record<TauwType, string> = {
   bodemonderzoek: "Bodemonderzoek",
-  bezoekronde: "Bezoekronde",
+  bezoekronde: "Klantgegevens",
 };
 
 // Rol-gebaseerde levenscyclus: beheerder importeert → werknemer werkt af → beheerder controleert → doorsturen.
