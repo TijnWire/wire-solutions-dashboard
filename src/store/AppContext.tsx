@@ -1460,6 +1460,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hydrated, rondes]);
+  // De bodemonderzoek-opdrachten uit de vorige opzet zijn op verzoek van de eigenaar weggehaald
+  // (19-11-2026); bodemonderzoeken lopen nu via dezelfde planning als Schouwafspraken.
+  useEffect(() => {
+    if (!hydrated || tauwOpdrachten.length === 0) return;
+    for (const o of tauwOpdrachten) deleteTauw(o.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated, tauwOpdrachten.length]);
   // Ook Oesterbank 19 is op verzoek van de eigenaar uit Saneren gehaald (11-11-2026).
   const WEG_UIT_SANEREN = /riedermorgen|oesterbank\s*19(?!\d)/i;
   useEffect(() => {

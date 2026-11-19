@@ -48,7 +48,7 @@ type MeldingData = {
 
 // Persoonlijke meldingen per gebruiker — wat moet deze persoon oppakken?
 export function meldingenVoor(user: User, data: MeldingData): Melding[] {
-  const { taken, rondes, afspraken, voorschouwen, voorschouwMappen, projects, projectPosts, tauwOpdrachten, saneringen, buurtaanpak, users, bedrijf, instellingen, verlof } = data;
+  const { taken, rondes, afspraken, voorschouwen, voorschouwMappen, projects, projectPosts, saneringen, buurtaanpak, users, bedrijf, instellingen, verlof } = data;
   const m: Melding[] = [];
   const isLeiding = user.rol === "eigenaar" || user.rol === "beheer" || user.rol === "hr";
 
@@ -133,20 +133,6 @@ export function meldingenVoor(user: User, data: MeldingData): Melding[] {
       m.push({ id: "pp-" + post.id, ernst: "waarschuwing", titel: `Vraag · ${project.naam}`, tekst: `${voornaam(post.auteurId)}: ${kort}`, navKey: projectNav, target: { project: project.id } });
     } else {
       m.push({ id: "pp-" + post.id, ernst: "info", titel: `Update · ${project.naam}`, tekst: `${voornaam(post.auteurId)}: ${kort}`, navKey: projectNav, target: { project: project.id } });
-    }
-  }
-
-  // TAUW: aan mij toegewezen mappen — herinnering met openstaande adressen, of een nudge "klaar voor controle"
-  for (const o of tauwOpdrachten.filter((t) => isToegewezen(t, user.id) && (t.status === "toegewezen" || t.status === "nieuw"))) {
-    const open = o.adressen.filter((a) => !a.bevestigd).length;
-    m.push({ id: "tauw-" + o.id, ernst: "info", titel: `${o.opdrachtgever ?? "TAUW"}: ${o.referentie || o.regio || "opdracht"}`, tekst: open > 0 ? `Nog ${open} adres${open === 1 ? "" : "sen"} af te ronden.` : "Klaar om naar controle te sturen.", navKey: "tauw", target: { tauwId: o.id } });
-  }
-
-  // TAUW: klaar voor controle — de beheerder moet checken en doorsturen naar Stedin
-  if (isLeiding) {
-    const voornaamVan = (id?: string) => users.find((u) => u.id === id)?.naam.split(" ")[0] ?? "een werknemer";
-    for (const o of tauwOpdrachten.filter((t) => t.status === "ter_controle")) {
-      m.push({ id: "tauw-ctrl-" + o.id, ernst: "waarschuwing", titel: `${o.opdrachtgever ?? "TAUW"} klaar voor controle: ${o.referentie || o.regio || "opdracht"}`, tekst: `Afgerond door ${voornaamVan(o.toegewezenAan)} — controleer en stuur door naar Stedin.`, navKey: "tauw", target: { tauwId: o.id } });
     }
   }
 

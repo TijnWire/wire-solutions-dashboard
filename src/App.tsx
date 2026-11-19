@@ -143,7 +143,7 @@ export default function App() {
       case "buurtaanpak":
         return <Buurtaanpak key={target?.buurtaanpakId ?? "lijst"} initieelId={target?.buurtaanpakId} />;
       case "tauw":
-        return <Bodemonderzoeken key={target?.tauwId ?? "lijst"} tauwId={target?.tauwId} />;
+        return <Bodemonderzoeken />;
       case "agenda":
         return <Agenda />;
       case "verlof":
