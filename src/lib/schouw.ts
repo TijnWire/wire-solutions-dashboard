@@ -2,6 +2,7 @@
 // Alles hier is gewone rekenlogica zonder scherm of opslag, zodat de pagina en de export exact hetzelfde zien.
 import type { Schouwafspraak, SchouwMap } from "./types";
 import { isISODatum, toISO } from "./week";
+import { dagenVanVenster, maakTijdblokken } from "./bodemonderzoek";
 
 export const WEEKDAG_NAMEN = ["Maandag", "Dinsdag", "Woensdag", "Donderdag", "Vrijdag", "Zaterdag", "Zondag"];
 
@@ -87,7 +88,18 @@ export const sorteerOpTijd = (a: string, b: string): number => (a === b ? 0 : a 
 // De tijdvakken van één dag: de aangepaste lijst van deze week, anders de standaardtijden.
 export function tijdenVan(map: SchouwMap | undefined, maandag: string, iso: string, dagIndex: number, plaats: string | undefined = map?.naam): string[] {
   const aangepast = map?.weken?.[maandag]?.[iso];
-  return (aangepast ? [...aangepast] : standaardTijden(dagIndex, plaats)).sort(sorteerOpTijd);
+  if (aangepast) return [...aangepast].sort(sorteerOpTijd);
+  const t = map?.planning?.tijden;
+  // Eigen tijdblokken (bijv. 08:00 tot 14:00 per uur): de begintijd van elk blok is een tijdvak.
+  if (t) return maakTijdblokken(t.van, t.tot, t.minuten).map((b) => b.split("-")[0]);
+  return standaardTijden(dagIndex, plaats).sort(sorteerOpTijd);
+}
+
+// De dagen van de eigen planning (leeg = geen eigen periode ingesteld).
+export function planningDagen(map: SchouwMap | undefined): string[] {
+  const p = map?.planning;
+  if (!p || (p.losseDagen ? !p.dagen?.length : !p.start)) return [];
+  return dagenVanVenster({ start: p.start ?? "", weken: 2, eind: p.eind, werkdagen: p.werkdagen, losseDagen: p.losseDagen, dagen: p.dagen });
 }
 
 // "08:45" → "8.45" (zoals op de Stedin-planning); iets anders blijft staan zoals het is.
@@ -115,14 +127,22 @@ export function bouwWeek(map: SchouwMap | undefined, maandag: string, afspraken:
   const weg = new Set(verwijderdeDagen(map, maandag));
   const twee = heeftTweeBlokken(plaats);
   const zonderVrijdag = geenVrijdag(plaats);
+  // Met een eigen periode staan alleen de dagen van die periode in het raster (plus dagen waar toch
+  // een afspraak op staat, zodat er nooit iets verdwijnt).
+  const periode = planningDagen(map);
+  const inPeriode = new Set(periode);
   dagenVanWeek(maandag).forEach((iso, i) => {
     const opDag = perDag.get(iso) ?? [];
-    const eigenVrijdag = i === 4 && zonderVrijdag && !map?.weken?.[maandag]?.[iso];
-    if ((i >= 5 || eigenVrijdag) && opDag.length === 0) return;
+    if (periode.length) {
+      if (!inPeriode.has(iso) && opDag.length === 0) return;
+    } else {
+      const eigenVrijdag = i === 4 && zonderVrijdag && !map?.weken?.[maandag]?.[iso];
+      if ((i >= 5 || eigenVrijdag) && opDag.length === 0) return;
+    }
     // Een verwijderde dag verdwijnt uit het raster en dus ook uit de Excel. Staat er toch een afspraak
     // op (later alsnog ingevuld), dan blijft de dag staan, zodat er nooit iets uit de planning valt.
     if (weg.has(iso) && opDag.length === 0) return;
-    const vakken = i >= 5 ? [] : tijdenVan(map, maandag, iso, i, plaats);
+    const vakken = i >= 5 && !inPeriode.has(iso) ? [] : tijdenVan(map, maandag, iso, i, plaats);
     const blokRegels = (blok: 1 | 2, lijst: Schouwafspraak[]): SchouwRegel[] => {
       const tijden = new Set<string>(vakken);
       for (const a of lijst) tijden.add(a.tijd || "");

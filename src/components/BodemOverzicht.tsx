@@ -201,7 +201,9 @@ export function BodemOverzicht({ opdracht, users }: { opdracht: TauwOpdracht; us
                         <div key={a.id} className="flex flex-wrap items-baseline gap-x-2 text-xs">
                           <span className="font-medium text-ink-800">{`${a.straat} ${a.huisnummer}`.trim()}</span>
                           <span className="text-ink-500">{a.plaats}</span>
-                          <span className="text-ink-500">· {a.bewoner || "—"}</span>
+                          {a.bewoner
+                            ? <span className="rounded bg-ink-100 px-1.5 py-0.5 font-semibold text-ink-800">{a.bewoner}</span>
+                            : <span className="rounded bg-red-50 px-1.5 py-0.5 font-semibold text-red-600">naam ontbreekt</span>}
                           <span className="text-ink-500">{telefoonNet(a.telefoon)}</span>
                         </div>
                       ))}

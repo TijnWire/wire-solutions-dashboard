@@ -517,6 +517,12 @@ export type SchouwMap = {
   weken?: Record<string, SchouwWeekTijden>; /* key = maandag ISO */
   verwijderdeDagen?: Record<string, string[]>; /* key = maandag ISO → ISO-datums die in die week niet doorgaan */ // sleutel = maandag van de week (ISO)
   tijdenVersie?: number; // eenmalige omzetting naar nieuwe vaste tijdvakken van een plaats is gedaan
+  // Eigen planning, net als bij Bodemonderzoeken: welke dagen (van–tot of losse dagen) en welke
+  // tijdblokken. Zonder planning gelden de vaste tijdvakken van de plaats.
+  planning?: {
+    losseDagen?: boolean; start?: string; eind?: string; werkdagen?: number[]; dagen?: string[];
+    tijden?: { van: string; tot: string; minuten: number };
+  };
 };
 
 // ── Klanten & Database ──

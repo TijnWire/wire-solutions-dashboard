@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, CalendarClock, CalendarX, ChevronLeft, ChevronRight, Clock, Download, FolderOpen, FolderPlus, Pencil, Phone, Plus, RotateCcw, Trash2, X } from "lucide-react";
+import { ArrowLeft, CalendarClock, CalendarX, ChevronDown, ChevronLeft, ChevronRight, Settings2, User, Clock, Download, FolderOpen, FolderPlus, Pencil, Phone, Plus, RotateCcw, Trash2, X } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { Card, Badge } from "../components/ui";
 import { WerknemerKiezer } from "../components/WerknemerKiezer";
 import { DatumKiezer } from "../components/DatumKiezer";
 import { TijdKiezer, normaliseerTijd } from "../components/TijdKiezer";
 import { Keuze } from "../components/Keuze";
-import { SCHOUW_STATUSSEN, type SchouwStatus, type Schouwafspraak } from "../lib/types";
+import { SCHOUW_STATUSSEN, type SchouwStatus, type Schouwafspraak, type SchouwMap } from "../lib/types";
+import { AfsprakenPeriode, TijdblokKeuze } from "../components/PlanningInstellen";
 import { isISODatum, toISO, verschuifWeek, weekBereik, weekNummer, weekStartISO } from "../lib/week";
 import {
-  bouwWeek, dagenVanWeek, exportDagen, mapOverzicht, normPlaats, sorteerOpTijd, tijdLabel, tijdenVan, verwijderdeDagen, WEEKDAG_NAMEN, type MapOverzicht, tijdenVersie, heeftTweeBlokken
+  bouwWeek, dagenVanWeek, exportDagen, mapOverzicht, normPlaats, sorteerOpTijd, tijdLabel, tijdenVan, verwijderdeDagen, WEEKDAG_NAMEN, type MapOverzicht, tijdenVersie, heeftTweeBlokken, planningDagen
 } from "../lib/schouw";
 import { exporteerSchouwPlanning } from "../lib/schouwExcel";
 import { isToegewezen, toegewezenIds, toewijzingPatch } from "../lib/toewijzing";
@@ -129,7 +130,7 @@ export function Schouwafspraken() {
 }
 
 // ───────────────────────── Eén map: weekplanning ─────────────────────────
-type FormState = { datum: string; tijd: string; straat: string; huisnummer: string; telefoon: string; notitie: string; toegewezenAan: string[]; status: SchouwStatus; blok: 1 | 2 };
+type FormState = { datum: string; tijd: string; straat: string; huisnummer: string; naam: string; telefoon: string; notitie: string; toegewezenAan: string[]; status: SchouwStatus; blok: 1 | 2 };
 
 function MapDetail({ overzicht, terug }: { overzicht: MapOverzicht; terug: () => void }) {
   const { users, currentUser, addSchouw, updateSchouw, deleteSchouw, addSchouwMap, updateSchouwMap } = useApp();
@@ -138,6 +139,7 @@ function MapDetail({ overzicht, terug }: { overzicht: MapOverzicht; terug: () =>
   const [form, setForm] = useState<FormState | null>(null);
   const [bewerkId, setBewerkId] = useState<string | null>(null);
   const [tijdenDag, setTijdenDag] = useState<string | null>(null);
+  const [planningOpen, setPlanningOpen] = useState(false);
   const [bezig, setBezig] = useState(false);
   const formRef = useRef<HTMLDivElement | null>(null);
 
@@ -171,41 +173,62 @@ function MapDetail({ overzicht, terug }: { overzicht: MapOverzicht; terug: () =>
   const kanTijdenAanpassen = overzicht.sleutel !== ""; // "Zonder plaats" is geen echte map
   const twee = heeftTweeBlokken(overzicht.naam); // twee planningen per dag (Rotterdam)
 
+  // Eigen planning (periode + tijdblokken). Nieuwe tijdblokken gelden vanaf deze week; eerder per dag
+  // aangepaste tijdvakken vanaf nu vervallen dan, zodat overal hetzelfde staat.
+  const zetPlanning = (patch: NonNullable<SchouwMap["planning"]>, nieuweTijden = false) => {
+    const id = record?.id ?? addSchouwMap(overzicht.naam);
+    const planning = { ...(record?.planning ?? {}), ...patch };
+    const huidige = weekStartISO(vandaagISO());
+    const weken = nieuweTijden ? Object.fromEntries(Object.entries(record?.weken ?? {}).filter(([ma]) => ma < huidige)) : record?.weken;
+    updateSchouwMap(id, { planning, ...(nieuweTijden ? { weken } : {}) });
+    // Naar de eerste week van de periode, zodat je meteen ziet wat je instelt.
+    const eerste = planningDagen({ ...(record ?? { id, naam: overzicht.naam, aangemaakt: "", bijgewerktOp: "" }), planning })[0];
+    if (eerste && !nieuweTijden) setMaandag(weekStartISO(eerste));
+  };
+  const periodeDagen = planningDagen(record);
+  const pt = record?.planning?.tijden;
+  const planningSamenvatting = [
+    periodeDagen.length
+      ? (record?.planning?.losseDagen ? `${periodeDagen.length} losse ${periodeDagen.length === 1 ? "dag" : "dagen"}` : `${dagKort(periodeDagen[0])} t/m ${dagKort(periodeDagen[periodeDagen.length - 1])}`)
+      : "Geen vaste periode",
+    pt ? `${pt.van}–${pt.tot}, tijdvak ${pt.minuten} min` : "vaste tijdvakken",
+  ].join(" · ");
+
   // Tijdvakken van een willekeurige datum (voor de tijdknoppen in het formulier).
   const vakkenVoor = (iso: string): string[] => {
     if (!isISODatum(iso)) return [];
     const ma = weekStartISO(iso);
     const dagIndex = (new Date(iso + "T00:00:00").getDay() + 6) % 7;
-    if (dagIndex >= 5 && !record?.weken?.[ma]?.[iso]) return [];
+    if (dagIndex >= 5 && !record?.weken?.[ma]?.[iso] && !planningDagen(record).includes(iso)) return [];
     return tijdenVan(record, ma, iso, dagIndex, overzicht.naam);
   };
 
   const openNieuw = (datum = "", tijd = "", blok: 1 | 2 = 1) => {
     setBewerkId(null);
-    setForm({ datum, tijd, straat: "", huisnummer: "", telefoon: "", notitie: "", toegewezenAan: [currentUser.id], status: "In te plannen", blok });
+    setForm({ datum, tijd, straat: "", huisnummer: "", naam: "", telefoon: "", notitie: "", toegewezenAan: [currentUser.id], status: "In te plannen", blok });
     setTimeout(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
   };
   const openBewerk = (a: Schouwafspraak) => {
     setBewerkId(a.id);
-    setForm({ datum: a.datum, tijd: a.tijd, straat: a.straat, huisnummer: a.huisnummer, telefoon: a.telefoon, notitie: a.notitie, toegewezenAan: toegewezenIds(a), status: a.status, blok: a.blok === 2 ? 2 : 1 });
+    setForm({ datum: a.datum, tijd: a.tijd, straat: a.straat, huisnummer: a.huisnummer, naam: a.contactNaam ?? "", telefoon: a.telefoon, notitie: a.notitie, toegewezenAan: toegewezenIds(a), status: a.status, blok: a.blok === 2 ? 2 : 1 });
     setTimeout(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
   };
   const sluit = () => { setForm(null); setBewerkId(null); };
   const set = (p: Partial<FormState>) => setForm((f) => (f ? { ...f, ...p } : f));
 
   const opslaan = () => {
-    if (!form || !form.straat.trim() || !form.huisnummer.trim()) return;
+    if (!form || !form.straat.trim() || !form.huisnummer.trim() || !form.naam.trim()) return;
     // Status volgt de datum: met datum = "Ingepland", zonder = "In te plannen" — tenzij de afspraak al
     // handmatig op Uitgevoerd of Geannuleerd is gezet.
     const handmatig = form.status === "Uitgevoerd" || form.status === "Geannuleerd";
     const status: SchouwStatus = handmatig ? form.status : form.datum ? "Ingepland" : "In te plannen";
     const data = {
-      straat: form.straat.trim(), huisnummer: form.huisnummer.trim(), telefoon: form.telefoon.trim(), notitie: form.notitie.trim(),
+      straat: form.straat.trim(), huisnummer: form.huisnummer.trim(), contactNaam: form.naam.trim(), telefoon: form.telefoon.trim(), notitie: form.notitie.trim(),
       datum: form.datum, tijd: form.tijd, ...toewijzingPatch(form.toegewezenAan), status,
       blok: twee && form.blok === 2 ? (2 as const) : undefined,
     };
     if (bewerkId) updateSchouw(bewerkId, data);
-    else addSchouw({ ...data, postcode: "", plaats: overzicht.sleutel ? overzicht.naam : "", contactNaam: "" });
+    else addSchouw({ ...data, postcode: "", plaats: overzicht.sleutel ? overzicht.naam : "" });
     // De week volgt de gekozen datum, zodat je de afspraak meteen op de planning ziet staan.
     if (form.datum && isISODatum(form.datum)) setMaandag(weekStartISO(form.datum));
     sluit();
@@ -279,6 +302,36 @@ function MapDetail({ overzicht, terug }: { overzicht: MapOverzicht; terug: () =>
           </button>
         </div>
       </div>
+
+      {/* Planning instellen: dezelfde opzet als bij Bodemonderzoeken (periode + tijdblokken) */}
+      {kanTijdenAanpassen && isLeiding && (
+        <Card className="p-4">
+          <button type="button" onClick={() => setPlanningOpen((o) => !o)} className="flex w-full items-center justify-between gap-3 text-left">
+            <span>
+              <span className="flex items-center gap-2 text-sm font-bold text-ink-900"><Settings2 className="h-4 w-4 text-ink-500" /> Planning instellen</span>
+              <span className="mt-0.5 block text-xs text-ink-500">{planningSamenvatting}</span>
+            </span>
+            <ChevronDown className={`h-4 w-4 shrink-0 text-ink-400 transition-transform ${planningOpen ? "rotate-180" : ""}`} />
+          </button>
+          {planningOpen && (
+            <div className="mt-4 space-y-4 border-t border-ink-100 pt-4">
+              <AfsprakenPeriode periode={record?.planning} onWijzig={(p) => zetPlanning(p)} />
+              <TijdblokKeuze tijden={record?.planning?.tijden} onWijzig={(t) => zetPlanning({ tijden: t }, true)}>
+                <div className="flex flex-wrap gap-1.5">
+                  {record?.planning?.tijden
+                    ? tijdenVan(record, "", "", 1, overzicht.naam).map((t) => <span key={t} className="rounded-md bg-ink-100 px-2 py-1 text-xs font-semibold text-ink-700">{tijdLabel(t)}</span>)
+                    : <span className="text-xs text-ink-500">Nog de vaste tijdvakken van {overzicht.naam}. Kies van, tot en tijdvak om eigen tijdblokken te gebruiken.</span>}
+                </div>
+              </TijdblokKeuze>
+              {record?.planning && (
+                <button type="button" onClick={() => { if (record) updateSchouwMap(record.id, { planning: undefined }); }} className={knop}>
+                  <RotateCcw className="h-3.5 w-3.5" /> Terug naar de vaste tijdvakken
+                </button>
+              )}
+            </div>
+          )}
+        </Card>
+      )}
 
       {/* Weekkiezer + download */}
       <Card className="p-4">
@@ -358,6 +411,7 @@ function MapDetail({ overzicht, terug }: { overzicht: MapOverzicht; terug: () =>
               <div><label className={labelCls}>Huisnummer</label><input value={form.huisnummer} onChange={(e) => set({ huisnummer: e.target.value })} placeholder="12 of 12B" className={veld} /></div>
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div><label className={labelCls}>Naam bewoner <span className="text-red-600">*</span></label><input value={form.naam} onChange={(e) => set({ naam: e.target.value })} placeholder="Voor- en achternaam" className={veld} /></div>
               <div><label className={labelCls}>Telefoonnummer</label><input value={form.telefoon} onChange={(e) => set({ telefoon: e.target.value })} inputMode="tel" placeholder="06 …" className={veld} /></div>
               {isLeiding && (
                 <div>
@@ -374,7 +428,7 @@ function MapDetail({ overzicht, terug }: { overzicht: MapOverzicht; terug: () =>
               </div>
             )}
             <div className="flex items-center gap-2">
-              <button type="button" onClick={opslaan} disabled={!form.straat.trim() || !form.huisnummer.trim()} className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-40">
+              <button type="button" onClick={opslaan} disabled={!form.straat.trim() || !form.huisnummer.trim() || !form.naam.trim()} className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-40">
                 <Plus className="h-4 w-4" /> {bewerkId ? "Opslaan" : "Toevoegen"}
               </button>
               <button type="button" onClick={sluit} className="rounded-lg border border-ink-200 bg-white px-5 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50">Annuleren</button>
@@ -391,6 +445,7 @@ function MapDetail({ overzicht, terug }: { overzicht: MapOverzicht; terug: () =>
             {zonderDatum.map((a) => (
               <div key={a.id} className="flex flex-wrap items-center gap-2 py-2 text-sm">
                 <span className="font-semibold text-ink-900">{a.straat} {a.huisnummer}</span>
+                {a.contactNaam ? <span className="font-medium text-ink-700">{a.contactNaam}</span> : <span className="text-xs font-semibold text-red-600">naam ontbreekt</span>}
                 {a.telefoon && <span className="text-ink-500">{a.telefoon}</span>}
                 <Badge tone={statusTone[a.status]}>{a.status}</Badge>
                 <span className="ml-auto flex gap-1.5">
@@ -481,6 +536,9 @@ function MapDetail({ overzicht, terug }: { overzicht: MapOverzicht; terug: () =>
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="text-sm font-bold text-ink-900">{a.straat} {a.huisnummer}</span>
+                          {a.contactNaam
+                            ? <span className="inline-flex items-center gap-1 rounded-md bg-ink-100 px-2 py-0.5 text-sm font-semibold text-ink-800"><User className="h-3.5 w-3.5 text-ink-500" />{a.contactNaam}</span>
+                            : <span className="rounded-md bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-600">naam ontbreekt</span>}
                           {a.status !== "Ingepland" && <Badge tone={statusTone[a.status]}>{a.status}</Badge>}
                           {!r.eigenVak && r.tijd && <span className="text-xs text-ink-400">buiten de tijdvakken</span>}
                         </div>

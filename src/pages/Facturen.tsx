@@ -1,12 +1,11 @@
 import { useEffect, useState } from "react";
-import { Plus, ArrowLeft, Download, Pencil, Trash2, Receipt, X, FileSpreadsheet, Users, Search, Mail, Clock, ArrowDownToLine, SlidersHorizontal, Save, Eye, Undo2, CheckCircle2, Hash } from "lucide-react";
+import { Plus, ArrowLeft, Download, Pencil, Trash2, Receipt, X, Users, Search, Mail, Clock, ArrowDownToLine, SlidersHorizontal, Save, Eye, Undo2, CheckCircle2, Hash } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { useNav } from "../store/NavContext";
 import { DatumKiezer } from "../components/DatumKiezer";
 import { Keuze } from "../components/Keuze";
 import { Card, Badge, Bevestig } from "../components/ui";
 import { downloadFactuurPdf, mailFactuur, factuurTotalen, euro } from "../lib/factuurPdf";
-import { exporteerExcel } from "../lib/excel";
 import { weekStartISO, weekLabel, isISODatum } from "../lib/week";
 import { PeriodeNavigator, periodeRange, type Periode } from "../components/PeriodeNavigator";
 import { STANDAARD_OPDRACHTGEVERS } from "../lib/opdrachtgeversData";
@@ -781,15 +780,6 @@ export function Facturen({ initieelFactuur, nieuwFactuurProject }: { initieelFac
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nieuwFactuurProject]);
 
-  // Exporteer alle facturen naar Excel (verplaatst vanuit Documenten — hoort bij de boekhouding).
-  const exporteerNaarExcel = () => {
-    if (facturen.length === 0) return;
-    const rijen = facturen.map((f) => {
-      const t = factuurTotalen(f);
-      return { Nummer: f.nummer, Datum: f.datum, Klant: f.klantNaam, Subtotaal: t.subtotaal, BTW: t.btw, Totaal: t.totaal, Status: f.status };
-    });
-    exporteerExcel(rijen, "Facturen", "Facturen");
-  };
 
   if (modus === "formulier") {
     return <FactuurForm bestaande={bewerk} initieel={nieuwVan} onKlaar={() => setModus("lijst")} onOpgeslagen={() => { bron?.(); setBron(null); }} />;
@@ -836,7 +826,7 @@ export function Facturen({ initieelFactuur, nieuwFactuurProject }: { initieelFac
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold text-ink-900">Facturen</h2>
-          <p className="text-sm text-ink-500">Maak facturen met jullie logo, download als PDF of exporteer alles naar Excel.</p>
+          <p className="text-sm text-ink-500">Maak facturen met jullie logo, en download ze als PDF.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button type="button" onClick={() => setModus("opdrachtgevers")} className="inline-flex items-center gap-2 rounded-xl border border-ink-200 bg-white px-4 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50">
@@ -851,11 +841,6 @@ export function Facturen({ initieelFactuur, nieuwFactuurProject }: { initieelFac
           <button type="button" onClick={() => setModus("nummering")} className="inline-flex items-center gap-2 rounded-xl border border-ink-200 bg-white px-4 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50">
             <Hash className="h-4 w-4 text-ink-500" /> Nummering
           </button>
-          {facturen.length > 0 && (
-            <button type="button" onClick={exporteerNaarExcel} className="inline-flex items-center gap-2 rounded-xl border border-ink-200 bg-white px-4 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50">
-              <FileSpreadsheet className="h-4 w-4 text-green-600" /> Excel
-            </button>
-          )}
           <button type="button" onClick={nieuweLege} className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-brand-700">
             <Plus className="h-4 w-4" /> Nieuwe factuur
           </button>

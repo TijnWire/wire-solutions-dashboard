@@ -6,14 +6,19 @@ import { StatCard } from "../components/StatCard";
 import type { User, Verlof } from "../lib/types";
 import { werkdagenExclFeestdagen } from "../lib/feestdagen";
 
-const STANDAARD_VRIJE_DAGEN = 25;
+// 22 vrije dagen per jaar; wie het hele jaar niet ziek is geweest, krijgt er 2 bij (24).
+const STANDAARD_VRIJE_DAGEN = 22;
+const BONUS_GEEN_ZIEKTE = 2;
 const STANDAARD_CONTRACT = 40;
 const werkdagenTussen = werkdagenExclFeestdagen; // ma–vr, excl. feestdagen
 const uurTekst = (n: number) => (Number.isInteger(n) ? String(n) : (Math.round(n * 10) / 10).toString().replace(".", ","));
 const inputCls = "w-full rounded-lg border border-ink-200 bg-white px-2 py-1.5 text-center text-sm font-semibold text-ink-800 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100";
 
 const contractUren = (u: User) => (u.contract?.uren != null ? u.contract.uren : STANDAARD_CONTRACT);
-const vrijeDagen = (u: User) => u.verlofDagenPerJaar ?? STANDAARD_VRIJE_DAGEN;
+const basisDagen = (u: User) => u.verlofDagenPerJaar ?? STANDAARD_VRIJE_DAGEN;
+const ziekDitJaar = (verlof: Verlof[], userId: string, jaar: number) =>
+  verlof.some((v) => v.medewerkerId === userId && v.type === "Ziek" && v.status !== "Afgewezen" && v.van <= `${jaar}-12-31` && v.tot >= `${jaar}-01-01`);
+const vrijeDagen = (u: User, verlof: Verlof[], jaar: number) => basisDagen(u) + (ziekDitJaar(verlof, u.id, jaar) ? 0 : BONUS_GEEN_ZIEKTE);
 
 // Opgenomen vakantie/verlof (werkdagen) binnen een periode; ziekte telt niet mee tegen de vrije dagen.
 function opgenomenDagen(verlof: Verlof[], userId: string, van: string, tot: string): number {
@@ -52,7 +57,7 @@ export function VrijeDagen() {
   const detail = eigen ? currentUser : detailId ? medewerkers.find((u) => u.id === detailId) : undefined;
   if (detail) {
     const u = detail;
-    const totaal = vrijeDagen(u);
+    const totaal = vrijeDagen(u, verlof, jaar);
     const op = opgenomenDagen(verlof, u.id, jaarStart, jaarEind);
     const over = totaal - op;
     const dagUren = contractUren(u) / 5;
@@ -82,7 +87,7 @@ export function VrijeDagen() {
         {eigen ? (
           <Card className="flex flex-wrap gap-x-6 gap-y-1 p-4 text-sm text-ink-600">
             <span>Contract: <strong className="text-ink-900">{contractUren(u)} uur/week</strong></span>
-            <span>Vrije dagen per jaar: <strong className="text-ink-900">{totaal}</strong></span>
+            <span>Vrije dagen per jaar: <strong className="text-ink-900">{basisDagen(u)}</strong>, of <strong className="text-ink-900">{basisDagen(u) + BONUS_GEEN_ZIEKTE}</strong> als je het hele jaar niet ziek bent.</span>
           </Card>
         ) : (
         <Card className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2">
@@ -92,14 +97,15 @@ export function VrijeDagen() {
           </label>
           <label className="space-y-1">
             <span className="block text-xs font-semibold text-ink-500">Vrije dagen per jaar</span>
-            <input inputMode="numeric" value={String(totaal)} onChange={(e) => { const n = parseInt(e.target.value.replace(/\D/g, ""), 10); updateUser(u.id, { verlofDagenPerJaar: Number.isFinite(n) ? n : 0 }); }} className={inputCls} />
+            <input inputMode="numeric" value={String(basisDagen(u))} onChange={(e) => { const n = parseInt(e.target.value.replace(/\D/g, ""), 10); updateUser(u.id, { verlofDagenPerJaar: Number.isFinite(n) ? n : 0 }); }} className={inputCls} />
+            <span className="block text-xs text-ink-400">+{BONUS_GEEN_ZIEKTE} bij geen ziekte = {basisDagen(u) + BONUS_GEEN_ZIEKTE}</span>
           </label>
         </Card>
         )}
 
         {/* Kerncijfers: dagen + uren */}
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <StatCard icon={Sun} label={`Vrije dagen ${jaar}`} value={`${totaal}`} sub={`${uurTekst(totaal * dagUren)} u`} tone="indigo" />
+          <StatCard icon={Sun} label={`Vrije dagen ${jaar}`} value={`${totaal}`} sub={totaal > basisDagen(u) ? `incl. ${BONUS_GEEN_ZIEKTE} extra: niet ziek · ${uurTekst(totaal * dagUren)} u` : `${uurTekst(totaal * dagUren)} u`} tone="indigo" />
           <StatCard icon={Plane} label="Opgenomen" value={`${op} ${op === 1 ? "dag" : "dagen"}`} sub={`${uurTekst(op * dagUren)} u`} tone="amber" />
           <StatCard icon={CalendarDays} label="Nog over" value={`${over} ${over === 1 ? "dag" : "dagen"}`} sub={`${uurTekst(over * dagUren)} u`} tone={over < 0 ? "red" : "green"} />
           <StatCard icon={Clock} label={`Gewerkt ${jaar}`} value={`${uurTekst(urenJaar)} u`} sub={`totaal ${uurTekst(urenTotaal)} u`} tone="green" />
@@ -152,7 +158,7 @@ export function VrijeDagen() {
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {medewerkers.map((u) => {
-            const totaal = vrijeDagen(u);
+            const totaal = vrijeDagen(u, verlof, jaar);
             const op = opgenomenDagen(verlof, u.id, jaarStart, jaarEind);
             const over = totaal - op;
             return (
@@ -190,7 +196,7 @@ export function VrijeDagen() {
         </div>
       )}
 
-      <p className="text-xs text-ink-400">"Opgenomen" telt de goedgekeurde vakantie- en verlofdagen (werkdagen ma–vr) van dit jaar; ziekte telt niet mee. De gewerkte uren komen uit de Urenstaat.</p>
+      <p className="text-xs text-ink-400">"Opgenomen" telt de goedgekeurde vakantie- en verlofdagen (werkdagen ma–vr) van dit jaar; ziekte telt niet mee. Iedereen heeft {STANDAARD_VRIJE_DAGEN} vrije dagen per jaar; wie dit jaar niet ziek is geweest, krijgt er {BONUS_GEEN_ZIEKTE} bij ({STANDAARD_VRIJE_DAGEN + BONUS_GEEN_ZIEKTE}). De gewerkte uren komen uit de Urenstaat.</p>
     </div>
   );
 }

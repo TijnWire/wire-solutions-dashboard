@@ -7,7 +7,6 @@ import {
   FileText,
   Users,
   Database,
-  MessagesSquare,
   BookOpen,
   UserCog,
   Settings,
@@ -76,7 +75,6 @@ export const NAV: NavItem[] = [
   { key: "afspraken", label: "Afspraken", icon: CalendarCheck, group: "Operatie", roles: LEIDING, verborgen: true },
   // Documenten staat nu als tabblad in Klanten & Documenten; de losse pagina blijft bereikbaar.
   { key: "documenten", label: "Documenten", icon: FileText, group: "Operatie", roles: LEIDING, verborgen: true },
-  { key: "communicatie", label: "Communicatie", icon: MessagesSquare, badge: "AI", group: "Operatie", roles: ALLE },
   { key: "kennisbank", label: "Kennisbank", icon: BookOpen, group: "Operatie", roles: ALLE },
   { key: "klanten", label: "Klanten & Documenten", icon: Database, group: "Operatie", roles: LEIDING },
 
