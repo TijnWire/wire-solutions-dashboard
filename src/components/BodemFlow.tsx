@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Check, ChevronRight, ArrowLeft, Settings2, ListPlus, Footprints, ClipboardCheck } from "lucide-react";
 import { BodemPlanning, BodemAfspraken } from "./BodemPlanning";
 import { BodemOverzicht } from "./BodemOverzicht";
+import { BodemWeekPlanning } from "./BodemWeekPlanning";
 import { BodemBewaartermijnKaart } from "./BodemBewaartermijn";
 import { dagenVanVenster, voortgangVan } from "../lib/bodemonderzoek";
 import type { TauwAdres, TauwOpdracht, User } from "../lib/types";
@@ -22,13 +23,14 @@ const STAPPEN: { key: StapKey; nr: number; titel: string; uitleg: string; Icon: 
   { key: "resultaat", nr: 4, titel: "Afronding", uitleg: "Afspraken en export", Icon: ClipboardCheck },
 ];
 
-export function BodemFlow({ opdracht, users, veldwerkers, magWissen, onWijzig, adressenSectie, rondeStart }: {
+export function BodemFlow({ opdracht, users, veldwerkers, magWissen, onWijzig, onAdres, adressenSectie, rondeStart }: {
   opdracht: TauwOpdracht;
   users: User[];
   veldwerkers: User[];
   magWissen: boolean; // alleen de eigenaar en HR mogen persoonsgegevens wissen
   onWijzig: (patch: Partial<TauwOpdracht>) => void;
   onAdressen?: (next: TauwAdres[]) => void;
+  onAdres?: (adresId: string, patch: Partial<TauwAdres>) => void;
   adressenSectie: ReactNode;   // de bestaande adreslijst met import-knop
   rondeStart: ReactNode;       // het blok "Langs de deuren" voor wie zelf meeloopt
 }) {
@@ -118,12 +120,14 @@ export function BodemFlow({ opdracht, users, veldwerkers, magWissen, onWijzig, a
       {stap === "onderweg" && (
         <>
           {rondeStart}
+          <BodemWeekPlanning opdracht={opdracht} users={users} onAdres={onAdres} />
           <BodemOverzicht opdracht={opdracht} users={users} />
         </>
       )}
 
       {stap === "resultaat" && (
         <>
+          <BodemWeekPlanning opdracht={opdracht} users={users} onAdres={onAdres} />
           <BodemAfspraken opdracht={opdracht} users={users} />
           <BodemOverzicht opdracht={opdracht} users={users} />
           <BodemBewaartermijnKaart

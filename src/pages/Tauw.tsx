@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState } from "react";
-import { ArrowLeft, Plus, Shovel, Trash2, MessageCircle, Phone, Navigation, FileDown, FileUp, Mail, Check, ChevronRight, ChevronDown, X, UserPlus, RotateCcw, Footprints, Search, Pencil, Archive } from "lucide-react";
+import { ArrowLeft, Plus, Shovel, FolderOpen, Trash2, MessageCircle, Phone, Navigation, FileDown, FileUp, Mail, Check, ChevronRight, ChevronDown, X, UserPlus, RotateCcw, Footprints, Search, Pencil, Archive } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { useProjectFilter } from "../components/ProjectFilter";
 import { WerkTabs, type WerkTab } from "../components/WerkTabs";
@@ -16,7 +16,7 @@ import { BodemImport } from "../components/BodemImport";
 import { BodemFlow } from "../components/BodemFlow";
 import { haalAdressen, zetAdressen, wijzigAdres, verwerkWachtrij, aantalWachtend } from "../lib/bodemAdressen";
 import { DeurRonde } from "./DeurRonde";
-import { sorteerRoute, voortgangVan, wijsToeAanProject } from "../lib/bodemonderzoek";
+import { sorteerRoute, voortgangVan, wijsToeAanProject, dagenVanVenster } from "../lib/bodemonderzoek";
 import {
   TAUW_TYPES, TAUW_TYPE_LABEL, TAUW_STATUS_LABEL, TAUW_STATUS_VOLGORDE, TAUW_OPDRACHTGEVERS,
   type TauwAdres, type TauwOpdracht, type TauwType, type TauwStatus, type TauwOpdrachtgever,
@@ -613,7 +613,7 @@ function TauwDetail({ opdracht, onTerug }: { opdracht: TauwOpdracht; onTerug: ()
           );
         })}
       </div>
-      {!opdracht.venster?.start && (
+      {dagenVanVenster(opdracht.venster).length === 0 && (
         <div className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
           Er is nog geen afsprakenperiode ingesteld (stap 1). Bewoners die erbij willen zijn, kunnen nu
           nog geen moment krijgen.
@@ -641,7 +641,7 @@ function TauwDetail({ opdracht, onTerug }: { opdracht: TauwOpdracht; onTerug: ()
       <div className="h-2.5 overflow-hidden rounded-full bg-ink-100">
         <div className="h-full rounded-full bg-brand-500 transition-all" style={{ width: `${(bodemVoortgang.afgerond / Math.max(1, bodemVoortgang.totaal)) * 100}%` }} />
       </div>
-      {!opdracht.venster?.start && (
+      {dagenVanVenster(opdracht.venster).length === 0 && (
         <div className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
           Er is nog geen afsprakenperiode ingesteld. Bewoners die erbij willen zijn, kun je nu nog geen moment geven.
         </div>
@@ -832,6 +832,7 @@ function TauwDetail({ opdracht, onTerug }: { opdracht: TauwOpdracht; onTerug: ()
           magWissen={magAlles(currentUser)}
           onWijzig={(patch) => updateTauw(opdracht.id, patch)}
           onAdressen={bewaarLijst}
+          onAdres={isLeiding ? bewaarAdres : undefined}
           adressenSectie={adressenSectie}
           rondeStart={<>{rondeStart}{rondePerPersoon}</>}
         />
@@ -1024,10 +1025,22 @@ export function Tauw({ initieelTauw }: { initieelTauw?: string }) {
                     return (
                       <div key={o.id} onClick={() => setOpenId(o.id)} className="cursor-pointer rounded-2xl border border-ink-200 bg-white p-4 text-left shadow-card transition-shadow hover:shadow-cardhover">
                         <div className="flex items-center gap-3">
-                          <div className="rounded-lg bg-brand-50 p-2.5 text-brand-600"><Shovel className="h-5 w-5" /></div>
+                          <div className="rounded-xl bg-brand-50 p-2.5 text-brand-600"><FolderOpen className="h-5 w-5" /></div>
                           <div className="min-w-0 flex-1">
-                            <div className="truncate font-semibold text-ink-900">{titel}</div>
+                            <div className="truncate font-bold text-ink-900">{titel}</div>
                             <div className="truncate text-xs text-ink-500">{[o.opdrachtgever ?? "TAUW", TAUW_TYPE_LABEL[o.type], `${o.adressen.length} adressen`].filter(Boolean).join(" · ")}</div>
+                            {(() => {
+                              // Net als bij Schouwafspraken: hoeveel afspraken deze week en hoeveel er gepland staan.
+                              const gepland = o.adressen.filter((a) => a.aanwezig === "ja" && a.datum && a.tijdslot);
+                              const n = new Date(); const ma = weekStartISO(`${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`);
+                              const dezeWeek = gepland.filter((a) => /^\d{4}-\d{2}-\d{2}$/.test(a.datum) && weekStartISO(a.datum) === ma).length;
+                              return (dezeWeek > 0 || gepland.length > 0) ? (
+                                <div className="mt-2 flex flex-wrap gap-1.5">
+                                  {dezeWeek > 0 && <Badge tone="amber">{dezeWeek} deze week</Badge>}
+                                  {gepland.length > 0 && <Badge tone="slate">{gepland.length} gepland</Badge>}
+                                </div>
+                              ) : null;
+                            })()}
                           </div>
                           <Badge tone={STATUS_TONE[o.status]}>{statusLabel(o.status, isLeiding)}</Badge>
                           <ChevronRight className="h-5 w-5 shrink-0 text-ink-300" />

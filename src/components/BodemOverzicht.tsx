@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
-import { CalendarDays, FileDown, FileText, Users, Loader2, PhoneCall, CloudOff, History, ChevronDown } from "lucide-react";
+import { useEffect, useState } from "react";
+import { FileDown, FileText, Users, Loader2, PhoneCall, CloudOff, History, ChevronDown } from "lucide-react";
 import { Card } from "./ui";
-import { dagLabel, telefoonNet, voortgangVan, blokkenVan, dagenVanVenster, slotActief } from "../lib/bodemonderzoek";
+import { dagLabel, telefoonNet, voortgangVan, } from "../lib/bodemonderzoek";
 import { exporteerBodemExcel, exporteerBodemPdf } from "../lib/bodemExport";
 import { sbBodemLog, type BodemLogRegel } from "../lib/supabase";
-import type { TauwAdres, TauwOpdracht, User } from "../lib/types";
+import type { TauwOpdracht, User } from "../lib/types";
 import { isToegewezen } from "../lib/toewijzing";
 
 // Wat de beheerder ziet als de ronde loopt: hoe ver het staat, wat er per dag gepland is, en de knop
@@ -45,21 +45,6 @@ export function BodemOverzicht({ opdracht, users }: { opdracht: TauwOpdracht; us
   const naamVan = (id?: string) => (id ? users.find((u) => u.id === id)?.naam ?? "Onbekend" : "—");
   const v = voortgangVan(opdracht.adressen);
 
-  // Alle geplande afspraken, gegroepeerd per dag en dan per tijdblok — precies zoals de aannemer
-  // zijn dag indeelt.
-  // Net als bij Schouwafspraken: elke dag van de periode, met al zijn tijdblokken — vrij of bezet.
-  const blokken = useMemo(() => blokkenVan(opdracht.venster).filter((s) => slotActief(opdracht.venster?.sloten, s)), [opdracht.venster]);
-  const perDag = useMemo(() => {
-    const m = new Map<string, Map<string, TauwAdres[]>>();
-    for (const d of dagenVanVenster(opdracht.venster)) m.set(d, new Map());
-    for (const a of opdracht.adressen) {
-      if (a.aanwezig !== "ja" || !a.datum || !a.tijdslot) continue;
-      const dag = m.get(a.datum) ?? new Map<string, TauwAdres[]>();
-      dag.set(a.tijdslot, [...(dag.get(a.tijdslot) ?? []), a]);
-      m.set(a.datum, dag);
-    }
-    return [...m.entries()].sort(([a], [b]) => a.localeCompare(b));
-  }, [opdracht.adressen, opdracht.venster]);
 
   const exporteer = async (soort: "excel" | "pdf") => {
     setBezig(soort);
@@ -175,46 +160,6 @@ export function BodemOverzicht({ opdracht, users }: { opdracht: TauwOpdracht; us
         );
       })()}
 
-      {/* Agenda: wat staat er per dag gepland */}
-      <div>
-        <div className="mb-1.5 flex items-center gap-1.5 text-sm font-semibold text-ink-700">
-          <CalendarDays className="h-4 w-4 text-ink-400" /> Geplande afspraken
-        </div>
-        {perDag.length === 0 ? (
-          <p className="rounded-lg bg-ink-50 px-3 py-3 text-sm text-ink-500">Nog geen afsprakenperiode ingesteld.</p>
-        ) : (
-          <div className="space-y-3">
-            {perDag.map(([datum, dagBlokken]) => (
-              <div key={datum} className="overflow-hidden rounded-lg border border-ink-200">
-                <div className="flex items-center justify-between bg-ink-50 px-3 py-1.5">
-                  <span className="text-sm font-bold text-ink-800">{dagLabel(datum)}</span>
-                  <span className="text-xs text-ink-500">
-                    {(() => { const n = [...dagBlokken.values()].reduce((s, l) => s + l.length, 0); return `${n} ${n === 1 ? "afspraak" : "afspraken"}`; })()}
-                  </span>
-                </div>
-                {[...new Set([...blokken, ...dagBlokken.keys()])].sort().map((s) => (
-                  <div key={s} className="flex gap-3 border-t border-ink-100 px-3 py-1.5">
-                    <span className="w-24 shrink-0 text-xs font-semibold text-ink-600">{s.replace("-", " – ")}</span>
-                    <div className="min-w-0 flex-1 space-y-0.5">
-                      {!dagBlokken.get(s)?.length && <span className="text-xs text-ink-400">vrij</span>}
-                      {(dagBlokken.get(s) ?? []).map((a) => (
-                        <div key={a.id} className="flex flex-wrap items-baseline gap-x-2 text-xs">
-                          <span className="font-medium text-ink-800">{`${a.straat} ${a.huisnummer}`.trim()}</span>
-                          <span className="text-ink-500">{a.plaats}</span>
-                          {a.bewoner
-                            ? <span className="rounded bg-ink-100 px-1.5 py-0.5 font-semibold text-ink-800">{a.bewoner}</span>
-                            : <span className="rounded bg-red-50 px-1.5 py-0.5 font-semibold text-red-600">naam ontbreekt</span>}
-                          <span className="text-ink-500">{telefoonNet(a.telefoon)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
       {/* Wijzigingslog — wie heeft wanneer wat gedaan. Ingeklapt, want je hebt het pas nodig als er
           een vraag over komt. */}
       <div className="border-t border-ink-100 pt-3">
