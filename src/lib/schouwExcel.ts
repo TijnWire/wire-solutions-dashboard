@@ -133,3 +133,98 @@ export async function exporteerSchouwPlanning(o: { plaats: string; maandag: stri
   URL.revokeObjectURL(url);
   return true;
 }
+
+// ── Bodemonderzoek (TAUW / Van der Helm): dezelfde opbouw, eigen sjabloon met een kolom voor de naam ──
+// Kolommen (1 = A): B datum, C tijd, D Namen & Bijzonderheden, E adres, F huisnummer, G tel nr,
+// H monteur, I werkzaamheden (DNA), J straatwerk, K m2. Bovenin: plaats, weeknummer en jaar.
+const BODEM_SJABLOON_URL = "/TAUW-bodemplanning-sjabloon.xlsx";
+const BODEM_RIJ = { eersteDag: 6, dag: 12, eersteRegelMaandag: 7, eersteRegel: 13, regel: 8, laatsteRegel: 15 } as const;
+const BODEM_KOL = { datum: 2, tijd: 3, naam: 4, straat: 5, huisnummer: 6, telefoon: 7, monteur: 8, dna: 9 } as const;
+const BODEM_TOT = 11;
+
+export async function bouwBodemWerkboek(
+  ExcelJS: ExcelJSModule,
+  sjabloon: ArrayBuffer,
+  o: { plaats: string; maandag: string; dagen: SchouwExportDag[]; naamVan?: (id: string) => string },
+): Promise<ArrayBuffer> {
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(sjabloon);
+  const ws = wb.worksheets[0];
+  const kloon = (st: unknown) => JSON.parse(JSON.stringify(st ?? {}));
+  const pak = (rij: number): Record<number, unknown> => {
+    const m: Record<number, unknown> = {};
+    for (let c = KOL_VAN; c <= BODEM_TOT; c++) m[c] = kloon(ws.getCell(rij, c).style);
+    return m;
+  };
+  const stijl = { eersteDag: pak(BODEM_RIJ.eersteDag), dag: pak(BODEM_RIJ.dag), eersteRegelMaandag: pak(BODEM_RIJ.eersteRegelMaandag), eersteRegel: pak(BODEM_RIJ.eersteRegel), regel: pak(BODEM_RIJ.regel), laatsteRegel: pak(BODEM_RIJ.laatsteRegel) };
+  const dagHoogte = ws.getRow(BODEM_RIJ.eersteDag).height || 15.75;
+  const origEinde = Math.max(ws.rowCount, BODEM_RIJ.laatsteRegel);
+  for (let r = BODEM_RIJ.eersteDag; r <= origEinde; r++) {
+    for (let c = KOL_VAN; c <= BODEM_TOT; c++) { const cell = ws.getCell(r, c); cell.value = null; cell.style = {}; }
+    ws.getRow(r).height = undefined as unknown as number;
+  }
+  const zetRij = (r: number, st: Record<number, unknown>) => { for (let c = KOL_VAN; c <= BODEM_TOT; c++) ws.getCell(r, c).style = kloon(st[c]); };
+
+  ws.getCell("H2").value = o.plaats;
+  ws.getCell("I2").value = `Week ${weekNummer(o.maandag)}`;
+  ws.getCell("J2").value = weekJaar(o.maandag);
+  ws.getCell(4, BODEM_KOL.tijd).value = "Tijd";
+
+  // Zoals de opdrachtgever het aanlevert: alleen de afspraken zelf, geen lege tijdvakken, en alleen de
+  // dagen waarop iets staat (staat er nog niets, dan de lege dagen als raamwerk).
+  const gevuld = o.dagen.map((d) => ({ ...d, regels: d.regels.filter((x) => x.straat || x.huisnummer) }));
+  const dagen = gevuld.some((d) => d.regels.length) ? gevuld.filter((d) => d.regels.length) : gevuld;
+  let r = BODEM_RIJ.eersteDag;
+  dagen.forEach((dag, di) => {
+    zetRij(r, di === 0 ? stijl.eersteDag : stijl.dag);
+    const [j, m, d] = dag.datum.split("-").map(Number);
+    ws.getCell(r, BODEM_KOL.datum).value = new Date(Date.UTC(j, m - 1, d));
+    ws.getCell(r, BODEM_KOL.tijd).value = dag.naam;
+    ws.getCell(r, BODEM_KOL.dna).value = "ja/nee";
+    ws.getRow(r).height = dagHoogte;
+    r++;
+    const regels = dag.regels.length ? dag.regels : [{ tijd: "", straat: "", huisnummer: "", telefoon: "", opmerking: "" } as SchouwExportDag["regels"][number]];
+    regels.forEach((x, i) => {
+      const laatste = di === dagen.length - 1 && i === regels.length - 1;
+      zetRij(r, laatste ? stijl.laatsteRegel : i === 0 ? (di === 0 ? stijl.eersteRegelMaandag : stijl.eersteRegel) : stijl.regel);
+      // Tijd zoals in het voorbeeld van de opdrachtgever: "09.00".
+      if (x.tijd) ws.getCell(r, BODEM_KOL.tijd).value = x.tijd.replace(":", ".");
+      const naam = [x.naam, x.opmerking].filter(Boolean).join(" — ");
+      if (naam) ws.getCell(r, BODEM_KOL.naam).value = naam;
+      if (x.straat) ws.getCell(r, BODEM_KOL.straat).value = x.straat;
+      if (x.huisnummer) ws.getCell(r, BODEM_KOL.huisnummer).value = /^\d+$/.test(x.huisnummer) ? Number(x.huisnummer) : x.huisnummer;
+      if (x.telefoon) ws.getCell(r, BODEM_KOL.telefoon).value = x.telefoon; // tekst: de beginnul blijft staan
+      if (x.monteur && o.naamVan) ws.getCell(r, BODEM_KOL.monteur).value = o.naamVan(x.monteur);
+      if (i === regels.length - 1) ws.getRow(r).height = dagHoogte;
+      r++;
+    });
+  });
+  wb.creator = "WIRE Solutions";
+  wb.lastModifiedBy = "WIRE Solutions";
+  wb.modified = new Date();
+  return (await wb.xlsx.writeBuffer()) as ArrayBuffer;
+}
+
+export async function exporteerBodemPlanning(o: { plaats: string; maandag: string; dagen: SchouwExportDag[]; naamVan?: (id: string) => string }): Promise<boolean> {
+  let sjabloon: ArrayBuffer | null = null;
+  try {
+    const resp = await fetch(BODEM_SJABLOON_URL);
+    if (resp.ok) sjabloon = await resp.arrayBuffer();
+  } catch { /* hieronder melden */ }
+  if (!sjabloon) {
+    if (typeof alert !== "undefined") alert("Het planningssjabloon kon niet worden geladen. Controleer je verbinding en probeer het opnieuw.");
+    return false;
+  }
+  const ExcelJS = (await import("exceljs")).default;
+  const buffer = await bouwBodemWerkboek(ExcelJS, sjabloon, o);
+  const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `Planning_Bodemonderzoek_Week_${weekNummer(o.maandag)}_${bestandsdeel(o.plaats)}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  return true;
+}

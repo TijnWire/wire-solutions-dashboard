@@ -495,6 +495,7 @@ export type Schouwafspraak = {
   datum: string; // ISO datum ("" = nog niet ingepland)
   tijd: string;  // "HH:MM" ("" = geen tijd)
   blok?: 2; // tweede planning van de dag (Rotterdam); leeg = eerste planning
+  soort?: "bodem"; // leeg = schouwafspraak; "bodem" = afspraak voor een bodemonderzoek (zelfde planning, met naam)
   toegewezenAan?: string; // user id van de schouwer
   extraToegewezen?: string[]; // overige medewerkers naast toegewezenAan (zie lib/toewijzing.ts)
   status: SchouwStatus;
@@ -517,6 +518,7 @@ export type SchouwMap = {
   weken?: Record<string, SchouwWeekTijden>; /* key = maandag ISO */
   verwijderdeDagen?: Record<string, string[]>; /* key = maandag ISO → ISO-datums die in die week niet doorgaan */ // sleutel = maandag van de week (ISO)
   tijdenVersie?: number; // eenmalige omzetting naar nieuwe vaste tijdvakken van een plaats is gedaan
+  soort?: "bodem"; // leeg = map van Schouwafspraken; "bodem" = map van Bodemonderzoeken
   // Eigen planning, net als bij Bodemonderzoeken: welke dagen (van–tot of losse dagen) en welke
   // tijdblokken. Zonder planning gelden de vaste tijdvakken van de plaats.
   planning?: {

@@ -48,7 +48,7 @@ export function lopendeProjecten(bron: {
   for (const a of bron.schouwafspraken) {
     if (a.status === "Geannuleerd") continue;
     if (a.datum && a.datum < weekStartISO) continue;
-    tel("Schouwafspraken", regioNaam(a.plaats));
+    tel(a.soort === "bodem" ? "Bodemonderzoeken" : "Schouwafspraken", regioNaam(a.plaats));
   }
   const volgorde: ProjectSoort[] = ["Saneren", "Schouwafspraken", "Bodemonderzoeken", "Buurtaanpak", "Brieven", "Voorschouwen"];
   return [...telling.values()].sort((a, b) => volgorde.indexOf(a.soort) - volgorde.indexOf(b.soort) || a.regio.localeCompare(b.regio));

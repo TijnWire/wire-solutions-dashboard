@@ -162,7 +162,7 @@ export function bouwWeek(map: SchouwMap | undefined, maandag: string, afspraken:
 }
 
 // ── Excel ──
-export type SchouwExportRegel = { tijd: string; straat: string; huisnummer: string; telefoon: string; opmerking: string; blok?: 1 | 2 };
+export type SchouwExportRegel = { tijd: string; straat: string; huisnummer: string; telefoon: string; opmerking: string; blok?: 1 | 2; naam?: string; monteur?: string };
 export type SchouwExportDag = { datum: string; naam: string; regels: SchouwExportRegel[] };
 
 // Zet de week om in precies de rijen die op de Stedin-planning komen. Geannuleerde afspraken staan er niet
@@ -175,7 +175,7 @@ export function exportDagen(week: SchouwDag[]): SchouwExportDag[] {
       regels: d.regels.flatMap<SchouwExportRegel>((r) => {
         const actief = r.afspraken.filter((a) => a.status !== "Geannuleerd");
         if (actief.length === 0) return r.eigenVak ? [{ tijd: r.tijd, straat: "", huisnummer: "", telefoon: "", opmerking: "", blok: r.blok }] : [];
-        return actief.map((a) => ({ tijd: r.tijd, straat: a.straat.trim(), huisnummer: a.huisnummer.trim(), telefoon: a.telefoon.trim(), opmerking: a.notitie.trim(), blok: r.blok }));
+        return actief.map((a) => ({ tijd: r.tijd, straat: a.straat.trim(), huisnummer: a.huisnummer.trim(), telefoon: a.telefoon.trim(), opmerking: a.notitie.trim(), blok: r.blok, naam: (a.contactNaam ?? "").trim(), monteur: a.toegewezenAan ?? "" }));
       }),
     }))
     // Een weekdag blijft altijd staan (ook zonder regels); het weekend alleen als er echt iets op staat.

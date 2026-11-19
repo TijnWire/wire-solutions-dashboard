@@ -323,7 +323,7 @@ type AppState = {
   addSchouw: (s: Omit<Schouwafspraak, "id" | "aangemaakt">) => string;
   updateSchouw: (id: string, patch: Partial<Schouwafspraak>) => void;
   deleteSchouw: (id: string) => void;
-  addSchouwMap: (naam: string) => string;
+  addSchouwMap: (naam: string, soort?: "bodem") => string;
   updateSchouwMap: (id: string, patch: Partial<Omit<SchouwMap, "id">>) => void;
   deleteSchouwMap: (id: string) => void;
 
@@ -1699,10 +1699,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
   const updateSchouw: AppState["updateSchouw"] = (id, patch) =>
     setSchouwafspraken((prev) => prev.map((x) => (x.id === id ? { ...x, ...patch } : x)));
-  const addSchouwMap: AppState["addSchouwMap"] = (naam) => {
+  const addSchouwMap: AppState["addSchouwMap"] = (naam, soort) => {
     const id = nextId("smap");
     const nu = new Date().toISOString();
-    setSchouwMappen((prev) => [...prev, { id, naam: naam.trim() || "Nieuwe map", aangemaakt: nu, bijgewerktOp: nu }]);
+    setSchouwMappen((prev) => [...prev, { id, naam: naam.trim() || "Nieuwe map", aangemaakt: nu, bijgewerktOp: nu, ...(soort ? { soort } : {}) }]);
     return id;
   };
   // bijgewerktOp bij ELKE wijziging meestempelen, zodat deze wijziging wint bij het samenvoegen op de centrale database.

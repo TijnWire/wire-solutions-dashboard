@@ -16,7 +16,7 @@ import { Saneren } from "./pages/Saneren";
 import { PosterHerinnering } from "./components/PosterHerinnering";
 import { NieuweVersie } from "./components/NieuweVersie";
 import { Buurtaanpak } from "./pages/Buurtaanpak";
-import { Tauw } from "./pages/Tauw";
+import { Bodemonderzoeken } from "./pages/Bodemonderzoeken";
 import { Brieven } from "./pages/Brieven";
 import { Urenstaat } from "./pages/Urenstaat";
 import { VrijeDagen } from "./pages/VrijeDagen";
@@ -143,7 +143,7 @@ export default function App() {
       case "buurtaanpak":
         return <Buurtaanpak key={target?.buurtaanpakId ?? "lijst"} initieelId={target?.buurtaanpakId} />;
       case "tauw":
-        return <Tauw key={target?.tauwId ?? "lijst"} initieelTauw={target?.tauwId} />;
+        return <Bodemonderzoeken key={target?.tauwId ?? "lijst"} tauwId={target?.tauwId} />;
       case "agenda":
         return <Agenda />;
       case "verlof":
