@@ -6,6 +6,7 @@ import {
 import { useApp } from "../store/AppContext";
 import { DatumKiezer } from "../components/DatumKiezer";
 import { SaneerFlow } from "../components/SaneerFlow";
+import { SaneerBellijstMorgen } from "../components/SaneerBellijstMorgen";
 import { useProjectFilter } from "../components/ProjectFilter";
 import { WerkTabs, type WerkTab } from "../components/WerkTabs";
 import {
@@ -238,6 +239,9 @@ export function SaneerDossiers({ onEerder }: { onEerder: () => void }) {
           )}
         </div>
       </div>
+
+      {/* Een dag van tevoren nabellen: alle adressen met uitvoering morgen onder één kopje. */}
+      {tab === "overzicht" && dossiers && <SaneerBellijstMorgen dossiers={dossiers} />}
 
       {filter.balk}
 

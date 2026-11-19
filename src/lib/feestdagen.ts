@@ -1,6 +1,9 @@
-// Nederlandse (algemeen erkende) feestdagen per jaar, met naam. Wordt gebruikt zodat opgenomen verlof
+// Erkende feestdagen in onze sector, met naam — volgens de cao Netwerkbedrijven (Stedin), die via de
+// uitzend-cao ook voor ons personeel geldt: Nieuwjaarsdag, 1e en 2e Paasdag, Koningsdag, Hemelvaartsdag,
+// 1e en 2e Pinksterdag, 1e en 2e Kerstdag, en eens per vijf jaar 5 mei. Goede Vrijdag hoort er niet bij.
+// Wordt gebruikt zodat opgenomen verlof
 // niet op weekenden/feestdagen telt, en zodat de Urenstaat feestdagen automatisch als vrije dag toont.
-// De paas-afhankelijke dagen (Goede Vrijdag, Tweede Paasdag, Hemelvaart, Tweede Pinksterdag) worden
+// De paas-afhankelijke dagen (Tweede Paasdag, Hemelvaart, Tweede Pinksterdag) worden
 // per jaar berekend met de paasdatum-formule.
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -35,11 +38,11 @@ function bereken(jaar: number): Map<string, string> {
   if (koningsdag.getDay() === 0) koningsdag = new Date(jaar, 3, 26);
   const dagen: [Date, string][] = [
     [new Date(jaar, 0, 1), "Nieuwjaarsdag"],
-    [plus(paas, -2), "Goede Vrijdag"],
     [paas, "Eerste Paasdag"],
     [plus(paas, 1), "Tweede Paasdag"],
     [koningsdag, "Koningsdag"],
-    [new Date(jaar, 4, 5), "Bevrijdingsdag"],
+    // Bevrijdingsdag is volgens de cao eens per vijf jaar een vrije dag (2025, 2030, …).
+    ...(jaar % 5 === 0 ? [[new Date(jaar, 4, 5), "Bevrijdingsdag"] as [Date, string]] : []),
     [plus(paas, 39), "Hemelvaartsdag"],
     [plus(paas, 49), "Eerste Pinksterdag"],
     [plus(paas, 50), "Tweede Pinksterdag"],

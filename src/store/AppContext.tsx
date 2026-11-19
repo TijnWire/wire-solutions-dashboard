@@ -1460,6 +1460,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hydrated, rondes]);
+  // Teamlijst november 2026: namen, e-mail (voornaam@wiresolutions.nl) en verjaardagen bijwerken, en
+  // de nieuwe medewerkers toevoegen. Eenmalig per apparaat; de verjaardagen staan daarna vanzelf in
+  // ieders agenda. Nieuwe accounts komen uit de seed (met een tijdelijk wachtwoord dat bij de eerste
+  // keer inloggen gewijzigd moet worden).
+  useEffect(() => {
+    if (!hydrated) return;
+    const TAG = "2026-11-team";
+    try { if (localStorage.getItem("wire.teamSync") === TAG) return; } catch { /* geen opslag: gewoon doen */ }
+    const team: Record<string, Partial<User>> = {"u-edilson": {"naam": "Edilson dos Santos", "initialen": "ES", "email": "edilson@wiresolutions.nl", "geboortedatum": "1987-07-11"}, "u-wesley": {"naam": "Wesley Bout", "initialen": "WB", "email": "wesley@wiresolutions.nl", "geboortedatum": "1979-12-02"}, "u-melany": {"naam": "Melany Bout-van der Hulst", "initialen": "MB", "email": "melany@wiresolutions.nl", "geboortedatum": "1977-06-05"}, "u-brandon": {"naam": "Brandon Santos Cabral", "initialen": "BC", "email": "brandon@wiresolutions.nl", "geboortedatum": "1992-07-09"}, "u-mitchell": {"naam": "Mitchel Korving", "initialen": "MK", "email": "mitchel@wiresolutions.nl", "geboortedatum": "1992-11-09"}, "u-tijn": {"naam": "Tijn den Haan", "initialen": "TH", "email": "tijn@wiresolutions.nl", "geboortedatum": "2005-05-07"}, "u-jackie": {"naam": "Jackie Klijnoot", "initialen": "JK", "email": "jackie@wiresolutions.nl", "geboortedatum": "2001-08-06"}, "u-roxanne": {"naam": "Roxanne van Heijst", "initialen": "RH", "email": "roxanne@wiresolutions.nl", "geboortedatum": "1996-11-24"}, "u-stefano": {"naam": "Stefano Waremann", "initialen": "SW", "email": "stefano@wiresolutions.nl", "geboortedatum": "1999-10-16"}, "u-guus": {"naam": "Guus Zaal", "initialen": "GZ", "email": "guus@wiresolutions.nl", "geboortedatum": "1961-10-06"}, "u-adi": {"naam": "Adilcao Mendes Moreira", "initialen": "AM", "email": "adilcao@wiresolutions.nl", "geboortedatum": "1993-06-27"}, "u-denilcao": {"naam": "Danilcao Mendes Moreira", "initialen": "DM", "email": "danilcao@wiresolutions.nl", "geboortedatum": "1999-08-02"}, "u-patrick": {"naam": "Patrick Ruter", "initialen": "PR", "email": "patrick@wiresolutions.nl", "geboortedatum": "1968-10-05"}, "u-anthony": {"naam": "Anthony Lopes Pereira", "initialen": "AP", "email": "anthony@wiresolutions.nl", "geboortedatum": "1999-10-18"}, "u-rene": {"naam": "Rene Heeneman", "initialen": "RH", "email": "rene@wiresolutions.nl", "geboortedatum": "1965-04-23"}, "u-danny": {"naam": "Danny Steer", "initialen": "DS", "email": "danny@wiresolutions.nl", "geboortedatum": "1974-10-22"}};
+    const nu = new Date().toISOString();
+    setUsers((prev) => {
+      const ids = new Set(prev.map((u) => u.id));
+      const bij = SEED_USERS.filter((u) => team[u.id] && !ids.has(u.id)).map((u) => ({ ...u, bijgewerktOp: nu }));
+      return [...prev.map((u) => (team[u.id] ? { ...u, ...team[u.id], bijgewerktOp: nu } : u)), ...bij];
+    });
+    try { localStorage.setItem("wire.teamSync", TAG); } catch { /* */ }
+  }, [hydrated]);
+
   // De bodemonderzoek-opdrachten uit de vorige opzet zijn op verzoek van de eigenaar weggehaald
   // (19-11-2026); bodemonderzoeken lopen nu via dezelfde planning als Schouwafspraken.
   useEffect(() => {
