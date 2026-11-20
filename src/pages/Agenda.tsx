@@ -195,6 +195,8 @@ export function Agenda() {
   };
 
   const opDag = (iso: string) => gebeurtenissen.filter((g) => valtOp(g, iso));
+  // Korte tekst in het dagvakje: bij een verjaardag volstaat de voornaam (het taartje zegt de rest).
+  const chipTekst = (g: AgendaGebeurtenis) => (g.soort === "verjaardag" && g.wie ? (users.find((u) => u.id === g.wie)?.naam.split(" ")[0] ?? g.titel) : g.titel);
   const verlofType = (g: AgendaGebeurtenis): VerlofType => verlof.find((v) => v.id === g.bronId)?.type ?? "Verlof";
 
   const vorige = () => { if (maand === 0) { setMaand(11); setJaar((j) => j - 1); } else setMaand((m) => m - 1); };
@@ -275,8 +277,8 @@ export function Agenda() {
             </div>
           </div>
           {filterBalk}
-          <div className="grid grid-cols-7 gap-1.5">
-            {DAGEN.map((d) => (<div key={d} className="pb-2 text-center text-sm font-semibold uppercase tracking-wide text-ink-400">{d}</div>))}
+          <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
+            {DAGEN.map((d) => (<div key={d} className="pb-2 text-center text-xs font-semibold uppercase tracking-wide text-ink-400 sm:text-sm">{d}</div>))}
             {cellen.map((d) => {
               const iso = toISO(d);
               const inMaand = d.getMonth() === maand;
@@ -288,17 +290,25 @@ export function Agenda() {
               const meer = rest.length - getoond.length;
               const feest = dag.some((g) => g.soort === "feestdag");
               return (
-                <button key={iso} type="button" onClick={() => setPopupDag(iso)} className={`flex min-h-[112px] flex-col rounded-xl border p-2 text-left align-top transition-colors hover:border-brand-300 hover:bg-brand-50/40 ${inMaand ? (feest ? "border-red-100 bg-red-50/30" : "border-ink-100 bg-white") : "border-ink-100 bg-ink-50/50"}`}>
-                  <div className={`text-sm font-bold ${isVandaag ? "inline-flex h-7 w-7 items-center justify-center rounded-full bg-brand-600 text-white" : inMaand ? "text-ink-800" : "text-ink-300"}`}>{d.getDate()}</div>
+                <button key={iso} type="button" onClick={() => setPopupDag(iso)} className={`flex min-h-[72px] min-w-0 flex-col items-stretch rounded-xl border p-1 text-left sm:min-h-[112px] sm:p-2 align-top transition-colors hover:border-brand-300 hover:bg-brand-50/40 ${inMaand ? (feest ? "border-red-100 bg-red-50/30" : "border-ink-100 bg-white") : "border-ink-100 bg-ink-50/50"}`}>
+                  <div className={`text-sm font-bold ${isVandaag ? "inline-flex h-7 w-7 items-center justify-center self-start rounded-full bg-brand-600 text-white" : inMaand ? "text-ink-800" : "text-ink-300"}`}>{d.getDate()}</div>
                   {getoond.map((g) => {
                     const Icoon = SOORT_STIJL[g.soort].icoon;
-                    return <div key={g.id} className={`mt-1 flex items-center gap-1 truncate rounded-lg px-1.5 py-0.5 text-[11px] font-semibold ${SOORT_STIJL[g.soort].chip}`} title={g.titel}><Icoon className="h-3 w-3 shrink-0" /><span className="truncate">{g.tijd ? `${g.tijd} ` : ""}{g.titel}</span></div>;
+                    // Op de telefoon alleen het teken (de tekst past daar niet); vanaf tablet teken + korte tekst
+                    // op één lijn, over de volle breedte van het vakje.
+                    return (
+                      <div key={g.id} title={g.titel}
+                        className={`mt-1 flex h-5 w-full min-w-0 items-center justify-center gap-1 rounded-md px-1 text-[11px] font-semibold leading-none sm:h-auto sm:justify-start sm:py-1 ${SOORT_STIJL[g.soort].chip}`}>
+                        <Icoon className="h-3 w-3 shrink-0" />
+                        <span className="hidden min-w-0 truncate sm:block">{g.tijd ? `${g.tijd} ` : ""}{chipTekst(g)}</span>
+                      </div>
+                    );
                   })}
-                  {meer > 0 && <div className="mt-1 px-1 text-[11px] font-semibold text-ink-400">+{meer} meer</div>}
+                  {meer > 0 && <div className="mt-1 px-1 text-center text-[11px] font-semibold text-ink-400 sm:text-left">+{meer}<span className="hidden sm:inline"> meer</span></div>}
                   {vrl.length > 0 && (
                     <div className="mt-1 flex flex-wrap gap-1">
                       {vrl.slice(0, 5).map((g) => (
-                        <span key={g.id} className={`flex h-6 w-6 items-center justify-center rounded-full text-[9px] font-bold text-white ${verlofKleur[verlofType(g)]}`} title={g.titel}>{g.wie ? initVan(g.wie) : "?"}</span>
+                        <span key={g.id} className={`flex h-5 w-5 items-center justify-center rounded-full text-[8px] font-bold text-white sm:h-6 sm:w-6 sm:text-[9px] ${verlofKleur[verlofType(g)]}`} title={g.titel}>{g.wie ? initVan(g.wie) : "?"}</span>
                       ))}
                     </div>
                   )}
@@ -306,6 +316,32 @@ export function Agenda() {
               );
             })}
           </div>
+          {/* Op de telefoon: alles van deze maand onder elkaar, met teken en tekst netjes uitgelijnd. */}
+          {(() => {
+            const maandStart = `${jaar}-${String(maand + 1).padStart(2, "0")}-01`;
+            const maandEind = `${jaar}-${String(maand + 1).padStart(2, "0")}-31`;
+            const lijst = gebeurtenissen
+              .filter((g) => g.soort !== "verlof" && g.datum >= maandStart && g.datum <= maandEind)
+              .sort((a, b) => a.datum.localeCompare(b.datum) || (a.tijd ?? "").localeCompare(b.tijd ?? ""));
+            if (!lijst.length) return null;
+            return (
+              <div className="mt-4 space-y-1.5 sm:hidden">
+                {lijst.map((g) => {
+                  const st = SOORT_STIJL[g.soort];
+                  const Icoon = st.icoon;
+                  return (
+                    <button key={g.id} type="button" onClick={() => setPopupDag(g.datum)} className="flex w-full items-center gap-3 rounded-lg border border-ink-100 bg-white px-2.5 py-2 text-left">
+                      <span className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${st.chip}`}><Icoon className="h-4 w-4" /></span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-semibold text-ink-800">{g.tijd ? `${g.tijd} ` : ""}{g.titel}</span>
+                        <span className="block text-xs text-ink-500">{new Date(g.datum + "T00:00:00").toLocaleDateString("nl-NL", { weekday: "short", day: "numeric", month: "short" })} · {AGENDA_SOORT_LABEL[g.soort]}</span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })()}
           <div className="mt-4 flex flex-wrap gap-5 border-t border-ink-100 pt-4 text-sm text-ink-500">
             {VERLOF_TYPES.map((t) => (<span key={t} className="inline-flex items-center gap-2"><span className={`h-3 w-3 rounded-full ${verlofKleur[t]}`} /> {t}</span>))}
           </div>
