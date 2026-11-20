@@ -33,6 +33,7 @@ const vandaagISO = () => toISO(new Date());
 // medewerkers. Verschil: bij bodemonderzoek is de naam van de bewoner verplicht en gaat de planning in
 // het sjabloon van de opdrachtgever (met een kolom voor de naam).
 type Soort = "schouw" | "bodem";
+const BODEM_TIJDEN = { van: "08:00", tot: "16:00", minuten: 60 };
 const SoortCtx = createContext<Soort>("schouw");
 
 // ───────────────────────── Overzicht: één map per stad / plaats ─────────────────────────
@@ -157,7 +158,13 @@ function MapDetail({ overzicht, terug }: { overzicht: MapOverzicht; terug: () =>
   const [bezig, setBezig] = useState(false);
   const formRef = useRef<HTMLDivElement | null>(null);
 
-  const week = useMemo(() => bouwWeek(record, maandag, afspraken, plaatsTijden), [record, maandag, afspraken, plaatsTijden]);
+  // Bodemonderzoek werkt altijd met hele uren; zonder eigen keuze 08:00 tot 16:00 per uur.
+  const tijdRecord = useMemo<SchouwMap | undefined>(() => {
+    if (!bodem) return record;
+    const basis = record ?? ({ id: "", naam: overzicht.naam, aangemaakt: "", bijgewerktOp: "" } as SchouwMap);
+    return { ...basis, planning: { ...(basis.planning ?? {}), tijden: { ...BODEM_TIJDEN, ...(basis.planning?.tijden ?? {}), minuten: 60 } } };
+  }, [bodem, record, overzicht.naam]);
+  const week = useMemo(() => bouwWeek(tijdRecord, maandag, afspraken, plaatsTijden), [tijdRecord, maandag, afspraken, plaatsTijden]);
   const zonderDatum = useMemo(() => afspraken.filter((a) => !a.datum || !isISODatum(a.datum)), [afspraken]);
   const wekenMetWerk = useMemo(() => {
     const t = new Map<string, number>();
@@ -205,7 +212,7 @@ function MapDetail({ overzicht, terug }: { overzicht: MapOverzicht; terug: () =>
     periodeDagen.length
       ? (record?.planning?.losseDagen ? `${periodeDagen.length} losse ${periodeDagen.length === 1 ? "dag" : "dagen"}` : `${dagKort(periodeDagen[0])} t/m ${dagKort(periodeDagen[periodeDagen.length - 1])}`)
       : "Geen vaste periode",
-    pt ? `${pt.van}–${pt.tot}, tijdvak ${pt.minuten} min` : "vaste tijdvakken",
+    pt ? `${pt.van}–${pt.tot}, ${pt.minuten === 60 ? "per uur" : `tijdvak ${pt.minuten} min`}` : bodem ? "08:00–16:00, per uur" : "vaste tijdvakken",
   ].join(" · ");
 
   // Tijdvakken van een willekeurige datum (voor de tijdknoppen in het formulier).
@@ -214,7 +221,7 @@ function MapDetail({ overzicht, terug }: { overzicht: MapOverzicht; terug: () =>
     const ma = weekStartISO(iso);
     const dagIndex = (new Date(iso + "T00:00:00").getDay() + 6) % 7;
     if (dagIndex >= 5 && !record?.weken?.[ma]?.[iso] && !planningDagen(record).includes(iso)) return [];
-    return tijdenVan(record, ma, iso, dagIndex, plaatsTijden);
+    return tijdenVan(tijdRecord, ma, iso, dagIndex, plaatsTijden);
   };
 
   const openNieuw = (datum = "", tijd = "", blok: 1 | 2 = 1) => {
@@ -332,10 +339,10 @@ function MapDetail({ overzicht, terug }: { overzicht: MapOverzicht; terug: () =>
           {planningOpen && (
             <div className="mt-4 space-y-4 border-t border-ink-100 pt-4">
               <AfsprakenPeriode periode={record?.planning} onWijzig={(p) => zetPlanning(p)} />
-              <TijdblokKeuze tijden={record?.planning?.tijden} onWijzig={(t) => zetPlanning({ tijden: t }, true)}>
+              <TijdblokKeuze tijden={tijdRecord?.planning?.tijden} alleenUren={bodem} onWijzig={(t) => zetPlanning({ tijden: bodem ? { ...t, minuten: 60 } : t }, true)}>
                 <div className="flex flex-wrap gap-1.5">
-                  {record?.planning?.tijden
-                    ? tijdenVan(record, "", "", 1, plaatsTijden).map((t) => <span key={t} className="rounded-md bg-ink-100 px-2 py-1 text-xs font-semibold text-ink-700">{tijdLabel(t)}</span>)
+                  {tijdRecord?.planning?.tijden
+                    ? tijdenVan(tijdRecord, "", "", 1, plaatsTijden).map((t) => <span key={t} className="rounded-md bg-ink-100 px-2 py-1 text-xs font-semibold text-ink-700">{tijdLabel(t)}</span>)
                     : <span className="text-xs text-ink-500">{bodem ? "Nog de standaard tijdvakken." : `Nog de vaste tijdvakken van ${overzicht.naam}.`} Kies van, tot en tijdvak om eigen tijdblokken te gebruiken.</span>}
                 </div>
               </TijdblokKeuze>

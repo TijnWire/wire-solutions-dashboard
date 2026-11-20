@@ -3,7 +3,8 @@
 //   • Periode: "Van – tot" (met werkdagen) of "Losse dagen" (bijv. ma 17-11, di 18-11 en vr 21-11).
 //   • Tijdblokken: van, tot en de lengte van een tijdvak (bijv. 08:00–14:00 per uur), per project anders.
 import type { ReactNode } from "react";
-import { CalendarRange, Clock, Loader2, X } from "lucide-react";
+import { useState } from "react";
+import { CalendarRange, Clock, Loader2, Plus, X } from "lucide-react";
 import { DatumKiezer } from "./DatumKiezer";
 import { dagenVanVenster, dagLabel, STANDAARD_WERKDAGEN, DAGNAMEN } from "../lib/bodemonderzoek";
 
@@ -27,7 +28,17 @@ export function AfsprakenPeriode({ periode, onWijzig, extra }: {
   const losse = !!periode?.losseDagen;
   const dagen = dagenVanPeriode(periode);
   const werkdagen = periode?.werkdagen?.length ? periode.werkdagen : STANDAARD_WERKDAGEN;
-  const voegDagToe = (iso: string) => { if (iso) onWijzig({ dagen: [...new Set([...(periode?.dagen ?? []), iso])].sort() }); };
+  const [blokVan, setBlokVan] = useState("");
+  const [blokTot, setBlokTot] = useState("");
+  // Een blok dagen toevoegen (bijv. 13 t/m 14 nov, later nog 18 t/m 19 nov). Weekenden en
+  // feestdagen slaan we over; één dag = alleen "van" invullen.
+  const voegBlokToe = () => {
+    if (!blokVan) return;
+    const eind = blokTot && blokTot >= blokVan ? blokTot : blokVan;
+    const nieuw = blokVan === eind ? [blokVan] : dagenVanVenster({ start: blokVan, weken: 0, eind });
+    onWijzig({ dagen: [...new Set([...(periode?.dagen ?? []), ...nieuw])].sort() });
+    setBlokVan(""); setBlokTot("");
+  };
 
   return (
     <div>
@@ -38,17 +49,29 @@ export function AfsprakenPeriode({ periode, onWijzig, extra }: {
         {([false, true] as const).map((l) => (
           <button key={String(l)} type="button" onClick={() => onWijzig({ losseDagen: l })}
             className={`rounded-md px-3 py-1.5 text-sm font-semibold transition-colors ${losse === l ? "bg-brand-600 text-white" : "text-ink-600 hover:bg-ink-50"}`}>
-            {l ? "Losse dagen" : "Van – tot"}
+            {l ? "Losse dagen / blokken" : "Van – tot"}
           </button>
         ))}
       </div>
 
       {losse ? (
         <>
-          <div>
-            <span className="mb-1 block text-xs font-medium text-ink-500">Dag toevoegen</span>
-            <DatumKiezer value="" onChange={voegDagToe} placeholder="Kies een dag" />
+          <div className="flex flex-wrap items-end gap-2">
+            <div>
+              <span className="mb-1 block text-xs font-medium text-ink-500">Van</span>
+              <DatumKiezer value={blokVan} onChange={setBlokVan} placeholder="Eerste dag" />
+            </div>
+            <span className="pb-2.5 text-sm text-ink-400">t/m</span>
+            <div>
+              <span className="mb-1 block text-xs font-medium text-ink-500">Tot en met (optioneel)</span>
+              <DatumKiezer value={blokTot} onChange={setBlokTot} placeholder="Laatste dag" />
+            </div>
+            <button type="button" onClick={voegBlokToe} disabled={!blokVan}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-40">
+              <Plus className="h-4 w-4" /> Toevoegen
+            </button>
           </div>
+          <p className="mt-1 text-xs text-ink-500">Voeg zo vaak toe als nodig, bijvoorbeeld 13 t/m 14 nov en daarna 18 t/m 19 nov.</p>
           {dagen.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1.5">
               {dagen.map((d) => (
@@ -100,13 +123,15 @@ export function AfsprakenPeriode({ periode, onWijzig, extra }: {
   );
 }
 
-export function TijdblokKeuze({ tijden, onWijzig, bezig, children }: {
+export function TijdblokKeuze({ tijden, onWijzig, bezig, children, alleenUren }: {
   tijden: Tijden | undefined;
+  alleenUren?: boolean; // alleen hele uren, tijdvak altijd 1 uur
   onWijzig: (t: Tijden) => void;
   bezig?: boolean;
   children?: ReactNode; // bijv. de lijst met blokken aan/uit
 }) {
   const t = tijden ?? STANDAARD_TIJDEN;
+  const keuzes = alleenUren ? TIJDEN.filter((x) => x.endsWith(":00")) : TIJDEN;
   const select = "rounded-lg border border-ink-200 bg-white px-2.5 py-2 text-sm font-semibold text-ink-800 outline-none focus:border-brand-400";
   const zet = (patch: Partial<Tijden>) => onWijzig({ ...t, ...patch });
   return (
@@ -119,21 +144,23 @@ export function TijdblokKeuze({ tijden, onWijzig, bezig, children }: {
         <label className="block">
           <span className="mb-1 block text-xs font-medium text-ink-500">Van</span>
           <select value={t.van} onChange={(e) => zet({ van: e.target.value })} className={select}>
-            {TIJDEN.map((x) => <option key={x} value={x}>{x}</option>)}
+            {keuzes.map((x) => <option key={x} value={x}>{x}</option>)}
           </select>
         </label>
         <label className="block">
           <span className="mb-1 block text-xs font-medium text-ink-500">Tot</span>
           <select value={t.tot} onChange={(e) => zet({ tot: e.target.value })} className={select}>
-            {TIJDEN.map((x) => <option key={x} value={x}>{x}</option>)}
+            {keuzes.map((x) => <option key={x} value={x}>{x}</option>)}
           </select>
         </label>
-        <label className="block">
+        {alleenUren ? (
+          <span className="pb-2.5 text-sm font-semibold text-ink-600">per uur</span>
+        ) : <label className="block">
           <span className="mb-1 block text-xs font-medium text-ink-500">Tijdvak</span>
           <select value={t.minuten} onChange={(e) => zet({ minuten: Number(e.target.value) })} className={select}>
             {BLOKLENGTES.map((m) => <option key={m} value={m}>{lengteLabel(m)}</option>)}
           </select>
-        </label>
+        </label>}
       </div>
       {children}
     </div>
