@@ -445,6 +445,10 @@ async function main() {
       // Niets veranderd = niets schrijven en niemand lastigvallen.
       const zelfde = await post("/state", tijnTel.token, { key: K, wijzig: [{ id: "live", naam: "Direct mee" }] });
       check(zelfde.data.ongewijzigd === true, "dezelfde wijziging nog eens wordt herkend als 'niets nieuws'");
+
+      // De app stuurt alleen losse wijzigingen als de server zegt dat hij dat kan (anders: hele lijst).
+      const rechten = (await get("/rechten", tijnTel.token)).data;
+      check(Array.isArray(rechten?.kan) && rechten.kan.includes("wijzig"), "de server meldt dat hij losse wijzigingen snapt");
     }
 
     opruimen.push(KEY, KEY2);

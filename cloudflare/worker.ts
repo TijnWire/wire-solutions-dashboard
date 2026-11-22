@@ -42,6 +42,7 @@ import { heeftIds, mergeTombstones, pasWijzigingenToe, samenvoegenOpServer, type
 type MetId = { id: string; bijgewerktOp?: string };
 import { fotoRoutes, verhuisFotos } from "./fotos";
 import { bouwPersoonlijkeFeed } from "../src/lib/agendaFeed";
+import { genereerWachtwoord } from "../src/lib/auth";
 import type { AgendaBronnen } from "../src/lib/agendaFeed";
 import { saneerRoutes } from "./saneerflow";
 
@@ -970,7 +971,9 @@ export default {
       // Welke onderdelen mag ik niet zien? De app vraagt dit op zodat zij ze niet probeert te uploaden
       // en haar eigen (mogelijk oude) kopie lokaal opruimt.
       if (path === "/rechten" && req.method === "GET") {
-        return json({ rol: mijnRechten?.rol ?? "monteur", boekhouding: !!mijnRechten?.boekhouding, afgeschermd: [...afgeschermd] });
+        // `kan`: wat deze server ondersteunt. De app zet nieuwe manieren van schrijven pas aan als de server
+        // ze hier noemt — dan maakt het niet uit of de app of de server eerst live gaat.
+        return json({ rol: mijnRechten?.rol ?? "monteur", boekhouding: !!mijnRechten?.boekhouding, afgeschermd: [...afgeschermd], kan: ["wijzig"] });
       }
 
       if (path === "/state" && req.method === "GET") {

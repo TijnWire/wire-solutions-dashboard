@@ -416,7 +416,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     gemist: Set<string>;                     // live-bericht binnengekomen terwijl we zelf schreven → daarna ophalen
     timers: Record<string, ReturnType<typeof setTimeout>>; // korte wachttijd per onderdeel (typen = één schrijf)
     opheffen: string[];                      // records die bewust uit de prullenbak terugkomen (herstel)
-  }>({ klaar: false, gezien: {}, bezig: new Set(), laatsteFout: "", versies: {}, vuil: new Set(), laatsteOk: 0, wachtrij: new Map(), afgeschermd: new Set(), basis: {}, gemist: new Set(), timers: {}, opheffen: [] });
+    kanWijzig: boolean;                      // server snapt "alleen wijzigingen" (zegt hij via /rechten)
+  }>({ klaar: false, gezien: {}, bezig: new Set(), laatsteFout: "", versies: {}, vuil: new Set(), laatsteOk: 0, wachtrij: new Map(), afgeschermd: new Set(), basis: {}, gemist: new Set(), timers: {}, opheffen: [], kanWijzig: false });
   // Laatst-gepushte referentie per slice — zo serialiseren we alleen de slice die écht wijzigde (niet alle 23 per klik).
   const pushRef = useRef<Record<string, unknown>>({});
 
@@ -845,7 +846,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return opheffen.length ? { data: waarde, opheffen } : { data: waarde };
     }
     const basis = sync.current.basis[key];
-    if (!COLLECTIONS.has(key) || !basis || !Array.isArray(waarde)) return { data: waarde };
+    if (!COLLECTIONS.has(key) || !basis || !Array.isArray(waarde) || !sync.current.kanWijzig) return { data: waarde };
     const lokaal = (waarde as { id: string }[]).filter((x) => x && x.id != null);
     const ids = new Set(lokaal.map((x) => x.id));
     const tombs = deletesRef.current[sliceVan(key)] ?? {};
@@ -1102,6 +1103,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (!actief) return false;
       if (rechten) {
         sync.current.afgeschermd = new Set(rechten.afgeschermd);
+        // Een oudere server negeert `wijzig` en zou dan een lege lijst opslaan. Dus alleen als hij het zegt.
+        sync.current.kanWijzig = !!rechten.kan?.includes("wijzig");
         // Staat er nog oude boekhoud-data op dit toestel van vóór de afscherming? Die hoort hier niet meer
         // en wordt lokaal opgeruimd. De centrale database houdt het origineel — we sturen dus niets terug.
         //

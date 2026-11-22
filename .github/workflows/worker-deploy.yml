@@ -1,0 +1,52 @@
+# Zet de Cloudflare Worker (de server) automatisch live bij elke push naar main die hem raakt.
+# Waarom: wie via Claude Code op het web werkt, kan zelf niet uitrollen. Dan bleef de server weken achter
+# op de app (agenda-koppeling en nieuwe regio's stonden in de code maar niet live).
+# Database-migraties (cloudflare/schema*.sql) gaan hier bewust NIET mee: die blijven handwerk.
+#
+# Eenmalig nodig: repo-secret CLOUDFLARE_API_TOKEN (Cloudflare → My Profile → API Tokens →
+# template "Edit Cloudflare Workers"). Zonder dat secret slaat deze workflow zichzelf over.
+name: Worker uitrollen
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "cloudflare/**"
+      - "wrangler.toml"
+      - "src/lib/**"        # de Worker bundelt merge.ts, auth.ts en agendaFeed.ts (+ hun imports)
+  workflow_dispatch:
+
+concurrency:
+  group: worker-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: a7f1b9217bb3263c5748c71f8a9af3cd
+    steps:
+      - name: Secret aanwezig?
+        id: check
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::warning::CLOUDFLARE_API_TOKEN ontbreekt — Worker niet uitgerold."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.check.outputs.ok == 'true'
+      - uses: actions/setup-node@v4
+        if: steps.check.outputs.ok == 'true'
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+        if: steps.check.outputs.ok == 'true'
+      - run: npx wrangler deploy
+        if: steps.check.outputs.ok == 'true'
+      - name: Controle na uitrol
+        if: steps.check.outputs.ok == 'true'
+        run: curl -fsS https://wire-solutions-api.denhaantijn1.workers.dev/agenda/status
