@@ -97,9 +97,15 @@ export async function sbLeesAlles(): Promise<Record<string, unknown>> {
   return api<Record<string, unknown>>("/state", { method: "GET", timeoutMs: DATA_TIMEOUT });
 }
 
-export async function sbSchrijf(key: string, data: unknown): Promise<string> {
-  const r = await api<{ updated_at: string }>("/state", { method: "POST", body: { key, data }, timeoutMs: DATA_TIMEOUT });
-  return r.updated_at; // zodat de aanroeper weet welke versie hij zojuist schreef
+// Wat een toestel naar de server stuurt. `wijzig` = alleen de records die dit toestel aanpaste; `data` =
+// de hele waarde (losse objecten, nieuwe onderdelen, of na herschikken). `door` = dit tabblad, zodat het
+// zijn eigen live-bericht kan herkennen en negeren.
+export type SchrijfBody = { data?: unknown; wijzig?: unknown[]; achter?: string[]; tomb?: Record<string, string>; opheffen?: string[] };
+export type SchrijfAntwoord = { updated_at: string; vorige?: string | null; ongewijzigd?: boolean; teruggezet?: { id: string }[]; data?: unknown };
+export const TABBLAD_ID = Math.random().toString(36).slice(2) + Date.now().toString(36);
+
+export async function sbSchrijf(key: string, body: SchrijfBody): Promise<SchrijfAntwoord> {
+  return api<SchrijfAntwoord>("/state", { method: "POST", body: { key, ...body, door: TABBLAD_ID }, timeoutMs: DATA_TIMEOUT });
 }
 
 // Lichtgewicht check: alleen key + updated_at (geen data) — om elke paar seconden te zien wat er gewijzigd is.
@@ -303,7 +309,7 @@ export async function sbSyncTest(onStap?: (stap: SyncStap, gelukt: boolean) => v
       r.melding = duidingVanFout(e, r.email);
       return r;
     }
-    try { await sbSchrijf("synctest", { door: r.email, op: new Date().toISOString() }); r.schrijven = true; onStap?.("schrijven", true); }
+    try { await sbSchrijf("synctest", { data: { door: r.email, op: new Date().toISOString() } }); r.schrijven = true; onStap?.("schrijven", true); }
     catch (e) {
       onStap?.("schrijven", false); r.melding = `Lezen lukt, maar schrijven wordt geblokkeerd: ${e instanceof Error ? e.message : String(e)}.`; return r; }
     r.melding = `Alles werkt — dit apparaat (${r.email}) leest én schrijft naar de centrale database. Wijzigingen worden gedeeld.`;

@@ -394,6 +394,59 @@ async function main() {
       check(true, `${groot2.length} onderdeel(en) boven 1 MB — die worden vanaf nu automatisch geknipt`);
     }
 
+    // ── 10. Vijftig man tegelijk ──
+    // De echte vraag: als veel mensen op exact hetzelfde moment opslaan, blijft dan van iedereen alles
+    // bewaard? Vroeger won de laatste schrijver en verdween de rest van de server.
+    console.log("\n10. Veel mensen tegelijk opslaan");
+    {
+      const K = `synctest_${stempel}_druk`;
+      opruimen.push(K);
+      await post("/state", tijnTel.token, { key: K, data: [{ id: "basis", naam: "Bestaat al", bijgewerktOp: "2026-01-01T00:00:00Z" }] });
+
+      // 25 toestellen sturen tegelijk hun HELE lijst (zoals oudere app-versies), elk met één eigen toevoeging.
+      const oud = Array.from({ length: 25 }, (_, i) => post("/state", i % 2 ? remon.token : tijnTel.token, {
+        key: K, data: [{ id: "basis", naam: "Bestaat al", bijgewerktOp: "2026-01-01T00:00:00Z" }, { id: `heel${i}`, naam: `Toestel ${i}` }],
+      }));
+      // 25 toestellen sturen tegelijk alleen hun wijziging (nieuwe app).
+      const nieuw = Array.from({ length: 25 }, (_, i) => post("/state", i % 2 ? remon.token : tijnLap.token, {
+        key: K, wijzig: [{ id: `los${i}`, naam: `Wijziging ${i}` }],
+      }));
+      const uit = await Promise.all([...oud, ...nieuw]);
+      check(uit.every((r) => r.status === 200), "alle 50 schrijfacties komen aan", uit.filter((r) => r.status !== 200).map((r) => r.status).join(","));
+      const lijst = (await post("/state/keys", remon.token, { keys: [K] })).data[K] ?? [];
+      const ids = new Set(lijst.map((x) => x.id));
+      const mist = ["basis", ...Array.from({ length: 25 }, (_, i) => `heel${i}`), ...Array.from({ length: 25 }, (_, i) => `los${i}`)].filter((id) => !ids.has(id));
+      check(mist.length === 0, "van alle 50 toestellen staat het werk op de server", mist.length ? `kwijt: ${mist.join(",")}` : "");
+      check(lijst.length === 51, "zonder dubbelen", `${lijst.length}`);
+
+      // Een verouderde kopie mag een nieuwere wijziging van een collega niet terugdraaien.
+      await post("/state", tijnTel.token, { key: K, wijzig: [{ id: "basis", naam: "Nieuw door Tijn", bijgewerktOp: "2026-11-22T12:00:00Z" }] });
+      await post("/state", remon.token, { key: K, data: [{ id: "basis", naam: "Oude kopie Remon", bijgewerktOp: "2026-11-22T09:00:00Z" }] });
+      const na = (await post("/state/keys", remon.token, { keys: [K] })).data[K] ?? [];
+      check(na.find((x) => x.id === "basis")?.naam === "Nieuw door Tijn", "een oude kopie draait een nieuwere wijziging niet terug");
+      check(na.length === 51, "en een hele lijst van één toestel gooit de rest niet weg", `${na.length}`);
+
+      // Weggooien: met grafsteen weg, en een collega met een oude kopie brengt het niet terug.
+      await post("/state", tijnTel.token, { key: K, wijzig: [], tomb: { los0: new Date().toISOString() } });
+      await post("/state", remon.token, { key: K, wijzig: [{ id: "los1", naam: "Remon past los1 aan" }] });
+      const weg = (await post("/state/keys", remon.token, { keys: [K] })).data[K] ?? [];
+      check(!weg.some((x) => x.id === "los0"), "een weggegooid record is weg");
+      check(weg.find((x) => x.id === "los1")?.naam === "Remon past los1 aan", "de rest gaat gewoon door");
+
+      // De wijziging gaat zelf mee in het live-bericht: andere toestellen hoeven niets op te halen.
+      [tijnLap].forEach((a) => a.leeg());
+      const vanaf = Date.now();
+      const w = await post("/state", tijnTel.token, { key: K, wijzig: [{ id: "live", naam: "Direct mee" }], door: "test-tijn" });
+      await tijnLap.wachtOp(K, vanaf);
+      const msg = tijnLap.ontvangen.find((x) => x.msg?.keys?.includes(K))?.msg;
+      check(msg?.wijzig?.[0]?.naam === "Direct mee", "het live-bericht bevat de wijziging zelf");
+      check(msg?.door === "test-tijn" && msg?.updated_at === w.data.updated_at && !!msg?.vorige, "met afzender en versie-aansluiting");
+
+      // Niets veranderd = niets schrijven en niemand lastigvallen.
+      const zelfde = await post("/state", tijnTel.token, { key: K, wijzig: [{ id: "live", naam: "Direct mee" }] });
+      check(zelfde.data.ongewijzigd === true, "dezelfde wijziging nog eens wordt herkend als 'niets nieuws'");
+    }
+
     opruimen.push(KEY, KEY2);
     console.log(`\n${geslaagd} geslaagd, ${gefaald} gefaald`);
     if (PROD) {

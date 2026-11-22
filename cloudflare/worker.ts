@@ -38,6 +38,8 @@ import {
   spiegelStatus, herspiegelAlles, type SpiegelEnv,
 } from "./spiegel";
 import { schrijfGesplitst, herstelAllemaal, isDeelSleutel, basisSleutel } from "./delen";
+import { heeftIds, mergeTombstones, pasWijzigingenToe, samenvoegenOpServer, type Tombstones } from "../src/lib/merge";
+type MetId = { id: string; bijgewerktOp?: string };
 import { fotoRoutes, verhuisFotos } from "./fotos";
 import { bouwPersoonlijkeFeed } from "../src/lib/agendaFeed";
 import type { AgendaBronnen } from "../src/lib/agendaFeed";
@@ -71,13 +73,30 @@ export interface Env extends SpiegelEnv {
 // Eén globale instantie houdt alle open WebSockets van de apparaten vast (met hibernation, zodat idle
 // verbindingen niets kosten). Na elke schrijfactie stuurt de Worker hierheen een broadcast, die de hub
 // meteen naar álle verbonden apparaten doorstuurt → wijzigingen verschijnen binnen een fractie van een sec.
+//
+// Dezelfde klasse doet ook het SCHRIJVEN, met één instantie per onderdeel ("schrijf:<key>"). Een Durable
+// Object is één plek op de wereld; met blockConcurrencyWhile handelt hij de schrijfacties voor dat
+// onderdeel één voor één af. Zo kan het niet meer gebeuren dat twee collega's tegelijk opslaan en de één
+// de ander overschrijft: de tweede wordt samengevoegd met wat de eerste net heeft weggeschreven.
 export class SyncHub {
   state: DurableObjectState;
-  constructor(state: DurableObjectState) {
+  env: Env;
+  constructor(state: DurableObjectState, env: Env) {
     this.state = state;
+    this.env = env;
   }
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
+    if (url.pathname.endsWith("/schrijf")) {
+      const v = (await request.json()) as SchrijfVerzoek;
+      let uit: unknown;
+      try {
+        await this.state.blockConcurrencyWhile(async () => { uit = await schrijfSamengevoegd(this.env, v); });
+      } catch (e) {
+        return Response.json({ error: e instanceof Error ? e.message : String(e) }, { status: 503 });
+      }
+      return Response.json(uit);
+    }
     if (url.pathname.endsWith("/broadcast")) {
       const msg = await request.text();
       for (const ws of this.state.getWebSockets()) {
@@ -85,9 +104,19 @@ export class SyncHub {
       }
       return new Response("ok");
     }
+    // Account verwijderd of wachtwoord gereset: zijn open verbindingen meteen dicht, anders blijft een
+    // vertrokken medewerker live wijzigingen binnenkrijgen tot hij de app sluit.
+    if (url.pathname.endsWith("/kick")) {
+      const email = url.searchParams.get("email") ?? "";
+      for (const ws of this.state.getWebSockets()) {
+        try { if ((ws.deserializeAttachment() as { email?: string } | null)?.email === email) ws.close(4001, "sessie ingetrokken"); } catch { /* noop */ }
+      }
+      return new Response("ok");
+    }
     if (request.headers.get("Upgrade") === "websocket") {
       const pair = new WebSocketPair();
       this.state.acceptWebSocket(pair[1]); // hibernation API: overleeft idle-periodes gratis
+      pair[1].serializeAttachment({ email: url.searchParams.get("email") ?? "" });
       return new Response(null, { status: 101, webSocket: pair[0] });
     }
     return new Response("not found", { status: 404 });
@@ -100,6 +129,70 @@ export class SyncHub {
     try { ws.close(); } catch { /* noop */ }
   }
   webSocketError(): void { /* niets — hibernation ruimt de socket op */ }
+}
+
+// ── Samenvoegend schrijven (draait ín de Durable Object van het onderdeel, dus nooit twee tegelijk) ──
+// Drie soorten verzoeken:
+//   • wijzig: alleen de records die het toestel aanpaste (nieuwe app) → in de bestaande lijst verwerken.
+//   • data:   de hele lijst (oudere app, of na herschikken) → per record samenvoegen, niets van collega's kwijt.
+//   • deletes: de verwijderlijst → altijd optellen; `opheffen` haalt bewust teruggezette records eruit.
+// Losse objecten (bedrijf, instellingen, comm) blijven "laatste wint".
+type SchrijfVerzoek = {
+  key: string; nuISO: string; data?: unknown;
+  wijzig?: MetId[]; achter?: string[]; tomb?: Record<string, string>; opheffen?: string[];
+};
+async function leesOnderdeel(env: Env, key: string): Promise<{ updated_at: string | null; waarde: unknown; kapot: boolean }> {
+  const rij = await env.DB.prepare("select data, updated_at from wire_state where key = ?").bind(key).first<{ data: string; updated_at: string }>();
+  if (!rij) return { updated_at: null, waarde: undefined, kapot: false };
+  try {
+    const w = (await herstelAllemaal(env, { [key]: JSON.parse(rij.data) }))[key];
+    return { updated_at: rij.updated_at, waarde: w, kapot: w === undefined };
+  } catch { return { updated_at: rij.updated_at, waarde: undefined, kapot: true }; }
+}
+async function schrijfSamengevoegd(env: Env, v: SchrijfVerzoek) {
+  const huidig = await leesOnderdeel(env, v.key);
+  // Kunnen we de huidige versie niet lezen, dan NIET schrijven: samenvoegen met "niets" zou de lijst
+  // van iedereen vervangen door alleen de wijzigingen van dit toestel. Het toestel probeert het zo opnieuw.
+  if (huidig.kapot) throw new Error("De huidige versie is even niet leesbaar; probeer het zo opnieuw.");
+  let nieuw: unknown;
+  let effectief: MetId[] | undefined;
+  let teruggezet: MetId[] | undefined;
+  if (v.key === "deletes") {
+    const t = mergeTombstones(huidig.waarde as Tombstones | undefined, v.data as Tombstones | undefined);
+    for (const id of v.opheffen ?? []) for (const slice of Object.values(t)) delete slice[id];
+    nieuw = t;
+  } else {
+    const slice = v.key.startsWith("voorschouwen_") ? "voorschouwen" : v.key;
+    const opgeslagen = (await leesOnderdeel(env, "deletes")).waarde as Tombstones | undefined;
+    const tomb = { ...(opgeslagen?.[slice] ?? {}), ...(v.tomb ?? {}) };
+    for (const id of v.opheffen ?? []) delete tomb[id]; // bewust teruggezet (herstel)
+    if (Array.isArray(v.wijzig)) {
+      if (huidig.waarde !== undefined && !heeftIds(huidig.waarde)) throw new Error(`'${v.key}' is geen lijst.`);
+      const lijst = pasWijzigingenToe((huidig.waarde as MetId[] | undefined) ?? [], v.wijzig, tomb, v.achter);
+      const ids = new Set(v.wijzig.map((w) => w?.id));
+      const verstuurd = new Map(v.wijzig.map((w) => [w?.id, JSON.stringify(w)] as const));
+      effectief = lijst.filter((x) => ids.has(x.id));
+      teruggezet = effectief.filter((x) => verstuurd.get(x.id) !== JSON.stringify(x));
+      nieuw = lijst;
+    } else if (heeftIds(huidig.waarde) && heeftIds(v.data)) {
+      nieuw = samenvoegenOpServer(huidig.waarde, v.data, tomb);
+    } else {
+      nieuw = v.data ?? null;
+    }
+  }
+  const tekst = JSON.stringify(nieuw);
+  if (huidig.updated_at && tekst === JSON.stringify(huidig.waarde)) {
+    return { updated_at: huidig.updated_at, vorige: huidig.updated_at, ongewijzigd: true, rijen: [], nieuw };
+  }
+  // Tijdstempel strikt oplopend per onderdeel: apparaten gebruiken hem om te zien of ze iets misten.
+  let ua = v.nuISO;
+  if (huidig.updated_at && ua <= huidig.updated_at) ua = new Date(Date.parse(huidig.updated_at) + 1).toISOString();
+  const { rijen } = await schrijfGesplitst(env, v.key, nieuw, ua);
+  return {
+    updated_at: ua, vorige: huidig.updated_at, rijen, nieuw, effectief, teruggezet,
+    // Hele lijst gestuurd en de server maakte er iets anders van? Dan krijgt het toestel de uitkomst terug.
+    afwijkend: v.wijzig === undefined && tekst !== JSON.stringify(v.data ?? null),
+  };
 }
 
 // Stuurt een bericht naar alle verbonden apparaten (fire-and-forget; vertraagt de schrijf niet).
@@ -310,6 +403,9 @@ async function trekTokensIn(env: Env, email: string, nuSec: number): Promise<voi
     ).bind(email, nuSec).run();
   } catch { /* tabel ontbreekt → migratie nog niet gedraaid; account is al uit users_auth verwijderd */ }
   _revocatieCache = null; // meteen effect in deze isolate
+  try {
+    await env.SYNC_HUB.get(env.SYNC_HUB.idFromName("global")).fetch(`https://hub/kick?email=${encodeURIComponent(email)}`);
+  } catch { /* de socket valt anders bij de volgende herverbinding af */ }
 }
 
 // ── E-mail via Resend: nieuw wachtwoord na "wachtwoord vergeten" ──
@@ -787,7 +883,11 @@ export default {
         // Ook een ingetrokken account (verwijderd / wachtwoord gereset) mag geen socket meer openen —
         // anders blijft de realtime-verbinding van een vertrokken medewerker hangen.
         if (!s || (await tokenIngetrokken(env, s.email, s.iat))) return new Response("unauthorized", { status: 401, headers: CORS });
-        return env.SYNC_HUB.get(env.SYNC_HUB.idFromName("global")).fetch(req);
+        // E-mail meegeven (door de Worker, niet de app) zodat de hub deze verbinding kan sluiten bij intrekken.
+        const naarHub = new URL(req.url);
+        naarHub.searchParams.delete("token");
+        naarHub.searchParams.set("email", s.email);
+        return env.SYNC_HUB.get(env.SYNC_HUB.idFromName("global")).fetch(new Request(naarHub.toString(), req));
       }
 
       // ── Vanaf hier: geldige token vereist ──
@@ -993,19 +1093,47 @@ export default {
         // in die lijst tot eigenaar promoveren en daarna wachtwoorden van collega's resetten.
         // Wie geen eigenaar/HR is, mag alles aan de lijst wijzigen (naam, contract, eigen wachtwoordhash)
         // BEHALVE de rollen — die worden teruggezet op wat er al stond.
-        if (key === "users" && !magAlles(mijnRechten?.rol)) body.data = await zeefRollen(env, body.data);
+        if (key === "users" && !magAlles(mijnRechten?.rol)) {
+          if (body.data !== undefined) body.data = await zeefRollen(env, body.data);
+          if (Array.isArray(body.wijzig)) body.wijzig = await zeefRollen(env, body.wijzig);
+        }
         if (isDeelSleutel(key)) return json({ error: "Deze naam is voor intern gebruik." }, 400);
-        // Past het onderdeel in één rij, dan gaat het precies zoals altijd. Is het te groot voor de
-        // database, dan knipt schrijfGesplitst het in stukken en zet de leesroute het weer in elkaar.
-        // Zo mislukt een schrijf nooit meer op grootte — ook niet bij een map vol foto's.
-        const { rijen: geschreven, gesplitst } = await schrijfGesplitst(env, key, body.data ?? null, nuISO);
-        if (gesplitst) console.log("[delen]", key, "in", geschreven.length - 1, "stukken");
+        // Eén schrijver per onderdeel (Durable Object): leest wat er staat, voegt samen, schrijft weg.
+        // Te groot voor één rij? Dan knipt schrijfGesplitst het daarbinnen in stukken.
+        const verzoek: SchrijfVerzoek = {
+          key, nuISO, data: body.data,
+          wijzig: Array.isArray(body.wijzig) ? (body.wijzig as MetId[]) : undefined,
+          achter: Array.isArray(body.achter) ? (body.achter as string[]) : undefined,
+          tomb: body.tomb && typeof body.tomb === "object" ? (body.tomb as Record<string, string>) : undefined,
+          opheffen: Array.isArray(body.opheffen) ? (body.opheffen as string[]) : undefined,
+        };
+        const antwoord = await env.SYNC_HUB.get(env.SYNC_HUB.idFromName(`schrijf:${key}`))
+          .fetch("https://hub/schrijf", { method: "POST", body: JSON.stringify(verzoek) });
+        const uit = (await antwoord.json()) as {
+          error?: string; updated_at: string; vorige: string | null; ongewijzigd?: boolean; afwijkend?: boolean;
+          rijen: { key: string; data: unknown; updated_at: string }[]; nieuw: unknown; effectief?: MetId[]; teruggezet?: MetId[];
+        };
+        if (!antwoord.ok) return json({ error: uit.error ?? "Opslaan mislukte, probeer het zo opnieuw." }, 503);
+        if (uit.ongewijzigd) return json({ updated_at: uit.updated_at, vorige: uit.vorige, ongewijzigd: true });
+        if (uit.rijen.length > 1) console.log("[delen]", key, "in", uit.rijen.length - 1, "stukken");
         // Tweede kopie naar Supabase (achtergrond — vertraagt of blokkeert deze schrijf nooit).
-        spiegelUpsert(env, ctx, "wire_state", geschreven, "key");
+        spiegelUpsert(env, ctx, "wire_state", uit.rijen, "key");
         // Rol-spiegel bijwerken zodra de gebruikerslijst verandert (zodat is_owner/is_boekhouding kloppen).
-        if (key === "users") await seedRollenUitUsers(env, body.data, nuISO, ctx);
-        broadcast(env, ctx, { type: "changed", keys: [key], updated_at: nuISO }); // alle apparaten meteen op de hoogte
-        return json({ updated_at: nuISO });
+        if (key === "users") await seedRollenUitUsers(env, uit.nieuw, nuISO, ctx);
+        // Alle apparaten meteen op de hoogte. Bij losse wijzigingen gaan die zelf mee, dan hoeft niemand
+        // de hele lijst op te halen (scheelt bij 50 man 49 verzoeken per opslag). Boekhouding nooit, want
+        // de socket weet niet wie er luistert; grote wijzigingen ook niet — die halen de apparaten zelf.
+        const bericht: Record<string, unknown> = { type: "changed", keys: [key], updated_at: uit.updated_at, vorige: uit.vorige, door: body.door ?? null };
+        if (uit.effectief && !BOEKHOUD_ONDERDELEN.includes(key)) {
+          const mee = { wijzig: uit.effectief, achter: verzoek.achter, tomb: verzoek.tomb };
+          if (JSON.stringify(mee).length < 256_000) Object.assign(bericht, mee);
+        }
+        broadcast(env, ctx, bericht);
+        return json({
+          updated_at: uit.updated_at, vorige: uit.vorige,
+          teruggezet: uit.teruggezet?.length ? uit.teruggezet : undefined,
+          data: uit.afwijkend ? uit.nieuw : undefined,
+        });
       }
 
       // ── VERLOF-BESLISSINGEN (iedereen leest; alleen boekhouding schrijft) ──

@@ -73,8 +73,8 @@ import {
   SEED_BUURTAANPAK,
 } from "../lib/seed";
 import { idbGet, idbSet } from "./db";
-import { mergeCollection, mergeTombstones, type Tombstones } from "../lib/merge";
-import { supabaseAan, sbLeesAlles, sbSchrijf, sbVersies, sbLeesKeys, sbLogin, sbLoginUitkomst, sbRegistreer, sbLogout, sbSessieEmail, bewaarSyncCred, wisSyncCred, sbHerstelSessie, cloudWsUrl, wisSessieGeweigerd, sbMijnRechten, type LoginUitkomst } from "../lib/supabase";
+import { mergeCollection, mergeTombstones, pasWijzigingenToe, type Tombstones } from "../lib/merge";
+import { supabaseAan, sbLeesAlles, sbSchrijf, sbVersies, sbLeesKeys, sbLogin, sbLoginUitkomst, sbRegistreer, sbLogout, sbSessieEmail, bewaarSyncCred, wisSyncCred, sbHerstelSessie, cloudWsUrl, wisSessieGeweigerd, sbMijnRechten, TABBLAD_ID, type LoginUitkomst, type SchrijfBody } from "../lib/supabase";
 
 // Uitkomst van een inlogpoging. Bewust géén kale boolean meer: de gebruiker moet het verschil zien tussen
 // een verkeerd wachtwoord en een database die even niet bereikbaar is.
@@ -412,7 +412,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     laatsteOk: number;                       // wanneer de server voor het laatst écht antwoordde
     wachtrij: Map<string, unknown>;          // per onderdeel de laatste waarde die nog weg moet
     afgeschermd: Set<string>;                // onderdelen waar dit account niet bij mag (server bepaalt dit)
-  }>({ klaar: false, gezien: {}, bezig: new Set(), laatsteFout: "", versies: {}, vuil: new Set(), laatsteOk: 0, wachtrij: new Map(), afgeschermd: new Set() });
+    basis: Record<string, Map<string, string>>; // per lijst: id → JSON zoals de server hem heeft (voor "alleen wat ik wijzigde")
+    gemist: Set<string>;                     // live-bericht binnengekomen terwijl we zelf schreven → daarna ophalen
+    timers: Record<string, ReturnType<typeof setTimeout>>; // korte wachttijd per onderdeel (typen = één schrijf)
+    opheffen: string[];                      // records die bewust uit de prullenbak terugkomen (herstel)
+  }>({ klaar: false, gezien: {}, bezig: new Set(), laatsteFout: "", versies: {}, vuil: new Set(), laatsteOk: 0, wachtrij: new Map(), afgeschermd: new Set(), basis: {}, gemist: new Set(), timers: {}, opheffen: [] });
   // Laatst-gepushte referentie per slice — zo serialiseren we alleen de slice die écht wijzigde (niet alle 23 per klik).
   const pushRef = useRef<Record<string, unknown>>({});
 
@@ -782,10 +786,88 @@ export function AppProvider({ children }: { children: ReactNode }) {
         binnen as { id: string }[] | undefined,
         deletesRef.current[isVsShard(key) ? "voorschouwen" : key]
       );
+      zetBasis(key, binnen);
       setters[key](merged);
     } else {
       setters[key](val);
     }
+  };
+
+  // ── Wat staat er op de server? ── Per lijst onthouden we elk record zoals de server het heeft. Daarmee
+  // kan dit toestel bij het opslaan precies de records sturen die het zelf veranderde, in plaats van de
+  // hele lijst (waarin ook verouderde kopieën van andermans records zitten).
+  const zetBasis = (key: string, lijst: unknown) => {
+    if (!Array.isArray(lijst)) return;
+    const m = new Map<string, string>();
+    for (const x of lijst as { id?: string }[]) if (x && x.id != null) m.set(x.id, JSON.stringify(x));
+    sync.current.basis[key] = m;
+  };
+  // Zelfde volgorde-regels als de server (pasWijzigingenToe): nieuw bovenaan, of onderaan als 'achter'.
+  const basisNa = (key: string, wijzig: { id: string }[], tomb?: Record<string, string>, achter?: string[]) => {
+    const b = sync.current.basis[key];
+    if (!b) return;
+    const lijst = [...b].map(([id, j]) => ({ id, j }));
+    const uit = pasWijzigingenToe(lijst, wijzig.map((w) => ({ id: w.id, j: JSON.stringify(w) })), tomb, achter);
+    sync.current.basis[key] = new Map(uit.map((x) => [x.id, x.j]));
+  };
+  const sliceVan = (key: string) => (isVsShard(key) ? "voorschouwen" : key);
+
+  // Losse wijzigingen van een collega (via het live-bericht) verwerken: alleen díe records vervangen.
+  const pasDeltaToe = (key: string, wijzig: { id: string }[], tomb?: Record<string, string>, achter?: string[]) => {
+    if (!(key in setters) || !COLLECTIONS.has(key)) return;
+    const binnen = (key === "urenstaat" ? migreerUren(wijzig) : wijzig) as { id: string }[];
+    const dood = { ...(deletesRef.current[sliceVan(key)] ?? {}), ...(tomb ?? {}) };
+    const lijst = pasWijzigingenToe(waardenRef.current[key] as { id: string }[] | undefined, binnen, dood, achter);
+    basisNa(key, binnen, dood, achter);
+    waardenRef.current = { ...waardenRef.current, [key]: lijst };
+    sync.current.gezien[key] = JSON.stringify(lijst);
+    setters[key](lijst);
+  };
+
+  // Eén onderdeel opnieuw ophalen (na een gemist live-bericht).
+  const haalOp = (key: string) => {
+    void sbLeesKeys([key]).then((d) => {
+      if (!(key in d)) return;
+      if (drukBezig(key)) { sync.current.gemist.add(key); return; } // straks na onze eigen schrijf
+      const j = JSON.stringify(d[key]);
+      if (sync.current.gezien[key] === j) return;
+      sync.current.gezien[key] = j;
+      applyRemote(key, d[key]);
+    }).catch(() => { sync.current.vuil.add(key); /* de poll vangt het op */ });
+  };
+
+  // Wat sturen we? Voor een lijst waarvan we de serverversie kennen: alleen de records die anders zijn,
+  // plus welke records dit toestel weggooide. Is de volgorde van bestaande records veranderd (slepen),
+  // dan de hele lijst — de server voegt die per record samen, dus ook dan gaat er niets verloren.
+  const maakVerzoek = (key: string, waarde: unknown): SchrijfBody | null => {
+    if (key === "deletes") {
+      const opheffen = sync.current.opheffen;
+      return opheffen.length ? { data: waarde, opheffen } : { data: waarde };
+    }
+    const basis = sync.current.basis[key];
+    if (!COLLECTIONS.has(key) || !basis || !Array.isArray(waarde)) return { data: waarde };
+    const lokaal = (waarde as { id: string }[]).filter((x) => x && x.id != null);
+    const ids = new Set(lokaal.map((x) => x.id));
+    const tombs = deletesRef.current[sliceVan(key)] ?? {};
+    const tomb: Record<string, string> = {};
+    for (const id of basis.keys()) if (!ids.has(id) && tombs[id]) tomb[id] = tombs[id];
+    const heeftTomb = Object.keys(tomb).length > 0;
+    const gemeen = lokaal.filter((x) => basis.has(x.id)).map((x) => x.id).join("\n");
+    const basisGemeen = [...basis.keys()].filter((id) => ids.has(id)).join("\n");
+    if (gemeen !== basisGemeen) return heeftTomb ? { data: waarde, tomb } : { data: waarde };
+    const eersteBekend = lokaal.findIndex((x) => basis.has(x.id));
+    const wijzig: { id: string }[] = [];
+    const achter: string[] = [];
+    lokaal.forEach((x, i) => {
+      if (basis.get(x.id) === JSON.stringify(x)) return;
+      wijzig.push(x);
+      if (!basis.has(x.id) && eersteBekend >= 0 && i > eersteBekend) achter.push(x.id);
+    });
+    if (!wijzig.length && !heeftTomb) return null; // niets van onszelf — alleen andermans wijzigingen verwerkt
+    // Net uit de prullenbak teruggezet? Dan moet de server de verwijdering hier ook negeren, ook als de
+    // bijgewerkte prullenbak pas na deze schrijf aankomt.
+    const opheffen = sync.current.opheffen.length ? { opheffen: sync.current.opheffen } : {};
+    return { wijzig, ...(achter.length ? { achter } : {}), ...(heeftTomb ? { tomb } : {}), ...opheffen };
   };
 
   // ── Schrijven naar de centrale database, één tegelijk per onderdeel ──
@@ -798,13 +880,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // anders zou een verouderde lokale kopie de echte gegevens kunnen overschrijven.
     if (sync.current.afgeschermd.has(key)) return;
     if (sync.current.bezig.has(key)) { sync.current.wachtrij.set(key, waarde); return; }
+    const verzoek = maakVerzoek(key, waarde);
+    if (!verzoek) { sync.current.vuil.delete(key); return; }
     sync.current.bezig.add(key);
-    void sbSchrijf(key, waarde)
-      .then((ua) => {
-        sync.current.versies[key] = ua;
+    const versieVoor = sync.current.versies[key];
+    let ophalen = false;
+    void sbSchrijf(key, verzoek)
+      .then((r) => {
+        sync.current.versies[key] = r.updated_at;
         sync.current.vuil.delete(key);
         sync.current.laatsteOk = Date.now();
         sync.current.laatsteFout = "";
+        if (key === "deletes" && verzoek.opheffen) sync.current.opheffen = sync.current.opheffen.filter((id) => !verzoek.opheffen!.includes(id));
+        if (verzoek.wijzig) {
+          basisNa(key, verzoek.wijzig as { id: string }[], verzoek.tomb, verzoek.achter);
+          // Had een collega dit record al nieuwer opgeslagen, dan hield de server dat. Neem het over.
+          if (r.teruggezet?.length) pasDeltaToe(key, r.teruggezet);
+        } else if (r.data !== undefined) {
+          // De server maakte er iets anders van (records van collega's erbij): die uitkomst overnemen.
+          sync.current.gezien[key] = JSON.stringify(r.data);
+          applyRemote(key, r.data);
+        } else if (COLLECTIONS.has(key)) {
+          zetBasis(key, key === "urenstaat" ? migreerUren(waarde) : waarde);
+        }
+        // Zat er tussen onze vorige versie en deze schrijf iets van een collega? Dan dat alsnog ophalen.
+        if (r.vorige != null && r.vorige !== versieVoor) ophalen = true;
       })
       .catch((e) => {
         sync.current.laatsteFout = String((e as Error)?.message ?? e);
@@ -819,8 +919,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
           sync.current.gezien[key] = JSON.stringify(volgende);
           schrijfKey(key, volgende);
         }
+        const gemist = sync.current.gemist.delete(key);
+        if (ophalen || gemist) haalOp(key);
       });
   };
+
+  // Korte wachttijd vóór het opslaan: wie typt, stuurt na de laatste toets één keer in plaats van per
+  // letter. Scheelt bij vijftig man duizenden verzoeken per dag. Gaat de app naar de achtergrond, dan
+  // gaat alles meteen de deur uit (zie het effect hieronder).
+  const SCHRIJF_WACHT = 400;
+  const planSchrijf = (key: string) => {
+    clearTimeout(sync.current.timers[key]);
+    sync.current.timers[key] = setTimeout(() => {
+      delete sync.current.timers[key];
+      schrijfKey(key, waardenRef.current[key]);
+    }, SCHRIJF_WACHT);
+  };
+  const drukBezig = (key: string) => sync.current.bezig.has(key) || key in sync.current.timers;
+  useEffect(() => {
+    const nuWeg = () => {
+      if (document.visibilityState !== "hidden") return;
+      for (const key of Object.keys(sync.current.timers)) {
+        clearTimeout(sync.current.timers[key]);
+        delete sync.current.timers[key];
+        schrijfKey(key, waardenRef.current[key]);
+      }
+    };
+    document.addEventListener("visibilitychange", nuWeg);
+    window.addEventListener("pagehide", nuWeg);
+    return () => { document.removeEventListener("visibilitychange", nuWeg); window.removeEventListener("pagehide", nuWeg); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Onthoud dat records verwijderd zijn, zodat een samenvoeging (van dit of een ander apparaat) ze niet terugbrengt.
   const tomb = (slice: string, ...ids: string[]) => {
@@ -906,6 +1035,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           if (Object.keys(over).length > 0) schoon[slice] = over;
         }
         deletesRef.current = schoon;
+        sync.current.opheffen = [...sync.current.opheffen, ...ids]; // ook op de server uit de prullenbak
         setDeletes(schoon);
       }
       return true;
@@ -950,7 +1080,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (sync.current.gezien.deletes !== j) { sync.current.gezien.deletes = j; applyRemote("deletes", remote.deletes); }
       }
       for (const [key, val] of Object.entries(remote)) {
-        if (key === "deletes" || !(key in setters) || sync.current.bezig.has(key)) continue;
+        if (key === "deletes" || !(key in setters)) continue;
+        if (drukBezig(key)) { sync.current.gemist.add(key); continue; }
         const j = JSON.stringify(val);
         if (sync.current.gezien[key] === j) continue;
         sync.current.gezien[key] = j;
@@ -1070,7 +1201,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
         try {
           const msg = JSON.parse(String(ev.data));
           if (msg?.type === "changed" && Array.isArray(msg.keys)) {
-            const teHalen = (msg.keys as string[]).filter((k) => k in setters && !sync.current.bezig.has(k) && !sync.current.afgeschermd.has(k));
+            if (msg.door && msg.door === TABBLAD_ID) return; // ons eigen opslaan — dat weten we al
+            // Gingen de wijzigingen zelf mee én sluit dit bericht aan op wat wij hebben? Dan direct verwerken,
+            // zonder de hele lijst op te halen. Missen we iets (verbinding even weg), dan wél ophalen.
+            const k0 = msg.keys[0] as string;
+            if (Array.isArray(msg.wijzig) && msg.keys.length === 1 && k0 in setters && !sync.current.afgeschermd.has(k0)) {
+              if (drukBezig(k0)) { sync.current.gemist.add(k0); return; }
+              if (sync.current.versies[k0] === msg.vorige) {
+                pasDeltaToe(k0, msg.wijzig, msg.tomb, msg.achter);
+                sync.current.versies[k0] = msg.updated_at;
+                return;
+              }
+            }
+            for (const k of msg.keys as string[]) if (drukBezig(k)) sync.current.gemist.add(k);
+            const teHalen = (msg.keys as string[]).filter((k) => k in setters && !drukBezig(k) && !sync.current.afgeschermd.has(k));
             if (teHalen.length) void sbLeesKeys(teHalen).then((d) => { if (actief) pasToe(d); }).catch(() => { /* de poll vangt het op */ });
           }
         } catch { /* onbekend bericht — negeren */ }
@@ -1089,7 +1233,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         const versies = await sbVersies();
         if (!actief) return;
-        const gewijzigd = Object.keys(versies).filter((k) => k in setters && !sync.current.bezig.has(k) && !sync.current.afgeschermd.has(k) && versies[k] !== sync.current.versies[k]);
+        const gewijzigd = Object.keys(versies).filter((k) => k in setters && !drukBezig(k) && !sync.current.afgeschermd.has(k) && versies[k] !== sync.current.versies[k]);
         if (gewijzigd.length) {
           const data = await sbLeesKeys(gewijzigd);
           if (!actief) return;
@@ -1170,7 +1314,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         continue;
       }
       sync.current.gezien[key] = j;
-      schrijfKey(key, waarden[key]); // wachtrij: nooit twee schrijfacties tegelijk op hetzelfde onderdeel
+      planSchrijf(key); // korte wachttijd, daarna via de wachtrij: nooit twee schrijfacties tegelijk op hetzelfde onderdeel
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supabaseAan, sbSessie, hydrated, syncKlaar, users, projects, taken, projectPosts, planningen, saneringen, tauwOpdrachten, voorschouwen, voorschouwMappen, mededelingen, rondes, afspraken, facturen, bedrijf, loonstroken, boetes, comm, verlof, schouwafspraken, schouwMappen, blancoBrieven, saneerChecklists, urenstaat, agendaItems, todos, kennis, instellingen, klanten, opdrachtgevers, buurtaanpak, deletes]);

@@ -78,3 +78,56 @@ export function mergeTombstones(a: Tombstones | undefined, b: Tombstones | undef
   }
   return out;
 }
+
+// ── Samenvoegen op de server en met losse wijzigingen ──
+// Met vijftig mensen tegelijk is "de hele lijst heen en weer sturen" niet meer houdbaar: een toestel met
+// een verouderde kopie van record X overschrijft dan de nieuwere versie van een collega, ook als het zelf
+// alleen record Y aanpaste. Daarom sturen toestellen alleen nog de records die ze écht wijzigden, en
+// voegt de server die (één schrijver per onderdeel tegelijk) samen met wat er al staat.
+
+// Mag het bestaande record blijven staan? Alleen als beide een tijdstempel hebben en het bestaande
+// aantoonbaar nieuwer is. Zonder tijdstempels wint de wijziging (zoals het altijd ging).
+const bestaandNieuwer = (bestaand: MetId, wijziging: MetId) =>
+  !!(bestaand.bijgewerktOp && wijziging.bijgewerktOp && bestaand.bijgewerktOp > wijziging.bijgewerktOp);
+
+// Een lijst waarin elk element een id heeft — alleen zulke lijsten voegen we per record samen.
+export const heeftIds = (v: unknown): v is MetId[] =>
+  Array.isArray(v) && v.every((x) => !!x && typeof x === "object" && (x as MetId).id != null);
+
+// Losse wijzigingen (nieuwe en aangepaste records) in een lijst verwerken. Bestaande records houden hun
+// plek; nieuwe komen bovenaan, of onderaan als ze in `achter` staan (de app voegde ze achteraan toe).
+export function pasWijzigingenToe<T extends MetId>(
+  lijst: T[] | undefined, wijzig: T[], tomb?: Record<string, string>, achter?: string[],
+): T[] {
+  const L = Array.isArray(lijst) ? lijst : [];
+  const dood = (id: string) => !!(tomb && tomb[id]);
+  const nieuw = new Map<string, T>();
+  for (const w of wijzig) if (w && w.id != null) nieuw.set(w.id, w);
+  const bestaand = new Set(L.map((x) => x?.id));
+  const achteraan = new Set(achter ?? []);
+  const kop: T[] = [];
+  const staart: T[] = [];
+  for (const [id, w] of nieuw) if (!bestaand.has(id) && !dood(id)) (achteraan.has(id) ? staart : kop).push(w);
+  const midden = L.filter((x) => x && x.id != null && !dood(x.id)).map((x) => {
+    const w = nieuw.get(x.id);
+    return w && !bestaandNieuwer(x, w) ? w : x;
+  });
+  return [...kop, ...midden, ...staart];
+}
+
+// Een hele lijst van een toestel samenvoegen met wat er centraal staat (oudere app-versies sturen nog
+// altijd de hele lijst). Niets van collega's gaat verloren: records die alleen centraal staan blijven.
+export function samenvoegenOpServer<T extends MetId>(centraal: T[], binnen: T[], tomb?: Record<string, string>): T[] {
+  const dood = (id: string) => !!(tomb && tomb[id]);
+  const binnenIds = new Set(binnen.map((x) => x.id));
+  const cMap = new Map(centraal.map((x) => [x.id, x] as const));
+  const gezien = new Set<string>();
+  const rest: T[] = [];
+  for (const b of binnen) {
+    if (dood(b.id) || gezien.has(b.id)) continue;
+    gezien.add(b.id);
+    const c = cMap.get(b.id);
+    rest.push(c && bestaandNieuwer(c, b) ? c : b);
+  }
+  return [...centraal.filter((x) => !binnenIds.has(x.id) && !dood(x.id)), ...rest];
+}
