@@ -15,7 +15,7 @@ import { haalDossier, haalDossiers } from "../lib/saneerflow";
 import { supabaseAan } from "../lib/supabase";
 
 const ORANJE = "#e08a33";
-const BRUIN = "#4f2a08";
+const DONKER = "#2a1505"; // omlijning van tekst op de donkere kaart
 const KORT: Record<RegioKey, string> = { rotterdam: "Rotterdam", denhaag: "Den Haag", utrecht: "Utrecht" };
 
 // Waar het naamlabel naast het knooppunt staat (in kaarteenheden), zodat niets over de kust valt.
@@ -65,25 +65,25 @@ export function WerkgebiedKaart() {
   const totaalActief = new Set(REGIO_VOLGORDE.flatMap((k) => stand[k].medewerkers)).size;
 
   return (
-    <Card className="overflow-hidden">
-      <div className="flex items-center gap-3 border-b border-ink-100 px-4 py-3.5 sm:px-5">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600"><MapPin className="h-5 w-5" /></span>
+    <Card className="mw-paneel overflow-hidden !border-white/10 !bg-transparent text-white">
+      <div className="flex items-center gap-3 border-b border-white/10 px-4 py-3.5 sm:px-5">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-orange-300/40 bg-orange-400/15 text-orange-200"><MapPin className="h-5 w-5" /></span>
         <div className="min-w-0 flex-1">
-          <h3 className="text-sm font-bold text-ink-900">Onze werkgebieden</h3>
-          <p className="text-xs text-ink-500">Buurtaanpak, bodemonderzoeken, saneren en schouwafspraken · waar het team nu aan het werk is</p>
+          <h3 className="text-sm font-bold text-white">Onze werkgebieden</h3>
+          <p className="text-xs text-orange-50/65">Buurtaanpak, bodemonderzoeken, saneren en schouwafspraken · waar het team nu aan het werk is</p>
         </div>
-        <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-ink-100 px-2.5 py-1 text-xs font-semibold text-ink-600" title="Medewerkers met lopend werk">
+        <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 text-xs font-semibold text-orange-50/85" title="Medewerkers met lopend werk">
           <Users className="h-3.5 w-3.5" /> {totaalActief} actief
         </span>
       </div>
 
       {/* De kaart */}
-      <div className="relative bg-[radial-gradient(circle_at_1px_1px,rgba(224,138,51,0.16)_1px,transparent_0)] [background-size:18px_18px]">
+      <div className="relative bg-[radial-gradient(circle_at_1px_1px,rgba(240,163,90,0.14)_1px,transparent_0)] [background-size:18px_18px]">
         <svg viewBox={`0 0 1000 ${KAART_HOOGTE}`} className="block h-auto w-full select-none" role="img" aria-label="Kaart van Zuid-Holland en Utrecht met de werkgebieden Rotterdam, Den Haag en Utrecht">
           <defs>
             <linearGradient id="wk-vlak" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0" stopColor="#fff7ee" />
-              <stop offset="1" stopColor="#fde7cf" />
+              <stop offset="0" stopColor="#5a2f0c" />
+              <stop offset="1" stopColor="#3a1d06" />
             </linearGradient>
             <radialGradient id="wk-gloed">
               <stop offset="0" stopColor={ORANJE} stopOpacity="0.45" />
@@ -92,7 +92,7 @@ export function WerkgebiedKaart() {
           </defs>
 
           {/* Noordzee */}
-          <g fill="none" stroke="#93c5fd" strokeOpacity="0.55" strokeWidth="2.5" strokeLinecap="round">
+          <g fill="none" stroke="#93c5fd" strokeOpacity="0.4" strokeWidth="2.5" strokeLinecap="round">
             {[0, 1].map((i) => (
               <path key={i} d={`M${44 + i * 26} ${84 + i * 22} q 18 -12 36 0 t 36 0 t 36 0`} />
             ))}
@@ -146,12 +146,12 @@ export function WerkgebiedKaart() {
                     <animate attributeName="stroke-opacity" values="0.8;0" dur={`${Math.max(1.4, 2.6 - n * 0.2)}s`} repeatCount="indefinite" />
                   </circle>
                 )}
-                <circle cx={x} cy={y} r="19" fill="#fff" stroke={ORANJE} strokeWidth="5" />
-                <circle cx={x} cy={y} r="8" fill={n > 0 ? ORANJE : "#f3c08b"} />
+                <circle cx={x} cy={y} r="19" fill="#2a1505" stroke={ORANJE} strokeWidth="5" />
+                <circle cx={x} cy={y} r="8" fill={n > 0 ? "#ffb04d" : "#8a5a2c"} />
 
                 {/* Naam + aantal */}
-                <text x={lx} y={ly} textAnchor={l.anker} fontSize="38" fontWeight="800" stroke="#fff" strokeWidth="9" strokeLinejoin="round" paintOrder="stroke" fill={BRUIN} letterSpacing="1">{KORT[k]}</text>
-                <text x={lx} y={ly + 34} textAnchor={l.anker} fontSize="28" fontWeight="700" fill={ORANJE} stroke="#fff" strokeWidth="8" strokeLinejoin="round" paintOrder="stroke">
+                <text x={lx} y={ly} textAnchor={l.anker} fontSize="38" fontWeight="800" stroke={DONKER} strokeWidth="9" strokeLinejoin="round" paintOrder="stroke" fill="#fff4e6" letterSpacing="1">{KORT[k]}</text>
+                <text x={lx} y={ly + 34} textAnchor={l.anker} fontSize="28" fontWeight="700" fill="#f5a253" stroke={DONKER} strokeWidth="8" strokeLinejoin="round" paintOrder="stroke">
                   {n === 0 ? "niemand actief" : `${n} actief`}{jij ? " · jij" : ""}
                 </text>
 
@@ -161,13 +161,13 @@ export function WerkgebiedKaart() {
                   return (
                     <g key={id}>
                       <title>{naam(id)}</title>
-                      <circle cx={startX} cy={ly + 70} r="19" fill={id === currentUser?.id ? ORANJE : BRUIN} stroke="#fff" strokeWidth="3" />
+                      <circle cx={startX} cy={ly + 70} r="19" fill={id === currentUser?.id ? ORANJE : "#7a4514"} stroke="#fff4e6" strokeWidth="3" />
                       <text x={startX} y={ly + 77} textAnchor="middle" fontSize="17" fontWeight="700" fill="#fff">{initialen(id).slice(0, 2)}</text>
                     </g>
                   );
                 })}
                 {n > 4 && (
-                  <text x={l.anker === "end" ? lx - 20 - 4 * 34 : lx + 20 + 4 * 34} y={ly + 77} textAnchor="middle" fontSize="16" fontWeight="700" fill={BRUIN}>+{n - 4}</text>
+                  <text x={l.anker === "end" ? lx - 20 - 4 * 34 : lx + 20 + 4 * 34} y={ly + 77} textAnchor="middle" fontSize="16" fontWeight="700" fill="#fff4e6">+{n - 4}</text>
                 )}
               </g>
             );
@@ -176,7 +176,7 @@ export function WerkgebiedKaart() {
       </div>
 
       {/* Per regio in cijfers */}
-      <div className="grid grid-cols-3 divide-x divide-ink-100 border-t border-ink-100">
+      <div className="grid grid-cols-3 divide-x divide-white/10 border-t border-white/10 bg-white/[0.04]">
         {REGIO_VOLGORDE.map((k) => {
           const s = stand[k];
           const jij = !!currentUser && s.medewerkers.includes(currentUser.id);
@@ -188,12 +188,12 @@ export function WerkgebiedKaart() {
               onMouseLeave={() => setFocus(null)}
               onClick={() => setFocus((f) => (f === k ? null : k))}
               aria-pressed={focus === k}
-              className={`flex flex-col items-center justify-start px-2 py-3 text-center transition-colors sm:px-4 ${focus === k ? "bg-brand-50" : "hover:bg-ink-50"}`}
+              className={`flex flex-col items-center justify-start px-2 py-3 text-center transition-colors sm:px-4 ${focus === k ? "bg-orange-400/15" : "hover:bg-white/5"}`}
             >
-              <div className="truncate text-[11px] font-semibold uppercase tracking-wide text-ink-400 sm:text-xs"><span className="hidden sm:inline">Regio </span>{KORT[k]}</div>
-              <div className="mt-0.5 text-xl font-bold text-ink-900">{s.medewerkers.length}</div>
-              <div className="text-[11px] text-ink-500">actief<span className="hidden sm:inline"> · {s.lopend} lopend</span></div>
-              {jij && <div className="mt-1 rounded-full bg-brand-600 px-2 py-0.5 text-[10px] font-bold text-white">Jij</div>}
+              <div className="truncate text-[11px] font-semibold uppercase tracking-wide text-orange-200/70 sm:text-xs"><span className="hidden sm:inline">Regio </span>{KORT[k]}</div>
+              <div className="mt-0.5 text-xl font-bold text-white">{s.medewerkers.length}</div>
+              <div className="text-[11px] text-orange-50/65">actief<span className="hidden sm:inline"> · {s.lopend} lopend</span></div>
+              {jij && <div className="mt-1 rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-bold text-white">Jij</div>}
             </button>
           );
         })}

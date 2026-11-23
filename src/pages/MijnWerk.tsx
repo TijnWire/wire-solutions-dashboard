@@ -266,7 +266,7 @@ export function MijnWerk({ initieelProject }: { initieelProject?: string }) {
 
       {/* Mededelingen en werkgebieden: naast elkaar op een breed scherm, onder elkaar op de telefoon */}
       <div className="grid items-start gap-6 xl:grid-cols-2">
-        <div className="mw-op mw-op-3"><MededelingenBord /></div>
+        <div className="mw-op mw-op-3"><MededelingenBord donker /></div>
         <div className="mw-op mw-op-4"><WerkgebiedKaart /></div>
       </div>
 

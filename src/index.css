@@ -165,3 +165,22 @@
 @media (prefers-reduced-motion: reduce) {
   .mw-op, .mw-gloed, .mw-draad { animation: none !important; }
 }
+
+/* ── Mijn werk: donkere panelen (mededelingen, werkgebieden) in het thema van de kop ── */
+.mw-paneel {
+  background-image: linear-gradient(135deg, #3b1e07 0%, rgba(40,19,4,0) 55%), linear-gradient(180deg, #2a1505, #190b02);
+  box-shadow: 0 24px 60px -32px rgba(79,42,8,.75);
+}
+/* De mededelingenlijst gebruikt elders lichte kleuren; binnen een donker paneel zetten we ze om. */
+.mw-donker { color: #fff4e6; }
+.mw-donker .text-ink-900, .mw-donker .text-ink-800 { color: #fff4e6; }
+.mw-donker .text-ink-600, .mw-donker .text-ink-500 { color: rgba(255,244,230,.72); }
+.mw-donker .text-ink-400 { color: rgba(255,244,230,.5); }
+.mw-donker .border-ink-100, .mw-donker .border-ink-200 { border-color: rgba(255,255,255,.12); }
+.mw-donker .divide-ink-100 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(255,255,255,.1); }
+.mw-donker .bg-ink-100 { background-color: rgba(255,255,255,.1); }
+.mw-donker .bg-ink-800 { background-color: #e08a33; }
+.mw-donker .bg-brand-50 { background-color: rgba(240,138,36,.2); }
+.mw-donker .text-brand-700 { color: #fdba74; }
+.mw-donker .bg-red-50\/40 { background-color: rgba(248,113,113,.1); }
+.mw-donker .hover\:bg-ink-50:hover, .mw-donker .hover\:bg-ink-100:hover { background-color: rgba(255,255,255,.08); }

@@ -176,16 +176,16 @@ export function MededelingenFeed({ scrollClass = "max-h-96" }: { scrollClass?: s
 }
 
 // ── Gecombineerd prikbord (kop + optionele invoer + feed) — gebruikt op o.a. Mijn werk. ──
-export function MededelingenBord({ compose = false }: { compose?: boolean }) {
+export function MededelingenBord({ compose = false, donker = false }: { compose?: boolean; donker?: boolean }) {
   const { mededelingen, currentUser } = useApp();
   if (!currentUser) return null;
   const isLeiding = currentUser.rol === "eigenaar" || currentUser.rol === "beheer" || currentUser.rol === "hr";
   const aantal = mededelingen.filter((m) => isMededelingVoor(m, currentUser.id, isLeiding)).length;
 
   return (
-    <Card className="overflow-hidden">
-      <div className="flex items-center gap-2 border-b border-ink-100 bg-ink-50/60 px-5 py-3.5">
-        <Megaphone className="h-5 w-5 text-brand-600" />
+    <Card className={`overflow-hidden ${donker ? "mw-paneel mw-donker !border-white/10 !bg-transparent" : ""}`}>
+      <div className={`flex items-center gap-2 border-b border-ink-100 px-5 py-3.5 ${donker ? "" : "bg-ink-50/60"}`}>
+        <Megaphone className={`h-5 w-5 ${donker ? "text-orange-300" : "text-brand-600"}`} />
         <h3 className="text-sm font-bold text-ink-900">Mededelingen</h3>
         <span className="hidden text-xs text-ink-400 sm:inline">van de beheerder voor het team</span>
         {aantal > 0 && <span className="ml-auto rounded-full bg-ink-100 px-2 py-0.5 text-xs font-medium text-ink-500">{aantal}</span>}
