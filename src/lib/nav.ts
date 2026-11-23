@@ -68,9 +68,9 @@ export const NAV: NavItem[] = [
   { key: "brieven", label: "Brieven", icon: Mailbox, group: "Projecten", roles: ALLE },
   { key: "tauw", label: "Bodemonderzoeken", icon: Shovel, group: "Projecten", roles: ALLE },
   { key: "buurtaanpak", label: "Buurtaanpak", icon: Waypoints, group: "Projecten", roles: ALLE },
+  { key: "gas", label: "Gasleidingen", icon: Flame, group: "Projecten", roles: ALLE },
   { key: "saneren", label: "Saneren", icon: Building2, group: "Projecten", roles: ALLE },
   { key: "schouwafspraken", label: "Schouwafspraken", icon: CalendarClock, group: "Projecten", roles: ALLE },
-  { key: "gas", label: "Gasleidingen", icon: Flame, group: "Projecten", roles: ALLE },
   { key: "voorschouwen", label: "Voorschouwen", icon: ClipboardCheck, group: "Projecten", roles: ALLE },
 
   // Afspraken staat niet meer in het menu (op verzoek). Pagina en gegevens blijven bestaan;

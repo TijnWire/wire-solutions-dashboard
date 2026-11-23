@@ -15,7 +15,8 @@ export type GasRij = Omit<GasAdres, "id" | "projectId">;
 // Straatnamen in de lijst van Stedin staan in HOOFDLETTERS; netjes maken voor het scherm.
 export function netjesStraat(s: string): string {
   return s.trim().toLowerCase().replace(/(^|[\s\-'(])([a-zà-ÿ])/g, (_m, a: string, b: string) => a + b.toUpperCase())
-    .replace(/\b(Van|De|Der|Den|Het|Te|Ten|Ter|Aan|In|Op|Bij)\b/g, (w, _x, i: number) => (i === 0 ? w : w.toLowerCase()));
+    .replace(/\b(Van|De|Der|Den|Het|Te|Ten|Ter|Aan|In|Op|Bij)\b/g, (w, _x, i: number) => (i === 0 ? w : w.toLowerCase()))
+    .replace(/\b[IVXivx]{2,4}\b/g, (w) => w.toUpperCase()); // Romeinse cijfers: "Dirk III Straat"
 }
 const normPc = (p: string) => p.replace(/\s+/g, "").toUpperCase();
 

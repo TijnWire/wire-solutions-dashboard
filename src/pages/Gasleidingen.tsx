@@ -13,7 +13,7 @@ import {
   MailCheck, Phone, Plus, Search, Settings2, Trash2, Upload, X, CalendarCheck, Ban, Undo2,
 } from "lucide-react";
 import { useApp } from "../store/AppContext";
-import { Card, Badge } from "../components/ui";
+import { Card } from "../components/ui";
 import { isToegewezen } from "../lib/toewijzing";
 import type { GasAdres, GasBlok, GasProject } from "../lib/types";
 import {
@@ -163,18 +163,18 @@ function MiniBalk({ label, waarde, totaal, kleur }: { label: string; waarde: num
 }
 
 // ───────────────────────── Eén project ─────────────────────────
-type Tab = "overzicht" | "brieven" | "deur" | "planning";
+type Tab = "overzicht" | "planning";
 
 function ProjectDetail({ project: p, adressen, terug, isLeiding }: { project: GasProject; adressen: GasAdres[]; terug: () => void; isLeiding: boolean }) {
   const t = telling(adressen);
-  const [tab, setTab] = useState<Tab>(t.brief === 0 ? "brieven" : "overzicht");
+  const [tab, setTab] = useState<Tab>("overzicht");
+  const [modus, setModus] = useState<Modus>(t.brief < t.totaal ? "brieven" : "afspraak");
   const [adresId, setAdresId] = useState<string | null>(null);
-  const [straatFilter, setStraatFilter] = useState("");
   const [instellingen, setInstellingen] = useState(false);
   const gekozen = adressen.find((a) => a.id === adresId);
   const straten = useMemo(() => perStraat(adressen), [adressen]);
 
-  const naarStraat = (straat: string, doel: Tab) => { setStraatFilter(straat); setTab(doel); };
+  const naar = (m: Modus) => { setModus(m); setTab("overzicht"); };
 
   return (
     <div className="space-y-5">
@@ -205,15 +205,15 @@ function ProjectDetail({ project: p, adressen, terug, isLeiding }: { project: Ga
 
       {/* De drie stappen, met de voortgang van elk */}
       <div className="grid grid-cols-3 gap-2 sm:gap-3">
-        <Stap nr={1} titel="Brieven bezorgen" icon={Mail} waarde={t.brief} totaal={t.totaal} kleur="bg-sky-400" sub={t.totaal - t.brief ? `nog ${t.totaal - t.brief} te bezorgen` : "alle brieven bezorgd"} onClick={() => setTab("brieven")} actief={tab === "brieven"} />
+        <Stap nr={1} titel="Brieven bezorgen" icon={Mail} waarde={t.brief} totaal={t.totaal} kleur="bg-sky-400" sub={t.totaal - t.brief ? `nog ${t.totaal - t.brief} te bezorgen` : "alle brieven bezorgd"} onClick={() => naar("brieven")} actief={tab === "overzicht" && modus === "brieven"} />
         <Stap nr={2} titel="Afspraken maken" icon={Phone} waarde={t.afgesproken} totaal={t.totaal - t.weigert} kleur="bg-green-500"
-          sub={`${pct(t.afgesproken, t.totaal - t.weigert)}% van de adressen afgesproken`} onClick={() => setTab("deur")} actief={tab === "deur"} />
+          sub={`${pct(t.afgesproken, t.totaal - t.weigert)}% van de adressen afgesproken`} onClick={() => naar("afspraak")} actief={tab === "overzicht" && modus === "afspraak"} />
         <Stap nr={3} titel="Nog af te spreken" icon={DoorOpen} waarde={t.teDoen} totaal={t.totaal} kleur="bg-amber-400" omgekeerd
-          sub={t.weigert ? `${t.weigert} ${t.weigert === 1 ? "weigert" : "weigeren"}` : "nog in te plannen"} onClick={() => setTab("overzicht")} actief={tab === "overzicht"} />
+          sub={t.weigert ? `${t.weigert} ${t.weigert === 1 ? "weigert" : "weigeren"}` : "nog in te plannen"} onClick={() => naar("afspraak")} actief={false} />
       </div>
 
       <div className="flex gap-0.5 rounded-lg border border-ink-200 bg-white p-0.5 shadow-card sm:gap-1 sm:rounded-xl sm:p-1">
-        {([["overzicht", "Huizenoverzicht"], ["brieven", "Brieven"], ["deur", "Afspraken maken"], ["planning", "Planning"]] as [Tab, string][]).map(([k, l]) => (
+        {([["overzicht", "Overzicht"], ["planning", "Planning"]] as [Tab, string][]).map(([k, l]) => (
           <button key={k} type="button" onClick={() => setTab(k)} aria-pressed={tab === k}
             className={`flex-1 whitespace-nowrap rounded-md px-2 py-1.5 text-xs font-semibold transition-colors sm:px-3 sm:py-2 sm:text-sm ${tab === k ? "bg-brand-600 text-white" : "text-ink-600 hover:bg-ink-50"}`}>
             {l}
@@ -221,9 +221,7 @@ function ProjectDetail({ project: p, adressen, terug, isLeiding }: { project: Ga
         ))}
       </div>
 
-      {tab === "overzicht" && <HuizenOverzicht straten={straten} kiesAdres={setAdresId} naarStraat={naarStraat} />}
-      {tab === "brieven" && <BrievenLijst straten={straten} filter={straatFilter} setFilter={setStraatFilter} />}
-      {tab === "deur" && <DeurLijst project={p} straten={straten} filter={straatFilter} setFilter={setStraatFilter} kiesAdres={setAdresId} alle={adressen} />}
+      {tab === "overzicht" && <Overzicht straten={straten} modus={modus} setModus={setModus} kiesAdres={setAdresId} />}
       {tab === "planning" && <Planning project={p} adressen={adressen} kiesAdres={setAdresId} />}
 
       {isLeiding && (
@@ -280,206 +278,124 @@ function Legenda() {
   );
 }
 
-// ── Huizenoverzicht: elk huis een blokje, per straat ──
-function HuizenOverzicht({ straten, kiesAdres, naarStraat }: { straten: StraatGroep[]; kiesAdres: (id: string) => void; naarStraat: (s: string, t: Tab) => void }) {
-  const [zoek, setZoek] = useState("");
-  const [alleenOpen, setAlleenOpen] = useState(false);
-  const q = zoek.trim().toLowerCase();
-  const lijst = straten.filter((s) => (!q || s.straat.toLowerCase().includes(q)) && (!alleenOpen || s.open > 0));
-  return (
-    <Card className="p-4 sm:p-5">
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        <div className="relative min-w-[12rem] flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" />
-          <input value={zoek} onChange={(e) => setZoek(e.target.value)} placeholder="Zoek straat…"
-            className="w-full rounded-xl border border-ink-200 py-2 pl-9 pr-3 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100" />
-        </div>
-        <label className="inline-flex items-center gap-2 text-sm text-ink-700">
-          <input type="checkbox" checked={alleenOpen} onChange={(e) => setAlleenOpen(e.target.checked)} className="h-4 w-4 accent-brand-600" /> Alleen straten met open adressen
-        </label>
-      </div>
-      <div className="mb-4"><Legenda /></div>
-      <div className="divide-y divide-ink-100">
-        {lijst.map((s) => (
-          <div key={s.straat} className="py-3">
-            <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-              <span className="text-sm font-bold text-ink-900">{s.straat}</span>
-              <span className="text-xs text-ink-500">{s.adressen.length} adressen · {s.brief} brieven · {s.afgesproken} afgesproken</span>
-              <div className="ml-auto flex gap-1.5">
-                {s.brief < s.adressen.length && <button type="button" onClick={() => naarStraat(s.straat, "brieven")} className="rounded-lg border border-sky-200 bg-sky-50 px-2 py-1 text-xs font-semibold text-sky-700 hover:bg-sky-100">Brieven</button>}
-                {s.open > 0 && <button type="button" onClick={() => naarStraat(s.straat, "deur")} className="rounded-lg border border-brand-200 bg-brand-50 px-2 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-100">Afspraak</button>}
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-1">
-              {s.adressen.map((a) => {
-                const st = STAND[standVan(a)];
-                return (
-                  <button key={a.id} type="button" onClick={() => kiesAdres(a.id)} title={`${adresTekst(a)} — ${st.label}${a.status === "afgesproken" && a.datum ? `, ${dagKort(a.datum)} ${blokLabel(a.blok)}` : ""}`}
-                    className={`flex h-7 min-w-[2.25rem] items-center justify-center rounded-md px-1 text-[11px] font-bold transition-transform hover:scale-110 ${st.blok} ${standVan(a) === "geenBrief" ? "text-ink-600" : "text-white"}`}>
-                    {a.huisnummer}{a.toevoeging}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-        {lijst.length === 0 && <p className="py-6 text-center text-sm text-ink-500">Geen straten gevonden.</p>}
-      </div>
-    </Card>
-  );
-}
-
-function StraatKiezer({ straten, filter, setFilter, telLabel }: { straten: StraatGroep[]; filter: string; setFilter: (s: string) => void; telLabel: (s: StraatGroep) => string }) {
-  return (
-    <select value={filter} onChange={(e) => setFilter(e.target.value)}
-      className="w-full rounded-xl border border-ink-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100 sm:w-auto sm:min-w-[18rem]">
-      <option value="">Alle straten ({straten.length})</option>
-      {straten.map((s) => <option key={s.straat} value={s.straat}>{s.straat} — {telLabel(s)}</option>)}
-    </select>
-  );
-}
-
-// ── Stap 1: brieven bezorgen ──
-function BrievenLijst({ straten, filter, setFilter }: { straten: StraatGroep[]; filter: string; setFilter: (s: string) => void }) {
+// ── Overzicht: elk huis een blokje, per straat. Hier gebeurt alles. ──
+// Bovenaan kies je wat je aan het doen bent: brieven bezorgen of afspraken maken. Daarna is het
+// alleen nog tikken op een huis — bij brieven zet één tik het vinkje, bij afspraken opent het venster.
+type Modus = "brieven" | "afspraak";
+function Overzicht({ straten, modus, setModus, kiesAdres }: { straten: StraatGroep[]; modus: Modus; setModus: (m: Modus) => void; kiesAdres: (id: string) => void }) {
   const { updateGasAdressen, currentUser } = useApp();
-  const [nogTeDoen, setNogTeDoen] = useState(false);
-  const lijst = straten.filter((s) => (!filter || s.straat === filter) && (!nogTeDoen || s.brief < s.adressen.length));
-  const zet = (ids: string[], aan: boolean) =>
-    updateGasAdressen(ids, aan ? { briefOp: new Date().toISOString(), briefDoor: currentUser?.id } : { briefOp: undefined, briefDoor: undefined });
-
-  return (
-    <div className="space-y-3">
-      <Card className="flex flex-wrap items-center gap-3 p-4">
-        <StraatKiezer straten={straten} filter={filter} setFilter={setFilter} telLabel={(s) => `${s.brief}/${s.adressen.length} bezorgd`} />
-        <label className="inline-flex items-center gap-2 text-sm text-ink-700">
-          <input type="checkbox" checked={nogTeDoen} onChange={(e) => setNogTeDoen(e.target.checked)} className="h-4 w-4 accent-brand-600" /> Alleen nog te bezorgen
-        </label>
-        <p className="w-full text-xs text-ink-500">Tik op een huisnummer als de brief daar in de bus zit, of vink in één keer de hele straat af.</p>
-      </Card>
-      {lijst.map((s) => {
-        const klaar = s.brief === s.adressen.length;
-        const even = s.adressen.filter((a) => (parseInt(a.huisnummer) || 0) % 2 === 0);
-        const oneven = s.adressen.filter((a) => (parseInt(a.huisnummer) || 0) % 2 === 1);
-        return (
-          <Card key={s.straat} className="overflow-hidden p-0">
-            <div className={`flex flex-wrap items-center gap-3 border-b px-4 py-3 ${klaar ? "border-green-100 bg-green-50" : "border-ink-100 bg-sky-50/60"}`}>
-              {klaar ? <MailCheck className="h-5 w-5 text-green-600" /> : <Mail className="h-5 w-5 text-sky-600" />}
-              <div className="min-w-0 flex-1">
-                <div className="text-sm font-bold text-ink-900">{s.straat}</div>
-                <div className="text-xs text-ink-500">{s.brief} van {s.adressen.length} brieven bezorgd</div>
-              </div>
-              {klaar ? (
-                <button type="button" onClick={() => { if (confirm(`Brieven van ${s.straat} weer op "nee" zetten?`)) zet(s.adressen.map((a) => a.id), false); }}
-                  className="inline-flex items-center gap-1 text-xs font-semibold text-ink-500 hover:text-ink-800"><Undo2 className="h-3.5 w-3.5" /> terugzetten</button>
-              ) : (
-                <button type="button" onClick={() => zet(s.adressen.filter((a) => !a.briefOp).map((a) => a.id), true)}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-sky-700">
-                  <Check className="h-4 w-4" /> Hele straat bezorgd
-                </button>
-              )}
-            </div>
-            <div className="grid gap-3 p-4 md:grid-cols-2">
-              {[["Oneven kant", oneven], ["Even kant", even]].map(([titel, rij]) => (rij as GasAdres[]).length > 0 && (
-                <div key={titel as string}>
-                  <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-400">{titel as string}</div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {(rij as GasAdres[]).map((a) => (
-                      <button key={a.id} type="button" onClick={() => zet([a.id], !a.briefOp)} title={`${adresTekst(a)} · ${a.postcode}`}
-                        className={`inline-flex h-9 min-w-[3rem] items-center justify-center gap-1 rounded-lg px-2 text-sm font-bold transition-colors ${a.briefOp ? "bg-sky-500 text-white hover:bg-sky-600" : "border border-ink-200 bg-white text-ink-700 hover:border-sky-300 hover:bg-sky-50"}`}>
-                        {a.briefOp && <Check className="h-3.5 w-3.5" />}{a.huisnummer}{a.toevoeging && <span className="text-[11px] font-semibold opacity-80">{a.toevoeging}</span>}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </Card>
-        );
-      })}
-      {lijst.length === 0 && <Card className="p-8 text-center text-sm text-ink-500">Alle brieven in deze selectie zijn bezorgd.</Card>}
-    </div>
-  );
-}
-
-// ── Stap 2: afspraken maken (telefonisch binnengekomen of langs de deur) ──
-function DeurLijst({ project, straten, filter, setFilter, kiesAdres, alle }: { project: GasProject; straten: StraatGroep[]; filter: string; setFilter: (s: string) => void; kiesAdres: (id: string) => void; alle: GasAdres[] }) {
-  const { updateGasAdressen } = useApp();
   const [zoek, setZoek] = useState("");
-  const [toon, setToon] = useState<"open" | "alles">("open");
-  const q = zoek.trim().toLowerCase();
-  const eerstVrij = useMemo(() => vrijeSlots(project, alle, 1)[0], [project, alle]);
-  const groepen = straten
-    .filter((s) => !filter || s.straat === filter)
-    .map((s) => ({ ...s, rij: s.adressen.filter((a) => (toon === "alles" || a.status === "open" || a.status === "niet_thuis") && (!q || `${adresTekst(a)} ${a.postcode}`.toLowerCase().includes(q))) }))
-    .filter((s) => s.rij.length);
+  const [alleenWerk, setAlleenWerk] = useState(false);
+  const [laatste, setLaatste] = useState<{ ids: string[]; tekst: string } | null>(null);
+  const brieven = modus === "brieven";
 
+  // Zoeken op straat én huisnummer ("bovenkruier 12"): straten filteren, het huis oplichten.
+  const m = zoek.trim().toLowerCase().match(/^(.*?)\s*(\d+\s*[a-z]?)?$/);
+  const qStraat = (m?.[1] ?? "").trim();
+  const qNr = (m?.[2] ?? "").replace(/\s+/g, "");
+  const lijst = straten.filter((s) =>
+    (!qStraat || s.straat.toLowerCase().includes(qStraat)) &&
+    (!alleenWerk || (brieven ? s.brief < s.adressen.length : s.open > 0)));
+
+  const zetBrief = (ids: string[], aan: boolean, tekst: string) => {
+    updateGasAdressen(ids, aan ? { briefOp: new Date().toISOString(), briefDoor: currentUser?.id } : { briefOp: undefined, briefDoor: undefined });
+    setLaatste(aan ? { ids, tekst } : null);
+  };
+  const tik = (a: GasAdres) => {
+    if (!brieven) { kiesAdres(a.id); return; }
+    zetBrief([a.id], !a.briefOp, `Brief bezorgd: ${adresTekst(a)}`);
+  };
 
   return (
     <div className="space-y-3">
-      <Card className="space-y-3 p-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <StraatKiezer straten={straten} filter={filter} setFilter={setFilter} telLabel={(s) => `${s.open} open`} />
+      {/* Wat ga je doen? Twee grote knoppen, verder niets. */}
+      <div className="grid grid-cols-2 gap-2 sm:gap-3">
+        {([
+          ["brieven", Mail, "Brieven bezorgen", "Tik op een huis zodra de brief in de bus zit", "border-sky-400 bg-sky-50 text-sky-800 ring-sky-100", "bg-sky-500"],
+          ["afspraak", CalendarCheck, "Afspraak maken", "Tik op een huis om een afspraak in te plannen", "border-green-500 bg-green-50 text-green-800 ring-green-100", "bg-green-600"],
+        ] as const).map(([k, Icon, titel, uitleg, aan, bol]) => (
+          <button key={k} type="button" onClick={() => { setModus(k); setLaatste(null); }} aria-pressed={modus === k}
+            className={`flex items-center gap-3 rounded-2xl border-2 p-3 text-left transition-all sm:p-4 ${modus === k ? `${aan} ring-4` : "border-ink-200 bg-white text-ink-600 hover:border-ink-300"}`}>
+            <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white sm:h-12 sm:w-12 ${modus === k ? bol : "bg-ink-300"}`}><Icon className="h-5 w-5 sm:h-6 sm:w-6" /></span>
+            <span className="min-w-0">
+              <span className="block text-sm font-bold sm:text-base">{titel}</span>
+              <span className="hidden text-xs opacity-80 sm:block">{uitleg}</span>
+            </span>
+          </button>
+        ))}
+      </div>
+
+      <Card className="p-4 sm:p-5">
+        <div className="mb-3 flex flex-wrap items-center gap-3">
           <div className="relative min-w-[12rem] flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" />
-            <input value={zoek} onChange={(e) => setZoek(e.target.value)} placeholder="Zoek adres of postcode (bijv. als een bewoner belt)…"
-              className="w-full rounded-xl border border-ink-200 py-2.5 pl-9 pr-3 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100" />
+            <input value={zoek} onChange={(e) => setZoek(e.target.value)} placeholder="Zoek straat of adres, bv. Bovenkruier 12"
+              className="w-full rounded-xl border border-ink-200 py-2.5 pl-9 pr-9 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100" />
+            {zoek && <button type="button" onClick={() => setZoek("")} className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-ink-400 hover:text-ink-700" aria-label="Wissen"><X className="h-4 w-4" /></button>}
           </div>
-          <div className="flex rounded-lg border border-ink-200 p-0.5 text-xs font-semibold">
-            {(["open", "alles"] as const).map((k) => (
-              <button key={k} type="button" onClick={() => setToon(k)} className={`rounded-md px-3 py-1.5 ${toon === k ? "bg-ink-900 text-white" : "text-ink-600"}`}>{k === "open" ? "Nog af te spreken" : "Alle adressen"}</button>
-            ))}
-          </div>
+          <label className="inline-flex items-center gap-2 text-sm text-ink-700">
+            <input type="checkbox" checked={alleenWerk} onChange={(e) => setAlleenWerk(e.target.checked)} className="h-4 w-4 accent-brand-600" />
+            {brieven ? "Alleen straten waar nog brieven moeten" : "Alleen straten met open adressen"}
+          </label>
         </div>
-        <p className="text-xs text-ink-500">
-          Zoek het adres en klik op <b>Afspraak</b>: kies een vrije plek en vul het telefoonnummer van de bewoner in. Werkt een bewoner niet mee, gebruik dan <b>Weigert</b>.
-          {eerstVrij && <> Eerstvolgende vrije plek: <b className="text-ink-800">{dagKort(eerstVrij.datum)} · {blokLabel(eerstVrij.blok)}</b>.</>}
-        </p>
+        <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+          <Legenda />
+          <span className="text-xs font-semibold text-ink-500 sm:hidden">{brieven ? "Tik = brief bezorgd" : "Tik = afspraak maken"}</span>
+        </div>
+
+        <div className="divide-y divide-ink-100">
+          {lijst.map((s) => {
+            const allesBezorgd = s.brief === s.adressen.length;
+            return (
+              <div key={s.straat} className="py-3.5">
+                <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                  <span className="text-sm font-bold text-ink-900">{s.straat}</span>
+                  <span className="text-xs text-ink-500">
+                    {brieven ? `${s.brief}/${s.adressen.length} brieven` : `${s.afgesproken}/${s.adressen.length} afgesproken`}
+                  </span>
+                  {brieven && (allesBezorgd ? (
+                    <span className="ml-auto inline-flex items-center gap-1 rounded-lg bg-sky-50 px-2 py-1 text-xs font-semibold text-sky-700"><MailCheck className="h-3.5 w-3.5" /> Hele straat bezorgd</span>
+                  ) : (
+                    <button type="button" onClick={() => zetBrief(s.adressen.filter((a) => !a.briefOp).map((a) => a.id), true, `Hele ${s.straat} bezorgd`)}
+                      className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-sky-700">
+                      <Check className="h-3.5 w-3.5" /> Hele straat bezorgd
+                    </button>
+                  ))}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {s.adressen.map((a) => {
+                    const stand = standVan(a);
+                    const st = STAND[stand];
+                    const raak = !!qNr && `${a.huisnummer}${a.toevoeging}`.toLowerCase().replace(/\s+/g, "") === qNr;
+                    return (
+                      <button key={a.id} type="button" onClick={() => tik(a)}
+                        title={`${adresTekst(a)} — ${st.label}${a.status === "afgesproken" && a.datum ? `, ${dagKort(a.datum)} ${blokLabel(a.blok)}` : ""}`}
+                        className={`relative flex h-9 min-w-[2.75rem] items-center justify-center gap-0.5 rounded-lg px-1.5 text-xs font-bold transition-transform active:scale-95 sm:hover:scale-105 ${st.blok} ${stand === "geenBrief" ? "text-ink-600" : "text-white"} ${raak ? "ring-4 ring-brand-400 ring-offset-1" : ""}`}>
+                        {brieven && a.briefOp && stand === "brief" && <Check className="h-3 w-3" />}
+                        {stand === "afgesproken" && <CalendarCheck className="h-3 w-3" />}
+                        {a.huisnummer}{a.toevoeging}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+          {lijst.length === 0 && <p className="py-6 text-center text-sm text-ink-500">{alleenWerk ? (brieven ? "Overal zijn de brieven bezorgd." : "Alles is afgesproken.") : "Geen straat gevonden."}</p>}
+        </div>
       </Card>
 
-      {groepen.map((s) => (
-        <Card key={s.straat} className="overflow-hidden p-0">
-          <div className="flex items-center gap-2 border-b border-ink-100 bg-brand-50/60 px-4 py-2.5">
-            <DoorOpen className="h-4 w-4 text-brand-600" />
-            <span className="text-sm font-bold text-ink-900">{s.straat}</span>
-            <span className="text-xs text-ink-500">{s.open} nog af te spreken · {s.afgesproken} afgesproken</span>
+      {/* Even terug kunnen als je per ongeluk tikt */}
+      {laatste && (
+        <div className="fixed inset-x-0 bottom-20 z-40 flex justify-center px-4 md:bottom-6">
+          <div className="flex items-center gap-3 rounded-full bg-ink-900 py-2 pl-4 pr-2 text-sm text-white shadow-2xl">
+            <MailCheck className="h-4 w-4 text-sky-300" />
+            <span className="max-w-[14rem] truncate">{laatste.tekst}</span>
+            <button type="button" onClick={() => zetBrief(laatste.ids, false, "")} className="rounded-full bg-white/15 px-3 py-1 text-xs font-semibold hover:bg-white/25">Ongedaan</button>
+            <button type="button" onClick={() => setLaatste(null)} className="rounded-full p-1 text-white/60 hover:text-white" aria-label="Sluiten"><X className="h-4 w-4" /></button>
           </div>
-          <div className="divide-y divide-ink-100">
-            {s.rij.map((a) => {
-              const st = STAND[standVan(a)];
-              return (
-                <div key={a.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5">
-                  <button type="button" onClick={() => kiesAdres(a.id)} className="flex min-w-0 flex-1 items-center gap-2.5 text-left">
-                    <span className={`h-3 w-3 shrink-0 rounded-[3px] ${st.blok}`} />
-                    <span className="min-w-0">
-                      <span className="block text-sm font-bold text-ink-900">{adresTekst(a)}</span>
-                      <span className="block text-xs text-ink-500">
-                        {a.postcode}{!a.briefOp && " · nog geen brief"}
-                        {a.status === "afgesproken" && a.datum && ` · ${dagKort(a.datum)} ${blokLabel(a.blok)}`}
-                      </span>
-                    </span>
-                  </button>
-                  {a.status === "afgesproken" ? (
-                    <Badge tone="green">Afgesproken</Badge>
-                  ) : a.status === "weigert" ? (
-                    <Badge tone="red">Weigert</Badge>
-                  ) : (
-                    <div className="flex flex-wrap gap-1.5">
-                      <button type="button" onClick={() => kiesAdres(a.id)} className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-700">
-                        <CalendarCheck className="h-4 w-4" /> Afspraak
-                      </button>
-                      <button type="button" onClick={() => { if (confirm(`${adresTekst(a)}: bewoner werkt niet mee?`)) updateGasAdressen([a.id], { status: "weigert" }); }}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 bg-white px-2.5 py-1.5 text-sm font-semibold text-ink-500 hover:bg-ink-50" title="Weigert">
-                        <Ban className="h-4 w-4" />
-                      </button>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </Card>
-      ))}
-      {groepen.length === 0 && <Card className="p-8 text-center text-sm text-ink-500">{q ? "Geen adres gevonden." : "Alles in deze selectie is afgesproken."}</Card>}
+        </div>
+      )}
     </div>
   );
 }
@@ -634,7 +550,6 @@ function AdresVenster({ project, adres: a, alle, sluit, startDatum, startBlok }:
   const bez = bezetting(anderen);
   const vol = datum && blok ? (bez.get(`${datum}|${blok}`) ?? 0) >= (project.ploegen || 1) : false;
   const naam = (id?: string) => users.find((u) => u.id === id)?.naam ?? "";
-  const st = STAND[standVan(a)];
 
   const bewaar = () => {
     if (!datum || !blok || !telOk) return;
@@ -646,7 +561,6 @@ function AdresVenster({ project, adres: a, alle, sluit, startDatum, startBlok }:
     <Venster titel={adresTekst(a)} sub={`${a.postcode} ${a.plaats}`} sluit={sluit}>
       <div className="space-y-4 p-4">
         <div className="flex flex-wrap items-center gap-2">
-          <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ring-ink-200 ${st.tekst}`}><span className={`h-2.5 w-2.5 rounded-[3px] ${st.blok}`} /> {st.label}</span>
           <button type="button" onClick={() => updateGasAdressen([a.id], a.briefOp ? { briefOp: undefined, briefDoor: undefined } : { briefOp: new Date().toISOString(), briefDoor: currentUser?.id })}
             className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${a.briefOp ? "bg-sky-100 text-sky-800" : "bg-ink-100 text-ink-600 hover:bg-sky-50"}`}>
             {a.briefOp ? <MailCheck className="h-3.5 w-3.5" /> : <Mail className="h-3.5 w-3.5" />}
