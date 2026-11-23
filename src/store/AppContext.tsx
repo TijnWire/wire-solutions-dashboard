@@ -1633,6 +1633,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hydrated, users]);
 
+  // Schouwafspraken Den Haag is gesplitst (23-11-2026): de bestaande map heet nu "Den Haag Patrick" (met al
+  // zijn afspraken) en er is een tweede map "Den Haag Anthony" in precies dezelfde opzet (zelfde planning en
+  // tijdvakken, zonder afspraken). Draait opnieuw zodra er ergens weer een losse "Den Haag" opduikt (bv. van
+  // een apparaat met een oude versie), zodat alles netjes onder Patrick blijft. De nieuwe map heeft een vast
+  // id, zodat meerdere apparaten geen dubbele map maken.
+  useEffect(() => {
+    if (!hydrated) return;
+    const isDH = (n?: string) => (n ?? "").trim().replace(/\s+/g, " ").toLowerCase() === "den haag";
+    const oud = schouwMappen.find((m) => m.soort !== "bodem" && isDH(m.naam));
+    const losseAfspraken = schouwafspraken.some((a) => a.soort !== "bodem" && isDH(a.plaats));
+    if (!oud && !losseAfspraken) return;
+    const nu = new Date().toISOString();
+    if (losseAfspraken) setSchouwafspraken((prev) => prev.map((a) => (a.soort !== "bodem" && isDH(a.plaats) ? { ...a, plaats: "Den Haag Patrick" } : a)));
+    if (oud) {
+      const heeftPatrick = schouwMappen.some((m) => m.soort !== "bodem" && m.naam.trim().toLowerCase() === "den haag patrick");
+      const heeftAnthony = schouwMappen.some((m) => m.soort !== "bodem" && m.naam.trim().toLowerCase() === "den haag anthony");
+      setSchouwMappen((prev) => {
+        let lijst = heeftPatrick ? prev.filter((m) => m.id !== oud.id) : prev.map((m) => (m.id === oud.id ? { ...m, naam: "Den Haag Patrick", bijgewerktOp: nu } : m));
+        if (!heeftAnthony) {
+          const { id: _id, naam: _naam, aangemaakt: _a, bijgewerktOp: _b, pdNummer: _pd, boekhouding: _bk, afgerondOp: _ao, gefactureerdOp: _go, ...opzet } = oud;
+          lijst = [...lijst, { ...opzet, id: "smap-den-haag-anthony", naam: "Den Haag Anthony", aangemaakt: nu, bijgewerktOp: nu }];
+        }
+        return lijst;
+      });
+      if (heeftPatrick) tomb("schouwMappen", oud.id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated, schouwMappen, schouwafspraken]);
+
   // De bodemonderzoek-opdrachten uit de vorige opzet zijn op verzoek van de eigenaar weggehaald
   // (19-11-2026); bodemonderzoeken lopen nu via dezelfde planning als Schouwafspraken.
   useEffect(() => {
