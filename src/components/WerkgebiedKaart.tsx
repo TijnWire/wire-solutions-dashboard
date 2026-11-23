@@ -220,8 +220,6 @@ export function WerkgebiedKaart() {
         </svg>
       </div>
 
-      <p className="px-4 pb-3 pt-2.5 text-center text-[9px] font-medium uppercase tracking-wide text-orange-50/40 sm:text-[10px] sm:tracking-[0.16em]">Buurtaanpak · Bodemonderzoeken · Saneren · Schouwafspraken</p>
-
       {/* Per regio in cijfers */}
       <div className="grid grid-cols-3 divide-x divide-white/10 border-t border-white/10 bg-white/[0.04]">
         {REGIO_VOLGORDE.map((k) => {
