@@ -1,7 +1,6 @@
 import { Users2 } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { Card } from "../components/ui";
-import { ROL_LABEL } from "../lib/types";
 import { isToegewezen } from "../lib/toewijzing";
 
 export function Team() {
@@ -31,7 +30,7 @@ export function Team() {
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-medium text-ink-900">{u.naam}</div>
                   <div className="truncate text-xs text-ink-500">
-                    {ROL_LABEL[u.rol]} · {u.functie}
+                    Werknemer · Medewerker
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-4 text-right">
