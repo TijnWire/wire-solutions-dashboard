@@ -19,6 +19,8 @@ export type User = {
   // Werknemer-toegang: welke werk-onderdelen (nav-keys) deze medewerker mag zien. undefined = alles.
   // Zie WERKNEMER_TOEGANG in lib/nav.ts en de Toegang-pagina.
   toegang?: string[];
+  // Doet de facturatie: ziet Facturen en krijgt een melding zodra een project klaar is om te factureren.
+  boekhouder?: boolean;
   // Vast contract / standaardloon — wordt automatisch in een nieuwe loonstrook ingevuld.
   contract?: { periodeType?: PeriodeType; bruto?: number; bijtelling?: number; netto?: number; uren?: number };
   // Aantal vrije dagen per jaar (voor het vrije-dagen-overzicht in de Urenstaat). undefined = standaard 25.
@@ -519,6 +521,12 @@ export type SchouwMap = {
   verwijderdeDagen?: Record<string, string[]>; /* key = maandag ISO → ISO-datums die in die week niet doorgaan */ // sleutel = maandag van de week (ISO)
   tijdenVersie?: number; // eenmalige omzetting naar nieuwe vaste tijdvakken van een plaats is gedaan
   soort?: "bodem"; // leeg = map van Schouwafspraken; "bodem" = map van Bodemonderzoeken
+  // Bodemonderzoek: PD-nummer van de opdracht en de koppeling met Facturen. Zodra het project als
+  // afgerond wordt aangevinkt, staat het bij de boekhouding (Roxanne) klaar om te factureren.
+  pdNummer?: string;
+  boekhouding?: BoekhoudStatus;
+  afgerondOp?: string;
+  gefactureerdOp?: string;
   // Eigen planning, net als bij Bodemonderzoeken: welke dagen (van–tot of losse dagen) en welke
   // tijdblokken. Zonder planning gelden de vaste tijdvakken van de plaats.
   planning?: {

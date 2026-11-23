@@ -1,4 +1,4 @@
-import type { Bedrijf, Instellingen, Verlof, Taak, Brievenronde, Afspraak, Voorschouw, User, Project, ProjectPost, TauwOpdracht, Sanering, Buurtaanpak } from "./types";
+import type { Bedrijf, Instellingen, Verlof, Taak, Brievenronde, Afspraak, Voorschouw, User, Project, ProjectPost, TauwOpdracht, Sanering, Buurtaanpak, SchouwMap } from "./types";
 import { supabaseAan } from "./supabase";
 import { isToegewezen } from "./toewijzing";
 
@@ -44,6 +44,7 @@ type MeldingData = {
   bedrijf: Bedrijf;
   instellingen: Instellingen;
   verlof: Verlof[];
+  schouwMappen?: SchouwMap[];
 };
 
 // Persoonlijke meldingen per gebruiker — wat moet deze persoon oppakken?
@@ -133,6 +134,13 @@ export function meldingenVoor(user: User, data: MeldingData): Melding[] {
       m.push({ id: "pp-" + post.id, ernst: "waarschuwing", titel: `Vraag · ${project.naam}`, tekst: `${voornaam(post.auteurId)}: ${kort}`, navKey: projectNav, target: { project: project.id } });
     } else {
       m.push({ id: "pp-" + post.id, ernst: "info", titel: `Update · ${project.naam}`, tekst: `${voornaam(post.auteurId)}: ${kort}`, navKey: projectNav, target: { project: project.id } });
+    }
+  }
+
+  // Afgeronde bodemonderzoeken: de boekhouder (Roxanne) en de leiding zien dat er een factuur kan worden gemaakt.
+  if (user.boekhouder || isLeiding) {
+    for (const b of (data.schouwMappen ?? []).filter((x) => x.soort === "bodem" && x.boekhouding === "te_factureren")) {
+      m.push({ id: "bodem-fact-" + b.id, ernst: "info", titel: `Bodemonderzoek afgerond: ${b.pdNummer ? `${b.pdNummer} · ` : ""}${b.naam}`, tekst: `Klaar om te factureren${b.pdNummer ? ` op ${b.pdNummer}` : ""} — maak de factuur bij Facturen.`, navKey: "facturen" });
     }
   }
 

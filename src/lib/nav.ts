@@ -104,7 +104,9 @@ export const GROUPS: NavGroup[] = ["Werk", "Projecten", "Operatie", "Boekhouding
 
 // Bepaalt of een gebruiker een menu-item mag zien.
 // Beheerders zien beheer-onderdelen alleen als de eigenaar dat gebied heeft toegewezen.
-export function magZien(user: { rol: Role; beheerRechten?: string[]; toegang?: string[] }, item: NavItem): boolean {
+export function magZien(user: { rol: Role; beheerRechten?: string[]; toegang?: string[]; boekhouder?: boolean }, item: NavItem): boolean {
+  // De boekhouder (bijv. Roxanne) ziet Facturen, ook als medewerker.
+  if (item.key === "facturen" && user.boekhouder) return true;
   if (!item.roles.includes(user.rol)) return false;
   // Alleen voor beheerders, en alleen beheer-onderdelen (niet de items die ook voor werknemers zijn)
   if (user.rol === "beheer" && !item.roles.includes("monteur")) {

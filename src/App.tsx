@@ -57,7 +57,7 @@ function Splash() {
 const LAATSTE_PAGINA = "wire.laatstePagina"; // waar je gebleven was, zodat verversen je niet terugzet
 
 export default function App() {
-  const { currentUser, hydrated, bedrijf, instellingen, verlof, taken, rondes, afspraken, voorschouwen, voorschouwMappen, klanten, facturen, users, kennis, projects, projectPosts, tauwOpdrachten, saneringen, buurtaanpak, logout, synced } = useApp();
+  const { currentUser, hydrated, bedrijf, instellingen, verlof, taken, rondes, afspraken, voorschouwen, voorschouwMappen, klanten, facturen, users, kennis, projects, projectPosts, tauwOpdrachten, saneringen, buurtaanpak, schouwMappen, logout, synced } = useApp();
   const [active, setActive] = useState("mijnwerk");
   const [target, setTarget] = useState<NavTarget>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -101,13 +101,14 @@ export default function App() {
       projects.filter((p) => p.boekhouding === "te_factureren").length +
       buurtaanpak.filter((b) => b.boekhouding === "te_factureren").length +
       // Brievenrondes tellen per map (mapNaam), niet per straat.
-      new Set(rondes.filter((r) => r.boekhouding === "te_factureren").map((r) => r.mapNaam || r.id)).size,
-    [projects, buurtaanpak, rondes]
+      new Set(rondes.filter((r) => r.boekhouding === "te_factureren").map((r) => r.mapNaam || r.id)).size +
+      schouwMappen.filter((m) => m.soort === "bodem" && m.boekhouding === "te_factureren").length,
+    [projects, buurtaanpak, rondes, schouwMappen]
   );
   const sidebarBadges = useMemo<Record<string, number>>(() => ({ facturen: teFactureren }), [teFactureren]);
   const meldingen = useMemo(
-    () => (currentUser ? meldingenVoor(currentUser, { taken, rondes, afspraken, voorschouwen, voorschouwMappen, projects, projectPosts, tauwOpdrachten, saneringen, buurtaanpak, users, bedrijf, instellingen, verlof }) : []),
-    [currentUser, taken, rondes, afspraken, voorschouwen, voorschouwMappen, projects, projectPosts, tauwOpdrachten, saneringen, buurtaanpak, users, bedrijf, instellingen, verlof]
+    () => (currentUser ? meldingenVoor(currentUser, { taken, rondes, afspraken, voorschouwen, voorschouwMappen, projects, projectPosts, tauwOpdrachten, saneringen, buurtaanpak, users, bedrijf, instellingen, verlof, schouwMappen }) : []),
+    [currentUser, taken, rondes, afspraken, voorschouwen, voorschouwMappen, projects, projectPosts, tauwOpdrachten, saneringen, buurtaanpak, users, bedrijf, instellingen, verlof, schouwMappen]
   );
 
   if (!hydrated) return <Splash />;

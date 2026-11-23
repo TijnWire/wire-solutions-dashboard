@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, CalendarClock, CalendarX, ChevronDown, ChevronLeft, ChevronRight, Settings2, User as UserIcon, Clock, Download, FolderOpen, FolderPlus, Pencil, Phone, Plus, RotateCcw, Trash2, X } from "lucide-react";
+import { ArrowLeft, CalendarClock, CalendarX, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Settings2, User as UserIcon, Clock, Download, FolderOpen, FolderPlus, Pencil, Phone, Plus, RotateCcw, Trash2, X } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { Card, Badge } from "../components/ui";
 import { WerknemerKiezer } from "../components/WerknemerKiezer";
@@ -109,7 +109,10 @@ export function Schouwafspraken({ soort = "schouw", extra }: { soort?: Soort; ex
                 <button type="button" onClick={() => setGekozen(m.sleutel)} className="flex w-full items-start gap-3 rounded-2xl p-4 text-left hover:bg-ink-50">
                   <div className="rounded-xl bg-brand-50 p-2.5 text-brand-600"><FolderOpen className="h-5 w-5" /></div>
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-bold text-ink-900">{m.naam}</div>
+                    <div className="flex items-center gap-2">
+                      <span className="truncate text-sm font-bold text-ink-900">{m.naam}</span>
+                      {bodem && m.record?.pdNummer && <span className="shrink-0 rounded-md bg-ink-900 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-white">{m.record.pdNummer}</span>}
+                    </div>
                     <div className="mt-0.5 text-xs text-ink-500">
                       {m.afspraken.length === 0 ? "Nog geen afspraken" : `${m.afspraken.length} ${m.afspraken.length === 1 ? "afspraak" : "afspraken"}`}
                     </div>
@@ -117,6 +120,8 @@ export function Schouwafspraken({ soort = "schouw", extra }: { soort?: Soort; ex
                       {dezeWeek > 0 && <Badge tone="amber">{dezeWeek} deze week</Badge>}
                       {komend > 0 && <Badge tone="slate">{komend} gepland</Badge>}
                       {nogIn > 0 && <Badge tone="red">{nogIn} zonder datum</Badge>}
+                      {bodem && m.record?.boekhouding === "te_factureren" && <Badge tone="indigo">Afgerond · te factureren</Badge>}
+                      {bodem && m.record?.boekhouding === "gefactureerd" && <Badge tone="green">Gefactureerd</Badge>}
                     </div>
                   </div>
                 </button>
@@ -325,6 +330,61 @@ function MapDetail({ overzicht, terug }: { overzicht: MapOverzicht; terug: () =>
           </button>
         </div>
       </div>
+
+      {/* Bodemonderzoek: PD-nummer en afronden → naar de boekhouding (Facturen) */}
+      {bodem && kanTijdenAanpassen && isLeiding && (
+        <Card className="p-4">
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="block">
+              <span className="mb-1 block text-xs font-semibold text-ink-600">PD-nummer</span>
+              <div className="flex items-stretch overflow-hidden rounded-lg border border-ink-200 focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-100">
+                <span className="flex items-center bg-ink-50 px-2.5 text-sm font-bold text-ink-500">PD</span>
+                <input
+                  value={(record?.pdNummer ?? "").replace(/^PD/i, "")}
+                  onChange={(e) => {
+                    const cijfers = e.target.value.replace(/[^0-9]/g, "");
+                    const id = record?.id ?? addSchouwMap(overzicht.naam, "bodem");
+                    updateSchouwMap(id, { pdNummer: cijfers ? `PD${cijfers}` : undefined });
+                  }}
+                  inputMode="numeric"
+                  placeholder="123456"
+                  disabled={record?.boekhouding === "gefactureerd"}
+                  className="w-36 px-3 py-2 text-sm outline-none disabled:bg-ink-50"
+                />
+              </div>
+            </label>
+            <div className="flex-1" />
+            {!record?.boekhouding ? (
+              <button
+                type="button"
+                disabled={!record?.pdNummer}
+                title={record?.pdNummer ? undefined : "Vul eerst het PD-nummer in"}
+                onClick={() => {
+                  if (!record?.pdNummer) return;
+                  if (!confirm(`Bodemonderzoek ${overzicht.naam} (${record.pdNummer}) als afgerond aanvinken? Het gaat dan naar de boekhouding om te factureren.`)) return;
+                  const nu = new Date().toISOString();
+                  updateSchouwMap(record.id, { boekhouding: "te_factureren", afgerondOp: nu });
+                }}
+                className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <CheckCircle2 className="h-4 w-4" /> Project afgerond
+              </button>
+            ) : record.boekhouding === "te_factureren" ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-700">
+                  <CheckCircle2 className="h-4 w-4" /> Afgerond · bij de boekhouding om te factureren
+                </span>
+                <button type="button" onClick={() => updateSchouwMap(record.id, { boekhouding: undefined, afgerondOp: undefined })} className="text-xs font-medium text-ink-400 hover:text-ink-600">ongedaan maken</button>
+              </div>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 rounded-lg bg-green-50 px-3 py-2 text-sm font-semibold text-green-700">
+                <CheckCircle2 className="h-4 w-4" /> Gefactureerd{record.gefactureerdOp ? ` op ${new Date(record.gefactureerdOp).toLocaleDateString("nl-NL")}` : ""}
+              </span>
+            )}
+          </div>
+          {!record?.pdNummer && !record?.boekhouding && <p className="mt-2 text-xs text-ink-500">Met het PD-nummer erbij kan de boekhouding meteen de factuur maken zodra het project is afgerond.</p>}
+        </Card>
+      )}
 
       {/* Planning instellen: dezelfde opzet als bij Bodemonderzoeken (periode + tijdblokken) */}
       {kanTijdenAanpassen && isLeiding && (

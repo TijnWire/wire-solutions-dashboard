@@ -1625,6 +1625,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try { localStorage.setItem("wire.teamSync", TAG); } catch { /* */ }
   }, [hydrated]);
 
+  // Roxanne doet de facturatie: zij ziet Facturen en krijgt de meldingen van afgeronde projecten.
+  useEffect(() => {
+    if (!hydrated) return;
+    const r = users.find((u) => u.id === "u-roxanne");
+    if (r && r.boekhouder === undefined) updateUser(r.id, { boekhouder: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated, users]);
+
   // De bodemonderzoek-opdrachten uit de vorige opzet zijn op verzoek van de eigenaar weggehaald
   // (19-11-2026); bodemonderzoeken lopen nu via dezelfde planning als Schouwafspraken.
   useEffect(() => {
