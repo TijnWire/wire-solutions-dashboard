@@ -237,7 +237,7 @@ export function WerkgebiedKaart() {
             >
               <div className="truncate text-[11px] font-semibold uppercase tracking-wide text-orange-200/70 sm:text-xs"><span className="hidden sm:inline">Regio </span>{KORT[k]}</div>
               <div className="mt-0.5 text-xl font-bold text-white">{s.medewerkers.length}</div>
-              <div className="text-[11px] text-orange-50/65">actief<span className="hidden sm:inline"> · {s.lopend} lopend</span></div>
+              <div className="text-[11px] text-orange-50/65">{s.medewerkers.length === 1 ? "medewerker" : "medewerkers"} actief</div>
               {jij && <div className="mt-1 rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-bold text-white">Jij</div>}
             </button>
           );
