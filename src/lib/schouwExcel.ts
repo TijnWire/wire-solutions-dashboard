@@ -145,7 +145,7 @@ const BODEM_TOT = 11;
 export async function bouwBodemWerkboek(
   ExcelJS: ExcelJSModule,
   sjabloon: ArrayBuffer,
-  o: { plaats: string; maandag: string; dagen: SchouwExportDag[]; naamVan?: (id: string) => string },
+  o: { plaats: string; maandag: string; tot?: string; dagen: SchouwExportDag[]; naamVan?: (id: string) => string },
 ): Promise<ArrayBuffer> {
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(sjabloon);
@@ -166,7 +166,8 @@ export async function bouwBodemWerkboek(
   const zetRij = (r: number, st: Record<number, unknown>) => { for (let c = KOL_VAN; c <= BODEM_TOT; c++) ws.getCell(r, c).style = kloon(st[c]); };
 
   ws.getCell("H2").value = o.plaats;
-  ws.getCell("I2").value = `Week ${weekNummer(o.maandag)}`;
+  const vanNr = weekNummer(o.maandag), totNr = o.tot ? weekNummer(o.tot) : vanNr;
+  ws.getCell("I2").value = totNr !== vanNr ? `Week ${vanNr}–${totNr}` : `Week ${vanNr}`;
   ws.getCell("J2").value = weekJaar(o.maandag);
   ws.getCell(4, BODEM_KOL.tijd).value = "Tijd";
 
@@ -205,7 +206,7 @@ export async function bouwBodemWerkboek(
   return (await wb.xlsx.writeBuffer()) as ArrayBuffer;
 }
 
-export async function exporteerBodemPlanning(o: { plaats: string; maandag: string; dagen: SchouwExportDag[]; naamVan?: (id: string) => string }): Promise<boolean> {
+export async function exporteerBodemPlanning(o: { plaats: string; maandag: string; tot?: string; dagen: SchouwExportDag[]; naamVan?: (id: string) => string }): Promise<boolean> {
   let sjabloon: ArrayBuffer | null = null;
   try {
     const resp = await fetch(BODEM_SJABLOON_URL);
@@ -221,7 +222,7 @@ export async function exporteerBodemPlanning(o: { plaats: string; maandag: strin
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `Planning_Bodemonderzoek_Week_${weekNummer(o.maandag)}_${bestandsdeel(o.plaats)}.xlsx`;
+  a.download = `Planning_Bodemonderzoek_${bestandsdeel(o.plaats)}.xlsx`;
   document.body.appendChild(a);
   a.click();
   a.remove();

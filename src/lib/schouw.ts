@@ -204,3 +204,21 @@ export function mapOverzicht(mappen: SchouwMap[], afspraken: Schouwafspraak[]): 
   }
   return [...perSleutel.values()].sort((a, b) => a.naam.localeCompare(b.naam, "nl"));
 }
+
+// Afgeronde bodemonderzoeken die klaarstaan om te factureren, gebundeld per PD-nummer: meerdere plaatsen
+// op hetzelfde PD-nummer komen samen op één factuur.
+export type BodemFactuurGroep = { sleutel: string; pd: string; mappen: SchouwMap[]; afgerondOp: string };
+export function bodemTeFactureren(mappen: SchouwMap[]): BodemFactuurGroep[] {
+  const groepen = new Map<string, BodemFactuurGroep>();
+  for (const m of mappen) {
+    if (m.soort !== "bodem" || m.boekhouding !== "te_factureren") continue;
+    const pd = (m.pdNummer ?? "").trim().toUpperCase();
+    const sleutel = pd || `map-${m.id}`;
+    const g = groepen.get(sleutel) ?? { sleutel, pd, mappen: [], afgerondOp: "" };
+    g.mappen.push(m);
+    if ((m.afgerondOp ?? "") > g.afgerondOp) g.afgerondOp = m.afgerondOp ?? "";
+    groepen.set(sleutel, g);
+  }
+  for (const g of groepen.values()) g.mappen.sort((a, b) => a.naam.localeCompare(b.naam, "nl"));
+  return [...groepen.values()].sort((a, b) => b.afgerondOp.localeCompare(a.afgerondOp));
+}

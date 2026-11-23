@@ -38,7 +38,7 @@ const SoortCtx = createContext<Soort>("schouw");
 
 // ───────────────────────── Overzicht: één map per stad / plaats ─────────────────────────
 export function Schouwafspraken({ soort = "schouw", extra }: { soort?: Soort; extra?: React.ReactNode }) {
-  const { schouwafspraken: alleAfspraken, schouwMappen: alleMappen, addSchouwMap, deleteSchouwMap, currentUser } = useApp();
+  const { schouwafspraken: alleAfspraken, schouwMappen: alleMappen, addSchouwMap, deleteSchouwMap, updateSchouwMap, currentUser } = useApp();
   const bodem = soort === "bodem";
   const schouwafspraken = useMemo(() => alleAfspraken.filter((a) => (a.soort === "bodem") === bodem), [alleAfspraken, bodem]);
   const schouwMappen = useMemo(() => alleMappen.filter((m) => (m.soort === "bodem") === bodem), [alleMappen, bodem]);
@@ -59,6 +59,23 @@ export function Schouwafspraken({ soort = "schouw", extra }: { soort?: Soort; ex
 
   const huidigeWeek = weekStartISO(vandaagISO());
   const vandaag = vandaagISO();
+
+  // Een plaats afronden vanuit het overzicht: zonder PD-nummer wordt erom gevraagd. Daarna staat de plaats
+  // bij de boekhouding (Roxanne) om te factureren; plaatsen met hetzelfde PD-nummer komen op één factuur.
+  const rondAf = (m: SchouwMap) => {
+    let pd = m.pdNummer;
+    if (!pd) {
+      const invoer = prompt(`PD-nummer voor bodemonderzoek ${m.naam} (alleen de cijfers):`, "");
+      if (invoer === null) return;
+      const cijfers = invoer.replace(/[^0-9]/g, "");
+      if (!cijfers) { alert("Vul een PD-nummer in om het project af te ronden."); return; }
+      pd = `PD${cijfers}`;
+    }
+    const zelfde = schouwMappen.filter((x) => x.id !== m.id && x.pdNummer === pd && x.boekhouding === "te_factureren").map((x) => x.naam);
+    const extraTekst = zelfde.length ? `\n\nOp ${pd} staat ook al: ${zelfde.join(", ")}. Dit komt samen op één factuur.` : "";
+    if (!confirm(`Bodemonderzoek ${m.naam} (${pd}) afronden? Het gaat dan naar de boekhouding om te factureren.${extraTekst}`)) return;
+    updateSchouwMap(m.id, { pdNummer: pd, boekhouding: "te_factureren", afgerondOp: new Date().toISOString() });
+  };
 
   const maakMap = () => {
     const naam = nieuw.trim().replace(/\s+/g, " ");
@@ -125,6 +142,17 @@ export function Schouwafspraken({ soort = "schouw", extra }: { soort?: Soort; ex
                     </div>
                   </div>
                 </button>
+                {bodem && isLeiding && m.record && !m.record.boekhouding && (
+                  <div className="border-t border-ink-100 px-4 py-2">
+                    <button
+                      type="button"
+                      onClick={() => rondAf(m.record!)}
+                      className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-green-600 px-3 py-2 text-xs font-bold text-white hover:bg-green-700"
+                    >
+                      <CheckCircle2 className="h-3.5 w-3.5" /> {m.naam} afronden{m.record.pdNummer ? ` · ${m.record.pdNummer}` : ""}
+                    </button>
+                  </div>
+                )}
                 {isLeiding && m.record && m.afspraken.length === 0 && (
                   <div className="border-t border-ink-100 px-4 py-2 text-right">
                     <button
@@ -145,6 +173,27 @@ export function Schouwafspraken({ soort = "schouw", extra }: { soort?: Soort; ex
   );
 }
 
+// Weken (maandagen) van de hele bodemplanning: de dagen van de ingestelde periode plus de weken waar
+// afspraken op staan. Zonder beide: alleen de getoonde week.
+function wekenVanPlanning(map: SchouwMap | undefined, afspraken: Schouwafspraak[], terugval: string): string[] {
+  const weken = new Set<string>();
+  for (const d of planningDagen(map)) weken.add(weekStartISO(d));
+  for (const a of afspraken) if (a.datum && isISODatum(a.datum) && a.status !== "Geannuleerd") weken.add(weekStartISO(a.datum));
+  if (!weken.size) weken.add(terugval);
+  return [...weken].sort();
+}
+
+// De week waarin de afspraken gemaakt moeten worden: de eerste (nog komende) dag van de planning, anders
+// de eerste komende afspraak, anders de laatste week met afspraken; pas daarna de huidige week.
+function startWeekBodem(map: SchouwMap | undefined, afspraken: Schouwafspraak[]): string {
+  const vandaag = vandaagISO();
+  const periode = planningDagen(map);
+  if (periode.length) return weekStartISO(periode.find((d) => d >= vandaag) ?? periode[0]);
+  const data = afspraken.map((a) => a.datum).filter((d): d is string => !!d && isISODatum(d)).sort();
+  if (data.length) return weekStartISO(data.find((d) => d >= vandaag) ?? data[data.length - 1]);
+  return weekStartISO(vandaag);
+}
+
 // ───────────────────────── Eén map: weekplanning ─────────────────────────
 type FormState = { datum: string; tijd: string; straat: string; huisnummer: string; naam: string; telefoon: string; notitie: string; toegewezenAan: string[]; status: SchouwStatus; blok: 1 | 2 };
 
@@ -155,7 +204,9 @@ function MapDetail({ overzicht, terug }: { overzicht: MapOverzicht; terug: () =>
   const plaatsTijden = bodem ? "" : overzicht.naam;
   const { users, currentUser, addSchouw, updateSchouw, deleteSchouw, addSchouwMap, updateSchouwMap } = useApp();
   const { record, afspraken } = overzicht;
-  const [maandag, setMaandag] = useState(() => weekStartISO(vandaagISO()));
+  // Bodemonderzoek opent meteen op de week waarin de afspraken gemaakt moeten worden (de planning),
+  // niet op de huidige week.
+  const [maandag, setMaandag] = useState(() => (bodem ? startWeekBodem(record, afspraken) : weekStartISO(vandaagISO())));
   const [form, setForm] = useState<FormState | null>(null);
   const [bewerkId, setBewerkId] = useState<string | null>(null);
   const [tijdenDag, setTijdenDag] = useState<string | null>(null);
@@ -298,7 +349,12 @@ function MapDetail({ overzicht, terug }: { overzicht: MapOverzicht; terug: () =>
   const download = async () => {
     setBezig(true);
     try {
-      if (bodem) await exporteerBodemPlanning({ plaats: overzicht.naam, maandag, dagen: exportDagen(week), naamVan });
+      if (bodem) {
+        // Eén geheel: alle weken van de planning (en waar afspraken op staan) in één Excel.
+        const weken = wekenVanPlanning(record, afspraken, maandag);
+        const dagen = weken.flatMap((w) => exportDagen(bouwWeek(tijdRecord, w, afspraken, plaatsTijden)));
+        await exporteerBodemPlanning({ plaats: overzicht.naam, maandag: weken[0], tot: weken[weken.length - 1], dagen, naamVan });
+      }
       else await exporteerSchouwPlanning({ plaats: overzicht.naam, maandag, dagen: exportDagen(week) });
     } finally {
       setBezig(false);
@@ -425,7 +481,7 @@ function MapDetail({ overzicht, terug }: { overzicht: MapOverzicht; terug: () =>
           </div>
           <button type="button" onClick={() => setMaandag(verschuifWeek(maandag, 1))} className={knop} aria-label="Volgende week"><ChevronRight className="h-4 w-4" /></button>
           <button type="button" onClick={download} disabled={bezig || week.length === 0} className="ml-auto inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50">
-            <Download className="h-4 w-4" /> {bezig ? "Bezig…" : (bodem ? `Planning week ${nr} (Excel)` : `Planning week ${nr} voor Stedin (Excel)`)}
+            <Download className="h-4 w-4" /> {bezig ? "Bezig…" : (bodem ? "Volledige planning (Excel)" : `Planning week ${nr} voor Stedin (Excel)`)}
           </button>
         </div>
         {wekenMetWerk.length > 0 && (

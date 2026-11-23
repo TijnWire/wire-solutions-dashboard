@@ -1,5 +1,6 @@
 import type { Bedrijf, Instellingen, Verlof, Taak, Brievenronde, Afspraak, Voorschouw, User, Project, ProjectPost, TauwOpdracht, Sanering, Buurtaanpak, SchouwMap } from "./types";
 import { supabaseAan } from "./supabase";
+import { bodemTeFactureren } from "./schouw";
 import { isToegewezen } from "./toewijzing";
 
 const isISODatum = (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d);
@@ -139,8 +140,9 @@ export function meldingenVoor(user: User, data: MeldingData): Melding[] {
 
   // Afgeronde bodemonderzoeken: de boekhouder (Roxanne) en de leiding zien dat er een factuur kan worden gemaakt.
   if (user.boekhouder || isLeiding) {
-    for (const b of (data.schouwMappen ?? []).filter((x) => x.soort === "bodem" && x.boekhouding === "te_factureren")) {
-      m.push({ id: "bodem-fact-" + b.id, ernst: "info", titel: `Bodemonderzoek afgerond: ${b.pdNummer ? `${b.pdNummer} · ` : ""}${b.naam}`, tekst: `Klaar om te factureren${b.pdNummer ? ` op ${b.pdNummer}` : ""} — maak de factuur bij Facturen.`, navKey: "facturen" });
+    for (const g of bodemTeFactureren(data.schouwMappen ?? [])) {
+      const namen = g.mappen.map((b) => b.naam).join(", ");
+      m.push({ id: "bodem-fact-" + g.sleutel + "-" + g.mappen.length, ernst: "info", titel: `Bodemonderzoek afgerond: ${g.pd ? `${g.pd} · ` : ""}${namen}`, tekst: `Klaar om te factureren${g.pd ? ` op ${g.pd}` : ""}${g.mappen.length > 1 ? " (samen op één factuur)" : ""} — maak de factuur bij Facturen.`, navKey: "facturen" });
     }
   }
 

@@ -1,3 +1,4 @@
+import { bodemTeFactureren } from "./lib/schouw";
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { X } from "lucide-react";
 import { Sidebar } from "./components/Sidebar";
@@ -102,7 +103,7 @@ export default function App() {
       buurtaanpak.filter((b) => b.boekhouding === "te_factureren").length +
       // Brievenrondes tellen per map (mapNaam), niet per straat.
       new Set(rondes.filter((r) => r.boekhouding === "te_factureren").map((r) => r.mapNaam || r.id)).size +
-      schouwMappen.filter((m) => m.soort === "bodem" && m.boekhouding === "te_factureren").length,
+      bodemTeFactureren(schouwMappen).length,
     [projects, buurtaanpak, rondes, schouwMappen]
   );
   const sidebarBadges = useMemo<Record<string, number>>(() => ({ facturen: teFactureren }), [teFactureren]);

@@ -9,6 +9,7 @@ import { downloadFactuurPdf, mailFactuur, factuurTotalen, euro } from "../lib/fa
 import { weekStartISO, weekLabel, isISODatum } from "../lib/week";
 import { PeriodeNavigator, periodeRange, type Periode } from "../components/PeriodeNavigator";
 import { STANDAARD_OPDRACHTGEVERS } from "../lib/opdrachtgeversData";
+import { bodemTeFactureren, normPlaats as normPlaatsNaam, type BodemFactuurGroep } from "../lib/schouw";
 import type { Factuur, FactuurRegel, FactuurStatus, Project, Opdrachtgever, Buurtaanpak, Brievenronde, Bedrijf, FactuurPreset, SchouwMap } from "../lib/types";
 
 // Concept = blauw, Goedgekeurd = groen, Verstuurd = oranje/geel, Betaald = groen — status in één oogopslag.
@@ -642,13 +643,14 @@ function NummeringBeheer({ bedrijf, facturen, updateBedrijf, onKlaar }: { bedrij
 }
 
 export function Facturen({ initieelFactuur, nieuwFactuurProject }: { initieelFactuur?: string; nieuwFactuurProject?: string }) {
-  const { facturen, bedrijf, updateBedrijf, updateFactuur, deleteFactuur, projects, updateProject, opdrachtgevers, buurtaanpak, updateBuurtaanpak, rondes, updateRonde, users, urenstaat, currentUser, addMededeling, schouwMappen, updateSchouwMap } = useApp();
+  const { facturen, bedrijf, updateBedrijf, updateFactuur, deleteFactuur, projects, updateProject, opdrachtgevers, buurtaanpak, updateBuurtaanpak, rondes, updateRonde, users, urenstaat, currentUser, addMededeling, schouwMappen, updateSchouwMap, schouwafspraken } = useApp();
   const { navigeer } = useNav();
   const teFactureren = projects.filter((p) => p.boekhouding === "te_factureren");
   const teFacturerenBuurt = buurtaanpak.filter((b) => b.boekhouding === "te_factureren");
   const teFacturerenRondes = rondes.filter((r) => r.boekhouding === "te_factureren");
   // Afgeronde bodemonderzoeken (met PD-nummer) die klaarstaan om te factureren.
-  const teFacturerenBodem = schouwMappen.filter((m) => m.soort === "bodem" && m.boekhouding === "te_factureren");
+  // Per PD-nummer gebundeld: meerdere plaatsen op hetzelfde PD-nummer komen op één factuur.
+  const teFacturerenBodem = bodemTeFactureren(schouwMappen);
   // Brievenrondes groeperen per map (mapNaam) → in "Te factureren" één regel per map, niet per straat.
   const teFacturerenMappen = (() => {
     const groepen = new Map<string, Brievenronde[]>();
@@ -747,7 +749,16 @@ export function Facturen({ initieelFactuur, nieuwFactuurProject }: { initieelFac
   // Bekijken: spring naar het volledige werk om het te bekijken of aan te passen.
   const openProject = (id: string) => navigeer("projecten", { project: id });
   const openBuurt = (id: string) => navigeer("buurtaanpak", { buurtaanpakId: id });
-  const nieuweVanBodem = (m: SchouwMap) => { setBewerk(undefined); setNieuwVan(maakConceptVan(m.pdNummer ?? "", `Bodemonderzoek ${m.naam}`)); setBron(() => () => updateSchouwMap(m.id, { boekhouding: "gefactureerd", gefactureerdOp: nu() })); setModus("formulier"); };
+  // Eén factuur per PD-nummer, met per plaats een regel (aantal = het aantal bodemonderzoeken in die plaats).
+  const aantalOnderzoeken = (m: SchouwMap) => schouwafspraken.filter((a) => a.soort === "bodem" && !a.gearchiveerd && a.status !== "Geannuleerd" && normPlaatsNaam(a.plaats) === normPlaatsNaam(m.naam)).length;
+  const nieuweVanBodem = (g: BodemFactuurGroep) => {
+    const concept = maakConceptVan(g.pd, "");
+    concept.regels = g.mappen.map((m) => ({ omschrijving: `Bodemonderzoek ${m.naam}`, aantal: aantalOnderzoeken(m) || 1, prijs: 0 }));
+    setBewerk(undefined);
+    setNieuwVan(concept);
+    setBron(() => () => { const t = nu(); for (const m of g.mappen) updateSchouwMap(m.id, { boekhouding: "gefactureerd", gefactureerdOp: t }); });
+    setModus("formulier");
+  };
   // Hele map open (niet één losse ronde) als de rondes uit dezelfde import-map komen.
   const openMap = (rs: Brievenronde[]) => rs[0]?.mapNaam ? navigeer("brieven", { brievenMap: rs[0].mapNaam }) : navigeer("brieven", { ronde: rs[0]?.id });
 
@@ -910,20 +921,20 @@ export function Facturen({ initieelFactuur, nieuwFactuurProject }: { initieelFac
                 </div>
               </div>
             ))}
-            {teFacturerenBodem.map((m) => (
-              <div key={m.id} className="flex flex-wrap items-center gap-3 px-5 py-3">
+            {teFacturerenBodem.map((g) => (
+              <div key={g.sleutel} className="flex flex-wrap items-center gap-3 px-5 py-3">
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    {m.pdNummer && <span className="rounded-md bg-ink-900 px-2 py-0.5 text-xs font-bold tracking-wide text-white">{m.pdNummer}</span>}
-                    <span className="truncate text-sm font-semibold text-ink-900">{m.naam}</span>
-                    <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-semibold text-brand-700">Bodemonderzoek</span>
+                    {g.pd && <span className="rounded-md bg-ink-900 px-2 py-0.5 text-xs font-bold tracking-wide text-white">{g.pd}</span>}
+                    <span className="text-sm font-semibold text-ink-900">{g.mappen.map((m) => m.naam).join(", ")}</span>
+                    <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-semibold text-brand-700">Bodemonderzoek{g.mappen.length > 1 ? ` · ${g.mappen.length} plaatsen` : ""}</span>
                   </div>
-                  <div className="text-xs text-ink-500">{m.afgerondOp ? `afgerond ${datumKort(m.afgerondOp)}` : ""}</div>
+                  <div className="text-xs text-ink-500">{g.afgerondOp ? `afgerond ${datumKort(g.afgerondOp)}` : ""}{g.mappen.length > 1 ? " · samen op één factuur" : ""}</div>
                 </div>
                 <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
                   <button type="button" onClick={() => navigeer("tauw")} className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-3 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-50"><Eye className="h-4 w-4" /> Bekijken</button>
-                  <button type="button" onClick={() => startIssue([m.pdNummer, `Bodemonderzoek ${m.naam}`].filter(Boolean).join(" · "), () => updateSchouwMap(m.id, { boekhouding: undefined, afgerondOp: undefined }))} className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-100"><Undo2 className="h-4 w-4" /> Terugsturen</button>
-                  <button type="button" onClick={() => nieuweVanBodem(m)} className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700"><Plus className="h-4 w-4" /> Factuur maken</button>
+                  <button type="button" onClick={() => startIssue([g.pd, `Bodemonderzoek ${g.mappen.map((m) => m.naam).join(", ")}`].filter(Boolean).join(" · "), () => { for (const m of g.mappen) updateSchouwMap(m.id, { boekhouding: undefined, afgerondOp: undefined }); })} className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-100"><Undo2 className="h-4 w-4" /> Terugsturen</button>
+                  <button type="button" onClick={() => nieuweVanBodem(g)} className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700"><Plus className="h-4 w-4" /> Factuur maken</button>
                 </div>
               </div>
             ))}
