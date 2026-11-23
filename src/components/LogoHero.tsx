@@ -58,7 +58,7 @@ function Laag({ i, voorste }: { i: number; voorste: boolean }) {
   );
 }
 
-export function LogoHero() {
+export function LogoHero({ donker = false, compact = false }: { donker?: boolean; compact?: boolean } = {}) {
   const [kanteling, setKanteling] = useState({ x: 0, y: 0 });
   const [draai, setDraai] = useState(0);
   const vak = useRef<HTMLDivElement | null>(null);
@@ -74,7 +74,7 @@ export function LogoHero() {
   };
 
   return (
-    <section className="flex flex-col items-center pb-2 pt-4" aria-label="WIRE Solutions">
+    <section className={`flex flex-col items-center ${compact ? "" : "pb-2 pt-4"}`} aria-label="WIRE Solutions">
       <div
         ref={vak}
         onPointerMove={beweeg}
@@ -99,7 +99,7 @@ export function LogoHero() {
         </div>
       </div>
       {/* Woordmerk: exact het lettertype uit het logo (als vector uit het originele logo overgenomen) */}
-      <img src="/wire-woordmerk.svg" alt="WIRE Solutions — Detachering &amp; Payrolling" className="relative z-10 mt-3 w-full max-w-[19rem] select-none sm:max-w-[22rem]" draggable={false} />
+      <img src={donker ? "/wire-woordmerk-licht.svg" : "/wire-woordmerk.svg"} alt="WIRE Solutions — Detachering &amp; Payrolling" className="relative z-10 mt-3 w-full max-w-[19rem] select-none sm:max-w-[22rem]" draggable={false} />
     </section>
   );
 }

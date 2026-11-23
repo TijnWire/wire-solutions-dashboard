@@ -32,7 +32,7 @@ import { TaakKaart } from "../components/TaakKaart";
 import { ProjectBord } from "../components/ProjectBord";
 import { BestandScanModal } from "../components/BestandScanModal";
 import { MededelingenBord } from "../components/MededelingenBord";
-import { LogoHero } from "../components/LogoHero";
+import { MijnWerkHero } from "../components/MijnWerkHero";
 import { WerkgebiedKaart } from "../components/WerkgebiedKaart";
 import type { LucideIcon } from "lucide-react";
 import { isToegewezen } from "../lib/toewijzing";
@@ -210,43 +210,15 @@ export function MijnWerk({ initieelProject }: { initieelProject?: string }) {
   const werkKlaar = werkbonnen.filter((w) => w.pct >= 100).length;
 
   const stats = [
-    { label: "Te doen", value: teDoen + werkTeDoen, icon: ListTodo, tone: "bg-red-50 text-red-600" },
-    { label: "Mee bezig", value: bezig + werkBezig, icon: Loader2, tone: "bg-orange-50 text-orange-600" },
-    { label: "Klaar", value: klaar + werkKlaar, icon: CheckCircle2, tone: "bg-green-50 text-green-600" },
+    { label: "Te doen", value: teDoen + werkTeDoen, icon: ListTodo, kleur: "rood" as const },
+    { label: "Mee bezig", value: bezig + werkBezig, icon: Loader2, kleur: "oranje" as const },
+    { label: "Klaar", value: klaar + werkKlaar, icon: CheckCircle2, kleur: "groen" as const },
   ];
 
   return (
     <div className="space-y-6">
-      {/* Bewegend 3D-logo */}
-      <LogoHero />
-
-      {/* Begroeting */}
-      <div>
-        <h2 className="text-xl font-bold text-ink-900">
-          Hoi {currentUser.naam.split(" ")[0]} 👋
-        </h2>
-        <p className="text-sm text-ink-500">
-          Dit staat er voor jou klaar vandaag. Werk je taken bij zodra je verder bent.
-        </p>
-      </div>
-
-      {/* Mini-stats */}
-      <div className="grid grid-cols-3 gap-4">
-        {stats.map((s) => {
-          const Icon = s.icon;
-          return (
-            <Card key={s.label} className="flex flex-col items-start gap-1.5 p-3 sm:flex-row sm:items-center sm:gap-3 sm:p-4">
-              <div className={`rounded-xl p-2.5 ${s.tone}`}>
-                <Icon className="h-5 w-5" />
-              </div>
-              <div>
-                <div className="text-xl font-bold text-ink-900">{s.value}</div>
-                <div className="text-xs text-ink-500">{s.label}</div>
-              </div>
-            </Card>
-          );
-        })}
-      </div>
+      {/* Kop: begroeting, bewegend 3D-logo en de drie tellers aan één draad */}
+      <MijnWerkHero voornaam={currentUser.naam.split(" ")[0]} stats={stats} />
 
       {/* SMS-herinneringen — binnen 24u versturen (1 druk: SMS klaar → verstuurd → sluit) */}
       {smsTeVersturen.length > 0 && (
@@ -292,11 +264,11 @@ export function MijnWerk({ initieelProject }: { initieelProject?: string }) {
         </div>
       )}
 
-      {/* Mededelingen: iedereen leest ze, alleen eigenaren en beheerders plaatsen ze */}
-      <MededelingenBord />
-
-      {/* Onze werkgebieden: Zuid-Holland & Utrecht, met wie waar actief is */}
-      <WerkgebiedKaart />
+      {/* Mededelingen en werkgebieden: naast elkaar op een breed scherm, onder elkaar op de telefoon */}
+      <div className="grid items-start gap-6 xl:grid-cols-2">
+        <div className="mw-op mw-op-3"><MededelingenBord /></div>
+        <div className="mw-op mw-op-4"><WerkgebiedKaart /></div>
+      </div>
 
       {/* Eigen taken per project */}
       {mijnProjecten.length > 0 && (

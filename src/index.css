@@ -146,3 +146,22 @@
   .lh-sway, .lh-zweef { animation: none !important; }
   .lh-sway { transform: rotateY(-18deg) rotateX(4deg); }
 }
+
+/* ── Mijn werk: kop (MijnWerkHero) ── */
+@keyframes mw-op { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes mw-stroom { to { background-position: 28px 0; } }
+@keyframes mw-gloed { 0%, 100% { opacity: .8; transform: translateX(var(--tw-translate-x, 0)) scale(1); } 50% { opacity: 1; transform: translateX(var(--tw-translate-x, 0)) scale(1.08); } }
+.mw-op { animation: mw-op .6s cubic-bezier(.2,.7,.2,1) both; }
+.mw-op-2 { animation-delay: .12s; }
+.mw-op-3 { animation-delay: .2s; }
+.mw-op-4 { animation-delay: .28s; }
+.mw-gloed { animation: mw-gloed 7s ease-in-out infinite; }
+/* De draad tussen de tellers: een stippellijn waar de stroom doorheen loopt. */
+.mw-draad {
+  background-image: linear-gradient(90deg, rgba(253,186,116,.75) 0 50%, transparent 50% 100%);
+  background-size: 14px 1px;
+  animation: mw-stroom 1.4s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mw-op, .mw-gloed, .mw-draad { animation: none !important; }
+}
