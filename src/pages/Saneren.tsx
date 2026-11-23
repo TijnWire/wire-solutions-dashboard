@@ -503,7 +503,7 @@ function SaneringDetail({ sanering, onTerug }: { sanering: Sanering; onTerug: ()
 // ── De oude opzet: overzicht per werkweek ──
 // Blijft bestaan zodat eerder ingevoerde saneringen bereikbaar blijven. De nieuwe manier van werken
 // staat in SaneerDossiers; deze lijst is er alleen nog om terug te kijken.
-function OudeSaneringen({ initieelSanering }: { initieelSanering?: string }) {
+function OudeSaneringen({ initieelSanering, inArchief, onOpen }: { initieelSanering?: string; inArchief?: boolean; onOpen?: (id: string) => void }) {
   const { saneringen, users, currentUser, addSanering, updateSanering } = useApp();
   const [openId, setOpenId] = useState<string | null>(initieelSanering ?? null);
   const [vraagVerwijder, setVraagVerwijder] = useState<Sanering | null>(null);
@@ -556,7 +556,7 @@ function OudeSaneringen({ initieelSanering }: { initieelSanering?: string }) {
 
   return (
     <div className="space-y-3 sm:space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className={inArchief ? "hidden" : "flex flex-wrap items-center justify-between gap-3"}>
         <div>
           <h2 className="text-lg font-bold text-ink-900 sm:text-xl">Saneren</h2>
           <p className="text-sm text-ink-500">Importeer Excel → project per wijk → werknemer maakt de afspraken → beheerder controleert en rondt af.</p>
@@ -576,9 +576,9 @@ function OudeSaneringen({ initieelSanering }: { initieelSanering?: string }) {
         <Card className="p-10 text-center">
           <Building2 className="mx-auto h-10 w-10 text-ink-300" />
           <p className="mt-3 text-sm text-ink-500">
-            {isLeiding ? "Nog geen saneringsprojecten. Klik op " : "Geen saneringen aan jou toegewezen."}
-            {isLeiding && <span className="font-semibold">Importeer Excel</span>}
-            {isLeiding && " om te beginnen."}
+            {inArchief ? "Geen eerder ingevoerde saneringen." : isLeiding ? "Nog geen saneringsprojecten. Klik op " : "Geen saneringen aan jou toegewezen."}
+            {!inArchief && isLeiding && <span className="font-semibold">Importeer Excel</span>}
+            {!inArchief && isLeiding && " om te beginnen."}
           </p>
         </Card>
       ) : (
@@ -610,7 +610,7 @@ function OudeSaneringen({ initieelSanering }: { initieelSanering?: string }) {
                     const pct = tot ? Math.round((klaarA / tot) * 100) : 0;
                     const teLaat = !!s.deadline && s.deadline < vandaag && s.status !== "verstuurd";
                     return (
-                      <div key={s.id} onClick={() => setOpenId(s.id)} className="cursor-pointer rounded-2xl border border-ink-200 bg-white p-4 text-left shadow-card transition-shadow hover:shadow-cardhover">
+                      <div key={s.id} onClick={() => (onOpen ? onOpen(s.id) : setOpenId(s.id))} className="cursor-pointer rounded-2xl border border-ink-200 bg-white p-4 text-left shadow-card transition-shadow hover:shadow-cardhover">
                         <div className="flex items-center gap-3">
                           <div className="rounded-lg bg-brand-50 p-2.5 text-brand-600"><Building2 className="h-5 w-5" /></div>
                           <div className="min-w-0 flex-1">
@@ -688,7 +688,9 @@ function OudeSaneringen({ initieelSanering }: { initieelSanering?: string }) {
 // Wat er vroeger stond is niet weggegooid: onder "Eerder ingevoerd" staat de oude lijst nog, zodat
 // niemand kwijtraakt wat er al in stond.
 export function Saneren({ initieelSanering, initieelPd }: { initieelSanering?: string; initieelPd?: string }) {
-  const [oud, setOud] = useState(!!initieelSanering);
+  const [oudId, setOudId] = useState<string | undefined>(initieelSanering);
+  const oud = !!oudId;
+  const setOud = (_aan: boolean) => setOudId(undefined);
   if (oud) {
     return (
       <div className="space-y-4">
@@ -699,9 +701,22 @@ export function Saneren({ initieelSanering, initieelPd }: { initieelSanering?: s
           Dit is de oude opzet. Nieuwe saneringen maak je aan op de vorige pagina; deze lijst staat er
           alleen nog om terug te kijken.
         </div>
-        <OudeSaneringen initieelSanering={initieelSanering} />
+        <OudeSaneringen key={oudId} initieelSanering={oudId} />
       </div>
     );
   }
-  return <SaneerDossiers onEerder={() => setOud(true)} initieelPd={initieelPd} />;
+  return (
+    <SaneerDossiers
+      initieelPd={initieelPd}
+      archiefExtra={
+        <div className="space-y-3 border-t border-ink-200 pt-5">
+          <div>
+            <h3 className="text-base font-bold text-ink-900">Eerder ingevoerd</h3>
+            <p className="text-sm text-ink-500">Saneringen uit de vorige opzet, om terug te kijken.</p>
+          </div>
+          <OudeSaneringen inArchief onOpen={(id) => setOudId(id)} />
+        </div>
+      }
+    />
+  );
 }

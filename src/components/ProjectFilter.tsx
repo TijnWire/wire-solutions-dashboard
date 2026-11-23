@@ -23,8 +23,9 @@ export function useProjectFilter<T>(items: T[], opties: {
   // Sommige pagina's hebben zelf al een open/dicht-knop (Voorschouwen: "zonder foto"). Twee knoppen
   // die bijna hetzelfde doen is verwarrender dan geen, dus die kun je hier uitzetten.
   toonOpenKnop?: boolean;
+  standaard?: Periode; // beginstand van Week/Maand/Kwartaal/Alles (standaard "alles")
 }) {
-  const [periode, setPeriode] = useState<Periode>("alles");
+  const [periode, setPeriode] = useState<Periode>(opties.standaard ?? "alles");
   const [anker, setAnker] = useState(() => new Date().toISOString().slice(0, 10));
   const [alleenOpen, setAlleenOpen] = useState(false);
 

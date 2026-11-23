@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Plus, ArrowLeft, Search, Loader2, AlertCircle,
   FolderOpen, RotateCcw, Building2, ChevronRight,
@@ -176,7 +176,7 @@ function NieuwDossier({ onKlaar, onAnnuleer }: { onKlaar: (pd: string) => void; 
 }
 
 // ── Overzicht ──
-export function SaneerDossiers({ onEerder, initieelPd }: { onEerder: () => void; initieelPd?: string }) {
+export function SaneerDossiers({ archiefExtra, initieelPd }: { archiefExtra?: ReactNode; initieelPd?: string }) {
   const { currentUser } = useApp();
   const [dossiers, setDossiers] = useState<Dossier[] | null>(null);
   const [nieuw, setNieuw] = useState(false);
@@ -207,6 +207,7 @@ export function SaneerDossiers({ onEerder, initieelPd }: { onEerder: () => void;
   const filter = useProjectFilter(inTab, {
     datum: (d) => (d.uitvoering_van || d.aangemaakt_op || "").slice(0, 10),
     isOpen: (d) => d.status !== "afgerond" && d.status !== "afgeboekt",
+    standaard: "week",
   });
   const zichtbaar = useMemo(() => {
     const q = zoek.trim().toLowerCase();
@@ -226,13 +227,10 @@ export function SaneerDossiers({ onEerder, initieelPd }: { onEerder: () => void;
         <div>
           <h2 className="text-xl font-bold text-ink-900">Saneren</h2>
           <p className="text-sm text-ink-500">
-            Adressen inlezen, verdelen, en met iedereen in een gebouw of postcode dezelfde dag afspreken.
+            Adressen inlezen, verdelen, en met iedereen in een portiek of straat dezelfde dag afspreken.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={onEerder} className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-ink-700 ring-1 ring-ink-200 hover:bg-ink-50">
-            <FolderOpen className="h-4 w-4" /> Eerder ingevoerd
-          </button>
           {isLeiding && (
             <button type="button" onClick={() => setNieuw(true)} className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700">
               <Plus className="h-4 w-4" /> Nieuwe sanering
@@ -310,6 +308,9 @@ export function SaneerDossiers({ onEerder, initieelPd }: { onEerder: () => void;
           })}
         </div>
       )}
+
+      {/* Eerder ingevoerde saneringen (de oude opzet) staan ook in het archief. */}
+      {tab === "archief" && archiefExtra}
     </div>
   );
 }

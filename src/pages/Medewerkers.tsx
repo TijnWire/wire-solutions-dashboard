@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ComponentType } from "react";
 import {
   ArrowLeft,
   ChevronRight,
@@ -14,15 +14,76 @@ import {
   Download,
   UserCog,
   Clock,
+  FolderKanban,
+  Building2,
+  Waypoints,
+  CalendarClock,
+  Shovel,
 } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { useNav } from "../store/NavContext";
 import { Card, Badge } from "../components/ui";
-import { ROL_LABEL, PERIODE_TYPES, type User, type AfspraakStatus, type PeriodeType } from "../lib/types";
+import { PERIODE_TYPES, type User, type AfspraakStatus, type PeriodeType } from "../lib/types";
 import { isToegewezen } from "../lib/toewijzing";
 
+// Op Medewerkers staat bij iedereen dezelfde aanduiding: werknemer · medewerker.
+const ROL_TEKST = "Werknemer · Medewerker";
+
+// Alle lopende projecten waar iemand op staat, uit elk onderdeel. Afgeronde en gearchiveerde zaken tellen niet mee.
+type ProjectRegel = { key: string; titel: string; sub: string; navKey: string; target?: Record<string, string>; Icon: ComponentType<{ className?: string }> };
+type AppData = ReturnType<typeof useApp>;
+const useProjectenVan = (userId: string) => projectenVan(userId, useApp());
+function projectenVan(userId: string, { projects, rondes, afspraken, buurtaanpak, saneringen, voorschouwMappen, schouwafspraken }: AppData): ProjectRegel[] {
+  const uit: ProjectRegel[] = [];
+  for (const p of projects) if (p.toegewezenAan?.includes(userId) && !p.afgerondOp) uit.push({ key: "p" + p.id, titel: p.naam, sub: `Project${p.wijk ? ` · ${p.wijk}` : ""}`, navKey: "projecten", target: { project: p.id }, Icon: FolderKanban });
+  // Brieven per map (of straat als er geen map is)
+  const mappen = new Map<string, typeof rondes>();
+  for (const r of rondes) if (isToegewezen(r, userId) && !r.gearchiveerd) { const k = r.mapNaam || r.straat; mappen.set(k, [...(mappen.get(k) ?? []), r]); }
+  for (const [naam, rs] of mappen) {
+    const te = rs.flatMap((r) => r.adressen.filter((a) => !a.ontbreekt));
+    uit.push({ key: "b" + naam, titel: naam, sub: `Brieven · ${te.filter((a) => a.status === "Gegooid").length}/${te.length} gegooid`, navKey: "brieven", target: rs.length === 1 ? { ronde: rs[0].id } : { brievenMap: naam }, Icon: Mailbox });
+  }
+  for (const loc of new Set(afspraken.filter((a) => isToegewezen(a, userId)).map((a) => a.locatie))) {
+    const rijen = afspraken.filter((a) => isToegewezen(a, userId) && a.locatie === loc);
+    const bevestigd = rijen.filter((a) => a.status === ("Bevestigd" as AfspraakStatus) || a.status === ("Afgerond" as AfspraakStatus)).length;
+    uit.push({ key: "a" + loc, titel: loc, sub: `Afspraken · ${bevestigd}/${rijen.length} bevestigd`, navKey: "afspraken", target: { locatie: loc }, Icon: CalendarCheck });
+  }
+  for (const b of buurtaanpak) if (isToegewezen(b, userId) && !b.afgerondOp && !b.gearchiveerd) uit.push({ key: "ba" + b.id, titel: b.naam, sub: `Buurtaanpak · ${b.adressen.length} adressen`, navKey: "buurtaanpak", target: { buurtaanpakId: b.id }, Icon: Waypoints });
+  for (const s of saneringen) if (isToegewezen(s, userId) && !s.afgerondOp && !s.gearchiveerd) uit.push({ key: "s" + s.id, titel: s.naam, sub: `Saneren · ${s.adressen.length} adressen`, navKey: "saneren", target: { saneringId: s.id }, Icon: Building2 });
+  for (const m of voorschouwMappen) if (isToegewezen(m, userId) && !m.gearchiveerd) uit.push({ key: "v" + m.id, titel: m.naam, sub: "Voorschouwen", navKey: "voorschouwen", target: { voorschouwMap: m.id }, Icon: ClipboardCheck });
+  const schouw = new Map<string, { bodem: boolean; n: number }>();
+  for (const a of schouwafspraken) if (isToegewezen(a, userId) && !a.gearchiveerd && a.status !== "Geannuleerd") { const k = `${a.soort ?? ""}|${a.plaats}`; const g = schouw.get(k) ?? { bodem: a.soort === "bodem", n: 0 }; g.n++; schouw.set(k, g); }
+  for (const [k, g] of schouw) { const plaats = k.split("|")[1]; uit.push({ key: "sa" + k, titel: plaats, sub: `${g.bodem ? "Bodemonderzoek" : "Schouwafspraken"} · ${g.n} afspraken`, navKey: g.bodem ? "tauw" : "schouwafspraken", Icon: g.bodem ? Shovel : CalendarClock }); }
+  return uit;
+}
+
+function ProjectenKaart({ userId }: { userId: string }) {
+  const lijst = useProjectenVan(userId);
+  const { navigeer } = useNav();
+  return (
+    <Card className="p-5">
+      <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-ink-900"><FolderKanban className="h-4 w-4 text-ink-500" /> Projecten</h3>
+      {lijst.length === 0 ? (
+        <p className="text-sm text-ink-400">Geen lopende projecten.</p>
+      ) : (
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {lijst.map(({ key, titel, sub, navKey, target, Icon }) => (
+            <button key={key} type="button" onClick={() => navigeer(navKey, target ?? null)} className="flex items-center gap-3 rounded-lg border border-ink-200 p-3 text-left hover:border-brand-300 hover:bg-ink-50">
+              <Icon className="h-4 w-4 shrink-0 text-brand-600" />
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-medium text-ink-900">{titel}</div>
+                <div className="truncate text-xs text-ink-500">{sub}</div>
+              </div>
+              <ChevronRight className="h-4 w-4 shrink-0 text-ink-300" />
+            </button>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 const euro = (n: number) => n.toLocaleString("nl-NL", { style: "currency", currency: "EUR" });
-const rolTone: Record<string, string> = { eigenaar: "green", beheer: "amber", monteur: "slate" };
 const veldCls = "w-full rounded-lg border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100";
 const labelMini = "mb-1 block text-xs font-semibold text-ink-600";
 
@@ -98,21 +159,20 @@ function ContractKaart({ user }: { user: User }) {
 }
 
 function MedewerkerDetail({ user, onTerug }: { user: User; onTerug: () => void }) {
-  const { taken, rondes, afspraken, loonstroken, boetes, voorschouwen } = useApp();
+  const { taken, loonstroken, boetes, voorschouwen } = useApp();
   const { navigeer } = useNav();
 
   const mijnTaken = taken.filter((t) => isToegewezen(t, user.id) || t.toegewezenAan === ""); // "" = hele team
   const openTaken = mijnTaken.filter((t) => t.status !== "Klaar");
-  const mijnRondes = rondes.filter((r) => isToegewezen(r, user.id));
-  const afspraakLocaties = [...new Set(afspraken.filter((a) => isToegewezen(a, user.id)).map((a) => a.locatie))];
   const mijnLoon = loonstroken.filter((l) => l.medewerkerId === user.id);
   const mijnBoetes = boetes.filter((b) => b.medewerkerId === user.id);
   const openBoetes = mijnBoetes.filter((b) => b.status === "Open").reduce((s, b) => s + b.bedrag, 0);
   const mijnVoorschouwen = voorschouwen.filter((v) => v.ingevuldDoor === user.id);
+  const projecten = useProjectenVan(user.id);
 
   const stats = [
     { label: "Open taken", value: String(openTaken.length), icon: ListTodo, tone: "bg-red-50 text-red-600" },
-    { label: "Toegewezen werk", value: String(mijnRondes.length + afspraakLocaties.length), icon: Mailbox, tone: "bg-brand-50 text-brand-600" },
+    { label: "Projecten", value: String(projecten.length), icon: FolderKanban, tone: "bg-brand-50 text-brand-600" },
     { label: "Loonstroken", value: String(mijnLoon.length), icon: Wallet, tone: "bg-green-50 text-green-600" },
     { label: "Open boetes", value: euro(openBoetes), icon: AlertTriangle, tone: "bg-amber-50 text-amber-600" },
   ];
@@ -129,7 +189,7 @@ function MedewerkerDetail({ user, onTerug }: { user: User; onTerug: () => void }
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <h2 className="text-xl font-bold text-ink-900">{user.naam}</h2>
-            <Badge tone={rolTone[user.rol]}>{ROL_LABEL[user.rol]}</Badge>
+            <Badge tone="slate">{ROL_TEKST}</Badge>
           </div>
           <div className="mt-0.5 flex flex-wrap items-center gap-x-4 text-sm text-ink-500">
             <span className="inline-flex items-center gap-1"><Briefcase className="h-4 w-4" />{user.functie}</span>
@@ -180,44 +240,8 @@ function MedewerkerDetail({ user, onTerug }: { user: User; onTerug: () => void }
         )}
       </Card>
 
-      {/* Toegewezen werk */}
-      <Card className="p-5">
-        <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-ink-900"><Mailbox className="h-4 w-4 text-ink-500" /> Toegewezen werk</h3>
-        {mijnRondes.length === 0 && afspraakLocaties.length === 0 ? (
-          <p className="text-sm text-ink-400">Geen werk toegewezen.</p>
-        ) : (
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            {mijnRondes.map((r) => {
-              const teBezorgen = r.adressen.filter((a) => !a.ontbreekt);
-              const gegooid = teBezorgen.filter((a) => a.status === "Gegooid").length;
-              return (
-                <button key={r.id} type="button" onClick={() => navigeer("brieven", { ronde: r.id })} className="flex items-center gap-3 rounded-lg border border-ink-200 p-3 text-left hover:border-brand-300 hover:bg-ink-50">
-                  <Mailbox className="h-4 w-4 shrink-0 text-brand-600" />
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium text-ink-900">{r.straat}</div>
-                    <div className="text-xs text-ink-500">Brieven · {gegooid}/{teBezorgen.length} gegooid</div>
-                  </div>
-                  <ChevronRight className="h-4 w-4 shrink-0 text-ink-300" />
-                </button>
-              );
-            })}
-            {afspraakLocaties.map((loc) => {
-              const rijen = afspraken.filter((a) => isToegewezen(a, user.id) && a.locatie === loc);
-              const bevestigd = rijen.filter((a) => a.status === ("Bevestigd" as AfspraakStatus) || a.status === ("Afgerond" as AfspraakStatus)).length;
-              return (
-                <button key={loc} type="button" onClick={() => navigeer("afspraken", { locatie: loc })} className="flex items-center gap-3 rounded-lg border border-ink-200 p-3 text-left hover:border-brand-300 hover:bg-ink-50">
-                  <CalendarCheck className="h-4 w-4 shrink-0 text-brand-600" />
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium text-ink-900">{loc}</div>
-                    <div className="text-xs text-ink-500">Afspraken · {bevestigd}/{rijen.length} bevestigd</div>
-                  </div>
-                  <ChevronRight className="h-4 w-4 shrink-0 text-ink-300" />
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </Card>
+      {/* Projecten: al het lopende werk waar deze medewerker op staat */}
+      <ProjectenKaart userId={user.id} />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* Loonstroken */}
@@ -294,7 +318,9 @@ function MedewerkerDetail({ user, onTerug }: { user: User; onTerug: () => void }
 }
 
 export function Medewerkers({ initieelMedewerker }: { initieelMedewerker?: string }) {
-  const { users, taken, rondes, afspraken, boetes, currentUser } = useApp();
+  const app = useApp();
+  const { users, taken, boetes, currentUser } = app;
+  const projectenAantal = (id: string) => projectenVan(id, app).length;
   const [selId, setSelId] = useState<string | null>(initieelMedewerker ?? null);
 
   if (!currentUser) return null;
@@ -316,7 +342,7 @@ export function Medewerkers({ initieelMedewerker }: { initieelMedewerker?: strin
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {users.map((u) => {
           const openTaken = taken.filter((t) => (isToegewezen(t, u.id) || t.toegewezenAan === "") && t.status !== "Klaar").length; // "" = hele team
-          const werk = rondes.filter((r) => isToegewezen(r, u.id)).length + new Set(afspraken.filter((a) => isToegewezen(a, u.id)).map((a) => a.locatie)).size;
+          const werk = projectenAantal(u.id);
           const openBoetes = boetes.filter((b) => b.medewerkerId === u.id && b.status === "Open").reduce((s, b) => s + b.bedrag, 0);
           return (
             <button key={u.id} type="button" onClick={() => setSelId(u.id)} className="rounded-2xl border border-ink-200 bg-white p-4 text-left shadow-card transition-all hover:border-brand-300 hover:shadow-cardhover">
@@ -324,7 +350,7 @@ export function Medewerkers({ initieelMedewerker }: { initieelMedewerker?: strin
                 <div className="flex h-11 w-11 items-center justify-center rounded-full bg-ink-800 text-sm font-semibold text-white">{u.initialen}</div>
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-semibold text-ink-900">{u.naam}</div>
-                  <div className="truncate text-xs text-ink-500">{ROL_LABEL[u.rol]} · {u.functie}</div>
+                  <div className="truncate text-xs text-ink-500">{ROL_TEKST}</div>
                 </div>
                 <ChevronRight className="h-5 w-5 shrink-0 text-ink-300" />
               </div>
@@ -335,7 +361,7 @@ export function Medewerkers({ initieelMedewerker }: { initieelMedewerker?: strin
                 </div>
                 <div className="rounded-lg bg-ink-50 py-2">
                   <div className="text-sm font-bold text-ink-900">{werk}</div>
-                  <div className="text-[11px] text-ink-500">werk</div>
+                  <div className="text-[11px] text-ink-500">projecten</div>
                 </div>
                 <div className="rounded-lg bg-ink-50 py-2">
                   <div className={`text-sm font-bold ${openBoetes > 0 ? "text-red-600" : "text-ink-900"}`}>{openBoetes > 0 ? euro(openBoetes) : "—"}</div>
