@@ -4,7 +4,7 @@
 // diepte, de drie steden als knooppunten (zoals de cirkel in het logo) en verbindingsdraden waar
 // lichtpulsjes overheen lopen. Hoe meer mensen er in een regio actief zijn, hoe sterker die pulseert.
 import { useEffect, useMemo, useState } from "react";
-import { MapPin, Users } from "lucide-react";
+import { MapPin } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { Card } from "./ui";
 import {
@@ -15,15 +15,10 @@ import { haalDossier, haalDossiers } from "../lib/saneerflow";
 import { supabaseAan } from "../lib/supabase";
 
 const ORANJE = "#e08a33";
-const DONKER = "#2a1505"; // omlijning van tekst op de donkere kaart
 const KORT: Record<RegioKey, string> = { rotterdam: "Rotterdam", denhaag: "Den Haag", utrecht: "Utrecht" };
 
-// Waar het naamlabel naast het knooppunt staat (in kaarteenheden), zodat niets over de kust valt.
-const LABEL: Record<RegioKey, { dx: number; dy: number; anker: "start" | "middle" | "end" }> = {
-  denhaag: { dx: -28, dy: -46, anker: "end" },
-  rotterdam: { dx: 0, dy: 66, anker: "middle" },
-  utrecht: { dx: 0, dy: 70, anker: "middle" },
-};
+// Waar het naamkaartje ten opzichte van het knooppunt staat, zodat niets over elkaar valt.
+const PLEK: Record<RegioKey, "links" | "rechts" | "onder"> = { denhaag: "links", rotterdam: "onder", utrecht: "rechts" };
 
 const vandaagISO = () => {
   const d = new Date();
@@ -64,111 +59,161 @@ export function WerkgebiedKaart() {
   const draden: [RegioKey, RegioKey][] = [["denhaag", "rotterdam"], ["rotterdam", "utrecht"], ["denhaag", "utrecht"]];
   const totaalActief = new Set(REGIO_VOLGORDE.flatMap((k) => stand[k].medewerkers)).size;
 
+  // Naamkaartje per stad: waar het staat ten opzichte van het knooppunt.
+  const kaartje = (k: RegioKey) => {
+    const [x, y] = punt(k);
+    const n = stand[k].medewerkers.length;
+    const jij = !!currentUser && stand[k].medewerkers.includes(currentUser.id);
+    const status = `${n} actief${jij ? " · jij" : ""}`;
+    const b = Math.round(Math.max(KORT[k].length * 19.5, status.length * 11.5 + 24) + 40 + Math.max(0, Math.min(n, 4) - 1) * 14);
+    const h = 84;
+    const pos = PLEK[k];
+    const kx = pos === "links" ? x - 42 - b : pos === "rechts" ? x + 42 : x - b / 2;
+    const ky = pos === "onder" ? y + 42 : y - h / 2 - (pos === "links" ? 46 : 0);
+    // Korte draad van het knooppunt naar het kaartje.
+    const naar: [number, number] = pos === "links" ? [kx + b, ky + h - 14] : pos === "rechts" ? [kx, ky + h / 2] : [x, ky];
+    return { x, y, n, jij, status, b, h, kx, ky, naar };
+  };
+
   return (
     <Card className="mw-paneel overflow-hidden !border-white/10 !bg-transparent text-white">
-      <div className="flex items-center gap-3 border-b border-white/10 px-4 py-3.5 sm:px-5">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-orange-300/40 bg-orange-400/15 text-orange-200"><MapPin className="h-5 w-5" /></span>
+      <div className="flex items-center gap-3 px-4 pb-3 pt-4 sm:px-5">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-orange-300/30 bg-gradient-to-br from-orange-400/25 to-orange-400/5 text-orange-200"><MapPin className="h-5 w-5" /></span>
         <div className="min-w-0 flex-1">
-          <h3 className="text-sm font-bold text-white">Onze werkgebieden</h3>
-          <p className="text-xs text-orange-50/65">Buurtaanpak, bodemonderzoeken, saneren en schouwafspraken · waar het team nu aan het werk is</p>
+          <h3 className="text-[15px] font-bold leading-tight tracking-tight text-white">Onze werkgebieden</h3>
+          <p className="text-xs text-orange-50/60">Waar het team nu aan het werk is</p>
         </div>
-        <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 text-xs font-semibold text-orange-50/85" title="Medewerkers met lopend werk">
-          <Users className="h-3.5 w-3.5" /> {totaalActief} actief
+        <span className="inline-flex shrink-0 items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-3 py-1.5 text-xs font-semibold text-orange-50/90" title="Medewerkers met lopend werk">
+          <span className="relative flex h-2 w-2">
+            {totaalActief > 0 && beweging && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />}
+            <span className={`relative inline-flex h-2 w-2 rounded-full ${totaalActief > 0 ? "bg-emerald-400" : "bg-white/30"}`} />
+          </span>
+          {totaalActief} actief
         </span>
       </div>
 
       {/* De kaart */}
-      <div className="relative bg-[radial-gradient(circle_at_1px_1px,rgba(240,163,90,0.14)_1px,transparent_0)] [background-size:18px_18px]">
+      <div className="relative mx-3 overflow-hidden rounded-2xl border border-white/[0.07] bg-black/25 sm:mx-4">
         <svg viewBox={`0 0 1000 ${KAART_HOOGTE}`} className="block h-auto w-full select-none" role="img" aria-label="Kaart van Zuid-Holland en Utrecht met de werkgebieden Rotterdam, Den Haag en Utrecht">
           <defs>
             <linearGradient id="wk-vlak" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0" stopColor="#5a2f0c" />
-              <stop offset="1" stopColor="#3a1d06" />
+              <stop offset="0" stopColor="#6b3a10" stopOpacity="0.95" />
+              <stop offset="1" stopColor="#371b06" stopOpacity="0.95" />
+            </linearGradient>
+            <linearGradient id="wk-rand" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stopColor="#ffc27a" />
+              <stop offset="1" stopColor="#d9771c" />
             </linearGradient>
             <radialGradient id="wk-gloed">
-              <stop offset="0" stopColor={ORANJE} stopOpacity="0.45" />
-              <stop offset="1" stopColor={ORANJE} stopOpacity="0" />
+              <stop offset="0" stopColor="#ffb04d" stopOpacity="0.5" />
+              <stop offset="1" stopColor="#ffb04d" stopOpacity="0" />
             </radialGradient>
+            <radialGradient id="wk-licht" cx="0.36" cy="0.5" r="0.75">
+              <stop offset="0" stopColor="#f08a24" stopOpacity="0.16" />
+              <stop offset="1" stopColor="#f08a24" stopOpacity="0" />
+            </radialGradient>
+            <pattern id="wk-raster" width="50" height="50" patternUnits="userSpaceOnUse">
+              <path d="M50 0H0V50" fill="none" stroke="#fff" strokeOpacity="0.045" strokeWidth="1" />
+            </pattern>
+            <filter id="wk-neon" x="-10%" y="-10%" width="120%" height="120%">
+              <feGaussianBlur stdDeviation="7" />
+            </filter>
           </defs>
 
+          {/* Ondergrond: fijn raster met een warme gloed */}
+          <rect width="1000" height={KAART_HOOGTE} fill="url(#wk-raster)" />
+          <rect width="1000" height={KAART_HOOGTE} fill="url(#wk-licht)" />
+
           {/* Noordzee */}
-          <g fill="none" stroke="#93c5fd" strokeOpacity="0.4" strokeWidth="2.5" strokeLinecap="round">
+          <text x="40" y="52" fontSize="17" fontWeight="600" letterSpacing="7" fill="#93c5fd" fillOpacity="0.6">NOORDZEE</text>
+          <g fill="none" stroke="#93c5fd" strokeOpacity="0.35" strokeWidth="2" strokeLinecap="round">
             {[0, 1].map((i) => (
-              <path key={i} d={`M${44 + i * 26} ${84 + i * 22} q 18 -12 36 0 t 36 0 t 36 0`} />
+              <path key={i} d={`M${40 + i * 22} ${70 + i * 15} q 14 -9 28 0 t 28 0 t 28 0`}>
+                {beweging && <animateTransform attributeName="transform" type="translate" values="0 0; 8 0; 0 0" dur={`${5 + i}s`} repeatCount="indefinite" />}
+              </path>
             ))}
           </g>
-          <text x="44" y="58" fontSize="24" fontStyle="italic" letterSpacing="5" fill="#60a5fa" fillOpacity="0.85">Noordzee</text>
 
-          {/* Diepte: een paar lagen onder de provincies, net als het 3D-logo */}
-          {[4, 3, 2, 1].map((n) => (
-            <g key={n} transform={`translate(${n * 2.5} ${n * 5})`} fill="none" stroke={ORANJE} strokeOpacity={0.09 + (4 - n) * 0.05} strokeWidth="3" strokeLinejoin="round">
+          {/* Diepte: de provincies als een plaat met dikte, net als het 3D-logo */}
+          {[5, 4, 3, 2, 1].map((n) => (
+            <g key={n} transform={`translate(${n * 2} ${n * 4})`} fill="#1a0c02" stroke="#b9661c" strokeOpacity={0.12 + (5 - n) * 0.07} strokeWidth="2.5" strokeLinejoin="round">
               <path d={PAD_ZUID_HOLLAND} />
               <path d={PAD_UTRECHT} />
             </g>
           ))}
 
-          {/* Provincies */}
-          <path d={PAD_ZUID_HOLLAND} fill="url(#wk-vlak)" stroke={ORANJE} strokeWidth="4" strokeLinejoin="round" />
-          <path d={PAD_UTRECHT} fill="url(#wk-vlak)" stroke={ORANJE} strokeWidth="4" strokeLinejoin="round" />
-          <path d={PAD_GRENS} fill="none" stroke={ORANJE} strokeWidth="2" strokeDasharray="2 10" strokeLinecap="round" strokeOpacity="0.9" />
+          {/* Neon-gloed onder de rand */}
+          <g fill="none" stroke="#f08a24" strokeWidth="9" strokeOpacity="0.55" strokeLinejoin="round" filter="url(#wk-neon)">
+            <path d={PAD_ZUID_HOLLAND} />
+            <path d={PAD_UTRECHT} />
+          </g>
 
-          {/* Verbindingsdraden tussen de regio's, met lichtpulsjes */}
+          {/* Provincies */}
+          <path d={PAD_ZUID_HOLLAND} fill="url(#wk-vlak)" stroke="url(#wk-rand)" strokeWidth="3.5" strokeLinejoin="round" />
+          <path d={PAD_UTRECHT} fill="url(#wk-vlak)" stroke="url(#wk-rand)" strokeWidth="3.5" strokeLinejoin="round" />
+          <path d={PAD_GRENS} fill="none" stroke="#ffc27a" strokeWidth="2" strokeDasharray="2 9" strokeLinecap="round" strokeOpacity="0.8" />
+          <text x="118" y="338" fontSize="15" fontWeight="700" letterSpacing="6" fill="#fff4e6" fillOpacity="0.22">ZUID-HOLLAND</text>
+          <text x="772" y="136" fontSize="15" fontWeight="700" letterSpacing="6" fill="#fff4e6" fillOpacity="0.22">UTRECHT</text>
+
+          {/* Verbindingsdraden tussen de regio's: licht gebogen, met lichtpulsjes */}
           {draden.map(([a, b], i) => {
             const [x1, y1] = punt(a), [x2, y2] = punt(b);
-            const d = `M${x1} ${y1} L${x2} ${y2}`;
+            const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+            const len = Math.hypot(x2 - x1, y2 - y1) || 1;
+            const buig = i === 2 ? -0.14 : 0.16; // hoe ver de draad doorbuigt
+            const cx = mx - ((y2 - y1) / len) * len * buig, cy = my + ((x2 - x1) / len) * len * buig;
+            const d = `M${x1} ${y1} Q${cx} ${cy} ${x2} ${y2}`;
             return (
               <g key={a + b}>
-                <path d={d} stroke={ORANJE} strokeWidth="2.5" strokeOpacity="0.55" strokeDasharray="10 9" fill="none" />
+                <path d={d} stroke="#ffb866" strokeWidth="5" strokeOpacity="0.12" fill="none" />
+                <path d={d} stroke="#ffc27a" strokeWidth="1.8" strokeOpacity="0.75" strokeDasharray="3 8" strokeLinecap="round" fill="none" />
                 {beweging && (
-                  <circle r="6" fill="#fff3e0" stroke={ORANJE} strokeWidth="2.5">
-                    <animateMotion dur={`${3.2 + i * 0.7}s`} repeatCount="indefinite" path={d} keyPoints={i === 1 ? "1;0" : "0;1"} keyTimes="0;1" calcMode="linear" />
+                  <circle r="5" fill="#fff3e0" style={{ filter: "drop-shadow(0 0 6px #ffb04d)" }}>
+                    <animateMotion dur={`${3.4 + i * 0.8}s`} repeatCount="indefinite" path={d} keyPoints={i === 1 ? "1;0" : "0;1"} keyTimes="0;1" calcMode="linear" />
                   </circle>
                 )}
               </g>
             );
           })}
 
-          {/* Knooppunten per regio */}
+          {/* Knooppunten per regio, met een naamkaartje */}
           {REGIO_VOLGORDE.map((k) => {
-            const [x, y] = punt(k);
+            const c = kaartje(k);
             const s = stand[k];
-            const n = s.medewerkers.length;
             const gedimd = focus && focus !== k;
-            const l = LABEL[k];
-            const lx = x + l.dx, ly = y + l.dy;
-            const jij = !!currentUser && s.medewerkers.includes(currentUser.id);
+            const gekozen = focus === k;
             return (
-              <g key={k} opacity={gedimd ? 0.35 : 1} style={{ transition: "opacity .25s" }} onMouseEnter={() => setFocus(k)} onMouseLeave={() => setFocus(null)}>
-                <circle cx={x} cy={y} r={70 + Math.min(n, 6) * 8} fill="url(#wk-gloed)" />
-                {beweging && n > 0 && (
-                  <circle cx={x} cy={y} r="18" fill="none" stroke={ORANJE} strokeWidth="3">
-                    <animate attributeName="r" values="18;54" dur={`${Math.max(1.4, 2.6 - n * 0.2)}s`} repeatCount="indefinite" />
-                    <animate attributeName="stroke-opacity" values="0.8;0" dur={`${Math.max(1.4, 2.6 - n * 0.2)}s`} repeatCount="indefinite" />
+              <g key={k} opacity={gedimd ? 0.35 : 1} style={{ transition: "opacity .25s", cursor: "pointer" }} onMouseEnter={() => setFocus(k)} onMouseLeave={() => setFocus(null)} onClick={() => setFocus((f) => (f === k ? null : k))}>
+                <circle cx={c.x} cy={c.y} r={64 + Math.min(c.n, 6) * 8} fill="url(#wk-gloed)" opacity={c.n > 0 ? 1 : 0.45} />
+                {beweging && c.n > 0 && (
+                  <circle cx={c.x} cy={c.y} r="16" fill="none" stroke="#ffb04d" strokeWidth="2.5">
+                    <animate attributeName="r" values="16;50" dur={`${Math.max(1.4, 2.6 - c.n * 0.2)}s`} repeatCount="indefinite" />
+                    <animate attributeName="stroke-opacity" values="0.8;0" dur={`${Math.max(1.4, 2.6 - c.n * 0.2)}s`} repeatCount="indefinite" />
                   </circle>
                 )}
-                <circle cx={x} cy={y} r="19" fill="#2a1505" stroke={ORANJE} strokeWidth="5" />
-                <circle cx={x} cy={y} r="8" fill={n > 0 ? "#ffb04d" : "#8a5a2c"} />
+                <path d={`M${c.x} ${c.y} L${c.naar[0]} ${c.naar[1]}`} stroke="#ffc27a" strokeOpacity="0.7" strokeWidth="1.8" />
+                <circle cx={c.x} cy={c.y} r="16" fill="#1f0f03" stroke="url(#wk-rand)" strokeWidth="4" />
+                <circle cx={c.x} cy={c.y} r="6.5" fill={c.n > 0 ? "#ffc27a" : "#8a5a2c"} />
 
-                {/* Naam + aantal */}
-                <text x={lx} y={ly} textAnchor={l.anker} fontSize="38" fontWeight="800" stroke={DONKER} strokeWidth="9" strokeLinejoin="round" paintOrder="stroke" fill="#fff4e6" letterSpacing="1">{KORT[k]}</text>
-                <text x={lx} y={ly + 34} textAnchor={l.anker} fontSize="28" fontWeight="700" fill="#f5a253" stroke={DONKER} strokeWidth="8" strokeLinejoin="round" paintOrder="stroke">
-                  {n === 0 ? "niemand actief" : `${n} actief`}{jij ? " · jij" : ""}
-                </text>
+                {/* Naamkaartje */}
+                <rect x={c.kx} y={c.ky} width={c.b} height={c.h} rx="16" fill="#190b02" fillOpacity="0.88" stroke={gekozen ? "#ffb04d" : "#ffffff"} strokeOpacity={gekozen ? 0.9 : 0.16} strokeWidth="1.5" />
+                <rect x={c.kx + 14} y={c.ky} width="34" height="3" rx="1.5" fill={c.n > 0 ? "#ffb04d" : "#8a5a2c"} />
+                <text x={c.kx + 20} y={c.ky + 40} fontSize="30" fontWeight="800" fill="#fff4e6" letterSpacing="0.3">{KORT[k]}</text>
+                <circle cx={c.kx + 26} cy={c.ky + 61} r="5" fill={c.n > 0 ? "#34d399" : "#ffffff"} fillOpacity={c.n > 0 ? 1 : 0.28} />
+                <text x={c.kx + 40} y={c.ky + 68} fontSize="20" fontWeight="600" fill={c.n > 0 ? "#fdba74" : "#fff4e6"} fillOpacity={c.n > 0 ? 1 : 0.5}>{c.status}</text>
 
-                {/* Gezichtjes (initialen) van wie er actief is */}
+                {/* Initialen van wie er actief is: op de onderrand van het kaartje */}
                 {s.medewerkers.slice(0, 4).map((id, i) => {
-                  const startX = l.anker === "end" ? lx - 20 - i * 34 : l.anker === "middle" ? lx - (Math.min(n, 4) - 1) * 17 + i * 34 : lx + 20 + i * 34;
+                  const ax = c.kx + c.b - 22 - i * 26;
                   return (
                     <g key={id}>
                       <title>{naam(id)}</title>
-                      <circle cx={startX} cy={ly + 70} r="19" fill={id === currentUser?.id ? ORANJE : "#7a4514"} stroke="#fff4e6" strokeWidth="3" />
-                      <text x={startX} y={ly + 77} textAnchor="middle" fontSize="17" fontWeight="700" fill="#fff">{initialen(id).slice(0, 2)}</text>
+                      <circle cx={ax} cy={c.ky + c.h} r="15" fill={id === currentUser?.id ? ORANJE : "#7a4514"} stroke="#190b02" strokeWidth="3" />
+                      <text x={ax} y={c.ky + c.h + 5} textAnchor="middle" fontSize="13" fontWeight="700" fill="#fff">{initialen(id).slice(0, 2)}</text>
                     </g>
                   );
                 })}
-                {n > 4 && (
-                  <text x={l.anker === "end" ? lx - 20 - 4 * 34 : lx + 20 + 4 * 34} y={ly + 77} textAnchor="middle" fontSize="16" fontWeight="700" fill="#fff4e6">+{n - 4}</text>
-                )}
+                {c.n > 4 && <text x={c.kx + c.b - 22 - 4 * 26 - 4} y={c.ky + c.h + 5} textAnchor="end" fontSize="13" fontWeight="700" fill="#fff4e6">+{c.n - 4}</text>}
               </g>
             );
           })}
@@ -176,9 +221,10 @@ export function WerkgebiedKaart() {
       </div>
 
       {/* Per regio in cijfers */}
-      <div className="grid grid-cols-3 divide-x divide-white/10 border-t border-white/10 bg-white/[0.04]">
+      <div className="grid grid-cols-3 gap-2 px-3 pb-2 pt-3 sm:gap-3 sm:px-4">
         {REGIO_VOLGORDE.map((k) => {
           const s = stand[k];
+          const n = s.medewerkers.length;
           const jij = !!currentUser && s.medewerkers.includes(currentUser.id);
           return (
             <button
@@ -188,16 +234,26 @@ export function WerkgebiedKaart() {
               onMouseLeave={() => setFocus(null)}
               onClick={() => setFocus((f) => (f === k ? null : k))}
               aria-pressed={focus === k}
-              className={`flex flex-col items-center justify-start px-2 py-3 text-center transition-colors sm:px-4 ${focus === k ? "bg-orange-400/15" : "hover:bg-white/5"}`}
+              className={`relative overflow-hidden rounded-xl border px-2.5 pb-2.5 pt-3 text-left transition-colors sm:px-3.5 ${focus === k ? "border-orange-300/60 bg-orange-400/15" : "border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.07]"}`}
             >
-              <div className="truncate text-[11px] font-semibold uppercase tracking-wide text-orange-200/70 sm:text-xs"><span className="hidden sm:inline">Regio </span>{KORT[k]}</div>
-              <div className="mt-0.5 text-xl font-bold text-white">{s.medewerkers.length}</div>
-              <div className="text-[11px] text-orange-50/65">actief<span className="hidden sm:inline"> · {s.lopend} lopend</span></div>
-              {jij && <div className="mt-1 rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-bold text-white">Jij</div>}
+              <span aria-hidden="true" className={`absolute inset-x-0 top-0 h-0.5 ${n > 0 ? "bg-gradient-to-r from-orange-400 to-amber-300" : "bg-white/10"}`} />
+              <div className="flex items-center gap-1.5">
+                <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${n > 0 ? "bg-emerald-400" : "bg-white/25"}`} />
+                <span className="truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-orange-100/70 sm:text-[11px]">{KORT[k]}</span>
+              </div>
+              <div className="mt-1.5 flex items-baseline gap-1.5">
+                <span className="text-2xl font-bold tabular-nums leading-none text-white sm:text-[1.7rem]">{n}</span>
+                <span className="text-[11px] text-orange-50/60">actief</span>
+              </div>
+              <div className="mt-1.5 flex items-center justify-between gap-1">
+                <span className="truncate text-[11px] text-orange-50/50">{s.lopend} lopend</span>
+                {jij && <span className="rounded-full bg-orange-500 px-1.5 py-px text-[10px] font-bold text-white">Jij</span>}
+              </div>
             </button>
           );
         })}
       </div>
+      <p className="px-4 pb-3.5 pt-1 text-center text-[10px] font-medium uppercase tracking-[0.16em] text-orange-50/35">Buurtaanpak · Bodemonderzoeken · Saneren · Schouwafspraken</p>
     </Card>
   );
 }
