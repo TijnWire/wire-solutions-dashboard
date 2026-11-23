@@ -176,13 +176,13 @@ function NieuwDossier({ onKlaar, onAnnuleer }: { onKlaar: (pd: string) => void; 
 }
 
 // ── Overzicht ──
-export function SaneerDossiers({ onEerder }: { onEerder: () => void }) {
+export function SaneerDossiers({ onEerder, initieelPd }: { onEerder: () => void; initieelPd?: string }) {
   const { currentUser } = useApp();
   const [dossiers, setDossiers] = useState<Dossier[] | null>(null);
   const [nieuw, setNieuw] = useState(false);
   const [zoek, setZoek] = useState("");
   // Welk dossier staat open? Eén tegelijk — daarbinnen loopt de stappenflow.
-  const [open, setOpen] = useState<string | null>(null);
+  const [open, setOpen] = useState<string | null>(initieelPd ?? null);
   // Dezelfde drie beelden als bij Brieven & Routes en Voorschouwen: waar wordt aan gewerkt, wat kan
   // naar Stedin, en wat is afgehandeld. Het is geen apart vinkje maar precies de stand die de
   // knoppen al zetten — anders houd je twee dingen bij die uit de pas gaan lopen.
@@ -199,7 +199,8 @@ export function SaneerDossiers({ onEerder }: { onEerder: () => void }) {
   const klaarLijst = useMemo(() => alle.filter((d) => d.status === "afgerond"), [alle]);
   const archiefLijst = useMemo(() => alle.filter((d) => d.status === "afgeboekt"), [alle]);
   const inTab = useMemo(
-    () => (tab === "stedin" ? klaarLijst : tab === "archief" ? archiefLijst : alle.filter((d) => d.status !== "afgerond" && d.status !== "afgeboekt")),
+    // Geen apart tabblad "Klaar voor Stedin" meer: afgeronde dossiers blijven in het overzicht tot ze zijn afgeboekt.
+    () => (tab === "archief" ? archiefLijst : alle.filter((d) => d.status !== "afgeboekt")),
     [alle, tab, klaarLijst, archiefLijst]
   );
 
@@ -219,7 +220,7 @@ export function SaneerDossiers({ onEerder }: { onEerder: () => void }) {
 
   return (
     <div className="space-y-5">
-      <WerkTabs tab={tab} setTab={setTab} klaar={klaarLijst.length} archief={archiefLijst.length} />
+      <WerkTabs tab={tab} setTab={setTab} klaar={klaarLijst.length} archief={archiefLijst.length} zonderStedin />
 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
@@ -240,7 +241,7 @@ export function SaneerDossiers({ onEerder }: { onEerder: () => void }) {
         </div>
       </div>
 
-      {/* Een dag van tevoren nabellen: alle adressen met uitvoering morgen onder één kopje. */}
+      {/* Een dag van tevoren: vandaag nabellen en vandaag de herinnerings-sms versturen voor de afspraken van morgen. */}
       {tab === "overzicht" && dossiers && <SaneerBellijstMorgen dossiers={dossiers} />}
 
       {filter.balk}

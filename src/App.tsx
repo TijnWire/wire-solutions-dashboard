@@ -1,6 +1,7 @@
 import { bodemTeFactureren } from "./lib/schouw";
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { X } from "lucide-react";
+import { useSaneerAdressen } from "./lib/saneerAdresCache";
 import { Sidebar } from "./components/Sidebar";
 import { Topbar } from "./components/Topbar";
 import { DevSwitcher } from "./components/DevSwitcher";
@@ -58,7 +59,8 @@ function Splash() {
 const LAATSTE_PAGINA = "wire.laatstePagina"; // waar je gebleven was, zodat verversen je niet terugzet
 
 export default function App() {
-  const { currentUser, hydrated, bedrijf, instellingen, verlof, taken, rondes, afspraken, voorschouwen, voorschouwMappen, klanten, facturen, users, kennis, projects, projectPosts, tauwOpdrachten, saneringen, buurtaanpak, schouwMappen, logout, synced } = useApp();
+  const { currentUser, hydrated, bedrijf, instellingen, verlof, taken, rondes, afspraken, voorschouwen, voorschouwMappen, klanten, facturen, users, kennis, projects, projectPosts, tauwOpdrachten, saneringen, buurtaanpak, schouwMappen, schouwafspraken, logout, synced } = useApp();
+  const saneerAdressen = useSaneerAdressen(!!currentUser);
   const [active, setActive] = useState("mijnwerk");
   const [target, setTarget] = useState<NavTarget>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -89,11 +91,11 @@ export default function App() {
   const onLogout = useCallback(() => logoutRef.current(), []);
   const onMelding = useCallback((m: Melding) => { if (m.navKey) navigeer(m.navKey, m.target ?? null); }, [navigeer]);
   const onResultaat = useCallback((it: ZoekItem) => navigeer(it.navKey, it.target ?? null), [navigeer]);
-  const zoekRef = useRef({ afspraken, rondes, voorschouwen, klanten, facturen, users, kennis, projects, currentUser });
-  zoekRef.current = { afspraken, rondes, voorschouwen, klanten, facturen, users, kennis, projects, currentUser };
+  const zoekRef = useRef({ afspraken, rondes, voorschouwen, klanten, facturen, users, kennis, projects, currentUser, schouwafspraken, buurtaanpak, saneringen, saneerAdressen });
+  zoekRef.current = { afspraken, rondes, voorschouwen, klanten, facturen, users, kennis, projects, currentUser, schouwafspraken, buurtaanpak, saneringen, saneerAdressen };
   const onZoek = useCallback((zoekterm: string) => {
     const z = zoekRef.current;
-    return zoekResultaten(zoekterm, { afspraken: z.afspraken, rondes: z.rondes, voorschouwen: z.voorschouwen, klanten: z.klanten, facturen: z.facturen, users: z.users, kennis: z.kennis, projects: z.projects }, z.currentUser);
+    return zoekResultaten(zoekterm, { afspraken: z.afspraken, rondes: z.rondes, voorschouwen: z.voorschouwen, klanten: z.klanten, facturen: z.facturen, users: z.users, kennis: z.kennis, projects: z.projects, schouwafspraken: z.schouwafspraken, buurtaanpak: z.buurtaanpak, saneringen: z.saneringen, saneerAdressen: z.saneerAdressen }, z.currentUser);
   }, []);
   const navContextValue = useMemo(() => ({ navigeer }), [navigeer]);
   // Aantal afgerond werk dat naar de boekhouding is gestuurd en nog gefactureerd moet worden → badge op Facturen.
@@ -141,7 +143,7 @@ export default function App() {
       case "voorschouwen":
         return <Voorschouwen key={target?.voorschouwMap ?? "lijst"} initieelMap={target?.voorschouwMap} />;
       case "saneren":
-        return <Saneren key={target?.saneringId ?? "lijst"} initieelSanering={target?.saneringId} />;
+        return <Saneren key={target?.saneringId ?? target?.saneerPd ?? "lijst"} initieelSanering={target?.saneringId} initieelPd={target?.saneerPd} />;
       case "buurtaanpak":
         return <Buurtaanpak key={target?.buurtaanpakId ?? "lijst"} initieelId={target?.buurtaanpakId} />;
       case "tauw":

@@ -687,7 +687,7 @@ function OudeSaneringen({ initieelSanering }: { initieelSanering?: string }) {
 //
 // Wat er vroeger stond is niet weggegooid: onder "Eerder ingevoerd" staat de oude lijst nog, zodat
 // niemand kwijtraakt wat er al in stond.
-export function Saneren({ initieelSanering }: { initieelSanering?: string }) {
+export function Saneren({ initieelSanering, initieelPd }: { initieelSanering?: string; initieelPd?: string }) {
   const [oud, setOud] = useState(!!initieelSanering);
   if (oud) {
     return (
@@ -703,5 +703,5 @@ export function Saneren({ initieelSanering }: { initieelSanering?: string }) {
       </div>
     );
   }
-  return <SaneerDossiers onEerder={() => setOud(true)} />;
+  return <SaneerDossiers onEerder={() => setOud(true)} initieelPd={initieelPd} />;
 }

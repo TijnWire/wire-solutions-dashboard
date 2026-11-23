@@ -38,7 +38,7 @@ const SoortCtx = createContext<Soort>("schouw");
 
 // ───────────────────────── Overzicht: één map per stad / plaats ─────────────────────────
 export function Schouwafspraken({ soort = "schouw", extra }: { soort?: Soort; extra?: React.ReactNode }) {
-  const { schouwafspraken: alleAfspraken, schouwMappen: alleMappen, addSchouwMap, deleteSchouwMap, updateSchouwMap, currentUser } = useApp();
+  const { schouwafspraken: alleAfspraken, schouwMappen: alleMappen, addSchouwMap, deleteSchouwMap, currentUser } = useApp();
   const bodem = soort === "bodem";
   const schouwafspraken = useMemo(() => alleAfspraken.filter((a) => (a.soort === "bodem") === bodem), [alleAfspraken, bodem]);
   const schouwMappen = useMemo(() => alleMappen.filter((m) => (m.soort === "bodem") === bodem), [alleMappen, bodem]);
@@ -59,23 +59,6 @@ export function Schouwafspraken({ soort = "schouw", extra }: { soort?: Soort; ex
 
   const huidigeWeek = weekStartISO(vandaagISO());
   const vandaag = vandaagISO();
-
-  // Een plaats afronden vanuit het overzicht: zonder PD-nummer wordt erom gevraagd. Daarna staat de plaats
-  // bij de boekhouding (Roxanne) om te factureren; plaatsen met hetzelfde PD-nummer komen op één factuur.
-  const rondAf = (m: SchouwMap) => {
-    let pd = m.pdNummer;
-    if (!pd) {
-      const invoer = prompt(`PD-nummer voor bodemonderzoek ${m.naam} (alleen de cijfers):`, "");
-      if (invoer === null) return;
-      const cijfers = invoer.replace(/[^0-9]/g, "");
-      if (!cijfers) { alert("Vul een PD-nummer in om het project af te ronden."); return; }
-      pd = `PD${cijfers}`;
-    }
-    const zelfde = schouwMappen.filter((x) => x.id !== m.id && x.pdNummer === pd && x.boekhouding === "te_factureren").map((x) => x.naam);
-    const extraTekst = zelfde.length ? `\n\nOp ${pd} staat ook al: ${zelfde.join(", ")}. Dit komt samen op één factuur.` : "";
-    if (!confirm(`Bodemonderzoek ${m.naam} (${pd}) afronden? Het gaat dan naar de boekhouding om te factureren.${extraTekst}`)) return;
-    updateSchouwMap(m.id, { pdNummer: pd, boekhouding: "te_factureren", afgerondOp: new Date().toISOString() });
-  };
 
   const maakMap = () => {
     const naam = nieuw.trim().replace(/\s+/g, " ");
@@ -142,17 +125,6 @@ export function Schouwafspraken({ soort = "schouw", extra }: { soort?: Soort; ex
                     </div>
                   </div>
                 </button>
-                {bodem && isLeiding && m.record && !m.record.boekhouding && (
-                  <div className="border-t border-ink-100 px-4 py-2">
-                    <button
-                      type="button"
-                      onClick={() => rondAf(m.record!)}
-                      className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-green-600 px-3 py-2 text-xs font-bold text-white hover:bg-green-700"
-                    >
-                      <CheckCircle2 className="h-3.5 w-3.5" /> {m.naam} afronden{m.record.pdNummer ? ` · ${m.record.pdNummer}` : ""}
-                    </button>
-                  </div>
-                )}
                 {isLeiding && m.record && m.afspraken.length === 0 && (
                   <div className="border-t border-ink-100 px-4 py-2 text-right">
                     <button

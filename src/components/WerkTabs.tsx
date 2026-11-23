@@ -10,7 +10,7 @@
 
 export type WerkTab = "overzicht" | "stedin" | "archief";
 
-export function WerkTabs({ tab, setTab, klaar, archief, stedinLabel, zonderArchief }: {
+export function WerkTabs({ tab, setTab, klaar, archief, stedinLabel, zonderArchief, zonderStedin }: {
   tab: WerkTab;
   setTab: (t: WerkTab) => void;
   klaar: number;
@@ -18,6 +18,7 @@ export function WerkTabs({ tab, setTab, klaar, archief, stedinLabel, zonderArchi
   // Optioneel: ander label voor het tweede tabblad (bijv. "Boekhouding" bij Brieven) en zonder Archief.
   stedinLabel?: string;
   zonderArchief?: boolean;
+  zonderStedin?: boolean;
 }) {
   // Op mobiel kort ("Stedin"), vanaf sm de volledige tekst ("Klaar voor Stedin") — scheelt hoogte en
   // voorkomt dat het label over twee regels breekt.
@@ -36,7 +37,7 @@ export function WerkTabs({ tab, setTab, klaar, archief, stedinLabel, zonderArchi
   return (
     <div className="flex gap-0.5 rounded-lg border border-ink-200 bg-white p-0.5 shadow-card sm:gap-1 sm:rounded-xl sm:p-1">
       {knop("overzicht", "Overzicht", "Overzicht")}
-      {knop("stedin", stedinLabel ?? "Stedin", stedinLabel ?? "Klaar voor Stedin", klaar)}
+      {!zonderStedin && knop("stedin", stedinLabel ?? "Stedin", stedinLabel ?? "Klaar voor Stedin", klaar)}
       {!zonderArchief && knop("archief", "Archief", "Archief", archief)}
     </div>
   );

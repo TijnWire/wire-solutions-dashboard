@@ -43,6 +43,7 @@ function groepeerMeldingen(meldingen: Melding[]): MeldingGroep[] {
 
 // Kleur per resultaattype, zodat je binnen een project meteen ziet wat het is.
 const CHIP_KLEUR: Record<string, string> = {
+  Adres: "bg-brand-50 text-brand-700",
   Afspraak: "bg-blue-50 text-blue-600",
   Brievenronde: "bg-amber-50 text-amber-700",
   Voorschouw: "bg-violet-50 text-violet-600",
@@ -62,7 +63,7 @@ function ZoekLijst({ groepen, totaal, onKies }: { groepen: ZoekGroep[]; totaal: 
       <div className="flex flex-col items-center gap-2 px-6 py-14 text-center">
         <SearchX className="h-8 w-8 text-ink-300" />
         <p className="text-sm font-semibold text-ink-700">Niets gevonden</p>
-        <p className="max-w-[16rem] text-xs text-ink-400">Probeer een adres, gemeente, klantnaam of factuurnummer.</p>
+        <p className="max-w-[16rem] text-xs text-ink-400">Probeer een adres, postcode, naam, telefoonnummer of factuurnummer.</p>
       </div>
     );
   }
@@ -165,7 +166,7 @@ export const Topbar = memo(function Topbar({
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Zoek klant, adres, gemeente of factuur…"
+          placeholder="Zoek adres, naam, telefoon of factuur…"
           className="relative z-50 w-80 rounded-xl border border-ink-200 bg-ink-50 py-2.5 pl-10 pr-9 text-sm text-ink-800 outline-none placeholder:text-ink-400 focus:border-brand-400 focus:bg-white focus:ring-2 focus:ring-brand-100 lg:w-96"
         />
         {q && (
@@ -294,7 +295,7 @@ export const Topbar = memo(function Topbar({
                 autoFocus
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                placeholder="Zoek klant, adres of gemeente…"
+                placeholder="Zoek adres, naam of telefoon…"
                 className="w-full rounded-xl border border-ink-200 bg-ink-50 py-2.5 pl-10 pr-9 text-sm text-ink-800 outline-none placeholder:text-ink-400 focus:border-brand-400 focus:bg-white focus:ring-2 focus:ring-brand-100"
               />
               {q && (

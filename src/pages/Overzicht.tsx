@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CalendarCheck, Mailbox, Receipt, HardHat, MessageCircle, CheckCircle2, MapPin, Building2, ClipboardList, FolderKanban, ArrowRight, Bell,  Sparkles, Loader2 } from "lucide-react";
+import { CalendarCheck, Mailbox, Receipt, HardHat, MessageCircle, CheckCircle2, MapPin, Building2, FolderKanban, ArrowRight, Bell,  Sparkles, Loader2 } from "lucide-react";
 import {
   ResponsiveContainer,
   BarChart,
@@ -120,7 +120,6 @@ export function Overzicht() {
 
   // ── Operaties (klikbaar, dekt alle modules) ──
   const operaties = [
-    { key: "voorschouwen", icon: ClipboardList, label: "Voorschouwen", waarde: vsIngediend, sub: `${vsConcept} concept · ${vsIngediend} ingediend` },
     { key: "brieven", icon: Mailbox, label: "Brieven", waarde: actieveRondes.length, sub: `${gegooid}/${teBezorgen.length} gegooid` },
     { key: "buurtaanpak", icon: MapPin, label: "Buurtaanpak", waarde: actieveBuurt.length, sub: `${buurtBevestigd} bevestigd · ${buurtUitgevoerd} uitgevoerd` },
     { key: "saneren", icon: Building2, label: "Saneren", waarde: actieveSaneer.length, sub: `${saneerAdressen} adres${saneerAdressen === 1 ? "" : "sen"}` },
