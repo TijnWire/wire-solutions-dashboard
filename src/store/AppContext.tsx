@@ -32,6 +32,8 @@ import type {
   Communicatie,
   Verlof,
   Schouwafspraak,
+  GasProject,
+  GasAdres,
   SchouwMap,
   BlancoBrief,
   SaneerChecklist,
@@ -159,6 +161,8 @@ const LS = {
   comm: "wire.comm",
   verlof: "wire.verlof",
   schouwafspraken: "wire.schouwafspraken",
+  gasProjecten: "wire.gasProjecten",
+  gasAdressen: "wire.gasAdressen",
   schouwMappen: "wire.schouwMappen",
   blancoBrieven: "wire.blancoBrieven",
   saneerChecklists: "wire.saneerChecklists",
@@ -217,6 +221,12 @@ type AppState = {
   comm: Communicatie;
   verlof: Verlof[];
   schouwafspraken: Schouwafspraak[];
+  gasProjecten: GasProject[];
+  gasAdressen: GasAdres[];
+  addGasProject: (p: Omit<GasProject, "id" | "aangemaakt">, adressen: Omit<GasAdres, "id" | "projectId">[]) => string;
+  updateGasProject: (id: string, patch: Partial<GasProject>) => void;
+  deleteGasProject: (id: string) => void;
+  updateGasAdressen: (ids: string[], patch: Partial<GasAdres> | ((a: GasAdres) => Partial<GasAdres>)) => void;
   schouwMappen: SchouwMap[];
   blancoBrieven: BlancoBrief[];
   saneerChecklists: SaneerChecklist[];
@@ -387,6 +397,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [comm, setComm] = useState<Communicatie>(SEED_COMM);
   const [verlof, setVerlof] = useState<Verlof[]>(SEED_VERLOF);
   const [schouwafspraken, setSchouwafspraken] = useState<Schouwafspraak[]>(SEED_SCHOUW);
+  const [gasProjecten, setGasProjecten] = useState<GasProject[]>([]);
+  const [gasAdressen, setGasAdressen] = useState<GasAdres[]>([]);
   const [schouwMappen, setSchouwMappen] = useState<SchouwMap[]>([]);
   const [blancoBrieven, setBlancoBrieven] = useState<BlancoBrief[]>(SEED_BLANCO);
   const [saneerChecklists, setSaneerChecklists] = useState<SaneerChecklist[]>([]);
@@ -425,7 +437,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let actief = true;
     (async () => {
-      let [u, p, t, pp, pl, san, tw, v, r, af, fac, bed, loon, boe, communicatie, verl, kn, inst, kl, s, vm, med, og, ba, del, sch, ai, td, bl, ur, schm, scl] = await Promise.all([
+      let [u, p, t, pp, pl, san, tw, v, r, af, fac, bed, loon, boe, communicatie, verl, kn, inst, kl, s, vm, med, og, ba, del, sch, ai, td, bl, ur, schm, scl, gp, ga] = await Promise.all([
         laadSlice<User[]>("users", LS.users, SEED_USERS),
         laadSlice<Project[]>("projects", LS.projects, SEED_PROJECTS),
         laadSlice<Taak[]>("taken", LS.taken, SEED_TAKEN),
@@ -458,6 +470,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         laadSlice<Urenregel[]>("urenstaat", LS.urenstaat, SEED_UREN),
         laadSlice<SchouwMap[]>("schouwMappen", LS.schouwMappen, []),
         laadSlice<SaneerChecklist[]>("saneerChecklists", LS.saneerChecklists, []),
+        laadSlice<GasProject[]>("gasProjecten", LS.gasProjecten, []),
+        laadSlice<GasAdres[]>("gasAdressen", LS.gasAdressen, []),
       ]);
       if (!actief) return;
       // Eenmalige schoonmaak: verwijder de voorbeeld-/demoprojecten en bijbehorende data, zodat het
@@ -580,6 +594,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setVerlof(verl);
       setSchouwafspraken(sch ?? []);
       setSchouwMappen(schm ?? []);
+      setGasProjecten(gp ?? []);
+      setGasAdressen(ga ?? []);
       setSaneerChecklists(scl ?? []);
       setBlancoBrieven(bl ?? []);
       setUrenstaat(migreerUren(ur));
@@ -662,6 +678,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (hydrated) void idbSet("schouwafspraken", schouwafspraken);
   }, [schouwafspraken, hydrated]);
   useEffect(() => {
+    if (hydrated) void idbSet("gasProjecten", gasProjecten);
+  }, [gasProjecten, hydrated]);
+  useEffect(() => {
+    if (hydrated) void idbSet("gasAdressen", gasAdressen);
+  }, [gasAdressen, hydrated]);
+  useEffect(() => {
     if (hydrated) void idbSet("schouwMappen", schouwMappen);
   }, [schouwMappen, hydrated]);
   useEffect(() => {
@@ -726,6 +748,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     comm: (v) => setComm(v as Communicatie),
     verlof: (v) => setVerlof(v as Verlof[]),
     schouwafspraken: (v) => setSchouwafspraken(v as Schouwafspraak[]),
+    gasProjecten: (v) => setGasProjecten(v as GasProject[]),
+    gasAdressen: (v) => setGasAdressen(v as GasAdres[]),
     schouwMappen: (v) => setSchouwMappen(v as SchouwMap[]),
     blancoBrieven: (v) => setBlancoBrieven(v as BlancoBrief[]),
     saneerChecklists: (v) => setSaneerChecklists(v as SaneerChecklist[]),
@@ -746,6 +770,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     users, projects, taken, projectPosts, planningen, saneringen, tauw: tauwOpdrachten,
     voorschouwMappen, mededelingen, rondes, afspraken, facturen, bedrijf,
     loonstroken, boetes, comm, verlof, schouwafspraken, schouwMappen, blancoBrieven, saneerChecklists, urenstaat, agendaItems, todos, kennis, instellingen, klanten, opdrachtgevers, buurtaanpak,
+    gasProjecten, gasAdressen,
     deletes,
   };
   // Voorschouwen per shard toevoegen aan de te-pushen waarden (los van de rest).
@@ -762,7 +787,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const COLLECTIONS = new Set([
     "users", "projects", "taken", "projectPosts", "planningen", "saneringen", "buurtaanpak", "tauw",
     "voorschouwMappen", "mededelingen", "rondes", "afspraken", "facturen",
-    "opdrachtgevers", "loonstroken", "boetes", "verlof", "schouwafspraken", "schouwMappen", "blancoBrieven", "saneerChecklists", "urenstaat", "agendaItems", "todos", "kennis", "klanten",
+    "opdrachtgevers", "loonstroken", "boetes", "verlof", "schouwafspraken", "schouwMappen", "gasProjecten", "gasAdressen", "blancoBrieven", "saneerChecklists", "urenstaat", "agendaItems", "todos", "kennis", "klanten",
   ]);
   for (let i = 0; i < VS_SHARDS; i++) COLLECTIONS.add(vsKey(i));
 
@@ -1320,7 +1345,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       planSchrijf(key); // korte wachttijd, daarna via de wachtrij: nooit twee schrijfacties tegelijk op hetzelfde onderdeel
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supabaseAan, sbSessie, hydrated, syncKlaar, users, projects, taken, projectPosts, planningen, saneringen, tauwOpdrachten, voorschouwen, voorschouwMappen, mededelingen, rondes, afspraken, facturen, bedrijf, loonstroken, boetes, comm, verlof, schouwafspraken, schouwMappen, blancoBrieven, saneerChecklists, urenstaat, agendaItems, todos, kennis, instellingen, klanten, opdrachtgevers, buurtaanpak, deletes]);
+  }, [supabaseAan, sbSessie, hydrated, syncKlaar, users, projects, taken, projectPosts, planningen, saneringen, tauwOpdrachten, voorschouwen, voorschouwMappen, mededelingen, rondes, afspraken, facturen, bedrijf, loonstroken, boetes, comm, verlof, schouwafspraken, schouwMappen, blancoBrieven, saneerChecklists, urenstaat, agendaItems, todos, kennis, instellingen, klanten, opdrachtgevers, buurtaanpak, gasProjecten, gasAdressen, deletes]);
 
   // Bewaakt of de sync écht loopt. `sbSessie` betekende alleen "we hebben ooit een token gekregen" — dat
   // bolletje stond dus groen terwijl er in werkelijkheid uren niets meer heen en weer ging (verlopen token,
@@ -1921,6 +1946,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setSchouwMappen((prev) => prev.filter((m) => m.id !== id));
     tomb("schouwMappen", id);
   };
+  // Gasleidingen: project + adressen als losse records, zodat collega's tegelijk kunnen afvinken
+  // zonder elkaars werk te overschrijven (samenvoegen gaat per adres, nieuwste bijgewerktOp wint).
+  const addGasProject: AppState["addGasProject"] = (p, adressen) => {
+    const id = nextId("gas");
+    const nu = new Date().toISOString();
+    setGasProjecten((prev) => [...prev, { ...p, id, aangemaakt: nu, bijgewerktOp: nu }]);
+    setGasAdressen((prev) => [...prev, ...adressen.map((a, i) => ({ ...a, id: `${id}-a${i + 1}`, projectId: id, bijgewerktOp: nu }))]);
+    return id;
+  };
+  const updateGasProject: AppState["updateGasProject"] = (id, patch) =>
+    setGasProjecten((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch, bijgewerktOp: new Date().toISOString() } : p)));
+  const deleteGasProject: AppState["deleteGasProject"] = (id) => {
+    const weg = gasAdressen.filter((a) => a.projectId === id).map((a) => a.id);
+    setGasProjecten((prev) => prev.filter((p) => p.id !== id));
+    setGasAdressen((prev) => prev.filter((a) => a.projectId !== id));
+    tomb("gasProjecten", id);
+    if (weg.length) tomb("gasAdressen", ...weg);
+  };
+  const updateGasAdressen: AppState["updateGasAdressen"] = (ids, patch) => {
+    const set = new Set(ids);
+    const nu = new Date().toISOString();
+    setGasAdressen((prev) => prev.map((a) => (set.has(a.id) ? { ...a, ...(typeof patch === "function" ? patch(a) : patch), bijgewerktOp: nu } : a)));
+  };
   const deleteSchouw: AppState["deleteSchouw"] = (id) => {
     setSchouwafspraken((prev) => prev.filter((x) => x.id !== id));
     tomb("schouwafspraken", id);
@@ -2039,6 +2087,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         verlof,
         schouwafspraken,
         schouwMappen,
+        gasProjecten,
+        gasAdressen,
+        addGasProject,
+        updateGasProject,
+        deleteGasProject,
+        updateGasAdressen,
         blancoBrieven,
         saneerChecklists,
         addSaneerChecklist,

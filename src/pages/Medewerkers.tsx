@@ -19,6 +19,7 @@ import {
   Waypoints,
   CalendarClock,
   Shovel,
+  Flame,
 } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { useNav } from "../store/NavContext";
@@ -33,7 +34,7 @@ const ROL_TEKST = "Werknemer · Medewerker";
 type ProjectRegel = { key: string; titel: string; sub: string; navKey: string; target?: Record<string, string>; Icon: ComponentType<{ className?: string }> };
 type AppData = ReturnType<typeof useApp>;
 const useProjectenVan = (userId: string) => projectenVan(userId, useApp());
-function projectenVan(userId: string, { projects, rondes, afspraken, buurtaanpak, saneringen, voorschouwMappen, schouwafspraken }: AppData): ProjectRegel[] {
+function projectenVan(userId: string, { projects, rondes, afspraken, buurtaanpak, saneringen, voorschouwMappen, schouwafspraken, gasProjecten, gasAdressen }: AppData): ProjectRegel[] {
   const uit: ProjectRegel[] = [];
   for (const p of projects) if (p.toegewezenAan?.includes(userId) && !p.afgerondOp) uit.push({ key: "p" + p.id, titel: p.naam, sub: `Project${p.wijk ? ` · ${p.wijk}` : ""}`, navKey: "projecten", target: { project: p.id }, Icon: FolderKanban });
   // Brieven per map (of straat als er geen map is)
@@ -51,6 +52,10 @@ function projectenVan(userId: string, { projects, rondes, afspraken, buurtaanpak
   for (const b of buurtaanpak) if (isToegewezen(b, userId) && !b.afgerondOp && !b.gearchiveerd) uit.push({ key: "ba" + b.id, titel: b.naam, sub: `Buurtaanpak · ${b.adressen.length} adressen`, navKey: "buurtaanpak", target: { buurtaanpakId: b.id }, Icon: Waypoints });
   for (const s of saneringen) if (isToegewezen(s, userId) && !s.afgerondOp && !s.gearchiveerd) uit.push({ key: "s" + s.id, titel: s.naam, sub: `Saneren · ${s.adressen.length} adressen`, navKey: "saneren", target: { saneringId: s.id }, Icon: Building2 });
   for (const m of voorschouwMappen) if (isToegewezen(m, userId) && !m.gearchiveerd) uit.push({ key: "v" + m.id, titel: m.naam, sub: "Voorschouwen", navKey: "voorschouwen", target: { voorschouwMap: m.id }, Icon: ClipboardCheck });
+  for (const g of gasProjecten) if (isToegewezen(g, userId) && !g.gearchiveerd) {
+    const lijst = gasAdressen.filter((a) => a.projectId === g.id);
+    uit.push({ key: "g" + g.id, titel: g.naam, sub: `Gasleidingen · ${lijst.filter((a) => a.status === "afgesproken").length}/${lijst.length} afgesproken`, navKey: "gas", target: { gasProject: g.id }, Icon: Flame });
+  }
   const schouw = new Map<string, { bodem: boolean; n: number }>();
   for (const a of schouwafspraken) if (isToegewezen(a, userId) && !a.gearchiveerd && a.status !== "Geannuleerd") { const k = `${a.soort ?? ""}|${a.plaats}`; const g = schouw.get(k) ?? { bodem: a.soort === "bodem", n: 0 }; g.n++; schouw.set(k, g); }
   for (const [k, g] of schouw) { const plaats = k.split("|")[1]; uit.push({ key: "sa" + k, titel: plaats, sub: `${g.bodem ? "Bodemonderzoek" : "Schouwafspraken"} · ${g.n} afspraken`, navKey: g.bodem ? "tauw" : "schouwafspraken", Icon: g.bodem ? Shovel : CalendarClock }); }

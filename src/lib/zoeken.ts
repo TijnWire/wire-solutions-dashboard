@@ -1,4 +1,4 @@
-import type { Afspraak, Brievenronde, Voorschouw, Klant, Factuur, User, KennisArtikel, Project, Schouwafspraak, Buurtaanpak, Sanering } from "./types";
+import type { Afspraak, Brievenronde, Voorschouw, Klant, Factuur, User, KennisArtikel, Project, Schouwafspraak, Buurtaanpak, Sanering, GasAdres, GasProject } from "./types";
 import type { FlowAdres } from "./saneerflowWerk";
 import { factuurTotalen, euro } from "./factuurPdf";
 import { isToegewezen } from "./toewijzing";
@@ -10,7 +10,7 @@ export type ZoekItem = {
   categorie: string; // type-label, bijv. "Afspraak", "Klant" — getoond als chip
   navKey: string;
   projectId: string | null; // gekoppeld project (null = niet aan project gekoppeld)
-  target?: { ronde?: string; locatie?: string; klantKey?: string; buurtaanpakId?: string; saneringId?: string; saneerPd?: string };
+  target?: { ronde?: string; locatie?: string; klantKey?: string; buurtaanpakId?: string; saneringId?: string; saneerPd?: string; gasProject?: string };
 };
 // Eén groep per project; items zonder project belanden in de "Overig"-groep (projectId null).
 export type ZoekGroep = { projectId: string | null; titel: string; wijk?: string; items: ZoekItem[] };
@@ -28,6 +28,8 @@ type ZoekData = {
   buurtaanpak?: Buurtaanpak[];
   saneringen?: Sanering[];
   saneerAdressen?: FlowAdres[]; // adressen uit Saneren (centrale database), vooraf opgehaald
+  gasProjecten?: GasProject[];
+  gasAdressen?: GasAdres[];
 };
 
 // ── Adressen: elk adres dat ergens in de omgeving is opgeslagen, samengevoegd per adres ──
@@ -57,6 +59,12 @@ function adresIndex(data: ZoekData, user: User, isLeiding: boolean): AdresRegel[
   for (const a of data.saneerAdressen ?? []) {
     if (a.verwijderd) continue;
     voeg(a.straat, a.huisnummer, a.toevoeging, a.postcode, a.plaats, a.bewoner, a.telefoon, { label: "Saneren", navKey: "saneren", target: { saneerPd: a.pd_nummer } });
+  }
+  // Gasleidingen: alle adressen van de projecten die deze gebruiker ziet
+  const gasZichtbaar = new Set((data.gasProjecten ?? []).filter((p) => !p.gearchiveerd && (isLeiding || !p.toegewezenAan || isToegewezen(p, user.id))).map((p) => p.id));
+  for (const a of data.gasAdressen ?? []) {
+    if (!gasZichtbaar.has(a.projectId)) continue;
+    voeg(a.straat, a.huisnummer, a.toevoeging, a.postcode, a.plaats, "", a.telefoon, { label: "Gasleidingen", navKey: "gas", target: { gasProject: a.projectId } });
   }
   for (const a of data.afspraken) {
     if (!isLeiding && !isToegewezen(a, user.id)) continue;

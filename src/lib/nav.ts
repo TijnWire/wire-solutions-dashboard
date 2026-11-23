@@ -22,6 +22,7 @@ import {
   Plane,
   Building2,
   Shovel,
+  Flame,
   // Cable, — hoort bij Buurtaanpak; terug zodra die weer in het menu staat
   Briefcase,
   type LucideIcon,
@@ -55,6 +56,7 @@ export const WERKNEMER_TOEGANG: { key: string; label: string }[] = [
   { key: "voorschouwen", label: "Voorschouwen" },
   { key: "schouwafspraken", label: "Schouwafspraken" },
   { key: "tauw", label: "Bodemonderzoeken" },
+  { key: "gas", label: "Gasleidingen" },
 ];
 export const WERKNEMER_TOEGANG_KEYS = WERKNEMER_TOEGANG.map((x) => x.key);
 
@@ -68,6 +70,7 @@ export const NAV: NavItem[] = [
   { key: "buurtaanpak", label: "Buurtaanpak", icon: Waypoints, group: "Projecten", roles: ALLE },
   { key: "saneren", label: "Saneren", icon: Building2, group: "Projecten", roles: ALLE },
   { key: "schouwafspraken", label: "Schouwafspraken", icon: CalendarClock, group: "Projecten", roles: ALLE },
+  { key: "gas", label: "Gasleidingen", icon: Flame, group: "Projecten", roles: ALLE },
   { key: "voorschouwen", label: "Voorschouwen", icon: ClipboardCheck, group: "Projecten", roles: ALLE },
 
   // Afspraken staat niet meer in het menu (op verzoek). Pagina en gegevens blijven bestaan;

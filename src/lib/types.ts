@@ -906,3 +906,49 @@ export const PROJECT_CATEGORIE_LABEL: Record<ProjectCategorie, string> = {
   voorschouwen: "Voorschouwen",
   tauw: "TAUW",
 };
+
+// ── Gasleidingen (vervangen gas): per plaats een project met alle adressen uit de lijst van Stedin ──
+// Werkvolgorde: brieven bezorgen (afvinken per adres of per straat) → bewoners bellen zelf om een
+// afspraak te maken, de rest wordt aan de deur afgesproken → planning per dag in twee tijdsblokken
+// (08:00–12:00 en 12:00–16:00), met per blok één afspraak per ploeg van Stedin.
+export type GasBlok = "ochtend" | "middag";
+export type GasStatus = "open" | "afgesproken" | "niet_thuis" | "weigert";
+export type GasProject = {
+  id: string;
+  naam: string;          // bv. "Nieuw-Lekkerland"
+  aangemaakt: string;    // ISO
+  bijgewerktOp?: string; // ISO
+  ploegen: number;       // aantal ploegen van Stedin = afspraken per tijdsblok
+  vanaf?: string;        // ISO yyyy-mm-dd — eerste dag van de uitvoering
+  tot?: string;          // ISO yyyy-mm-dd — laatste dag (leeg = doorlopend)
+  vrijeDagen?: string[]; // ISO-dagen binnen de periode waarop niet gewerkt wordt
+  belnummer?: string;    // het nummer dat in de brief staat
+  pdNummer?: string;
+  toegewezenAan?: string;
+  extraToegewezen?: string[];
+  gearchiveerd?: boolean;
+  gearchiveerdOp?: string;
+};
+export type GasBezoek = { op: string; door?: string };
+export type GasAdres = {
+  id: string;
+  projectId: string;
+  volgorde: number;      // volgorde uit het bronbestand
+  straat: string;
+  huisnummer: string;
+  toevoeging: string;
+  postcode: string;
+  plaats: string;
+  briefOp?: string;      // ISO — brief bezorgd
+  briefDoor?: string;    // user id
+  status: GasStatus;
+  datum?: string;        // ISO yyyy-mm-dd — afspraak
+  blok?: GasBlok;
+  via?: "telefoon" | "deur";
+  telefoon?: string;
+  opmerking?: string;
+  bezoeken?: GasBezoek[]; // keren aangebeld zonder afspraak
+  afgesprokenOp?: string;
+  afgesprokenDoor?: string;
+  bijgewerktOp?: string;
+};
