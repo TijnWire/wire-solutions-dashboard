@@ -65,10 +65,10 @@ export function WerkgebiedKaart() {
     const n = stand[k].medewerkers.length;
     const jij = !!currentUser && stand[k].medewerkers.includes(currentUser.id);
     const status = `${n} actief${jij ? " · jij" : ""}`;
-    const b = Math.round(Math.max(KORT[k].length * 19.5, status.length * 11.5 + 24) + 40 + Math.max(0, Math.min(n, 4) - 1) * 14);
+    const b = Math.round(Math.max(KORT[k].length * 18.5, status.length * 11.5 + 24) + 36 + Math.max(0, Math.min(n, 4) - 1) * 14);
     const h = 84;
     const pos = PLEK[k];
-    const kx = pos === "links" ? x - 42 - b : pos === "rechts" ? x + 42 : x - b / 2;
+    const kx = pos === "links" ? x - 42 - b : pos === "rechts" ? x + 34 : x - b / 2;
     const ky = pos === "onder" ? y + 42 : y - h / 2 - (pos === "links" ? 46 : 0);
     // Korte draad van het knooppunt naar het kaartje.
     const naar: [number, number] = pos === "links" ? [kx + b, ky + h - 14] : pos === "rechts" ? [kx, ky + h / 2] : [x, ky];
@@ -153,7 +153,7 @@ export function WerkgebiedKaart() {
           <path d={PAD_UTRECHT} fill="url(#wk-vlak)" stroke="url(#wk-rand)" strokeWidth="3.5" strokeLinejoin="round" />
           <path d={PAD_GRENS} fill="none" stroke="#ffc27a" strokeWidth="2" strokeDasharray="2 9" strokeLinecap="round" strokeOpacity="0.8" />
           <text x="118" y="338" fontSize="15" fontWeight="700" letterSpacing="6" fill="#fff4e6" fillOpacity="0.22">ZUID-HOLLAND</text>
-          <text x="772" y="136" fontSize="15" fontWeight="700" letterSpacing="6" fill="#fff4e6" fillOpacity="0.22">UTRECHT</text>
+          <text x="842" y="280" textAnchor="middle" fontSize="15" fontWeight="700" letterSpacing="6" fill="#fff4e6" fillOpacity="0.22">UTRECHT</text>
 
           {/* Verbindingsdraden tussen de regio's: licht gebogen, met lichtpulsjes */}
           {draden.map(([a, b], i) => {
@@ -220,11 +220,12 @@ export function WerkgebiedKaart() {
         </svg>
       </div>
 
+      <p className="px-4 pb-3 pt-2.5 text-center text-[9px] font-medium uppercase tracking-wide text-orange-50/40 sm:text-[10px] sm:tracking-[0.16em]">Buurtaanpak · Bodemonderzoeken · Saneren · Schouwafspraken</p>
+
       {/* Per regio in cijfers */}
-      <div className="grid grid-cols-3 gap-2 px-3 pb-2 pt-3 sm:gap-3 sm:px-4">
+      <div className="grid grid-cols-3 divide-x divide-white/10 border-t border-white/10 bg-white/[0.04]">
         {REGIO_VOLGORDE.map((k) => {
           const s = stand[k];
-          const n = s.medewerkers.length;
           const jij = !!currentUser && s.medewerkers.includes(currentUser.id);
           return (
             <button
@@ -234,26 +235,16 @@ export function WerkgebiedKaart() {
               onMouseLeave={() => setFocus(null)}
               onClick={() => setFocus((f) => (f === k ? null : k))}
               aria-pressed={focus === k}
-              className={`relative overflow-hidden rounded-xl border px-2.5 pb-2.5 pt-3 text-left transition-colors sm:px-3.5 ${focus === k ? "border-orange-300/60 bg-orange-400/15" : "border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.07]"}`}
+              className={`flex flex-col items-center justify-start px-2 py-3 text-center transition-colors sm:px-4 ${focus === k ? "bg-orange-400/15" : "hover:bg-white/5"}`}
             >
-              <span aria-hidden="true" className={`absolute inset-x-0 top-0 h-0.5 ${n > 0 ? "bg-gradient-to-r from-orange-400 to-amber-300" : "bg-white/10"}`} />
-              <div className="flex items-center gap-1.5">
-                <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${n > 0 ? "bg-emerald-400" : "bg-white/25"}`} />
-                <span className="truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-orange-100/70 sm:text-[11px]">{KORT[k]}</span>
-              </div>
-              <div className="mt-1.5 flex items-baseline gap-1.5">
-                <span className="text-2xl font-bold tabular-nums leading-none text-white sm:text-[1.7rem]">{n}</span>
-                <span className="text-[11px] text-orange-50/60">actief</span>
-              </div>
-              <div className="mt-1.5 flex items-center justify-between gap-1">
-                <span className="truncate text-[11px] text-orange-50/50">{s.lopend} lopend</span>
-                {jij && <span className="rounded-full bg-orange-500 px-1.5 py-px text-[10px] font-bold text-white">Jij</span>}
-              </div>
+              <div className="truncate text-[11px] font-semibold uppercase tracking-wide text-orange-200/70 sm:text-xs"><span className="hidden sm:inline">Regio </span>{KORT[k]}</div>
+              <div className="mt-0.5 text-xl font-bold text-white">{s.medewerkers.length}</div>
+              <div className="text-[11px] text-orange-50/65">actief<span className="hidden sm:inline"> · {s.lopend} lopend</span></div>
+              {jij && <div className="mt-1 rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-bold text-white">Jij</div>}
             </button>
           );
         })}
       </div>
-      <p className="px-4 pb-3.5 pt-1 text-center text-[10px] font-medium uppercase tracking-[0.16em] text-orange-50/35">Buurtaanpak · Bodemonderzoeken · Saneren · Schouwafspraken</p>
     </Card>
   );
 }
