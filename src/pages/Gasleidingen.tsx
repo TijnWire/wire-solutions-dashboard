@@ -10,7 +10,7 @@
 import { useMemo, useRef, useState } from "react";
 import {
   ArrowLeft, Check, ChevronDown, ChevronLeft, ChevronRight, DoorOpen, Download, Flame, FolderOpen, Loader2, Mail,
-  MailCheck, Phone, Plus, Search, Settings2, Trash2, Upload, UserX, X, CalendarCheck, Ban, Undo2,
+  MailCheck, Phone, Plus, Search, Settings2, Trash2, Upload, X, CalendarCheck, Ban, Undo2,
 } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { Card, Badge } from "../components/ui";
@@ -21,6 +21,7 @@ import {
   plusDagen, sorteerAdressen, telling, vandaagISO, vrijeSlots, type GasRij, type StraatGroep,
 } from "../lib/gas";
 import { exporteerGasAdreslijst, exporteerGasPlanning } from "../lib/gasExcel";
+import { weekNummer } from "../lib/week";
 
 const pct = (a: number, b: number) => (b ? Math.round((a / b) * 100) : 0);
 
@@ -28,13 +29,12 @@ const pct = (a: number, b: number) => (b ? Math.round((a / b) * 100) : 0);
 const STAND = {
   geenBrief: { label: "Nog geen brief", blok: "bg-ink-200", tekst: "text-ink-600" },
   brief: { label: "Brief bezorgd", blok: "bg-sky-400", tekst: "text-sky-700" },
-  nietThuis: { label: "Niet thuis", blok: "bg-amber-400", tekst: "text-amber-700" },
   afgesproken: { label: "Afgesproken", blok: "bg-green-500", tekst: "text-green-700" },
   weigert: { label: "Weigert", blok: "bg-red-500", tekst: "text-red-700" },
 } as const;
 type StandKey = keyof typeof STAND;
 const standVan = (a: GasAdres): StandKey =>
-  a.status === "afgesproken" ? "afgesproken" : a.status === "weigert" ? "weigert" : a.status === "niet_thuis" ? "nietThuis" : a.briefOp ? "brief" : "geenBrief";
+  a.status === "afgesproken" ? "afgesproken" : a.status === "weigert" ? "weigert" : a.briefOp ? "brief" : "geenBrief";
 
 export function Gasleidingen({ initieelProject }: { initieelProject?: string }) {
   const { gasProjecten, gasAdressen, currentUser } = useApp();
@@ -207,9 +207,9 @@ function ProjectDetail({ project: p, adressen, terug, isLeiding }: { project: Ga
       <div className="grid grid-cols-3 gap-2 sm:gap-3">
         <Stap nr={1} titel="Brieven bezorgen" icon={Mail} waarde={t.brief} totaal={t.totaal} kleur="bg-sky-400" sub={t.totaal - t.brief ? `nog ${t.totaal - t.brief} te bezorgen` : "alle brieven bezorgd"} onClick={() => setTab("brieven")} actief={tab === "brieven"} />
         <Stap nr={2} titel="Afspraken maken" icon={Phone} waarde={t.afgesproken} totaal={t.totaal - t.weigert} kleur="bg-green-500"
-          sub={`${t.viaTelefoon} gebeld · ${t.viaDeur} aan de deur${t.nietThuis ? ` · ${t.nietThuis} niet thuis` : ""}`} onClick={() => setTab("deur")} actief={tab === "deur"} />
+          sub={`${pct(t.afgesproken, t.totaal - t.weigert)}% van de adressen afgesproken`} onClick={() => setTab("deur")} actief={tab === "deur"} />
         <Stap nr={3} titel="Nog af te spreken" icon={DoorOpen} waarde={t.teDoen} totaal={t.totaal} kleur="bg-amber-400" omgekeerd
-          sub={t.weigert ? `${t.weigert} ${t.weigert === 1 ? "weigert" : "weigeren"}` : "langs de deur of nabellen"} onClick={() => setTab("overzicht")} actief={tab === "overzicht"} />
+          sub={t.weigert ? `${t.weigert} ${t.weigert === 1 ? "weigert" : "weigeren"}` : "nog in te plannen"} onClick={() => setTab("overzicht")} actief={tab === "overzicht"} />
       </div>
 
       <div className="flex gap-0.5 rounded-lg border border-ink-200 bg-white p-0.5 shadow-card sm:gap-1 sm:rounded-xl sm:p-1">
@@ -307,7 +307,7 @@ function HuizenOverzicht({ straten, kiesAdres, naarStraat }: { straten: StraatGr
               <span className="text-xs text-ink-500">{s.adressen.length} adressen · {s.brief} brieven · {s.afgesproken} afgesproken</span>
               <div className="ml-auto flex gap-1.5">
                 {s.brief < s.adressen.length && <button type="button" onClick={() => naarStraat(s.straat, "brieven")} className="rounded-lg border border-sky-200 bg-sky-50 px-2 py-1 text-xs font-semibold text-sky-700 hover:bg-sky-100">Brieven</button>}
-                {s.open > 0 && <button type="button" onClick={() => naarStraat(s.straat, "deur")} className="rounded-lg border border-brand-200 bg-brand-50 px-2 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-100">Langs de deur</button>}
+                {s.open > 0 && <button type="button" onClick={() => naarStraat(s.straat, "deur")} className="rounded-lg border border-brand-200 bg-brand-50 px-2 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-100">Afspraak</button>}
               </div>
             </div>
             <div className="flex flex-wrap gap-1">
@@ -403,7 +403,7 @@ function BrievenLijst({ straten, filter, setFilter }: { straten: StraatGroep[]; 
 
 // ── Stap 2: afspraken maken (telefonisch binnengekomen of langs de deur) ──
 function DeurLijst({ project, straten, filter, setFilter, kiesAdres, alle }: { project: GasProject; straten: StraatGroep[]; filter: string; setFilter: (s: string) => void; kiesAdres: (id: string) => void; alle: GasAdres[] }) {
-  const { updateGasAdressen, currentUser } = useApp();
+  const { updateGasAdressen } = useApp();
   const [zoek, setZoek] = useState("");
   const [toon, setToon] = useState<"open" | "alles">("open");
   const q = zoek.trim().toLowerCase();
@@ -413,7 +413,6 @@ function DeurLijst({ project, straten, filter, setFilter, kiesAdres, alle }: { p
     .map((s) => ({ ...s, rij: s.adressen.filter((a) => (toon === "alles" || a.status === "open" || a.status === "niet_thuis") && (!q || `${adresTekst(a)} ${a.postcode}`.toLowerCase().includes(q))) }))
     .filter((s) => s.rij.length);
 
-  const nietThuis = (a: GasAdres) => updateGasAdressen([a.id], (x) => ({ status: "niet_thuis", bezoeken: [...(x.bezoeken ?? []), { op: new Date().toISOString(), door: currentUser?.id }] }));
 
   return (
     <div className="space-y-3">
@@ -432,7 +431,7 @@ function DeurLijst({ project, straten, filter, setFilter, kiesAdres, alle }: { p
           </div>
         </div>
         <p className="text-xs text-ink-500">
-          Belt een bewoner? Zoek het adres en klik op <b>Afspraak</b>. Aan de deur: <b>Afspraak</b> als het lukt, <b>Niet thuis</b> als er niemand opendoet (wordt bijgehouden), of <b>Weigert</b>.
+          Zoek het adres en klik op <b>Afspraak</b>: kies een vrije plek en vul het telefoonnummer van de bewoner in. Werkt een bewoner niet mee, gebruik dan <b>Weigert</b>.
           {eerstVrij && <> Eerstvolgende vrije plek: <b className="text-ink-800">{dagKort(eerstVrij.datum)} · {blokLabel(eerstVrij.blok)}</b>.</>}
         </p>
       </Card>
@@ -447,7 +446,6 @@ function DeurLijst({ project, straten, filter, setFilter, kiesAdres, alle }: { p
           <div className="divide-y divide-ink-100">
             {s.rij.map((a) => {
               const st = STAND[standVan(a)];
-              const n = a.bezoeken?.length ?? 0;
               return (
                 <div key={a.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5">
                   <button type="button" onClick={() => kiesAdres(a.id)} className="flex min-w-0 flex-1 items-center gap-2.5 text-left">
@@ -455,7 +453,7 @@ function DeurLijst({ project, straten, filter, setFilter, kiesAdres, alle }: { p
                     <span className="min-w-0">
                       <span className="block text-sm font-bold text-ink-900">{adresTekst(a)}</span>
                       <span className="block text-xs text-ink-500">
-                        {a.postcode}{!a.briefOp && " · nog geen brief"}{n > 0 && ` · ${n}× niet thuis`}
+                        {a.postcode}{!a.briefOp && " · nog geen brief"}
                         {a.status === "afgesproken" && a.datum && ` · ${dagKort(a.datum)} ${blokLabel(a.blok)}`}
                       </span>
                     </span>
@@ -468,9 +466,6 @@ function DeurLijst({ project, straten, filter, setFilter, kiesAdres, alle }: { p
                     <div className="flex flex-wrap gap-1.5">
                       <button type="button" onClick={() => kiesAdres(a.id)} className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-700">
                         <CalendarCheck className="h-4 w-4" /> Afspraak
-                      </button>
-                      <button type="button" onClick={() => nietThuis(a)} className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-sm font-semibold text-amber-700 hover:bg-amber-100">
-                        <UserX className="h-4 w-4" /> Niet thuis
                       </button>
                       <button type="button" onClick={() => { if (confirm(`${adresTekst(a)}: bewoner werkt niet mee?`)) updateGasAdressen([a.id], { status: "weigert" }); }}
                         className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 bg-white px-2.5 py-1.5 text-sm font-semibold text-ink-500 hover:bg-ink-50" title="Weigert">
@@ -501,6 +496,8 @@ function Planning({ project: p, adressen, kiesAdres }: { project: GasProject; ad
   }, []);
   const [maandag, setMaandag] = useState(start);
   const [kiezen, setKiezen] = useState<{ datum: string; blok: GasBlok } | null>(null);
+  const [inplannen, setInplannen] = useState<string | null>(null);
+  const inplannenAdres = adressen.find((a) => a.id === inplannen);
   const bez = bezetting(adressen);
   const dagen = [0, 1, 2, 3, 4].map((i) => plusDagen(maandag, i));
   const perSlot = (datum: string, blok: GasBlok) => adressen.filter((a) => a.status === "afgesproken" && a.datum === datum && a.blok === blok).sort(sorteerAdressen);
@@ -512,7 +509,7 @@ function Planning({ project: p, adressen, kiesAdres }: { project: GasProject; ad
       <Card className="flex flex-wrap items-center gap-3 p-3">
         <button type="button" onClick={() => setMaandag(plusDagen(maandag, -7))} className="rounded-lg border border-ink-200 p-2 hover:bg-ink-50" aria-label="Vorige week"><ChevronLeft className="h-4 w-4" /></button>
         <div className="min-w-0 flex-1 text-center">
-          <div className="text-sm font-bold text-ink-900">{dagKort(dagen[0])} – {dagKort(dagen[4])}</div>
+          <div className="text-sm font-bold text-ink-900">Week {weekNummer(maandag)} · {dagKort(dagen[0])} – {dagKort(dagen[4])}</div>
           <div className="text-xs text-ink-500">{weekTotaal} van {weekCap} plekken gevuld</div>
         </div>
         <button type="button" onClick={() => setMaandag(plusDagen(maandag, 7))} className="rounded-lg border border-ink-200 p-2 hover:bg-ink-50" aria-label="Volgende week"><ChevronRight className="h-4 w-4" /></button>
@@ -550,7 +547,7 @@ function Planning({ project: p, adressen, kiesAdres }: { project: GasProject; ad
                           <div key={a.id} className="group flex items-center gap-1.5 rounded-lg bg-green-50 px-2 py-1.5 ring-1 ring-green-200">
                             <button type="button" onClick={() => kiesAdres(a.id)} className="min-w-0 flex-1 text-left">
                               <span className="block truncate text-xs font-bold text-ink-900">{adresTekst(a)}</span>
-                              <span className="block truncate text-[11px] text-ink-500">{a.via === "deur" ? "aan de deur" : "gebeld"}{a.telefoon ? ` · ${a.telefoon}` : ""}</span>
+                              <span className="block truncate text-[11px] text-ink-500">{a.telefoon || "geen telefoon"}</span>
                             </button>
                             <button type="button" title="Afspraak weghalen" onClick={() => { if (confirm(`Afspraak ${adresTekst(a)} weghalen?`)) updateGasAdressen([a.id], { status: "open", datum: undefined, blok: undefined }); }}
                               className="rounded p-0.5 text-ink-300 hover:bg-white hover:text-red-500"><X className="h-3.5 w-3.5" /></button>
@@ -572,22 +569,21 @@ function Planning({ project: p, adressen, kiesAdres }: { project: GasProject; ad
         })}
       </div>
 
-      {kiezen && <AdresKiezer adressen={adressen} titel={`${dagLang(kiezen.datum)} · ${blokLabel(kiezen.blok)}`} sluit={() => setKiezen(null)}
-        kies={(a, via) => { updateGasAdressen([a.id], { status: "afgesproken", datum: kiezen.datum, blok: kiezen.blok, via, afgesprokenOp: new Date().toISOString(), afgesprokenDoor: currentUser?.id }); setKiezen(null); }} />}
+      {kiezen && !inplannen && <AdresKiezer adressen={adressen} titel={`${dagLang(kiezen.datum)} · ${blokLabel(kiezen.blok)}`} sluit={() => setKiezen(null)}
+        kies={(a) => setInplannen(a.id)} />}
+      {kiezen && inplannenAdres && <AdresVenster project={p} adres={inplannenAdres} alle={adressen} startDatum={kiezen.datum} startBlok={kiezen.blok} sluit={() => { setInplannen(null); setKiezen(null); }} />}
     </div>
   );
 }
 
 // Een adres kiezen voor een leeg tijdsblok (bijv. een bewoner belt voor een vrije plek).
-function AdresKiezer({ adressen, titel, kies, sluit }: { adressen: GasAdres[]; titel: string; kies: (a: GasAdres, via: "telefoon" | "deur") => void; sluit: () => void }) {
+function AdresKiezer({ adressen, titel, kies, sluit }: { adressen: GasAdres[]; titel: string; kies: (a: GasAdres) => void; sluit: () => void }) {
   const [zoek, setZoek] = useState("");
-  const [via, setVia] = useState<"telefoon" | "deur">("telefoon");
   const q = zoek.trim().toLowerCase();
   const lijst = adressen.filter((a) => (a.status === "open" || a.status === "niet_thuis") && (!q || `${adresTekst(a)} ${a.postcode}`.toLowerCase().includes(q))).sort(sorteerAdressen).slice(0, 40);
   return (
     <Venster titel="Adres inplannen" sub={titel} sluit={sluit}>
       <div className="space-y-3 p-4">
-        <ViaKeuze via={via} setVia={setVia} />
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" />
           <input autoFocus value={zoek} onChange={(e) => setZoek(e.target.value)} placeholder="Straat, huisnummer of postcode…"
@@ -595,7 +591,7 @@ function AdresKiezer({ adressen, titel, kies, sluit }: { adressen: GasAdres[]; t
         </div>
         <div className="max-h-80 divide-y divide-ink-100 overflow-y-auto rounded-xl border border-ink-200">
           {lijst.map((a) => (
-            <button key={a.id} type="button" onClick={() => kies(a, via)} className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-brand-50">
+            <button key={a.id} type="button" onClick={() => kies(a)} className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-brand-50">
               <span className={`h-2.5 w-2.5 rounded-[3px] ${STAND[standVan(a)].blok}`} />
               <span className="flex-1 text-sm font-semibold text-ink-900">{adresTekst(a)}</span>
               <span className="text-xs text-ink-500">{a.postcode}</span>
@@ -605,15 +601,6 @@ function AdresKiezer({ adressen, titel, kies, sluit }: { adressen: GasAdres[]; t
         </div>
       </div>
     </Venster>
-  );
-}
-
-function ViaKeuze({ via, setVia }: { via: "telefoon" | "deur"; setVia: (v: "telefoon" | "deur") => void }) {
-  return (
-    <div className="flex rounded-xl border border-ink-200 p-0.5 text-sm font-semibold">
-      <button type="button" onClick={() => setVia("telefoon")} className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 ${via === "telefoon" ? "bg-ink-900 text-white" : "text-ink-600"}`}><Phone className="h-4 w-4" /> Bewoner belde</button>
-      <button type="button" onClick={() => setVia("deur")} className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 ${via === "deur" ? "bg-ink-900 text-white" : "text-ink-600"}`}><DoorOpen className="h-4 w-4" /> Aan de deur</button>
-    </div>
   );
 }
 
@@ -635,13 +622,13 @@ function Venster({ titel, sub, sluit, children }: { titel: string; sub?: string;
 }
 
 // ── Eén adres: brief, afspraak maken of wijzigen, bezoeken ──
-function AdresVenster({ project, adres: a, alle, sluit }: { project: GasProject; adres: GasAdres; alle: GasAdres[]; sluit: () => void }) {
+function AdresVenster({ project, adres: a, alle, sluit, startDatum, startBlok }: { project: GasProject; adres: GasAdres; alle: GasAdres[]; sluit: () => void; startDatum?: string; startBlok?: GasBlok }) {
   const { updateGasAdressen, currentUser, users } = useApp();
-  const [via, setVia] = useState<"telefoon" | "deur">(a.via ?? "telefoon");
   const [telefoon, setTelefoon] = useState(a.telefoon ?? "");
   const [opmerking, setOpmerking] = useState(a.opmerking ?? "");
-  const [datum, setDatum] = useState(a.datum ?? "");
-  const [blok, setBlok] = useState<GasBlok | "">(a.blok ?? "");
+  const [datum, setDatum] = useState(startDatum ?? a.datum ?? "");
+  const [blok, setBlok] = useState<GasBlok | "">(startBlok ?? a.blok ?? "");
+  const telOk = telefoon.replace(/\D/g, "").length >= 10;
   const anderen = alle.filter((x) => x.id !== a.id);
   const slots = useMemo(() => vrijeSlots(project, anderen, 10), [project, anderen]);
   const bez = bezetting(anderen);
@@ -650,8 +637,8 @@ function AdresVenster({ project, adres: a, alle, sluit }: { project: GasProject;
   const st = STAND[standVan(a)];
 
   const bewaar = () => {
-    if (!datum || !blok) return;
-    updateGasAdressen([a.id], { status: "afgesproken", datum, blok, via, telefoon: telefoon.trim() || undefined, opmerking: opmerking.trim() || undefined, afgesprokenOp: a.afgesprokenOp ?? new Date().toISOString(), afgesprokenDoor: a.afgesprokenDoor ?? currentUser?.id });
+    if (!datum || !blok || !telOk) return;
+    updateGasAdressen([a.id], { status: "afgesproken", datum, blok, telefoon: telefoon.trim(), opmerking: opmerking.trim() || undefined, afgesprokenOp: a.afgesprokenOp ?? new Date().toISOString(), afgesprokenDoor: a.afgesprokenDoor ?? currentUser?.id });
     sluit();
   };
 
@@ -669,7 +656,6 @@ function AdresVenster({ project, adres: a, alle, sluit }: { project: GasProject;
 
         <div className="space-y-3 rounded-xl border border-ink-200 p-3">
           <div className="text-sm font-bold text-ink-900">{a.status === "afgesproken" ? "Afspraak wijzigen" : "Afspraak maken"}</div>
-          <ViaKeuze via={via} setVia={setVia} />
           {slots.length > 0 && (
             <div>
               <div className="mb-1.5 text-xs font-semibold text-ink-600">Eerstvolgende vrije plekken</div>
@@ -704,25 +690,22 @@ function AdresVenster({ project, adres: a, alle, sluit }: { project: GasProject;
           {datum && !isProjectDag(project, datum) && <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">Let op: dit is geen werkdag van het project.</p>}
           <div className="grid gap-2 sm:grid-cols-2">
             <label className="block">
-              <span className="mb-1 block text-xs font-semibold text-ink-600">Telefoon (optioneel)</span>
-              <input value={telefoon} onChange={(e) => setTelefoon(e.target.value)} inputMode="tel" placeholder="06…" className="w-full rounded-lg border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100" />
+              <span className="mb-1 block text-xs font-semibold text-ink-600">Telefoon <span className="text-red-500">*</span></span>
+              <input value={telefoon} required onChange={(e) => setTelefoon(e.target.value)} inputMode="tel" placeholder="06…" className="w-full rounded-lg border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100" />
             </label>
             <label className="block">
               <span className="mb-1 block text-xs font-semibold text-ink-600">Opmerking</span>
               <input value={opmerking} onChange={(e) => setOpmerking(e.target.value)} placeholder="bv. meterkast in schuur" className="w-full rounded-lg border border-ink-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100" />
             </label>
           </div>
-          <button type="button" onClick={bewaar} disabled={!datum || !blok || vol}
+          {telefoon.trim() !== "" && !telOk && <p className="text-xs text-red-600">Vul een volledig telefoonnummer in (10 cijfers).</p>}
+          <button type="button" onClick={bewaar} disabled={!datum || !blok || vol || !telOk}
             className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-40">
             <CalendarCheck className="h-4 w-4" /> {a.status === "afgesproken" ? "Wijziging opslaan" : "Afspraak vastleggen"}
           </button>
         </div>
 
         <div className="flex flex-wrap gap-2">
-          {a.status !== "afgesproken" && a.status !== "weigert" && (
-            <button type="button" onClick={() => { updateGasAdressen([a.id], (x) => ({ status: "niet_thuis", bezoeken: [...(x.bezoeken ?? []), { op: new Date().toISOString(), door: currentUser?.id }] })); sluit(); }}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-100"><UserX className="h-4 w-4" /> Niet thuis</button>
-          )}
           {a.status !== "weigert" ? (
             <button type="button" onClick={() => { if (confirm("Bewoner werkt niet mee?")) { updateGasAdressen([a.id], { status: "weigert", datum: undefined, blok: undefined }); sluit(); } }}
               className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-100"><Ban className="h-4 w-4" /> Weigert</button>
@@ -735,15 +718,7 @@ function AdresVenster({ project, adres: a, alle, sluit }: { project: GasProject;
           )}
         </div>
 
-        {(a.bezoeken?.length ?? 0) > 0 && (
-          <div>
-            <div className="mb-1 text-xs font-semibold text-ink-600">Aangebeld zonder afspraak</div>
-            <ul className="space-y-0.5 text-xs text-ink-500">
-              {a.bezoeken!.map((b, i) => <li key={i}>{new Date(b.op).toLocaleString("nl-NL", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}{b.door ? ` · ${naam(b.door)}` : ""}</li>)}
-            </ul>
-          </div>
-        )}
-        {a.status === "afgesproken" && a.afgesprokenDoor && <p className="text-xs text-ink-400">Afgesproken door {naam(a.afgesprokenDoor)}{a.via === "deur" ? " aan de deur" : " (bewoner belde)"}.</p>}
+        {a.status === "afgesproken" && a.afgesprokenDoor && <p className="text-xs text-ink-400">Afgesproken door {naam(a.afgesprokenDoor)}.</p>}
       </div>
     </Venster>
   );
