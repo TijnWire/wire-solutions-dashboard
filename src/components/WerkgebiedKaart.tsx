@@ -80,7 +80,7 @@ export function WerkgebiedKaart() {
       <div className="flex items-center gap-3 px-4 pb-3 pt-4 sm:px-5">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-orange-300/30 bg-gradient-to-br from-orange-400/25 to-orange-400/5 text-orange-200"><MapPin className="h-5 w-5" /></span>
         <div className="min-w-0 flex-1">
-          <h3 className="text-[15px] font-bold leading-tight tracking-tight text-white">Onze werkgebieden</h3>
+          <h3 className="text-[15px] font-bold leading-tight tracking-tight text-white">Werkgebieden</h3>
           <p className="text-xs text-orange-50/60">Waar het team nu aan het werk is</p>
         </div>
         <span className="inline-flex shrink-0 items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-3 py-1.5 text-xs font-semibold text-orange-50/90" title="Medewerkers met lopend werk">

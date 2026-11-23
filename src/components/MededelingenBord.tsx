@@ -183,7 +183,7 @@ export function MededelingenBord({ compose = false, donker = false }: { compose?
   const aantal = mededelingen.filter((m) => isMededelingVoor(m, currentUser.id, isLeiding)).length;
 
   return (
-    <Card className={`overflow-hidden ${donker ? "mw-paneel mw-donker !border-white/10 !bg-transparent" : ""}`}>
+    <Card className={`overflow-hidden ${donker ? "mw-paneel mw-donker !border-white/10 !bg-transparent xl:flex xl:h-full xl:flex-col" : ""}`}>
       <div className={`flex items-center gap-2 border-b border-ink-100 px-5 py-3.5 ${donker ? "" : "bg-ink-50/60"}`}>
         <Megaphone className={`h-5 w-5 ${donker ? "text-orange-300" : "text-brand-600"}`} />
         <h3 className="text-sm font-bold text-ink-900">Mededelingen</h3>
@@ -195,7 +195,7 @@ export function MededelingenBord({ compose = false, donker = false }: { compose?
           <MededelingComposer />
         </div>
       )}
-      <MededelingenFeed />
+      <MededelingenFeed scrollClass={donker ? "max-h-96 xl:max-h-none xl:min-h-0 xl:flex-1" : undefined} />
     </Card>
   );
 }
