@@ -3,6 +3,7 @@ import { ArrowLeft, Ban, CalendarClock, CalendarX, CheckCircle2, ChevronDown, Ch
 import { useApp } from "../store/AppContext";
 import { Overzicht, type Modus } from "./Gasleidingen";
 import { perStraat } from "../lib/gas";
+import { adresSleutel, bodemAdressen, bodemCijfers } from "../lib/bodemStand";
 import { Card, Badge } from "../components/ui";
 import { WerknemerKiezer } from "../components/WerknemerKiezer";
 import { DatumKiezer } from "../components/DatumKiezer";
@@ -40,7 +41,7 @@ const SoortCtx = createContext<Soort>("schouw");
 
 // ───────────────────────── Overzicht: één map per stad / plaats ─────────────────────────
 export function Schouwafspraken({ soort = "schouw", extra }: { soort?: Soort; extra?: React.ReactNode }) {
-  const { schouwafspraken: alleAfspraken, schouwMappen: alleMappen, addSchouwMap, deleteSchouwMap, currentUser } = useApp();
+  const { schouwafspraken: alleAfspraken, schouwMappen: alleMappen, addSchouwMap, deleteSchouwMap, currentUser, gasAdressen } = useApp();
   const bodem = soort === "bodem";
   const schouwafspraken = useMemo(() => alleAfspraken.filter((a) => (a.soort === "bodem") === bodem), [alleAfspraken, bodem]);
   const schouwMappen = useMemo(() => alleMappen.filter((m) => (m.soort === "bodem") === bodem), [alleMappen, bodem]);
@@ -116,7 +117,12 @@ export function Schouwafspraken({ soort = "schouw", extra }: { soort?: Soort; ex
                       {bodem && m.record?.pdNummer && <span className="shrink-0 rounded-md bg-ink-900 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-white">{m.record.pdNummer}</span>}
                     </div>
                     <div className="mt-0.5 text-xs text-ink-500">
-                      {m.afspraken.length === 0 ? "Nog geen afspraken" : `${m.afspraken.length} ${m.afspraken.length === 1 ? "afspraak" : "afspraken"}`}
+                      {(() => {
+                        // Bodem met adreslijst: "25 adressen · 18 brieven · 3 afgesproken"
+                        const c = bodem ? bodemCijfers(bodemAdressen(m.sleutel, gasAdressen, m.afspraken)) : null;
+                        if (c && c.adressen) return `${c.adressen} adressen · ${c.brieven} brieven · ${c.afgesproken} afgesproken${c.weigert ? ` · ${c.weigert} weigert` : ""}`;
+                        return m.afspraken.length === 0 ? "Nog geen afspraken" : `${m.afspraken.length} ${m.afspraken.length === 1 ? "afspraak" : "afspraken"}`;
+                      })()}
                     </div>
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {dezeWeek > 0 && <Badge tone="amber">{dezeWeek} deze week</Badge>}
@@ -169,9 +175,6 @@ function startWeekBodem(map: SchouwMap | undefined, afspraken: Schouwafspraak[])
 }
 
 // ───────────────────────── Eén map: weekplanning ─────────────────────────
-// Adres vergelijken tussen de adreslijst en de afspraken: straat + huisnummer (met toevoeging), zonder spaties/hoofdletters.
-const adresSleutel = (straat: string, nr: string) => `${straat.toLowerCase().replace(/\s+/g, " ").trim()}|${nr.toLowerCase().replace(/[\s-]+/g, "")}`;
-
 type FormState = { datum: string; tijd: string; straat: string; huisnummer: string; naam: string; telefoon: string; notitie: string; toegewezenAan: string[]; status: SchouwStatus; blok: 1 | 2; postcode?: string; lijstId?: string };
 
 function MapDetail({ overzicht, terug }: { overzicht: MapOverzicht; terug: () => void }) {
@@ -184,15 +187,7 @@ function MapDetail({ overzicht, terug }: { overzicht: MapOverzicht; terug: () =>
   // Bodemonderzoek: de adreslijst van deze plaats, met per huis de stand (brief / afgesproken / weigert).
   // "Afgesproken" volgt uit de planning: er staat een (niet geannuleerde) afspraak op dat adres.
   const [modus, setModus] = useState<Modus>("brieven");
-  const lijstAdressen = useMemo(() => {
-    if (!bodem || !overzicht.sleutel) return [] as GasAdres[];
-    const sleutelAfspraak = new Map<string, Schouwafspraak>();
-    for (const a of afspraken) if (a.status !== "Geannuleerd") sleutelAfspraak.set(adresSleutel(a.straat, a.huisnummer), a);
-    return gasAdressen.filter((x) => x.projectId === `bodem:${overzicht.sleutel}`).map((x): GasAdres => {
-      const af = sleutelAfspraak.get(adresSleutel(x.straat, `${x.huisnummer}${x.toevoeging}`));
-      return af ? { ...x, status: "afgesproken", datum: af.datum && isISODatum(af.datum) ? af.datum : undefined, telefoon: af.telefoon || x.telefoon } : x;
-    });
-  }, [bodem, overzicht.sleutel, gasAdressen, afspraken]);
+  const lijstAdressen = useMemo(() => (bodem ? bodemAdressen(overzicht.sleutel, gasAdressen, afspraken) : []), [bodem, overzicht.sleutel, gasAdressen, afspraken]);
   const lijstStraten = useMemo(() => perStraat(lijstAdressen), [lijstAdressen]);
   // Bodemonderzoek opent meteen op de week waarin de afspraken gemaakt moeten worden (de planning),
   // niet op de huidige week.
