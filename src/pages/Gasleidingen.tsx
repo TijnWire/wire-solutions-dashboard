@@ -281,8 +281,8 @@ function Legenda() {
 // ── Overzicht: elk huis een blokje, per straat. Hier gebeurt alles. ──
 // Bovenaan kies je wat je aan het doen bent: brieven bezorgen of afspraken maken. Daarna is het
 // alleen nog tikken op een huis — bij brieven zet één tik het vinkje, bij afspraken opent het venster.
-type Modus = "brieven" | "afspraak";
-function Overzicht({ straten, modus, setModus, kiesAdres }: { straten: StraatGroep[]; modus: Modus; setModus: (m: Modus) => void; kiesAdres: (id: string) => void }) {
+export type Modus = "brieven" | "afspraak";
+export function Overzicht({ straten, modus, setModus, kiesAdres }: { straten: StraatGroep[]; modus: Modus; setModus: (m: Modus) => void; kiesAdres: (id: string) => void }) {
   const { updateGasAdressen, currentUser } = useApp();
   const [zoek, setZoek] = useState("");
   const [alleenWerk, setAlleenWerk] = useState(false);

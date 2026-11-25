@@ -1,3 +1,5 @@
+import { BODEM_ADRESSEN_SEED } from "../lib/bodemAdressenSeed";
+import { normPlaats } from "../lib/schouw";
 import {
   createContext,
   useContext,
@@ -1657,6 +1659,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (r && r.boekhouder === undefined) updateUser(r.id, { boekhouder: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hydrated, users]);
+
+  // Bodemonderzoeken (25-11-2026): de adreslijst van Stedin/TAUW per plaats inlezen, zodat per map de
+  // huizen kunnen worden afgevinkt (brief, afgesproken, weigert). De adressen hangen aan de plaats
+  // ("bodem:<plaats>") en hebben vaste id's, zodat meerdere apparaten geen dubbele lijst maken. Een
+  // oude tijdstempel zorgt dat afvinkwerk van andere apparaten altijd voorgaat.
+  useEffect(() => {
+    if (!hydrated) return;
+    const ontbreekt = Object.keys(BODEM_ADRESSEN_SEED).filter((pl) => !gasAdressen.some((a) => a.projectId === `bodem:${normPlaats(pl)}`));
+    if (!ontbreekt.length) return;
+    const t = "2026-11-25T00:00:00.000Z";
+    const nieuw: GasAdres[] = ontbreekt.flatMap((pl) => BODEM_ADRESSEN_SEED[pl].map(([straat, huisnummer, toevoeging, postcode, opmerking], i) => ({
+      id: `bodem-${normPlaats(pl).replace(/[^a-z0-9]+/g, "-")}-${i + 1}`, projectId: `bodem:${normPlaats(pl)}`, volgorde: i + 1,
+      straat, huisnummer, toevoeging, postcode, plaats: pl, status: "open" as const, ...(opmerking ? { opmerking } : {}), bijgewerktOp: t,
+    })));
+    setGasAdressen((prev) => [...prev, ...nieuw.filter((n) => !prev.some((x) => x.id === n.id))]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated, gasAdressen.length]);
 
   // Schouwafspraken Den Haag is gesplitst (23-11-2026): de bestaande map heet nu "Den Haag Patrick" (met al
   // zijn afspraken) en er is een tweede map "Den Haag Anthony" in precies dezelfde opzet (zelfde planning en

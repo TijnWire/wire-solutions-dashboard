@@ -66,6 +66,8 @@ function adresIndex(data: ZoekData, user: User, isLeiding: boolean): AdresRegel[
     if (!gasZichtbaar.has(a.projectId)) continue;
     voeg(a.straat, a.huisnummer, a.toevoeging, a.postcode, a.plaats, "", a.telefoon, { label: "Gasleidingen", navKey: "gas", target: { gasProject: a.projectId } });
   }
+  // Adreslijsten van de bodemonderzoeken (per plaats)
+  if (isLeiding) for (const a of data.gasAdressen ?? []) if (a.projectId.startsWith("bodem:")) voeg(a.straat, a.huisnummer, a.toevoeging, a.postcode, a.plaats, "", a.telefoon, { label: "Bodemonderzoek", navKey: "tauw" });
   for (const a of data.afspraken) {
     if (!isLeiding && !isToegewezen(a, user.id)) continue;
     voeg(a.straat, a.huisnummer, "", a.postcode, a.plaats, a.klantNaam, a.telefoon, { label: "Afspraak", navKey: "afspraken", target: { locatie: a.locatie } });

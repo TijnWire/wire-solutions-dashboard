@@ -1,12 +1,14 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, CalendarClock, CalendarX, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Settings2, User as UserIcon, Clock, Download, FolderOpen, FolderPlus, Pencil, Phone, Plus, RotateCcw, Trash2, X } from "lucide-react";
+import { ArrowLeft, Ban, CalendarClock, CalendarX, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Settings2, User as UserIcon, Clock, Download, FolderOpen, FolderPlus, Pencil, Phone, Plus, RotateCcw, Trash2, X } from "lucide-react";
 import { useApp } from "../store/AppContext";
+import { Overzicht, type Modus } from "./Gasleidingen";
+import { perStraat } from "../lib/gas";
 import { Card, Badge } from "../components/ui";
 import { WerknemerKiezer } from "../components/WerknemerKiezer";
 import { DatumKiezer } from "../components/DatumKiezer";
 import { TijdKiezer, normaliseerTijd } from "../components/TijdKiezer";
 import { Keuze } from "../components/Keuze";
-import { SCHOUW_STATUSSEN, type SchouwStatus, type Schouwafspraak, type SchouwMap } from "../lib/types";
+import { SCHOUW_STATUSSEN, type SchouwStatus, type Schouwafspraak, type SchouwMap, type GasAdres } from "../lib/types";
 import { AfsprakenPeriode, TijdblokKeuze } from "../components/PlanningInstellen";
 import { isISODatum, toISO, verschuifWeek, weekBereik, weekNummer, weekStartISO } from "../lib/week";
 import {
@@ -167,15 +169,31 @@ function startWeekBodem(map: SchouwMap | undefined, afspraken: Schouwafspraak[])
 }
 
 // ───────────────────────── Eén map: weekplanning ─────────────────────────
-type FormState = { datum: string; tijd: string; straat: string; huisnummer: string; naam: string; telefoon: string; notitie: string; toegewezenAan: string[]; status: SchouwStatus; blok: 1 | 2 };
+// Adres vergelijken tussen de adreslijst en de afspraken: straat + huisnummer (met toevoeging), zonder spaties/hoofdletters.
+const adresSleutel = (straat: string, nr: string) => `${straat.toLowerCase().replace(/\s+/g, " ").trim()}|${nr.toLowerCase().replace(/[\s-]+/g, "")}`;
+
+type FormState = { datum: string; tijd: string; straat: string; huisnummer: string; naam: string; telefoon: string; notitie: string; toegewezenAan: string[]; status: SchouwStatus; blok: 1 | 2; postcode?: string; lijstId?: string };
 
 function MapDetail({ overzicht, terug }: { overzicht: MapOverzicht; terug: () => void }) {
   const bodem = useContext(SoortCtx) === "bodem";
   const soortVeld = bodem ? ("bodem" as const) : undefined;
   // De vaste tijdvakken van Den Haag en Rotterdam gelden alleen voor schouwafspraken.
   const plaatsTijden = bodem ? "" : overzicht.naam;
-  const { users, currentUser, addSchouw, updateSchouw, deleteSchouw, addSchouwMap, updateSchouwMap } = useApp();
+  const { users, currentUser, addSchouw, updateSchouw, deleteSchouw, addSchouwMap, updateSchouwMap, gasAdressen, updateGasAdressen } = useApp();
   const { record, afspraken } = overzicht;
+  // Bodemonderzoek: de adreslijst van deze plaats, met per huis de stand (brief / afgesproken / weigert).
+  // "Afgesproken" volgt uit de planning: er staat een (niet geannuleerde) afspraak op dat adres.
+  const [modus, setModus] = useState<Modus>("brieven");
+  const lijstAdressen = useMemo(() => {
+    if (!bodem || !overzicht.sleutel) return [] as GasAdres[];
+    const sleutelAfspraak = new Map<string, Schouwafspraak>();
+    for (const a of afspraken) if (a.status !== "Geannuleerd") sleutelAfspraak.set(adresSleutel(a.straat, a.huisnummer), a);
+    return gasAdressen.filter((x) => x.projectId === `bodem:${overzicht.sleutel}`).map((x): GasAdres => {
+      const af = sleutelAfspraak.get(adresSleutel(x.straat, `${x.huisnummer}${x.toevoeging}`));
+      return af ? { ...x, status: "afgesproken", datum: af.datum && isISODatum(af.datum) ? af.datum : undefined, telefoon: af.telefoon || x.telefoon } : x;
+    });
+  }, [bodem, overzicht.sleutel, gasAdressen, afspraken]);
+  const lijstStraten = useMemo(() => perStraat(lijstAdressen), [lijstAdressen]);
   // Bodemonderzoek opent meteen op de week waarin de afspraken gemaakt moeten worden (de planning),
   // niet op de huidige week.
   const [maandag, setMaandag] = useState(() => (bodem ? startWeekBodem(record, afspraken) : weekStartISO(vandaagISO())));
@@ -252,9 +270,9 @@ function MapDetail({ overzicht, terug }: { overzicht: MapOverzicht; terug: () =>
     return tijdenVan(tijdRecord, ma, iso, dagIndex, plaatsTijden);
   };
 
-  const openNieuw = (datum = "", tijd = "", blok: 1 | 2 = 1) => {
+  const openNieuw = (datum = "", tijd = "", blok: 1 | 2 = 1, adres?: GasAdres) => {
     setBewerkId(null);
-    setForm({ datum, tijd, straat: "", huisnummer: "", naam: "", telefoon: "", notitie: "", toegewezenAan: [currentUser.id], status: "In te plannen", blok });
+    setForm({ datum, tijd, straat: adres?.straat ?? "", huisnummer: adres ? `${adres.huisnummer}${adres.toevoeging ? (/^[a-z]$/i.test(adres.toevoeging) ? adres.toevoeging : ` ${adres.toevoeging}`) : ""}` : "", naam: "", telefoon: "", notitie: adres?.opmerking ?? "", toegewezenAan: [currentUser.id], status: "In te plannen", blok, postcode: adres?.postcode, lijstId: adres?.id });
     setTimeout(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
   };
   const openBewerk = (a: Schouwafspraak) => {
@@ -263,6 +281,15 @@ function MapDetail({ overzicht, terug }: { overzicht: MapOverzicht; terug: () =>
     setTimeout(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
   };
   const sluit = () => { setForm(null); setBewerkId(null); };
+  // Tik op een huis (afspraak-modus): bestaande afspraak openen, anders een nieuwe met het adres al ingevuld.
+  const tikHuis = (id: string) => {
+    const adres = lijstAdressen.find((x) => x.id === id);
+    if (!adres) return;
+    const bestaand = afspraken.find((a) => a.status !== "Geannuleerd" && adresSleutel(a.straat, a.huisnummer) === adresSleutel(adres.straat, `${adres.huisnummer}${adres.toevoeging}`));
+    if (bestaand) { openBewerk(bestaand); setForm((f) => (f ? { ...f, lijstId: adres.id } : f)); }
+    else openNieuw("", "", 1, adres);
+  };
+  const formLijst = form?.lijstId ? lijstAdressen.find((x) => x.id === form.lijstId) : undefined;
   const set = (p: Partial<FormState>) => setForm((f) => (f ? { ...f, ...p } : f));
 
   const opslaan = () => {
@@ -278,7 +305,7 @@ function MapDetail({ overzicht, terug }: { overzicht: MapOverzicht; terug: () =>
       blok: twee && form.blok === 2 ? (2 as const) : undefined,
     };
     if (bewerkId) updateSchouw(bewerkId, data);
-    else addSchouw({ contactNaam: "", ...data, postcode: "", plaats: overzicht.sleutel ? overzicht.naam : "", ...(soortVeld ? { soort: soortVeld } : {}) });
+    else addSchouw({ contactNaam: "", ...data, postcode: form.postcode ?? "", plaats: overzicht.sleutel ? overzicht.naam : "", ...(soortVeld ? { soort: soortVeld } : {}) });
     // De week volgt de gekozen datum, zodat je de afspraak meteen op de planning ziet staan.
     if (form.datum && isISODatum(form.datum)) setMaandag(weekStartISO(form.datum));
     sluit();
@@ -414,6 +441,19 @@ function MapDetail({ overzicht, terug }: { overzicht: MapOverzicht; terug: () =>
         </Card>
       )}
 
+      {/* Bodemonderzoek: alle adressen uit de lijst — brieven afvinken en afspraken maken, net als bij Gasleidingen */}
+      {bodem && lijstAdressen.length > 0 && (
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h3 className="text-base font-bold text-ink-900">Adressen</h3>
+            <span className="text-xs text-ink-500">
+              {lijstAdressen.length} adressen · {lijstAdressen.filter((x) => x.briefOp).length} brieven · {lijstAdressen.filter((x) => x.status === "afgesproken").length} afgesproken{lijstAdressen.some((x) => x.status === "weigert") ? ` · ${lijstAdressen.filter((x) => x.status === "weigert").length} weigert` : ""}
+            </span>
+          </div>
+          <Overzicht straten={lijstStraten} modus={modus} setModus={setModus} kiesAdres={tikHuis} />
+        </div>
+      )}
+
       {/* Planning instellen: dezelfde opzet als bij Bodemonderzoeken (periode + tijdblokken) */}
       {kanTijdenAanpassen && isLeiding && (
         <Card className="p-4">
@@ -543,7 +583,14 @@ function MapDetail({ overzicht, terug }: { overzicht: MapOverzicht; terug: () =>
                 <Plus className="h-4 w-4" /> {bewerkId ? "Opslaan" : "Toevoegen"}
               </button>
               <button type="button" onClick={sluit} className="rounded-lg border border-ink-200 bg-white px-5 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50">Annuleren</button>
+              {formLijst && !bewerkId && (formLijst.status === "weigert" ? (
+                <button type="button" onClick={() => { updateGasAdressen([formLijst.id], { status: "open" }); sluit(); }} className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-4 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50">Weer open zetten</button>
+              ) : (
+                <button type="button" onClick={() => { if (confirm(`${formLijst.straat} ${formLijst.huisnummer}${formLijst.toevoeging ? ` ${formLijst.toevoeging}` : ""}: bewoner werkt niet mee?`)) { updateGasAdressen([formLijst.id], { status: "weigert" }); sluit(); } }}
+                  className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-100"><Ban className="h-4 w-4" /> Weigert</button>
+              ))}
             </div>
+            {formLijst?.status === "weigert" && !bewerkId && <p className="text-xs font-semibold text-red-600">Dit adres staat op "weigert".</p>}
           </Card>
         </div>
       )}
