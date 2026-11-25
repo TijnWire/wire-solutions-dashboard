@@ -120,7 +120,7 @@ export function Schouwafspraken({ soort = "schouw", extra }: { soort?: Soort; ex
                       {(() => {
                         // Bodem met adreslijst: "25 adressen · 18 brieven · 3 afgesproken"
                         const c = bodem ? bodemCijfers(bodemAdressen(m.sleutel, gasAdressen, m.afspraken)) : null;
-                        if (c && c.adressen) return `${c.adressen} adressen · ${c.brieven} brieven · ${c.afgesproken} afgesproken${c.weigert ? ` · ${c.weigert} weigert` : ""}`;
+                        if (c && c.adressen) return `${c.adressen} adressen · ${c.brieven} brieven bezorgd · ${c.afgesproken} afgesproken${c.weigert ? ` · ${c.weigert} weigert` : ""}`;
                         return m.afspraken.length === 0 ? "Nog geen afspraken" : `${m.afspraken.length} ${m.afspraken.length === 1 ? "afspraak" : "afspraken"}`;
                       })()}
                     </div>
