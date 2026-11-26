@@ -106,9 +106,9 @@ export const NAV: NavItem[] = [
 export const GROUPS: NavGroup[] = ["Werk", "Projecten", "Operatie", "Boekhouding", "Bedrijfsdata", "Systeem"];
 // Wat er in het menu boven elke groep staat (de interne namen blijven gelijk, zodat toegang e.d. niet verandert).
 export const GROEP_LABEL: Record<NavGroup, string> = {
-  Werk: "Mijn dag",
-  Projecten: "In het veld",
-  Operatie: "Naslag",
+  Werk: "Voor mij",
+  Projecten: "Projecten",
+  Operatie: "Database",
   Boekhouding: "Kantoor",
   Bedrijfsdata: "Inzicht",
   Systeem: "Achter de schermen",
