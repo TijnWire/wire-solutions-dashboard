@@ -349,7 +349,13 @@ function MapDetail({ overzicht, terug }: { overzicht: MapOverzicht; terug: () =>
         const dagen = weken.flatMap((w) => exportDagen(bouwWeek(tijdRecord, w, afspraken, plaatsTijden)));
         await exporteerBodemPlanning({ plaats: overzicht.naam, maandag: weken[0], tot: weken[weken.length - 1], dagen, naamVan });
       }
-      else await exporteerSchouwPlanning({ plaats: overzicht.naam, maandag, dagen: exportDagen(week) });
+      else {
+        // Voor Stedin alleen de plaats: de naam van de medewerker achter de map ("Rotterdam Rene") valt weg.
+        const voornamen = new Set(users.map((u) => u.naam.split(" ")[0].toLowerCase()));
+        const woorden = overzicht.naam.trim().split(/\s+/);
+        const plaats = woorden.length > 1 && voornamen.has(woorden[woorden.length - 1].toLowerCase()) ? woorden.slice(0, -1).join(" ") : overzicht.naam;
+        await exporteerSchouwPlanning({ plaats, maandag, dagen: exportDagen(week) });
+      }
     } finally {
       setBezig(false);
     }
