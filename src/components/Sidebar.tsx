@@ -1,6 +1,6 @@
 import { memo, useMemo } from "react";
 import { LogOut } from "lucide-react";
-import { NAV, GROUPS, magZien } from "../lib/nav";
+import { NAV, GROUPS, GROEP_LABEL, magZien } from "../lib/nav";
 import { ROL_LABEL, type User } from "../lib/types";
 import { useApp } from "../store/AppContext";
 import { logoSrc } from "../lib/logo";
@@ -34,7 +34,7 @@ export const Sidebar = memo(function Sidebar({
         {groups.map((group) => (
           <div key={group}>
             <div className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-ink-400">
-              {group}
+              {GROEP_LABEL[group]}
             </div>
             <div className="space-y-0.5">
               {items

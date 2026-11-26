@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Lock, Check, ChevronDown } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { Card, Badge } from "../components/ui";
-import { NAV, GROUPS, WERKNEMER_TOEGANG_KEYS } from "../lib/nav";
+import { NAV, GROUPS, GROEP_LABEL, WERKNEMER_TOEGANG_KEYS } from "../lib/nav";
 import { magAlles } from "../lib/rechten";
 import type { User } from "../lib/types";
 
@@ -79,7 +79,7 @@ export function Toegang() {
                         <div key={groep} className="overflow-hidden rounded-xl border border-ink-200">
                           <button type="button" onClick={() => toggleGroep(groep)} className="flex w-full items-center gap-2 bg-ink-50/70 px-3 py-2 text-left hover:bg-ink-100">
                             <ChevronDown className={`h-4 w-4 shrink-0 text-ink-400 transition-transform ${groepDicht ? "-rotate-90" : ""}`} />
-                            <span className="flex-1 text-sm font-bold text-ink-800">{groep}</span>
+                            <span className="flex-1 text-sm font-bold text-ink-800">{GROEP_LABEL[groep]}</span>
                             {regelbaar.length > 0 && <span className="text-xs font-medium text-ink-400">{aanCount}/{regelbaar.length} aan</span>}
                           </button>
                           {!groepDicht && (
