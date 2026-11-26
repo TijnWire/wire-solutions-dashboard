@@ -1,4 +1,5 @@
 import { BODEM_ADRESSEN_SEED } from "../lib/bodemAdressenSeed";
+import { ROTTERDAM_W49 } from "../lib/rotterdamWeek49";
 import { normPlaats } from "../lib/schouw";
 import {
   createContext,
@@ -1659,6 +1660,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (r && r.boekhouder === undefined) updateUser(r.id, { boekhouder: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hydrated, users]);
+
+  // Schouwafspraken Rotterdam (26-11-2026): de map heet voortaan "Rotterdam Rene" (afspraken verhuizen mee)
+  // en de handgeschreven planning van week 49 wordt ingelezen. Vaste id's: geen dubbele afspraken op
+  // meerdere apparaten; een afspraak die iemand weggooit, komt niet terug. Pas na de eerste volledige
+  // ophaal, zodat we zien wat collega's al hebben staan.
+  useEffect(() => {
+    if (!hydrated || (supabaseAan && sbSessie && !syncKlaar)) return;
+    const isR = (n?: string) => (n ?? "").trim().replace(/\s+/g, " ").toLowerCase() === "rotterdam";
+    const oud = schouwMappen.find((m) => m.soort !== "bodem" && isR(m.naam));
+    const losse = schouwafspraken.some((a) => a.soort !== "bodem" && isR(a.plaats));
+    const weg = deletes["schouwafspraken"] ?? {};
+    const ontbreekt = ROTTERDAM_W49.map((r, i) => ({ r, id: `sa-rot-rene-w49-${i + 1}` })).filter(({ id }) => !weg[id] && !schouwafspraken.some((a) => a.id === id));
+    if (!oud && !losse && !ontbreekt.length) return;
+    const nu = new Date().toISOString();
+    if (oud) {
+      const heeftRene = schouwMappen.some((m) => m.soort !== "bodem" && m.naam.trim().toLowerCase() === "rotterdam rene");
+      if (heeftRene) { setSchouwMappen((prev) => prev.filter((m) => m.id !== oud.id)); tomb("schouwMappen", oud.id); }
+      else setSchouwMappen((prev) => prev.map((m) => (m.id === oud.id ? { ...m, naam: "Rotterdam Rene", bijgewerktOp: nu } : m)));
+    }
+    setSchouwafspraken((prev) => [
+      ...ontbreekt.map(({ r: [datum, blok, tijd, straat, huisnummer, telefoon, notitie], id }): Schouwafspraak => ({
+        id, straat, huisnummer, postcode: "", plaats: "Rotterdam Rene", contactNaam: "", telefoon, datum, tijd,
+        ...(blok === 2 ? { blok: 2 as const } : {}), toegewezenAan: "u-rene", status: "Ingepland", notitie, aangemaakt: nu,
+      })).filter((n) => !prev.some((x) => x.id === n.id)),
+      ...prev.map((a) => (a.soort !== "bodem" && isR(a.plaats) ? { ...a, plaats: "Rotterdam Rene" } : a)),
+    ]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated, sbSessie, syncKlaar, schouwMappen, schouwafspraken]);
 
   // Bodemonderzoeken (25-11-2026): de adreslijst van Stedin/TAUW per plaats inlezen, zodat per map de
   // huizen kunnen worden afgevinkt (brief, afgesproken, weigert). De adressen hangen aan de plaats

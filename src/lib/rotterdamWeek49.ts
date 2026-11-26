@@ -1,0 +1,46 @@
+// Planning Rotterdam (Rene), week 49 — overgenomen van de handgeschreven planningsbladen (foto's, 26-11-2026).
+// Per regel: [datum, blok (1 = eerste planning, 2 = tweede), tijd, straat, huisnummer, telefoon, notitie]
+export const ROTTERDAM_W49: [string, 1 | 2, string, string, string, string, string][] = [
+  // Maandag 30 november (geen 9.00)
+  ["2026-11-30", 1, "10:30", "IJsselmondselaan", "170", "0633500776", ""],
+  ["2026-11-30", 1, "11:30", "Aelbrechtskade", "19B", "0102449675", ""],
+  ["2026-11-30", 1, "13:30", "Heemskerkstraat", "40A", "0651322620", ""],
+  ["2026-11-30", 1, "15:00", "Vierambachtstraat", "26B", "0640018261", ""],
+  ["2026-11-30", 2, "10:30", "Slotstraat", "18B2", "0637437733", ""],
+  ["2026-11-30", 2, "11:30", "Vierambachtstraat", "47A", "0685502651", ""],
+  ["2026-11-30", 2, "13:30", "Vierambachtstraat", "32A", "0655944435", ""],
+  ["2026-11-30", 2, "15:00", "Beukelsdijk", "15A", "0627258675", ""],
+  // Dinsdag 1 december
+  ["2026-12-01", 1, "09:00", "Dordtsestraatweg", "639", "0629338122", ""],
+  ["2026-12-01", 1, "10:30", "Blois van Treslongstraat", "29", "0623215835", ""],
+  ["2026-12-01", 1, "11:30", "Sandelingenstraat", "126", "", "Telefoonnummer op de planning doorgestreept"],
+  ["2026-12-01", 1, "13:30", "Gerard Scholtenstraat", "53A02", "0657651812", ""],
+  ["2026-12-01", 1, "15:00", "Vierambachtstraat", "53A", "0657452464", ""],
+  ["2026-12-01", 2, "09:00", "Zweedsestraat", "83A", "0611514275", ""],
+  ["2026-12-01", 2, "10:30", "Gerard Scholtenstraat", "53B", "0639450024", "Telefoonnummer was deels doorgehaald — graag controleren"],
+  ["2026-12-01", 2, "11:30", "Prinses Margrietlaan", "31A", "0644659380", ""],
+  ["2026-12-01", 2, "13:30", "Jonker Fransstraat", "109A", "0102600028", ""],
+  ["2026-12-01", 2, "15:00", "Goudsesingel", "45B", "0627249002", ""],
+  // Woensdag 2 december
+  ["2026-12-02", 1, "09:00", "Statenweg", "99B", "", ""],
+  ["2026-12-02", 1, "10:30", "Jonker Fransstraat", "111D", "0610704332", ""],
+  ["2026-12-02", 1, "11:30", "Jonker Fransstraat", "111A", "0641789860", ""],
+  ["2026-12-02", 1, "13:30", "Slotstraat", "16A01", "", "Wil geen nummer geven"],
+  ["2026-12-02", 1, "15:00", "Lusthofstraat", "1", "0613736995", ""],
+  ["2026-12-02", 2, "09:00", "Jonker Fransstraat", "113C", "0624523468", ""],
+  ["2026-12-02", 2, "10:30", "Willem Buytewechstraat", "111B", "0104763840", ""],
+  ["2026-12-02", 2, "11:30", "Jonker Fransstraat", "118B", "0627031115", ""],
+  ["2026-12-02", 2, "13:30", "Dresselhuysstraat", "20A", "0624672838", ""],
+  ["2026-12-02", 2, "15:00", "Blois van Treslongstraat", "81", "0624841524", ""],
+  // Donderdag 3 december
+  ["2026-12-03", 1, "09:00", "Joost van Geelstraat", "62B", "0624390193", ""],
+  ["2026-12-03", 1, "10:30", "Gouwstraat", "54A", "0638762813", ""],
+  ["2026-12-03", 1, "11:30", "Dordtsestraatweg", "241", "0645500111", ""],
+  ["2026-12-03", 1, "13:30", "Dordtsestraatweg", "247", "0645500111", ""],
+  ["2026-12-03", 1, "15:00", "Dordtsestraatweg", "243", "0645500111", ""],
+  ["2026-12-03", 2, "09:00", "Blois van Treslongstraat", "79", "0641424347", ""],
+  ["2026-12-03", 2, "10:30", "Blois van Treslongstraat", "69", "0641424347", ""],
+  ["2026-12-03", 2, "11:30", "Blois van Treslongstraat", "73", "0648126083", ""],
+  ["2026-12-03", 2, "13:30", "Blois van Treslongstraat", "65", "0610235507", ""],
+  ["2026-12-03", 2, "15:00", "Blois van Treslongstraat", "33", "0649700489", ""],
+];
