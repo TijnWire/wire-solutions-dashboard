@@ -19,7 +19,7 @@ import { afsprakenInWerkweek, brievenPerMaand, laatsteMaanden, lopendeProjecten,
 import { haalDossiers } from "../lib/saneerflow";
 import { supabaseAan } from "../lib/supabase";
 import type { Factuur } from "../lib/types";
-import { bodemAdressen, bodemCijfers } from "../lib/bodemStand";
+import { bodemAdressen, bodemCijfers, type BodemCijfers } from "../lib/bodemStand";
 import { normPlaats } from "../lib/schouw";
 
 const euro = (n: number) =>
@@ -49,6 +49,64 @@ const factuurTotaal = (f: Factuur) => f.regels.reduce((s, r) => s + r.aantal * r
 
 
 // Eén klikbare kaart per operatie/module.
+type VoortgangRij = BodemCijfers & { sleutel: string; naam: string; id?: string };
+const somCijfers = (rijen: BodemCijfers[]) => rijen.reduce((t, p) => ({ adressen: t.adressen + p.adressen, brieven: t.brieven + p.brieven, afgesproken: t.afgesproken + p.afgesproken, weigert: t.weigert + p.weigert, alleenBrief: t.alleenBrief + p.alleenBrief }), { adressen: 0, brieven: 0, afgesproken: 0, weigert: 0, alleenBrief: 0 });
+const proc = (a: number, b: number) => (b ? Math.round((a / b) * 100) : 0);
+
+// Voortgang van een adreslijst (bodemonderzoeken, gasleidingen): vier kerncijfers en per plaats/project een balk.
+function AdresVoortgang({ titel, subtitel, eenheid, rijen, openen }: { titel: string; subtitel: string; eenheid: [string, string]; rijen: VoortgangRij[]; openen: (id?: string) => void }) {
+  if (!rijen.length) return null;
+  const t = somCijfers(rijen);
+  return (
+    <Card>
+      <CardHeader title={titel} subtitle={subtitel}
+        action={<button type="button" onClick={() => openen()} className="inline-flex items-center gap-1 text-sm font-semibold text-brand-600 hover:text-brand-700">Openen <ArrowRight className="h-4 w-4" /></button>} />
+      <div className="p-5">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {[
+            { label: "Adressen", waarde: t.adressen.toLocaleString("nl-NL"), sub: `${rijen.length} ${rijen.length === 1 ? eenheid[0] : eenheid[1]}`, kleur: "bg-ink-300" },
+            { label: "Brieven bezorgd", waarde: `${proc(t.brieven, t.adressen)}%`, sub: `${t.brieven} van ${t.adressen}`, kleur: "bg-sky-400" },
+            { label: "Afgesproken", waarde: `${proc(t.afgesproken, t.adressen - t.weigert)}%`, sub: `${t.afgesproken} van ${t.adressen - t.weigert}`, kleur: "bg-green-500" },
+            { label: "Weigeraars", waarde: String(t.weigert), sub: `${proc(t.weigert, t.adressen)}% van de adressen`, kleur: "bg-red-500" },
+          ].map((k) => (
+            <div key={k.label} className="rounded-xl border border-ink-100 bg-ink-50/60 p-3">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-ink-500"><span className={`h-2.5 w-2.5 rounded-[3px] ${k.kleur}`} /> {k.label}</div>
+              <div className="mt-1 text-2xl font-bold text-ink-900">{k.waarde}</div>
+              <div className="text-xs text-ink-500">{k.sub}</div>
+            </div>
+          ))}
+        </div>
+        <div className="mt-5 space-y-3.5">
+          {rijen.map((p) => {
+            const rest = Math.max(0, p.adressen - p.afgesproken - p.weigert - p.alleenBrief);
+            const seg = (n: number) => `${p.adressen ? (n / p.adressen) * 100 : 0}%`;
+            return (
+              <button key={p.sleutel} type="button" onClick={() => openen(p.id)} className="block w-full text-left">
+                <div className="mb-1 flex flex-wrap items-baseline justify-between gap-x-3 text-sm">
+                  <span className="font-semibold text-ink-900">{p.naam}</span>
+                  <span className="text-xs text-ink-500">{p.adressen} adressen · {p.brieven} brieven bezorgd · <b className="text-green-700">{p.afgesproken} afgesproken</b>{p.weigert ? ` · ${p.weigert} weigert` : ""}</span>
+                </div>
+                <div className="flex h-3 overflow-hidden rounded-full bg-ink-100" title={`${p.afgesproken} afgesproken, ${p.alleenBrief} alleen brief, ${rest} nog geen brief, ${p.weigert} weigert`}>
+                  <div className="h-full bg-green-500" style={{ width: seg(p.afgesproken) }} />
+                  <div className="h-full bg-sky-400" style={{ width: seg(p.alleenBrief) }} />
+                  <div className="h-full bg-ink-200" style={{ width: seg(rest) }} />
+                  <div className="h-full bg-red-500" style={{ width: seg(p.weigert) }} />
+                </div>
+              </button>
+            );
+          })}
+        </div>
+        <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-500">
+          <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-[3px] bg-green-500" /> Afgesproken</span>
+          <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-[3px] bg-sky-400" /> Brief bezorgd</span>
+          <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-[3px] bg-ink-200" /> Nog geen brief</span>
+          <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-[3px] bg-red-500" /> Weigert</span>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 function OperatieKaart({ icon: Icon, label, waarde, sub, onClick }: { icon: ComponentType<{ className?: string }>; label: string; waarde: number | string; sub: string; onClick: () => void }) {
   return (
     <button type="button" onClick={onClick} className="group flex items-center gap-3 rounded-2xl border border-ink-200 bg-white p-4 text-left shadow-card transition hover:border-brand-300 hover:shadow-cardhover">
@@ -64,7 +122,7 @@ function OperatieKaart({ icon: Icon, label, waarde, sub, onClick }: { icon: Comp
 }
 
 export function Overzicht() {
-  const { afspraken, rondes, voorschouwen, voorschouwMappen, facturen, taken, users, saneringen, tauwOpdrachten, verlof, projects, projectPosts, buurtaanpak, schouwafspraken, currentUser, instellingen, gasAdressen } = useApp();
+  const { afspraken, rondes, voorschouwen, voorschouwMappen, facturen, taken, users, saneringen, tauwOpdrachten, verlof, projects, projectPosts, buurtaanpak, schouwafspraken, currentUser, instellingen, gasAdressen, gasProjecten } = useApp();
   // Saneerdossiers staan op de server; die halen we op voor het tellen van de lopende projecten.
   const [dossiers, setDossiers] = useState<DossierLicht[]>([]);
   useEffect(() => {
@@ -159,8 +217,12 @@ export function Overzicht() {
       return { sleutel, naam: lijst[0]?.plaats ?? sleutel, ...bodemCijfers(lijst) };
     })
     .sort((a, b) => b.adressen - a.adressen);
-  const bodemTotaal = bodemPlaatsen.reduce((t, p) => ({ adressen: t.adressen + p.adressen, brieven: t.brieven + p.brieven, afgesproken: t.afgesproken + p.afgesproken, weigert: t.weigert + p.weigert }), { adressen: 0, brieven: 0, afgesproken: 0, weigert: 0 });
-  const proc = (a: number, b: number) => (b ? Math.round((a / b) * 100) : 0);
+  const bodemTotaal = somCijfers(bodemPlaatsen);
+  // ── Gasleidingen: per project hetzelfde ──
+  const gasRijen = gasProjecten.filter((g) => !g.gearchiveerd)
+    .map((g) => ({ sleutel: g.id, id: g.id, naam: g.naam, ...bodemCijfers(gasAdressen.filter((a) => a.projectId === g.id)) }))
+    .sort((a, b) => b.adressen - a.adressen);
+  const gasTotaal = somCijfers(gasRijen);
 
   // ── Recente activiteit ──
   const recente = [...projectPosts].sort((a, b) => (a.aangemaakt < b.aangemaakt ? 1 : -1)).slice(0, 6);
@@ -171,6 +233,7 @@ export function Overzicht() {
     `Brieven: ${gegooid} gegooid van ${teBezorgen.length}; nog te gooien: ${brievenTeGooien}.`,
     `Voorschouwen: ${vsConcept} concept, ${vsIngediend} ingediend.`,
     `TAUW: ${tauwOpen} open, ${tauwControle} ter controle.`,
+    gasRijen.length ? `Gasleidingen: ${gasTotaal.adressen} adressen, ${gasTotaal.brieven} brieven bezorgd, ${gasTotaal.afgesproken} afgesproken, ${gasTotaal.weigert} weigeren (${gasRijen.map((p) => `${p.naam} ${p.afgesproken}/${p.adressen}`).join(", ")}).` : "",
     bodemPlaatsen.length ? `Bodemonderzoeken: ${bodemTotaal.adressen} adressen, ${bodemTotaal.brieven} brieven bezorgd, ${bodemTotaal.afgesproken} afgesproken, ${bodemTotaal.weigert} weigeren (${bodemPlaatsen.map((p) => `${p.naam} ${p.afgesproken}/${p.adressen}`).join(", ")}).` : "",
     `Openstaande taken: ${openTaken.length}. Openstaande verlofaanvragen: ${verlofOpen}. Klaar voor facturatie: ${teFactureren}.`,
     `Facturen: ${openFacturen.length} openstaand (${euro(openBedrag)}); totaal gefactureerd ${euro(totaalOmzet)}, betaald ${euro(bedragBetaald)}, concept ${euro(bedragConcept)}.`,
@@ -210,56 +273,9 @@ export function Overzicht() {
         </div>
       </div>
 
-      {/* Bodemonderzoeken: voortgang van de adreslijsten per plaats */}
-      {bodemPlaatsen.length > 0 && (
-        <Card>
-          <CardHeader title="Bodemonderzoeken" subtitle="Voortgang van de adreslijsten per plaats"
-            action={<button type="button" onClick={() => navigeer("tauw")} className="inline-flex items-center gap-1 text-sm font-semibold text-brand-600 hover:text-brand-700">Openen <ArrowRight className="h-4 w-4" /></button>} />
-          <div className="p-5">
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            {[
-              { label: "Adressen", waarde: bodemTotaal.adressen.toLocaleString("nl-NL"), sub: `${bodemPlaatsen.length} ${bodemPlaatsen.length === 1 ? "plaats" : "plaatsen"}`, kleur: "bg-ink-300" },
-              { label: "Brieven bezorgd", waarde: `${proc(bodemTotaal.brieven, bodemTotaal.adressen)}%`, sub: `${bodemTotaal.brieven} van ${bodemTotaal.adressen}`, kleur: "bg-sky-400" },
-              { label: "Afgesproken", waarde: `${proc(bodemTotaal.afgesproken, bodemTotaal.adressen - bodemTotaal.weigert)}%`, sub: `${bodemTotaal.afgesproken} van ${bodemTotaal.adressen - bodemTotaal.weigert}`, kleur: "bg-green-500" },
-              { label: "Weigeraars", waarde: String(bodemTotaal.weigert), sub: `${proc(bodemTotaal.weigert, bodemTotaal.adressen)}% van de adressen`, kleur: "bg-red-500" },
-            ].map((k) => (
-              <div key={k.label} className="rounded-xl border border-ink-100 bg-ink-50/60 p-3">
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-ink-500"><span className={`h-2.5 w-2.5 rounded-[3px] ${k.kleur}`} /> {k.label}</div>
-                <div className="mt-1 text-2xl font-bold text-ink-900">{k.waarde}</div>
-                <div className="text-xs text-ink-500">{k.sub}</div>
-              </div>
-            ))}
-          </div>
-          <div className="mt-5 space-y-3.5">
-            {bodemPlaatsen.map((p) => {
-              const alleenBrief = p.alleenBrief;
-              const rest = Math.max(0, p.adressen - p.afgesproken - p.weigert - alleenBrief);
-              const seg = (n: number) => `${p.adressen ? (n / p.adressen) * 100 : 0}%`;
-              return (
-                <button key={p.sleutel} type="button" onClick={() => navigeer("tauw")} className="block w-full text-left">
-                  <div className="mb-1 flex flex-wrap items-baseline justify-between gap-x-3 text-sm">
-                    <span className="font-semibold text-ink-900">{p.naam}</span>
-                    <span className="text-xs text-ink-500">{p.adressen} adressen · {p.brieven} brieven · <b className="text-green-700">{p.afgesproken} afgesproken</b>{p.weigert ? ` · ${p.weigert} weigert` : ""}</span>
-                  </div>
-                  <div className="flex h-3 overflow-hidden rounded-full bg-ink-100" title={`${p.afgesproken} afgesproken, ${alleenBrief} alleen brief, ${rest} nog geen brief, ${p.weigert} weigert`}>
-                    <div className="h-full bg-green-500" style={{ width: seg(p.afgesproken) }} />
-                    <div className="h-full bg-sky-400" style={{ width: seg(alleenBrief) }} />
-                    <div className="h-full bg-ink-200" style={{ width: seg(rest) }} />
-                    <div className="h-full bg-red-500" style={{ width: seg(p.weigert) }} />
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-          <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-500">
-            <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-[3px] bg-green-500" /> Afgesproken</span>
-            <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-[3px] bg-sky-400" /> Brief bezorgd</span>
-            <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-[3px] bg-ink-200" /> Nog geen brief</span>
-            <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-[3px] bg-red-500" /> Weigert</span>
-          </div>
-          </div>
-        </Card>
-      )}
+      {/* Bodemonderzoeken en Gasleidingen: voortgang van de adreslijsten */}
+      <AdresVoortgang titel="Bodemonderzoeken" subtitel="Voortgang van de adreslijsten per plaats" eenheid={["plaats", "plaatsen"]} rijen={bodemPlaatsen} openen={() => navigeer("tauw")} />
+      <AdresVoortgang titel="Gasleidingen" subtitel="Voortgang per project: brieven bezorgd en afspraken gemaakt" eenheid={["project", "projecten"]} rijen={gasRijen} openen={(id) => navigeer("gas", id ? { gasProject: id } : null)} />
 
       {/* Brieven gegooid per maand */}
       <Card>
