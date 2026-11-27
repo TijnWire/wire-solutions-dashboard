@@ -48,10 +48,14 @@ export type PlaatsIndeling = {
   versie: number;         // ophogen zodra deze plaats nieuwe vaste tijden krijgt (zie Schouwafspraken)
 };
 const DEN_HAAG: PlaatsIndeling = { maandag: DEN_HAAG_MAANDAG, werkdag: DEN_HAAG_WERKDAG, versie: 1 };
+// Den Haag (2) Anthony: zonder 8.00 en 15.15 — maandag 10.00 t/m 14.15, dinsdag t/m vrijdag 8.45 t/m 14.15.
+const DEN_HAAG_2_MAANDAG = DEN_HAAG_MAANDAG.filter((t) => t !== "15:15");
+const DEN_HAAG_2: PlaatsIndeling = { maandag: DEN_HAAG_2_MAANDAG, werkdag: ["08:45", "09:15", ...DEN_HAAG_2_MAANDAG], versie: 2 };
 const ROTTERDAM: PlaatsIndeling = { maandag: ROTTERDAM_MAANDAG, werkdag: ROTTERDAM_WERKDAG, geenVrijdag: true, tweeBlokken: true, versie: 2 };
 const PLAATS_TIJDEN: Record<string, PlaatsIndeling> = {
   rotterdam: ROTTERDAM,
   "den haag": DEN_HAAG,
+  "den haag (2)": DEN_HAAG_2,
   "'s-gravenhage": DEN_HAAG,
   "s-gravenhage": DEN_HAAG,
   "’s-gravenhage": DEN_HAAG,
@@ -66,7 +70,8 @@ export const plaatsIndeling = (plaats?: string): PlaatsIndeling | undefined => {
   const n = plaats ? normPlaats(plaats) : "";
   if (!n) return undefined;
   if (PLAATS_TIJDEN[n]) return PLAATS_TIJDEN[n];
-  const sleutel = Object.keys(PLAATS_TIJDEN).find((k) => n.includes(k));
+  // De langste passende naam wint, zodat "Den Haag (2) Anthony" zijn eigen indeling krijgt.
+  const sleutel = Object.keys(PLAATS_TIJDEN).filter((k) => n.includes(k)).sort((a, b) => b.length - a.length)[0];
   return sleutel ? PLAATS_TIJDEN[sleutel] : undefined;
 };
 export const heeftTweeBlokken = (plaats?: string): boolean => !!plaatsIndeling(plaats)?.tweeBlokken;
