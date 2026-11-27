@@ -1661,6 +1661,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hydrated, users]);
 
+  // Den Haag genummerd (27-11-2026): "Den Haag Patrick" → "Den Haag (1) Patrick" en "Den Haag Anthony" →
+  // "Den Haag (2) Anthony", mappen én afspraken. Draait opnieuw als een oude versie de oude naam terugzet.
+  useEffect(() => {
+    if (!hydrated) return;
+    const NIEUW: Record<string, string> = { "den haag patrick": "Den Haag (1) Patrick", "den haag anthony": "Den Haag (2) Anthony" };
+    const nieuwVan = (n?: string) => NIEUW[(n ?? "").trim().replace(/\s+/g, " ").toLowerCase()];
+    const mappen = schouwMappen.some((m) => m.soort !== "bodem" && nieuwVan(m.naam));
+    const afs = schouwafspraken.some((a) => a.soort !== "bodem" && nieuwVan(a.plaats));
+    if (!mappen && !afs) return;
+    const nu = new Date().toISOString();
+    if (mappen) {
+      const bestaand = new Set(schouwMappen.map((m) => m.naam.trim().toLowerCase()));
+      const dubbel = schouwMappen.filter((m) => m.soort !== "bodem" && nieuwVan(m.naam) && bestaand.has(nieuwVan(m.naam).toLowerCase())).map((m) => m.id);
+      setSchouwMappen((prev) => prev.filter((m) => !dubbel.includes(m.id)).map((m) => (m.soort !== "bodem" && nieuwVan(m.naam) ? { ...m, naam: nieuwVan(m.naam), bijgewerktOp: nu } : m)));
+      if (dubbel.length) tomb("schouwMappen", ...dubbel);
+    }
+    if (afs) setSchouwafspraken((prev) => prev.map((a) => (a.soort !== "bodem" && nieuwVan(a.plaats) ? { ...a, plaats: nieuwVan(a.plaats) } : a)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated, schouwMappen, schouwafspraken]);
+
   // Schouwafspraken Rotterdam (26-11-2026): de map heet voortaan "Rotterdam Rene" (afspraken verhuizen mee)
   // en de handgeschreven planning van week 49 wordt ingelezen. Vaste id's: geen dubbele afspraken op
   // meerdere apparaten; een afspraak die iemand weggooit, komt niet terug. Pas na de eerste volledige
@@ -1718,15 +1738,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const losseAfspraken = schouwafspraken.some((a) => a.soort !== "bodem" && isDH(a.plaats));
     if (!oud && !losseAfspraken) return;
     const nu = new Date().toISOString();
-    if (losseAfspraken) setSchouwafspraken((prev) => prev.map((a) => (a.soort !== "bodem" && isDH(a.plaats) ? { ...a, plaats: "Den Haag Patrick" } : a)));
+    if (losseAfspraken) setSchouwafspraken((prev) => prev.map((a) => (a.soort !== "bodem" && isDH(a.plaats) ? { ...a, plaats: "Den Haag (1) Patrick" } : a)));
     if (oud) {
-      const heeftPatrick = schouwMappen.some((m) => m.soort !== "bodem" && m.naam.trim().toLowerCase() === "den haag patrick");
-      const heeftAnthony = schouwMappen.some((m) => m.soort !== "bodem" && m.naam.trim().toLowerCase() === "den haag anthony");
+      const heeftPatrick = schouwMappen.some((m) => m.soort !== "bodem" && ["den haag patrick", "den haag (1) patrick"].includes(m.naam.trim().toLowerCase()));
+      const heeftAnthony = schouwMappen.some((m) => m.soort !== "bodem" && ["den haag anthony", "den haag (2) anthony"].includes(m.naam.trim().toLowerCase()));
       setSchouwMappen((prev) => {
-        let lijst = heeftPatrick ? prev.filter((m) => m.id !== oud.id) : prev.map((m) => (m.id === oud.id ? { ...m, naam: "Den Haag Patrick", bijgewerktOp: nu } : m));
+        let lijst = heeftPatrick ? prev.filter((m) => m.id !== oud.id) : prev.map((m) => (m.id === oud.id ? { ...m, naam: "Den Haag (1) Patrick", bijgewerktOp: nu } : m));
         if (!heeftAnthony) {
           const { id: _id, naam: _naam, aangemaakt: _a, bijgewerktOp: _b, pdNummer: _pd, boekhouding: _bk, afgerondOp: _ao, gefactureerdOp: _go, ...opzet } = oud;
-          lijst = [...lijst, { ...opzet, id: "smap-den-haag-anthony", naam: "Den Haag Anthony", aangemaakt: nu, bijgewerktOp: nu }];
+          lijst = [...lijst, { ...opzet, id: "smap-den-haag-anthony", naam: "Den Haag (2) Anthony", aangemaakt: nu, bijgewerktOp: nu }];
         }
         return lijst;
       });

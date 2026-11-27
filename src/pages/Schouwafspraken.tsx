@@ -352,9 +352,11 @@ function MapDetail({ overzicht, terug }: { overzicht: MapOverzicht; terug: () =>
       else {
         // Voor Stedin alleen de plaats: de naam van de medewerker achter de map ("Rotterdam Rene") valt weg.
         const voornamen = new Set(users.map((u) => u.naam.split(" ")[0].toLowerCase()));
-        const woorden = overzicht.naam.trim().split(/\s+/);
-        const plaats = woorden.length > 1 && voornamen.has(woorden[woorden.length - 1].toLowerCase()) ? woorden.slice(0, -1).join(" ") : overzicht.naam;
-        await exporteerSchouwPlanning({ plaats, maandag, dagen: exportDagen(week) });
+        // Een volgnummer tussen haakjes ("Den Haag (1) Patrick") komt vooraan in de bestandsnaam.
+        const volgnummer = overzicht.naam.match(/\((\d+)\)/)?.[1];
+        const woorden = overzicht.naam.replace(/\(\d+\)/, " ").trim().split(/\s+/);
+        const plaats = woorden.length > 1 && voornamen.has(woorden[woorden.length - 1].toLowerCase()) ? woorden.slice(0, -1).join(" ") : woorden.join(" ");
+        await exporteerSchouwPlanning({ plaats, maandag, dagen: exportDagen(week), volgnummer });
       }
     } finally {
       setBezig(false);

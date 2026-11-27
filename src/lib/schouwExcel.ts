@@ -110,7 +110,7 @@ export async function bouwSchouwWerkboek(
 const bestandsdeel = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^\w-]+/g, "_").replace(/^_+|_+$/g, "") || "planning";
 
 // Maakt de planning van één stad en week en downloadt die. Geeft false terug als het sjabloon ontbreekt.
-export async function exporteerSchouwPlanning(o: { plaats: string; maandag: string; dagen: SchouwExportDag[] }): Promise<boolean> {
+export async function exporteerSchouwPlanning(o: { plaats: string; maandag: string; dagen: SchouwExportDag[]; volgnummer?: string }): Promise<boolean> {
   let sjabloon: ArrayBuffer | null = null;
   try {
     const resp = await fetch(SJABLOON_URL);
@@ -126,7 +126,8 @@ export async function exporteerSchouwPlanning(o: { plaats: string; maandag: stri
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `Planning_Schouwafspraken_Week_${weekNummer(o.maandag)}_${bestandsdeel(o.plaats)}.xlsx`;
+  // Met volgnummer (bv. "Den Haag (1) Patrick"): Planning_(1)_Schouwafspraken_Week_49_Den_Haag.xlsx
+  a.download = `Planning_${o.volgnummer ? `(${o.volgnummer})_` : ""}Schouwafspraken_Week_${weekNummer(o.maandag)}_${bestandsdeel(o.plaats)}.xlsx`;
   document.body.appendChild(a);
   a.click();
   a.remove();
